@@ -1,0 +1,21 @@
+# 本地/占空间/非必要纳入版本管理的内容
+logs/
+docs/
+ref/
+deploy_qwen/
+ckpts/
+tmp/
+
+# 论文目录与位图
+paper/
+papers/
+*.png
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 以 . 开头的文件/目录一律忽略；仅对 .gitignore 本身做反忽略，否则该文件无法被提交
+.*
+!.gitignore
