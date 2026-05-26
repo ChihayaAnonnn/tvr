@@ -15,6 +15,7 @@ RUN_ID="${RUN_ID:-${RUN_DATE}_${RUN_TIME}}"
 LOG_DIR="logs/${RUN_DATE}"
 mkdir -p "${LOG_DIR}"
 LOG_FILE="${LOG_DIR}/${RUN_TIME}_train_msrvtt.log"
+TRAIN_PID_FILE="${TRAIN_PID_FILE:-}"
 
 echo "[run_train_msrvtt_bg] RUN_DATE=${RUN_DATE} RUN_TIME=${RUN_TIME}"
 echo "[run_train_msrvtt_bg] LOG_FILE=${LOG_FILE}"
@@ -24,10 +25,17 @@ echo "[run_train_msrvtt_bg] Starting: bash train_msrvtt.sh (completely detached)
 setsid env RUN_ID="${RUN_ID}" bash train_msrvtt.sh >"${LOG_FILE}" 2>&1 &
 
 TRAIN_PID=$!
+if [[ -n "${TRAIN_PID_FILE}" ]]; then
+  echo "${TRAIN_PID}" > "${TRAIN_PID_FILE}"
+fi
 echo "[run_train_msrvtt_bg] PID=${TRAIN_PID}"
 echo "[run_train_msrvtt_bg] MSRVTT 训练已在后台启动。你可以安全关闭 Cursor。"
 echo "[run_train_msrvtt_bg] 随时可以运行以下命令查看日志："
 echo "tail -f ${LOG_FILE}"
+
+if [[ "${NO_TAIL:-0}" == "1" ]]; then
+  exit 0
+fi
 
 # 启动后立即查看前 50 行日志确认启动成功
 tail -n 50 -F "${LOG_FILE}"

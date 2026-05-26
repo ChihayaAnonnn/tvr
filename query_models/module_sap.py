@@ -1,13 +1,15 @@
 """Semantic Anchor Probing (SAP) module.
 
-Decomposes video frame features into N semantically meaningful anchors,
-each with its own uncertainty estimate.  Produces:
-  - anchor tokens  [B, N, D]   (for WTI matching)
-  - gate scores    [B, N]      (semantic relevance)
-  - alpha          [B, N]      (uncertainty-modulated weights)
-  - mu_raw         [B, D]      (aggregated mean for probabilistic embedding)
-  - logsigma       [B, D]      (composed video-level log-variance)
-  - anchor_logsigma[B, N, D]   (per-anchor log-variance)
+以时空 token（T 帧 × S patches）为 memory，16 个可学习锚点通过
+cross-attention 聚焦到特定帧的特定 patch 区域，保留时空局部性。
+Sigmoid 独立门控：每个 anchor 独立计算 sigmoid 权重，L1 归一化聚合，
+无竞争，结构性消除锚点坍缩。
+
+输出:
+  - anchors       [B, N, D]   锚点表征
+  - mu_raw        [B, D]      加权聚合均值
+  - logsigma      [B, D]      加权聚合 log 方差
+  - gate_scores   [B, N]      每锚点独立门控分数（诊断用）
 """
 
 import torch
@@ -16,16 +18,19 @@ import torch.nn as nn
 
 class SemanticAnchorProbing(nn.Module):
 
-    def __init__(self, d_model=512, num_anchors=16, nhead=8, num_layers=2):
+    def __init__(self, d_model=512, num_anchors=16, nhead=8, num_layers=2,
+                 log_sigma_min=None, log_sigma_max=None):
         super().__init__()
         self.d_model = d_model
         self.num_anchors = num_anchors
+        self.log_sigma_min = log_sigma_min
+        self.log_sigma_max = log_sigma_max
 
-        # Learnable semantic anchors
+        # 可学习语义锚点
         self.anchor_tokens = nn.Parameter(torch.randn(num_anchors, d_model))
         nn.init.trunc_normal_(self.anchor_tokens, std=0.02)
 
-        # Self-Attn among anchors + Cross-Attn with video frames
+        # 锚点间 self-attention + 与时空 token cross-attention
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=d_model, nhead=nhead,
             dim_feedforward=4 * d_model,
@@ -34,32 +39,27 @@ class SemanticAnchorProbing(nn.Module):
         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
         self.norm = nn.LayerNorm(d_model)
 
-        # Semantic relevance gate  g_n = σ(MLP(q_n))
-        self.gate_fc = nn.Sequential(
-            nn.Linear(d_model, d_model // 2),
-            nn.ReLU(),
-            nn.Linear(d_model // 2, 1),
-            nn.Sigmoid(),
-        )
-
-        # Per-anchor uncertainty head  ℓ_n = W_u q_n + b_u
-        # Bias initialized to 0.5 → initial logsigma ≈ 0.5, var ≈ exp(0.5) ≈ 1.65
-        # Prevents immediate variance collapse to near-zero at training start.
+        # 每锚点不确定性头：ℓ_n = W_u q_n + b_u
+        # 偏置初始化 0.5 → 初始 logsigma ≈ 0.5, var ≈ 1.65
         self.uncertainty_head = nn.Linear(d_model, d_model)
         nn.init.zeros_(self.uncertainty_head.weight)
         nn.init.constant_(self.uncertainty_head.bias, 0.5)
 
-        # Learnable scale controlling how much uncertainty affects gating.
-        # Initialized to 0.1 so uncertainty modulation has a meaningful effect from step 1.
-        self.beta = nn.Parameter(torch.ones(1) * 0.1)
+        # Sigmoid 独立门控：每个 anchor 独立输出标量权重 [0, 1]
+        # 2 层 MLP + sigmoid，无竞争，结构性消除坍缩
+        self.gate_fc = nn.Sequential(
+            nn.Linear(d_model, d_model // 4),
+            nn.GELU(),
+            nn.Linear(d_model // 4, 1),
+        )
 
     def forward(self, video_features, padding_mask=None):
         """
         Args:
-            video_features: [B, T, D] frame-level features (L2-normed)
-            padding_mask:   [B, T]    True = padded position
+            video_features: [B, T*S, D] 时空 token（T 帧 × S patches）
+            padding_mask:   [B, T*S]    True = padded position
         Returns:
-            dict with keys listed in module docstring
+            dict: anchors, mu_raw, logsigma, gate_scores
         """
         B = video_features.shape[0]
         anchors = self.anchor_tokens.unsqueeze(0).expand(B, -1, -1)
@@ -70,37 +70,27 @@ class SemanticAnchorProbing(nn.Module):
         )
         anchors = self.norm(anchors)  # [B, N, D]
 
-        # --- semantic relevance ---
-        gate_scores = self.gate_fc(anchors).squeeze(-1)  # [B, N]
-
-        # --- per-anchor uncertainty ---
+        # 每锚点 log 方差
         anchor_logsigma = self.uncertainty_head(anchors)  # [B, N, D]
+        if self.log_sigma_min is not None and self.log_sigma_max is not None:
+            anchor_logsigma = torch.clamp(anchor_logsigma, min=self.log_sigma_min, max=self.log_sigma_max)
 
-        # --- uncertainty-modulated gating ---
-        # α_n = softmax( log g_n  −  β · norm(mean(ℓ_n)) )
-        # Normalize anchor_unc_scalar per-sample so beta's effect is scale-invariant.
-        anchor_unc_scalar = anchor_logsigma.mean(dim=-1)  # [B, N]
-        unc_mean = anchor_unc_scalar.mean(dim=-1, keepdim=True)
-        unc_std  = anchor_unc_scalar.std(dim=-1, keepdim=True) + 1e-6
-        anchor_unc_norm = (anchor_unc_scalar - unc_mean) / unc_std   # [B, N] zero-mean, unit-std
-        modulated_logits = (
-            torch.log(gate_scores + 1e-9)
-            - self.beta * anchor_unc_norm
-        )
-        alpha = torch.softmax(modulated_logits, dim=-1)   # [B, N]
+        # Sigmoid 独立门控：每个 anchor 独立计算权重，L1 归一化
+        gate_scores = torch.sigmoid(self.gate_fc(anchors)).squeeze(-1)  # [B, N]
+        alpha = gate_scores / (gate_scores.sum(dim=1, keepdim=True) + 1e-9)  # [B, N]
 
-        # --- compositional aggregation ---
-        anchors_norm = anchors / (anchors.norm(dim=-1, keepdim=True) + 1e-9)
-        mu_raw = torch.einsum("bn,bnd->bd", alpha, anchors_norm)
+        # 加权聚合
+        mu_raw = (alpha.unsqueeze(-1) * anchors).sum(dim=1)  # [B, D]
         mu_raw = mu_raw / (mu_raw.norm(dim=-1, keepdim=True) + 1e-9)
 
-        logsigma = torch.einsum("bn,bnd->bd", alpha, anchor_logsigma)
+        # mixture 方差：log(Σ α_i σ_i²)，而非 Σ α_i log(σ_i²)
+        anchor_var = torch.exp(anchor_logsigma)  # [B, N, D]
+        agg_var = (alpha.unsqueeze(-1) * anchor_var).sum(dim=1)  # [B, D]
+        logsigma = torch.log(agg_var + 1e-8)  # [B, D]
 
         return {
             "anchors": anchors,
-            "gate_scores": gate_scores,
-            "alpha": alpha,
             "mu_raw": mu_raw,
             "logsigma": logsigma,
-            "anchor_logsigma": anchor_logsigma,
+            "gate_scores": gate_scores,
         }

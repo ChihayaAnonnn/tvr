@@ -78,21 +78,21 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     # Debug/Logging: Query gate_scores
     # =========================
     parser.add_argument(
-        "--log_gate_scores",
-        action="store_true",
-        help="If set, periodically log QueryFormer gate_scores distribution to a separate TSV file under logs/.",
-    )
-    parser.add_argument(
         "--gate_log_interval",
         type=int,
         default=None,
-        help="Log interval (in optimizer steps) for gate_scores. If None, defaults to --n_display.",
+        help="Log interval (in optimizer steps) for MoE weights. If None, defaults to --n_display.",
     )
     parser.add_argument(
         "--gate_log_dir",
         type=str,
         default="logs/gate_scores",
         help="Root directory to save gate_scores logs (will create date subfolders).",
+    )
+    parser.add_argument(
+        "--log_mus_scores",
+        action="store_true",
+        help="若设置，在每次评估时将每条查询的 MUS（映射不确定性）写入 logs/mus_scores/ 下的 TSV 文件。",
     )
     # =========================
     # Debug/Logging: Uncertainty-driven MoE fusion weights (base/query)
@@ -196,8 +196,8 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         "--slice_framepos",
         type=int,
         default=0,
-        choices=[0, 1, 2],
-        help="0: cut from head frames; 1: cut from tail frames; 2: extract frames uniformly.",
+        choices=[0, 1, 2, 3],
+        help="0: cut from head frames; 1: cut from tail frames; 2: extract frames uniformly; 3: TQFS 帧质量采样.",
     )
     parser.add_argument(
         "--linear_patch", type=str, default="2d", choices=["2d", "3d"], help="linear projection of flattened patches."
@@ -270,6 +270,10 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         "--disable_spatial_enhancer", action="store_true", help="(deprecated) use --rope_mode none instead."
     )
     parser.add_argument(
+        "--num_expansion_tokens", default=0, type=int,
+        help="Number of learnable expansion tokens to concatenate with SAP anchors (Video-ColBERT style). 0=disabled.",
+    )
+    parser.add_argument(
         "--use_ada_norm", action="store_true",
         help="Enable uncertainty-aware adaptive LayerNorm before L2 normalize in probabilistic heads.",
     )
@@ -305,11 +309,34 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--w_mil", default=1e-2, type=float, help="Weight for MIL (probabilistic) loss.")
     parser.add_argument("--w_vib", default=1e-4, type=float, help="Weight for VIB (KL to prior) loss.")
     parser.add_argument(
-        "--w_gate_ent",
+        "--w_uncertainty_reg",
         default=1e-3,
         type=float,
-        help="Weight for gate entropy penalty (encourages anchor specialization). "
-             "Set to 0 to disable.",
+        help="Weight for DUQ-style evidential uncertainty regularization on retrieval logits.",
+    )
+    parser.add_argument("--w_orth", default=0.1, type=float, help="Weight for anchor orthogonality loss.")
+    parser.add_argument(
+        "--use_tas_uncertainty",
+        action="store_true",
+        help="Enable lightweight TAS to dynamically scale text-side VIB KL regularization.",
+    )
+    parser.add_argument(
+        "--tas_top_k",
+        default=5,
+        type=int,
+        help="Top-k batch neighbors used by lightweight TAS entropy.",
+    )
+    parser.add_argument(
+        "--tas_temperature",
+        default=0.05,
+        type=float,
+        help="Softmax temperature for lightweight TAS entropy.",
+    )
+    parser.add_argument(
+        "--tas_kl_scale",
+        default=0.5,
+        type=float,
+        help="Scale range for TAS-driven text-side KL weighting.",
     )
     parser.add_argument(
         "--w_query_sim",
@@ -323,6 +350,12 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         default=1.5,
         type=float,
         help="Temperature for MoE fusion weight softmax. Higher = smoother weight distribution.",
+    )
+    parser.add_argument(
+        "--experiment_desc",
+        default="",
+        type=str,
+        help="实验描述，会写入日志便于后续分析。",
     )
     args = parser.parse_args()
 
@@ -368,6 +401,8 @@ def set_seed_logger(args):
 
     if args.local_rank == 0:
         logger.info("Effective parameters:")
+        if args.experiment_desc:
+            logger.info("    [Experiment] %s", args.experiment_desc)
         # 按类别分组打印关键参数，其余用紧凑格式
         key_params = {
             "Training": ["epochs", "batch_size", "lr", "coef_lr", "gradient_accumulation_steps", "fp16",
@@ -375,8 +410,9 @@ def set_seed_logger(args):
             "Model": ["pretrained_clip_name", "sim_header", "linear_patch", "fusion_mode",
                        "extra_video_cls_num", "extra_text_cls_num", "n_video_embeddings", "n_text_embeddings",
                        "uncertainty_text_head", "log_sigma_min", "log_sigma_max"],
-            "Query": ["w_query_sim", "fusion_temperature", "num_queries"],
-            "Attributes": ["use_attributes", "max_words_attrs", "attr_num_blocks"],
+            "Query": ["w_query_sim", "w_uncertainty_reg",
+                      "use_tas_uncertainty", "tas_top_k", "tas_temperature", "tas_kl_scale",
+                      "fusion_temperature", "num_queries", "num_expansion_tokens"],
         }
         printed_keys = set()
         for group, keys in key_params.items():
@@ -501,7 +537,7 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
     )
 
     model = torch.nn.parallel.DistributedDataParallel(
-        model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True
+        model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False
     )
 
     return optimizer, scheduler, model
@@ -583,21 +619,11 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
 
         if len(batch) == 5:
             input_ids, input_mask, segment_ids, video, video_mask = batch
-            loss_dict = model(input_ids, segment_ids, input_mask, video, video_mask)
         elif len(batch) == 8:
-            input_ids, input_mask, segment_ids, input_ids_a, input_mask_a, segment_ids_a, video, video_mask = batch
-            loss_dict = model(
-                input_ids,
-                segment_ids,
-                input_mask,
-                video,
-                video_mask,
-                input_ids_attrs=input_ids_a,
-                token_type_ids_attrs=segment_ids_a,
-                attention_mask_attrs=input_mask_a,
-            )
+            input_ids, input_mask, segment_ids, _input_ids_a, _input_mask_a, _segment_ids_a, video, video_mask = batch
         else:
             raise ValueError(f"Unexpected batch size={len(batch)} from dataloader.")
+        loss_dict = model(input_ids, segment_ids, input_mask, video, video_mask)
         loss = loss_dict["total"]
 
         if n_gpu > 1:
@@ -641,7 +667,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             # ── 采集因果链诊断（每 opt_step 收集，rank 不限） ─────────────
             core = model.module if hasattr(model, "module") else model
             for _attr, _key in [
-                ("_diag_chain", "diag"), ("_sap_chain", "sap"),
+                ("_diag_chain", "diag"),
                 ("_prob_chain", "prob"), ("_aux_chain", "aux"),
             ]:
                 _d = getattr(core, _attr, None)
@@ -687,19 +713,12 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
 
                 # --- 因果链简报（每 log_step 打印一次当前值） ---
                 _dc = getattr(core, "_diag_chain", None)
-                _sc = getattr(core, "_sap_chain", None)
                 _pc = getattr(core, "_prob_chain", None)
                 _ac = getattr(core, "_aux_chain", None)
                 if _dc:
                     logger.info(
                         "  [Chain-Ret]  pos=%.3f  neg=%.3f  gap=%.3f  pos_std=%.3f",
                         _dc["pos_mean"], _dc["neg_mean"], _dc["gap"], _dc["pos_std"],
-                    )
-                if _sc:
-                    logger.info(
-                        "  [Chain-SAP]  gate_H=%.3f  norm_H=%.3f  top1=%.3f  beta=%.4f",
-                        _sc["gate_entropy_mean"], _sc.get("gate_norm_H", 0),
-                        _sc.get("gate_top1_mean", 0), _sc["sap_beta"],
                     )
                 if _pc:
                     logger.info(
@@ -710,19 +729,17 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     )
                 if _ac:
                     logger.info(
-                        "  [Chain-Aux]  div_loss=%.4f  gate_ent=%.4f  logsigma_v=%.4f",
-                        _ac["div_loss_val"], _ac["gate_ent_loss_val"], _ac["logsigma_v_mean"],
+                        "  [Chain-Aux]  evid_unc=%.4f  logsig_v=%.4f",
+                        _ac.get("evidential_uncertainty", 0),
+                        _ac["logsigma_v_mean"],
                     )
 
             if (
-                (args.log_gate_scores or args.log_moe_weights)
+                args.log_moe_weights
                 and (global_step % gate_log_step == 0)
                 and local_rank == 0
             ):
-                if args.log_gate_scores:
-                    _log_gate_scores_tsv(args, model, epoch=epoch, step=step, global_step=global_step)
-                if args.log_gate_scores or args.log_moe_weights:
-                    _log_moe_weights_tsv(args, model, epoch=epoch, step=step, global_step=global_step)
+                _log_moe_weights_tsv(args, model, epoch=epoch, step=step, global_step=global_step)
 
     total_loss = total_loss / len(train_dataloader)
     epoch_time = time.time() - epoch_start_time
@@ -747,7 +764,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 "  Ret  : pos=%.3f  neg=%.3f  gap=%.3f  pos_std=%.3f\n"
                 "  SAP  : gate_H=%.3f  norm_H=%.3f  top1=%.3f  beta=%.4f\n"
                 "  Prob : var_v=%.4f  var_t=%.4f  kl_v=%.4f±%.4f  kl_t=%.4f±%.4f\n"
-                "  Aux  : div_loss=%.4f  gate_ent=%.4f  logsigma_v=%.4f",
+                "  Aux  : div_loss=%.4f  dir_div=%.4f  gate_ent=%.4f  logsigma_v=%.4f",
                 epoch + 1,
                 dc.get("pos_mean", 0), dc.get("neg_mean", 0),
                 dc.get("gap", 0), dc.get("pos_std", 0),
@@ -756,85 +773,11 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 pc.get("var_video_mean", 0), pc.get("var_text_mean", 0),
                 pc.get("kl_video_mean", 0), pc.get("kl_video_std", 0),
                 pc.get("kl_text_mean", 0), pc.get("kl_text_std", 0),
-                ac.get("div_loss_val", 0), ac.get("gate_ent_loss_val", 0),
-                ac.get("logsigma_v_mean", 0),
+                ac.get("div_loss_val", 0), ac.get("dir_div_loss_val", 0),
+                ac.get("gate_ent_loss_val", 0), ac.get("logsigma_v_mean", 0),
             )
             _log_causal_summary_tsv(args, epoch, dc, sc, pc, ac)
     return total_loss, global_step
-
-
-def _log_gate_scores_tsv(args, model, epoch: int, step: int, global_step: int):
-    """
-    Write a single TSV line with gate_scores summary statistics.
-    This is rank0-only and is designed to be lightweight.
-    """
-    import datetime as _dt
-
-    # unwrap DDP
-    core = model.module if hasattr(model, "module") else model
-    gate_scores = getattr(core, "_last_gate_scores", None)
-    if gate_scores is None:
-        return
-
-    # gate_scores: [B, Q], values in [0,1] (sigmoid)
-    with torch.no_grad():
-        g = gate_scores.detach()
-        # stats on raw gate scores
-        g_flat = g.reshape(-1)
-        g_mean = float(g_flat.mean().item())
-        g_std = float(g_flat.std(unbiased=False).item())
-        g_min = float(g_flat.min().item())
-        g_max = float(g_flat.max().item())
-        frac_lt_005 = float((g_flat < 0.05).float().mean().item())
-        frac_gt_095 = float((g_flat > 0.95).float().mean().item())
-
-        # normalize per-sample to interpret as a distribution over queries
-        w = g / (g.sum(dim=-1, keepdim=True) + 1e-9)
-        # entropy and effective number of queries
-        entropy = -(w * (w + 1e-9).log()).sum(dim=-1)  # [B]
-        eff_n = torch.exp(entropy)  # [B]
-        top1 = w.max(dim=-1).values  # [B]
-
-        ent_mean = float(entropy.mean().item())
-        ent_std = float(entropy.std(unbiased=False).item())
-        effn_mean = float(eff_n.mean().item())
-        effn_std = float(eff_n.std(unbiased=False).item())
-        top1_mean = float(top1.mean().item())
-        top1_std = float(top1.std(unbiased=False).item())
-
-        # quantiles on raw gates (coarse shape)
-        q10 = float(torch.quantile(g_flat, 0.10).item())
-        q50 = float(torch.quantile(g_flat, 0.50).item())
-        q90 = float(torch.quantile(g_flat, 0.90).item())
-
-    # build path: logs/gate_scores/YYYYMMDD/<run_id>.tsv
-    date_str = _dt.datetime.now().strftime("%Y%m%d")
-    run_id = os.path.basename(os.path.normpath(args.output_dir))
-    out_dir = os.path.join(args.gate_log_dir, date_str)
-    os.makedirs(out_dir, exist_ok=True)
-    out_file = os.path.join(out_dir, f"{run_id}.tsv")
-
-    header = (
-        "time\toutput_dir\trun_id\tepoch\tstep\tglobal_step\t"
-        "gate_mean\tgate_std\tgate_min\tgate_max\tq10\tq50\tq90\t"
-        "frac_lt_0.05\tfrac_gt_0.95\t"
-        "w_entropy_mean\tw_entropy_std\tw_effn_mean\tw_effn_std\t"
-        "w_top1_mean\tw_top1_std\n"
-    )
-    line = (
-        f"{_dt.datetime.now().isoformat(timespec='seconds')}\t{args.output_dir}\t{run_id}\t"
-        f"{epoch + 1}\t{step + 1}\t{global_step}\t"
-        f"{g_mean:.6f}\t{g_std:.6f}\t{g_min:.6f}\t{g_max:.6f}\t{q10:.6f}\t{q50:.6f}\t{q90:.6f}\t"
-        f"{frac_lt_005:.6f}\t{frac_gt_095:.6f}\t"
-        f"{ent_mean:.6f}\t{ent_std:.6f}\t{effn_mean:.6f}\t{effn_std:.6f}\t"
-        f"{top1_mean:.6f}\t{top1_std:.6f}\n"
-    )
-
-    need_header = not os.path.exists(out_file) or os.path.getsize(out_file) == 0
-    with open(out_file, "a", encoding="utf-8") as f:
-        if need_header:
-            f.write(header)
-        f.write(line)
 
 
 def _log_moe_weights_tsv(args, model, epoch: int, step: int, global_step: int):
@@ -947,7 +890,7 @@ def _log_causal_summary_tsv(args, epoch: int, dc: dict, sc: dict, pc: dict, ac: 
         "ret_pos_mean\tret_neg_mean\tret_gap\tret_pos_std\t"
         "sap_gate_H\tsap_gate_norm_H\tsap_gate_top1\tsap_beta\t"
         "prob_var_v\tprob_var_t\tprob_kl_v_mean\tprob_kl_v_std\tprob_kl_t_mean\tprob_kl_t_std\t"
-        "aux_div_loss\taux_gate_ent_loss\taux_logsigma_v\n"
+        "aux_div_loss\taux_dir_div_loss\taux_gate_ent_loss\taux_logsigma_v\n"
     )
     def _f(x): return f"{x:.6f}" if isinstance(x, float) else "nan"
     line = (
@@ -959,14 +902,47 @@ def _log_causal_summary_tsv(args, epoch: int, dc: dict, sc: dict, pc: dict, ac: 
         f"{_f(pc.get('var_video_mean',0))}\t{_f(pc.get('var_text_mean',0))}\t"
         f"{_f(pc.get('kl_video_mean',0))}\t{_f(pc.get('kl_video_std',0))}\t"
         f"{_f(pc.get('kl_text_mean',0))}\t{_f(pc.get('kl_text_std',0))}\t"
-        f"{_f(ac.get('div_loss_val',0))}\t{_f(ac.get('gate_ent_loss_val',0))}\t"
-        f"{_f(ac.get('logsigma_v_mean',0))}\n"
+        f"{_f(ac.get('div_loss_val',0))}\t{_f(ac.get('dir_div_loss_val',0))}\t"
+        f"{_f(ac.get('gate_ent_loss_val',0))}\t{_f(ac.get('logsigma_v_mean',0))}\n"
     )
     need_header = not os.path.exists(out_file) or os.path.getsize(out_file) == 0
     with open(out_file, "a", encoding="utf-8") as f:
         if need_header:
             f.write(header)
         f.write(line)
+
+
+def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
+    """将 sim_matrix 每行的 MUS 写入 TSV 诊断日志（rank0 only）。
+
+    文件路径：logs/mus_scores/YYYYMMDD/<run_id>.tsv
+    列：idx, mus_score
+    """
+    import datetime as _dt
+    from modules.mus_util import compute_mus_batch
+
+    date_str = _dt.datetime.now().strftime("%Y%m%d")
+    run_id = os.path.basename(os.path.normpath(args.output_dir)) or "eval"
+    out_dir = os.path.join("logs", "mus_scores", date_str)
+    os.makedirs(out_dir, exist_ok=True)
+    out_file = os.path.join(out_dir, f"{run_id}.tsv")
+
+    mus_scores = compute_mus_batch(sim_matrix, k=10)
+    mean_mus = float(np.mean(mus_scores))
+    high_ratio = float(np.mean(mus_scores > 0.5))
+
+    need_header = not os.path.exists(out_file) or os.path.getsize(out_file) == 0
+    with open(out_file, "a", encoding="utf-8") as f:
+        if need_header:
+            f.write("time\tidx\tmus_score\n")
+        now = _dt.datetime.now().isoformat(timespec="seconds")
+        for i, v in enumerate(mus_scores):
+            f.write(f"{now}\t{i}\t{v:.6f}\n")
+
+    logger.info(
+        "MUS stats | mean=%.4f  high_ratio(>0.5)=%.3f  n_queries=%d  log=%s",
+        mean_mus, high_ratio, len(mus_scores), out_file,
+    )
 
 
 def _log_eval_stats_tsv(args, model, step):
@@ -1019,18 +995,11 @@ def _run_on_single_gpu(
     batch_list_v,
     batch_sequence_output_list,
     batch_visual_output_list,
-    batch_attrs_output_list=None,
 ):
     # Cat on CPU — features were already moved to CPU in eval_epoch to reduce GPU pressure
     visual_output_cls_all = torch.cat([v[0] for v in batch_visual_output_list], dim=0)
     visual_output_all_full = torch.cat([v[1] for v in batch_visual_output_list], dim=0)
     video_mask_all = torch.cat([v[0] for v in batch_list_v], dim=0)
-
-    # Attributes for QueryFormer memory
-    tok_a_all = mask_a_all = None
-    if batch_attrs_output_list is not None and len(batch_attrs_output_list) > 0:
-        tok_a_all = torch.cat([a[1] for a in batch_attrs_output_list], dim=0)
-        mask_a_all = torch.cat([a[2] for a in batch_attrs_output_list], dim=0)
 
     device = next(model.parameters()).device
     chunk_size = getattr(args, "eval_vid_chunk_size", 128)
@@ -1051,8 +1020,6 @@ def _run_on_single_gpu(
             cls_chunk   = visual_output_cls_all[v_start:v_end].to(device)
             full_chunk  = visual_output_all_full[v_start:v_end].to(device)
             vmask_chunk = video_mask_all[v_start:v_end].to(device)
-            tok_a_chunk  = tok_a_all[v_start:v_end].to(device) if tok_a_all is not None else None
-            mask_a_chunk = mask_a_all[v_start:v_end].to(device) if mask_a_all is not None else None
 
             chunk_logits, *_tmp2 = model.get_similarity_logits(
                 seq_dev,
@@ -1062,10 +1029,6 @@ def _run_on_single_gpu(
                 mask_dev,
                 vmask_chunk,
                 loose_type=model.loose_type,
-                sequence_output_attrs=tok_a_chunk,
-                text_token_attrs=tok_a_chunk,
-                attention_mask_attrs=mask_a_chunk,
-                attrs_num_blocks=getattr(args, "attr_num_blocks", 1),
             )
             row_logits.append(chunk_logits.cpu())
 
@@ -1110,7 +1073,6 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
         batch_list_t = []
         batch_list_v = []
         batch_sequence_output_list, batch_visual_output_list = [], []
-        batch_attrs_output_list = [] if getattr(args, "use_attributes", False) else None
         total_video_num = 0
 
         # ----------------------------
@@ -1124,7 +1086,7 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
             if len(batch) == 5:
                 input_ids, input_mask, segment_ids, video, video_mask = batch
             elif len(batch) == 8:
-                input_ids, input_mask, segment_ids, input_ids_a, input_mask_a, segment_ids_a, video, video_mask = batch
+                input_ids, input_mask, segment_ids, _input_ids_a, _input_mask_a, _segment_ids_a, video, video_mask = batch
             else:
                 raise ValueError(f"Unexpected batch size={len(batch)} from dataloader.")
 
@@ -1158,11 +1120,6 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
                 sequence_output, text_token, visual_output, visual_output_all = model.get_sequence_visual_output(
                     input_ids, segment_ids, input_mask, video, video_mask
                 )
-                # Cache attributes for candidate videos (semantic query branch).
-                if len(batch) == 8 and batch_attrs_output_list is not None:
-                    seq_a, tok_a = model.get_sequence_output(input_ids_a, segment_ids_a, input_mask_a)
-                    mask_a = input_mask_a.view(-1, input_mask_a.shape[-1])
-                    batch_attrs_output_list.append((seq_a.cpu(), tok_a.cpu(), mask_a.cpu()))
 
                 # Move to CPU immediately to reduce peak GPU memory during similarity computation
                 batch_sequence_output_list.append((sequence_output.cpu(), text_token.cpu()))
@@ -1180,7 +1137,6 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
             batch_list_v_splits = []
             batch_t_output_splits = []
             batch_v_output_splits = []
-            batch_a_output_splits = []
             bacth_len = len(batch_list_t)
             split_len = (bacth_len + n_gpu - 1) // n_gpu
             for dev_id in device_ids:
@@ -1191,7 +1147,6 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
 
                     batch_t_output_splits.append(batch_sequence_output_list[s_:e_])
                     batch_v_output_splits.append(batch_visual_output_list)
-                    batch_a_output_splits.append(batch_attrs_output_list)
                 else:
                     devc = torch.device("cuda:{}".format(str(dev_id)))
                     devc_batch_list = [tuple(t.to(devc) for t in b) for b in batch_list_t[s_:e_]]
@@ -1203,11 +1158,6 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
                     batch_t_output_splits.append(devc_batch_list)
                     devc_batch_list = [tuple(t.to(devc) for t in b) for b in batch_visual_output_list]
                     batch_v_output_splits.append(devc_batch_list)
-                    if batch_attrs_output_list is None:
-                        batch_a_output_splits.append(None)
-                    else:
-                        devc_batch_list = [tuple(t.to(devc) for t in b) for b in batch_attrs_output_list]
-                        batch_a_output_splits.append(devc_batch_list)
 
             parameters_tuple_list = [
                 (
@@ -1216,7 +1166,6 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
                     batch_list_v_splits[dev_id],
                     batch_t_output_splits[dev_id],
                     batch_v_output_splits[dev_id],
-                    batch_a_output_splits[dev_id],
                 )
                 for dev_id in device_ids
             ]
@@ -1233,9 +1182,12 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
                 batch_list_v,
                 batch_sequence_output_list,
                 batch_visual_output_list,
-                batch_attrs_output_list,
             )
             sim_matrix = np.concatenate(tuple(sim_matrix), axis=0)
+
+    # MUS 诊断日志：在相似度矩阵整合完成后、指标计算前输出
+    if getattr(args, "log_mus_scores", False):
+        _log_mus_scores_tsv(args, sim_matrix)
 
     if args.DSL:  # using dual softmax for test
         logger.info("\t Using Dual Softmax testing.")

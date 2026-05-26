@@ -99,6 +99,7 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4}" \
   torchrun --nproc_per_node=1 --master_addr=127.0.0.9 --master_port="${MASTER_PORT:-29520}" \
   main_task_retrieval.py \
   --do_eval \
+  --log_mus_scores \
   --init_model "${INIT_MODEL}" \
   --output_dir "${OUTPUT_DIR}" \
   --datatype "${DATATYPE}" \
@@ -116,9 +117,9 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4}" \
   --feature_framerate 1 \
   --batch_size_val 8 \
   --loose_type \
-  --slice_framepos 2 \
+  --slice_framepos 3 \
   --uncertainty_text_head text \
-  --log_sigma_min -6 \
+  --log_sigma_min -3 \
   --log_sigma_max 6 \
   "${EXTRA_ARGS[@]}" \
   2>&1 | tee "${LOG_FILE}"

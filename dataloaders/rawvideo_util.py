@@ -89,6 +89,69 @@ class RawVideoExtractorCV2():
         tensor = raw_video_data.view(-1, 1, tensor_size[-3], tensor_size[-2], tensor_size[-1])
         return tensor
 
+    def get_raw_video_data(self, video_path, start_time=None, end_time=None):
+        """解码视频帧（不做 CLIP 预处理），返回原始帧列表。
+
+        用于 TQFS 等需要在原始帧上计算质量指标的场景。
+        返回列表而非 stack 后的张量，避免 np.stack 改变数组内部结构
+        导致 cv2 函数无法识别。
+
+        Returns:
+            dict: {'video': List[np.ndarray]}，每个元素为 [H, W, 3] BGR uint8，
+                  若解码失败则 {'video': []}。
+        """
+        if start_time is not None or end_time is not None:
+            assert isinstance(start_time, int) and isinstance(end_time, int) \
+                   and start_time > -1 and end_time > start_time
+
+        cap = cv2.VideoCapture(video_path)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        if fps <= 0:
+            fps = 30
+
+        total_duration = (frame_count + fps - 1) // fps
+        start_sec, end_sec = 0, total_duration
+        if start_time is not None:
+            start_sec = start_time
+            end_sec = min(end_time, total_duration)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(start_time * fps))
+
+        interval = max(1, fps // max(self.framerate, 1)) if self.framerate > 0 else 1
+        inds = list(range(0, fps, interval))[:max(self.framerate, 1) if self.framerate > 0 else fps]
+
+        images = []
+        ret = True
+        for sec in range(start_sec, end_sec + 1):
+            if not ret:
+                break
+            sec_base = int(sec * fps)
+            for ind in inds:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, float(sec_base + int(ind)))
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                images.append(frame)  # BGR uint8 [H, W, 3]，cv2 原生数组
+        cap.release()
+
+        return {'video': images}
+
+    def preprocess_raw_frames(self, raw_frames_list):
+        """对原始帧列表应用 CLIP 预处理（Resize + CenterCrop + RGB + Normalize）。
+
+        Args:
+            raw_frames_list: List[np.ndarray]，每个元素为 [H, W, 3] BGR uint8。
+
+        Returns:
+            th.Tensor: shape [N, 1, 3, size, size] 的 float32 张量（已归一化）。
+        """
+        frames = []
+        for frame_bgr in raw_frames_list:
+            frame_rgb = cv2.cvtColor(frame_bgr.copy(), cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(frame_rgb)
+            frames.append(self.transform(pil_img))
+        return th.stack(frames).unsqueeze(1)  # [N, 1, 3, size, size]
+
     def process_frame_order(self, raw_video_data, frame_order=0):
         # 0: ordinary order; 1: reverse order; 2: random order.
         if frame_order == 0:

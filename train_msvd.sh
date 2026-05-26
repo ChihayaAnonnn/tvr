@@ -11,6 +11,8 @@ OUTPUT_DIR=${OUTPUT_DIR:-ckpts/ckpt_msvd_${RUN_ID}}
 # Query head is fixed to token_wti in codebase.
 W_QUERY_SIM="0.1"            # increase to make query branch stand-alone
 
+# Baseline replication: same three weights zero as MSRVTT baseline (frame-only WTI for retrieval logits).
+
 CUDA_VISIBLE_DEVICES=1,2,3,4 \
     torchrun --nproc_per_node=4 --master_addr=127.0.0.9 --master_port=29509 \
     main_task_retrieval.py \
@@ -21,7 +23,7 @@ CUDA_VISIBLE_DEVICES=1,2,3,4 \
     --lr 1e-5 --max_words 32 --max_frames 12 --batch_size_val 8 \
     --datatype msvd \
     --feature_framerate 1 --coef_lr "${COEF_LR}" \
-    --freeze_layer_num 0 --slice_framepos 2 \
+    --freeze_layer_num 0 --slice_framepos 3 \
     --loose_type --linear_patch 2d --sim_header seqTransf \
     --strategy 2 \
     --pretrained_clip_name ViT-B/16 \
@@ -33,6 +35,7 @@ CUDA_VISIBLE_DEVICES=1,2,3,4 \
     --uncertainty_text_head text \
     --log_sigma_min -6 \
     --log_sigma_max 6 \
-    --log_gate_scores \
+    --w_uncertainty_reg 1e-3 \
     --gate_log_interval 100 \
-    --w_query_sim "${W_QUERY_SIM}"
+    --w_query_sim "${W_QUERY_SIM}" \
+    --experiment_desc "${EXPERIMENT_DESC:-}"

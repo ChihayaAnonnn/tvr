@@ -5,3 +5,6 @@ line-length = 120
 # Enable isort-compatible import sorting rules.
 extend-select = ["I"]
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+

@@ -4,12 +4,14 @@ import logging
 import math
 
 import torch
+import torch.nn.functional as F
 from torch import nn
+
 from modules.module_clip import CLIP, convert_weights
 from modules.module_cross import CrossConfig
 from modules.module_cross import Transformer as TransformerClip
-from modules.until_module import AllGather, CrossEn, KLdivergence, MILNCELoss_BoF, PreTrainedModel
 from modules.spatial_enhancer import SpatialEnhancer
+from modules.until_module import AllGather, CrossEn, KLdivergence, MILNCELoss_BoF, PreTrainedModel
 from query_models.module_sap import SemanticAnchorProbing
 
 try:
@@ -228,17 +230,13 @@ class UATVR(CLIP4ClipPreTrainedModel):
         if hasattr(task_config, "sim_header"):
             self.sim_header = task_config.sim_header
             show_log(task_config, "\t sim_header: {}".format(self.sim_header))
-        # Ensure positional embedding tables cover the longest sequence we'll ever build:
+        # 确保位置嵌入表覆盖最长序列：
         #   text branch  : max_words + extra_text_cls_num  (e.g. 32+2 = 34)
-        #   attrs branch : max_words_attrs + extra_text_cls_num  (e.g. 77+2 = 79)
         #   visual branch: max_frames + extra_cls_frame_num  (e.g. 12+2 = 14)
-        # The cross-base config default (128) already covers all cases; we only
-        # override upward if the loaded config happens to be smaller.
-        _max_words_attrs = getattr(task_config, "max_words_attrs", task_config.max_words) or task_config.max_words
+        # cross-base config 默认 128 已覆盖；仅当加载的 config 更小时才向上覆盖。
         _extra_cls = getattr(task_config, "extra_text_cls_num", 2)
         _min_pos = max(
             task_config.max_words + _extra_cls,
-            int(_max_words_attrs) + _extra_cls,
             task_config.max_frames + getattr(task_config, "extra_video_cls_num", 2),
         )
         cross_config.max_position_embeddings = max(cross_config.max_position_embeddings, _min_pos)
@@ -299,7 +297,18 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.sap = SemanticAnchorProbing(
             d_model=transformer_width, num_anchors=self.num_anchors,
             nhead=transformer_heads, num_layers=2,
+            log_sigma_min=getattr(task_config, "log_sigma_min", None),
+            log_sigma_max=getattr(task_config, "log_sigma_max", None),
         )
+
+        # Video-ColBERT style expansion tokens: 可学习 token 拼接在 anchor 序列旁，
+        # 给 PIENet/WTI 更多聚合自由度。
+        self.num_expansion_tokens = getattr(self.task_config, "num_expansion_tokens", 0)
+        if self.num_expansion_tokens > 0:
+            self.expansion_tokens = nn.Parameter(
+                torch.zeros(1, self.num_expansion_tokens, transformer_width)
+            )
+            nn.init.normal_(self.expansion_tokens, std=0.02)
 
         # Loss functions
         self.loss_fct = CrossEn()
@@ -309,10 +318,12 @@ class UATVR(CLIP4ClipPreTrainedModel):
         # Loss weights
         self.w_mil = getattr(self.task_config, "w_mil", 1e-2)
         self.w_vib = getattr(self.task_config, "w_vib", 1e-4)
-        self.w_div = getattr(self.task_config, "w_div", 1e-3)
-        self.div_margin = getattr(self.task_config, "div_margin", 0.5)
-        # Gate entropy penalty: penalize high entropy (uniform gates) to force anchor specialization
-        self.w_gate_ent = getattr(self.task_config, "w_gate_ent", 1e-3)
+        self.w_uncertainty_reg = getattr(self.task_config, "w_uncertainty_reg", 1e-3)
+        self.w_orth = getattr(self.task_config, "w_orth", 0.0)
+        self.use_tas_uncertainty = getattr(self.task_config, "use_tas_uncertainty", False)
+        self.tas_top_k = getattr(self.task_config, "tas_top_k", 5)
+        self.tas_temperature = getattr(self.task_config, "tas_temperature", 0.05)
+        self.tas_kl_scale = getattr(self.task_config, "tas_kl_scale", 0.5)
 
         # Optional clamp for log-variance to stabilize sampling/KL terms
         self.log_sigma_min = getattr(self.task_config, "log_sigma_min", None)
@@ -328,6 +339,13 @@ class UATVR(CLIP4ClipPreTrainedModel):
         show_log(task_config, "\t Number of video sampling probabilistic embeddings: {}".format(self.n_video_samples))
         show_log(task_config, "\t Number of text sampling probabilistic embeddings: {}".format(self.n_text_samples))
 
+        # 诊断统计步数计数器（每 N 步采集一次，减少显存和计算开销）
+        self._diag_step = 0
+        self._diag_interval = getattr(task_config, "diag_interval", 10)
+        self._diag_chain = {}
+        self._prob_chain = {}
+        self._aux_chain = {}
+
         self.apply(self.init_weights)
 
     def forward(
@@ -337,9 +355,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         attention_mask,
         video,
         video_mask=None,
-        input_ids_attrs=None,
-        token_type_ids_attrs=None,
-        attention_mask_attrs=None,
     ):
         # (B 1 32)  (B 1 132) (B 1 32)
         input_ids = input_ids.view(-1, input_ids.shape[-1])
@@ -358,22 +373,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_len = num_frames * clips_per_frame
 
         sequence_output, text_token = self.get_sequence_output(input_ids, token_type_ids, attention_mask, shaped=True)
-
-        # [Work2] Attribute encoding — commented out, pass None to downstream
-        # if input_ids_attrs is None:
-        #     sequence_output_attrs, text_token_attrs = None, None
-        #     attention_mask_attrs_shaped = None
-        #     attrs_num_blocks = 1
-        # else:
-        #     attrs_num_blocks = (
-        #         int(input_ids_attrs.shape[1]) if hasattr(input_ids_attrs, "shape") and input_ids_attrs.dim() >= 2 else 1
-        #     )
-        #     input_ids_attrs = input_ids_attrs.view(-1, input_ids_attrs.shape[-1])
-        #     token_type_ids_attrs = token_type_ids_attrs.view(-1, token_type_ids_attrs.shape[-1])
-        #     attention_mask_attrs_shaped = attention_mask_attrs.view(-1, attention_mask_attrs.shape[-1])
-        #     sequence_output_attrs, text_token_attrs = self.get_sequence_output(
-        #         input_ids_attrs, token_type_ids_attrs, attention_mask_attrs_shaped, shaped=True
-        #     )
 
         visual_cls, visual_hidden = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_len)
 
@@ -397,16 +396,16 @@ class UATVR(CLIP4ClipPreTrainedModel):
             loss += sim_loss
             loss += res["MIL_loss"]
             loss += res["vib_loss"]
-            loss += res["div_loss"]
-            loss += res["gate_ent_loss"]
+            loss += res["uncertainty_reg_loss"]
+            loss += res["orth_loss"]
 
             loss_dict = {
                 "total": loss,
                 "sim_loss": sim_loss,
                 "mcsoft_loss": res["MIL_loss"],
                 "vib_loss": res["vib_loss"],
-                "div_loss": res["div_loss"],
-                "gate_ent": res["gate_ent_loss"],
+                "uncertainty_reg": res["uncertainty_reg_loss"],
+                "orth_loss": res["orth_loss"],
             }
             return loss_dict
         else:  # for inference
@@ -446,7 +445,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         # visual_cls: [bs*pair*bs*ts, 512] -> [bs_pair, video_frame, 512]
         visual_cls = visual_cls.view(bs_pair, -1, visual_cls.size(-1))
 
-        # visual_hidden: [bs*pair*bs*ts, 50, 512] -> [bs_pair, video_frame, 50, 512]
+        # visual_hidden: [bs*pair*bs*ts, 197, 512] -> [bs_pair, video_frame, 197, 512]
         visual_hidden = visual_hidden.view(bs_pair, video_frame, visual_hidden.size(-2), visual_hidden.size(-1))
 
         if hasattr(self, "spatial_enhancer") and self.spatial_enhancer is not None:
@@ -491,37 +490,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         )
         return sequence_output, hidden_word, visual_output, visual_output_all
 
-    # ── [Work2] get_query_features — commented out ──
-    # def get_query_features(self, visual_output, video_mask,
-    #                        attr_tokens=None, attr_mask=None, attrs_num_blocks=1):
-    #     """Pre-compute QueryFormer output + query uncertainty. Call once in eval."""
-    #     video_mask = video_mask.view(video_mask.size(0), -1)
-    #     attr_mem = None; attr_mem_mask = None
-    #     if attr_tokens is not None and attr_mask is not None:
-    #         attrs_num_blocks = int(attrs_num_blocks) if attrs_num_blocks is not None else 1
-    #         B_vid = visual_output.size(0)
-    #         attr_tok_norm = attr_tokens / (attr_tokens.norm(dim=-1, keepdim=True) + 1e-9)
-    #         if attrs_num_blocks > 1:
-    #             L_attr = attr_tok_norm.size(1)
-    #             attr_mem = attr_tok_norm.view(B_vid, attrs_num_blocks * L_attr, -1)
-    #             attr_mem_mask = (attr_mask.view(B_vid, attrs_num_blocks * L_attr) == 0)
-    #         else:
-    #             attr_mem = attr_tok_norm
-    #             attr_mem_mask = (attr_mask == 0)
-    #     queries, gate_scores = self.query_transformer(
-    #         visual_output, padding_mask=(video_mask == 0),
-    #         attr_features=attr_mem, attr_padding_mask=attr_mem_mask,
-    #     )
-    #     query_weight = torch.softmax(gate_scores, dim=-1)
-    #     queries_norm = queries / (queries.norm(dim=-1, keepdim=True) + 1e-9)
-    #     query_pooled = torch.einsum("bq,bqd->bd", query_weight, queries_norm)
-    #     query_pooled = query_pooled / (query_pooled.norm(dim=-1, keepdim=True) + 1e-9)
-    #     query_logsigma = self.uncertain_net_query(query_pooled, queries)["logsigma"]
-    #     if self.log_sigma_min is not None and self.log_sigma_max is not None:
-    #         query_logsigma = torch.clamp(query_logsigma, min=float(self.log_sigma_min), max=float(self.log_sigma_max))
-    #     return queries, gate_scores, query_logsigma
-    # ── [/Work2] ──
-
     def _mean_pooling_for_similarity_sequence(self, sequence_output, attention_mask):
         attention_mask_un = attention_mask.to(dtype=torch.float).unsqueeze(-1)
         attention_mask_un[:, 0, :] = 0.0
@@ -550,24 +518,14 @@ class UATVR(CLIP4ClipPreTrainedModel):
         attention_mask,
         video_mask,
         sim_header="seqTransf",
-        sequence_output_attrs=None,
-        text_token_attrs=None,
-        attention_mask_attrs=None,
-        attrs_num_blocks: int = 1,
-        pre_query_features=None,  # [Work2] kept for signature compat
     ):
         sequence_output, visual_output = (
             sequence_output.contiguous(),
             visual_output.contiguous(),
         )  # visual_output [B, T, D]
-        visual_output_hidden = visual_output_hidden.contiguous()  # [B, T, 50, D]
+        visual_output_hidden = visual_output_hidden.contiguous()  # [B, T, 197, D] (ViT-B/16: 196 patches + 1 CLS)
         frame_num = visual_output.size(1)  # 12 / 64
         word_num = text_token.size(1)  # 32 /
-
-        # [Work2] Attribute tokens — commented out
-        # attr_token = text_token_attrs
-        # attr_mask = attention_mask_attrs
-        has_attrs = False
 
         if sim_header == "seqTransf":
             # Sequential type: Transformer Encoder +++++++++++++= extra token
@@ -615,41 +573,15 @@ class UATVR(CLIP4ClipPreTrainedModel):
             text_token[:, : text_original.size(1), :] += text_original
             attention_mask = tempo_mask_
 
-            # [Work2] Encode attribute tokens — commented out
-            # if has_attrs:
-            #     attr_original = attr_token
-            #     attr_seq_length = extra_text_num + attr_token.size(1)
-            #     attr_pos_ids = torch.arange(attr_seq_length, dtype=torch.long, device=attr_token.device)
-            #     attr_pos_ids = attr_pos_ids.unsqueeze(0).expand(attr_token.size(0), -1)
-            #     attr_pos_emb = self.word_position_embeddings(attr_pos_ids)
-            #     attr_pos_emb[:, : attr_token.size(1), :] += attr_token
-            #     attr_token = attr_pos_emb
-            #     attr_tempo_mask = torch.cat(
-            #         [attr_mask, torch.ones(attr_token.size(0), extra_text_num).to(attr_token.device)], axis=1
-            #     )
-            #     attr_ext_mask = (1.0 - attr_tempo_mask.unsqueeze(1)) * -1000000.0
-            #     attr_ext_mask = attr_ext_mask.expand(-1, attr_tempo_mask.size(1), -1)
-            #     attr_token = attr_token.permute(1, 0, 2)
-            #     attr_token = self.transformerClip(attr_token, attr_ext_mask)
-            #     attr_token = attr_token.permute(1, 0, 2).contiguous()
-            #     attr_token[:, : attr_original.size(1), :] += attr_original
-            #     attr_mask = attr_tempo_mask
-
         if self.training:  # DDP all_gather
             visual_output = allgather(visual_output, self.task_config)
+            visual_output_hidden = allgather(visual_output_hidden, self.task_config)
             video_mask = allgather(video_mask, self.task_config)
             sequence_output = allgather(sequence_output, self.task_config)
             text_token = allgather(text_token, self.task_config)
             attention_mask = allgather(attention_mask, self.task_config)
-            # [Work2] if has_attrs:
-            #     attr_token = allgather(attr_token, self.task_config)
-            #     attr_mask = allgather(attr_mask, self.task_config)
 
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
-        visual_pooled = self._mean_pooling_for_similarity_visual(
-            visual_output[:, 0:frame_num, :].contiguous(), video_mask[:, 0:frame_num].contiguous()
-        )
-        base_visual_pooled = visual_pooled / visual_pooled.norm(dim=-1, keepdim=True)
 
         sequence_output = sequence_output.squeeze(1)
         sequence_output = sequence_output / sequence_output.norm(dim=-1, keepdim=True)
@@ -658,26 +590,43 @@ class UATVR(CLIP4ClipPreTrainedModel):
             text_token[:, 0:word_num, :].contiguous(), attention_mask[:, 0:word_num].contiguous()
         )
         text_pooled = text_pooled / text_pooled.norm(dim=-1, keepdim=True)
+        query_weight = None
+        if self.training and self.use_tas_uncertainty:
+            with torch.no_grad():
+                query_weight = self._compute_lightweight_tas(
+                    text_pooled.detach(),
+                    top_k=self.tas_top_k,
+                    temperature=self.tas_temperature,
+                )
 
         # ===== SAP: Semantic Anchor Probing =====
+        # 将时空 token [B, T, 197, D] 展平为 [B, T*197, D]，锚点聚焦局部 patch
+        B_vis = visual_output_hidden.size(0)
+        T_vis = visual_output_hidden.size(1)
+        S_vis = visual_output_hidden.size(2)  # 每帧 patch 数（含 CLS）
+        spatial_tokens = visual_output_hidden.reshape(B_vis, T_vis * S_vis, -1)
+        # 构造 padding mask：原始 video_mask [B, T] → [B, T*S]
+        spatial_mask = video_mask[:, 0:frame_num].unsqueeze(-1).expand(-1, -1, S_vis).reshape(B_vis, -1)
         sap_out = self.sap(
-            visual_output[:, 0:frame_num, :].contiguous(),
-            padding_mask=(video_mask[:, 0:frame_num] == 0),
+            spatial_tokens.contiguous(),
+            padding_mask=(spatial_mask == 0),
         )
         anchors = sap_out["anchors"]           # [B, N, D]
         mu_raw = sap_out["mu_raw"]             # [B, D]
         logsigma_video = sap_out["logsigma"]   # [B, D]
-
         if self.log_sigma_min is not None and self.log_sigma_max is not None:
-            logsigma_video = torch.clamp(
-                logsigma_video,
-                min=float(self.log_sigma_min),
-                max=float(self.log_sigma_max),
-            )
+            logsigma_video = torch.clamp(logsigma_video, min=float(self.log_sigma_min), max=float(self.log_sigma_max))
+
+        # 拼接 expansion tokens 到 anchor 序列
+        if self.num_expansion_tokens > 0:
+            B = anchors.size(0)
+            exp_tokens = self.expansion_tokens.expand(B, -1, -1)  # [B, E, D]
+            anchors = torch.cat([anchors, exp_tokens], dim=1)     # [B, N+E, D]
 
         # ===== Probabilistic modeling (video side, from SAP anchors) =====
-        # PIENet: attention-based mean enhancement over anchor tokens
-        out_v, _attn_v, _res_v = self.pie_net_video(mu_raw, anchors)
+        # PIENet: 用 text_pooled 做 cross-modal query 去 attend anchors，
+        # 而非用 mu_raw（已是 anchors 的加权聚合，信息增益有限）
+        out_v, _attn_v, _res_v = self.pie_net_video(text_pooled, anchors)
         if self.use_ada_norm:
             out_v = self.ada_norm_video(out_v, logsigma_video)
         out_v = l2_normalize(out_v)
@@ -689,9 +638,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
         prob_text_embedding = prob_text["embedding"]
         prob_text_logsigma = prob_text["logsigma"]
 
-        # ===== Frame-level WTI matching (keep SAP only for probabilistic branch) =====
+        # ===== Retrieval logits: frame WTI =====
         logit_scale = self.clip.logit_scale.exp()
-        _, N_q, _ = anchors.shape
         wti_logits = self.weighted_token_wise_intersection(
             text_token, visual_output, attention_mask, video_mask
         ) * logit_scale
@@ -707,91 +655,160 @@ class UATVR(CLIP4ClipPreTrainedModel):
             MIL_loss = (self.loss_MIL_fct(prob_sim_v, bs, n_video, n_text)
                         + self.loss_MIL_fct(prob_sim_t, bs, n_video, n_text)) / 2
 
-            vib_loss = self.vib_loss(prob_video_embedding, prob_video_logsigma, prob_text_embedding, prob_text_logsigma)
+            if query_weight is None:
+                vib_loss = self.vib_loss(prob_video_embedding, prob_video_logsigma, prob_text_embedding, prob_text_logsigma)
+            else:
+                vib_loss = self._dynamic_vib_loss(
+                    prob_video_embedding,
+                    prob_video_logsigma,
+                    prob_text_embedding,
+                    prob_text_logsigma,
+                    query_weight=query_weight,
+                    tas_kl_scale=self.tas_kl_scale,
+                )
 
-            # Anchor diversity regularization
-            anc_norm = anchors / (anchors.norm(dim=-1, keepdim=True) + 1e-9)
-            sim_qq = torch.bmm(anc_norm, anc_norm.transpose(1, 2))  # [B, N, N]
-            eye = torch.eye(N_q, device=sim_qq.device, dtype=sim_qq.dtype).unsqueeze(0)
-            div_loss = torch.clamp(sim_qq - eye - self.div_margin, min=0).mean()
+            # detach 避免 evidential loss 与 CrossEn 的梯度方向冲突
+            uncertainty_reg_loss, evidential_uncertainty = self.evidential_matrix_loss(wti_logits.detach())
 
-            # Gate entropy regularization: penalize uniform gates to encourage anchor specialization
-            gate_scores_train = sap_out["gate_scores"]           # [B, N]
-            g_w = gate_scores_train / (gate_scores_train.sum(dim=-1, keepdim=True) + 1e-9)
-            gate_entropy_loss = -(g_w * (g_w + 1e-9).log()).sum(dim=-1).mean()
+            # ── 因果链诊断统计（不参与 loss，detach 后计算，每 N 步采集一次） ──
+            self._diag_step += 1
+            if self._diag_step % self._diag_interval == 0:
+                with torch.no_grad():
+                    # 链一：检索头 — pos/neg gap
+                    S = wti_logits.detach()                  # [B, B]
+                    diag = S.diagonal()                      # [B]
+                    B_s = S.size(0)
+                    mask_off = ~torch.eye(B_s, dtype=torch.bool, device=S.device)
+                    off = S[mask_off]
+                    self._diag_chain = {
+                        "pos_mean": float(diag.mean()),
+                        "neg_mean": float(off.mean()),
+                        "gap":      float(diag.mean() - off.mean()),
+                        "pos_std":  float(diag.std(unbiased=False)),
+                    }
 
-            # ── 因果链诊断统计（不参与 loss，detach 后计算） ──────────────────
-            with torch.no_grad():
-                # 链一：检索头 — pos/neg gap（帧级 logit 矩阵对角 vs 非对角）
-                S = wti_logits.detach()                  # [B, B]
-                diag = S.diagonal()                      # [B]
-                B_s = S.size(0)
-                mask_off = ~torch.eye(B_s, dtype=torch.bool, device=S.device)
-                off = S[mask_off]
-                diag_chain = {
-                    "pos_mean": float(diag.mean()),
-                    "neg_mean": float(off.mean()),
-                    "gap":      float(diag.mean() - off.mean()),
-                    "pos_std":  float(diag.std(unbiased=False)),
-                }
+                    # 链二：概率分支 — logsigma 量级 + per-sample KL
+                    ls_v = prob_video_logsigma.detach()       # [B, D]
+                    ls_t = prob_text_logsigma.detach()
+                    var_v = float(ls_v.exp().mean())
+                    var_t = float(ls_t.exp().mean())
+                    kl_v  = 0.5 * (ls_v.exp() - 1 - ls_v).mean(dim=-1)   # [B]
+                    kl_t  = 0.5 * (ls_t.exp() - 1 - ls_t).mean(dim=-1)
+                    self._prob_chain = {
+                        "var_video_mean": var_v,
+                        "var_text_mean":  var_t,
+                        "kl_video_mean":  float(kl_v.mean()),
+                        "kl_video_std":   float(kl_v.std(unbiased=False)),
+                        "kl_text_mean":   float(kl_t.mean()),
+                        "kl_text_std":    float(kl_t.std(unbiased=False)),
+                    }
+                    if query_weight is not None:
+                        self._prob_chain["tas_mean"] = float(query_weight.detach().mean())
+                        self._prob_chain["tas_std"] = float(query_weight.detach().std(unbiased=False))
 
-                # 链二：SAP 行为 — gate 熵、归一化熵、top-1 占比
-                sap_gate = sap_out["gate_scores"].detach()   # [B, N]
-                g_w = sap_gate / (sap_gate.sum(dim=-1, keepdim=True) + 1e-9)
-                gate_entropy = -(g_w * (g_w + 1e-9).log()).sum(dim=-1)  # [B]
-                N_anchors = sap_gate.size(-1)
-                # 归一化熵：1.0 = 完全均匀，0.0 = 完全集中
-                gate_norm_H = gate_entropy / math.log(N_anchors)
-                # top-1 归一化 gate 权重：越大说明 gate 越集中
-                gate_top1 = g_w.max(dim=-1).values
-                sap_chain = {
-                    "gate_entropy_mean": float(gate_entropy.mean()),
-                    "gate_norm_H":       float(gate_norm_H.mean()),
-                    "gate_top1_mean":    float(gate_top1.mean()),
-                    "sap_beta":          float(self.sap.beta.item()),
-                }
-
-                # 链三：概率分支 — logsigma 量级 + per-sample KL
-                ls_v = prob_video_logsigma.detach()       # [B, D]
-                ls_t = prob_text_logsigma.detach()
-                # 实际方差量级（exp 后均值）
-                var_v = float(ls_v.exp().mean())
-                var_t = float(ls_t.exp().mean())
-                # per-sample KL（近似：0.5*(mu²+σ²-1-logσ²), mu≈0）
-                kl_v  = 0.5 * (ls_v.exp() - 1 - ls_v).mean(dim=-1)   # [B]
-                kl_t  = 0.5 * (ls_t.exp() - 1 - ls_t).mean(dim=-1)
-                prob_chain = {
-                    "var_video_mean": var_v,
-                    "var_text_mean":  var_t,
-                    "kl_video_mean":  float(kl_v.mean()),
-                    "kl_video_std":   float(kl_v.std(unbiased=False)),
-                    "kl_text_mean":   float(kl_t.mean()),
-                    "kl_text_std":    float(kl_t.std(unbiased=False)),
-                }
-
-                # 链四：辅助 loss 子项量级（验证正则化是否生效）
-                aux_chain = {
-                    "div_loss_val":      float(div_loss.item()),
-                    "gate_ent_loss_val": float(gate_entropy_loss.item()),
-                    "logsigma_v_mean":   float(logsigma_video.detach().mean().item()),
-                }
-
-            # 暂存到模型属性，供训练循环采集（不进 DDP all_reduce，rank0 only）
-            self._diag_chain  = diag_chain
-            self._sap_chain   = sap_chain
-            self._prob_chain  = prob_chain
-            self._aux_chain   = aux_chain
+                    # 链三：辅助 loss 子项
+                    self._aux_chain = {
+                        "uncertainty_reg_loss_val": float(uncertainty_reg_loss.item()),
+                        "evidential_uncertainty": float(evidential_uncertainty.item()),
+                        "logsigma_v_mean":   float(logsigma_video.detach().mean().item()),
+                    }
             # ──────────────────────────────────────────────────────────────────
+
+            # Anchor 正交损失：只对 SAP 的 N 个语义 anchor 做正交，排除 expansion tokens
+            orth_loss = torch.tensor(0.0, device=anchors.device)
+            if self.w_orth > 0:
+                sap_anchors = anchors[:, :self.num_anchors, :]  # [B, N, D]
+                anchor_norm = torch.nn.functional.normalize(sap_anchors, dim=-1)
+                sim_qq = torch.bmm(anchor_norm, anchor_norm.transpose(1, 2))  # [B, N, N]
+                eye = torch.eye(sim_qq.size(1), device=sim_qq.device).unsqueeze(0)
+                orth_loss = ((sim_qq - eye) ** 2).mean()
 
             loss = {}
             loss["retrieve_logits"] = wti_logits
             loss["MIL_loss"] = self.w_mil * MIL_loss
             loss["vib_loss"] = self.w_vib * vib_loss
-            loss["div_loss"] = self.w_div * div_loss
-            loss["gate_ent_loss"] = self.w_gate_ent * gate_entropy_loss
+            loss["uncertainty_reg_loss"] = self.w_uncertainty_reg * uncertainty_reg_loss
+            loss["orth_loss"] = self.w_orth * orth_loss
+            if query_weight is not None:
+                loss["tas_weight"] = query_weight.detach().mean()
             return loss
         else:
             return wti_logits
+
+    @staticmethod
+    def _compute_lightweight_tas(text_pooled, top_k=5, temperature=0.05):
+        """基于 batch 内文本相似度分布计算轻量 TAS。"""
+        batch_size = text_pooled.size(0)
+        if batch_size <= 1:
+            return text_pooled.new_zeros(batch_size)
+
+        top_k = max(1, min(int(top_k), batch_size))
+        temperature = max(float(temperature), 1e-6)
+        text_norm = F.normalize(text_pooled, p=2, dim=-1)
+        sim_matrix = torch.matmul(text_norm, text_norm.t())
+        top_scores = torch.topk(sim_matrix, k=top_k, dim=-1).values
+        probs = torch.softmax(top_scores / temperature, dim=-1)
+        entropy = -(probs * (probs + 1e-9).log()).sum(dim=-1)
+        if top_k <= 1:
+            return torch.zeros_like(entropy)
+        return torch.clamp(entropy / math.log(top_k), min=0.0, max=1.0)
+
+    @staticmethod
+    def _dynamic_vib_loss(sampled_video, video_sigma, sampled_text, text_sigma, query_weight=None, tas_kl_scale=0.5):
+        """按 TAS 对文本侧 KL 做逐样本动态缩放。"""
+        video_mu = sampled_video.mean(dim=1)
+        text_mu = sampled_text.mean(dim=1)
+        video_kl = UATVR._kl_divergence_per_sample(video_mu, video_sigma)
+        text_kl = UATVR._kl_divergence_per_sample(text_mu, text_sigma)
+        if query_weight is not None:
+            query_weight = query_weight.to(device=text_kl.device, dtype=text_kl.dtype).view(-1)
+            tas_kl_scale = max(float(tas_kl_scale), 0.0)
+            text_scale = 1.0 + tas_kl_scale * (1.0 - 2.0 * query_weight)
+            text_scale = torch.clamp(text_scale, min=0.0)
+            text_kl = text_kl * text_scale
+        return video_kl.mean() + text_kl.mean()
+
+    @staticmethod
+    def _kl_divergence_per_sample(mu, logsigma):
+        """计算每个样本到标准高斯先验的 KL。"""
+        return -0.5 * (1 + logsigma - mu.pow(2) - logsigma.exp()).sum(dim=-1)
+
+    @staticmethod
+    def evidential_matrix_loss(sim_matrix):
+        """DUQ-style evidence loss that encourages diagonal confidence in a similarity matrix.
+
+        Returns:
+            (loss, uncertainty): loss 为标量，uncertainty 为 [B] 的 per-sample 不确定性分数。
+            uncertainty = 1 - K/S，其中 K=批次大小，S=对角 alpha 之和。
+            S 越大（证据越强），uncertainty 越接近 0；S≈K 时 uncertainty≈1。
+        """
+        B = sim_matrix.shape[0]
+        target = torch.eye(B, dtype=sim_matrix.dtype, device=sim_matrix.device)
+        evidence = torch.relu(sim_matrix)
+        alpha = evidence + 1.0
+
+        def _dirichlet_mse(cur_target, cur_alpha):
+            strength = torch.sum(cur_alpha, dim=1, keepdim=True)
+            prob = cur_alpha / strength
+            err = torch.sum((cur_target - prob) ** 2, dim=1, keepdim=True)
+            var = torch.sum(
+                cur_alpha * (strength - cur_alpha) / (strength * strength * (strength + 1.0)),
+                dim=1,
+                keepdim=True,
+            )
+            return err + var
+
+        loss = (
+            torch.mean(_dirichlet_mse(target, alpha))
+            + torch.mean(_dirichlet_mse(target, alpha.t()))
+        ) / 2.0
+
+        # uncertainty: 对角 alpha 求和得到 S，uncertainty = 1 - K/S
+        diag_alpha = alpha.diagonal()  # [B]
+        S = diag_alpha.sum()
+        uncertainty = 1.0 - B / (S + 1e-8)
+
+        return loss, uncertainty
 
     def weighted_token_wise_intersection(self, text_token, frame_token, attention_mask, video_mask):
         device = text_token.device
@@ -818,61 +835,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         v2t_logits = torch.einsum("abv,bv->ab", [v2t_logits, video_weight])
         retrieve_logits = (t2v_logits + v2t_logits) / 2.0
         return retrieve_logits
-
-    def anchor_wti(self, text_token, anchor_token, attention_mask, anchor_mask, gate_scores):
-        """Anchor-level weighted token-wise intersection (bidirectional)."""
-        device = text_token.device
-
-        text_weight = self.text_weight_fc(text_token).squeeze(2)
-        text_mask_bool = (attention_mask == 0).to(device=device, dtype=torch.bool)
-        text_weight.masked_fill_(text_mask_bool, float("-inf"))
-        text_weight = torch.softmax(text_weight, dim=-1)
-
-        anchor_weight = gate_scores.clone()
-        anchor_mask_bool = (anchor_mask == 0).to(device=device, dtype=torch.bool)
-        anchor_weight.masked_fill_(anchor_mask_bool, 0.0)
-        anchor_weight = anchor_weight / (anchor_weight.sum(dim=-1, keepdim=True) + 1e-9)
-
-        retrieve_logits = torch.einsum("atd,bnd->abtn", [text_token, anchor_token])
-        retrieve_logits = torch.einsum("abtn,at->abtn", [retrieve_logits, attention_mask])
-        retrieve_logits = torch.einsum("abtn,bn->abtn", [retrieve_logits, anchor_mask])
-
-        t2a_logits, _ = retrieve_logits.max(dim=-1)  # [B_t, B_v, T]
-        t2a_logits = torch.einsum("abt,at->ab", [t2a_logits, text_weight])
-
-        a2t_logits, _ = retrieve_logits.max(dim=-2)  # [B_t, B_v, N]
-        a2t_logits = torch.einsum("abn,bn->ab", [a2t_logits, anchor_weight])
-
-        return (t2a_logits + a2t_logits) / 2.0
-
-    def probabilistic_video(self, video_pooled, videos):
-        output = {}
-
-        out, attn, residual = self.pie_net_video(
-            video_pooled, videos
-        )  # (B 512) (B 12 512)   multiheadatt + fc + sigmoid + (residual) + laynorm
-        output["attention"] = attn
-        output["residual"] = residual  # B 512
-
-        uncertain_out = self.uncertain_net_video(
-            video_pooled, videos
-        )  # (B 512) (B 12 512)   multiheadatt + fc + (residual)
-        logsigma = uncertain_out["logsigma"]
-        if self.log_sigma_min is not None and self.log_sigma_max is not None:
-            logsigma = torch.clamp(logsigma, min=float(self.log_sigma_min), max=float(self.log_sigma_max))
-        output["logsigma"] = logsigma  # B 512     可以看作是方差
-        output["uncertainty_attention"] = uncertain_out["attention"]
-
-        if self.use_ada_norm:
-            out = self.ada_norm_video(out, logsigma)
-        out = l2_normalize(out)  # B 512     l2 normalization后 均值
-        output["mean"] = out
-
-        output["embedding"] = sample_gaussian_tensors(
-            out, logsigma, self.n_video_samples
-        )  # B 7 512    从高斯分布中采样N个embedding
-
-        return output
 
     def probabilistic_text(self, text_pooled, text_token):
         output = {}
@@ -911,11 +873,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_mask,
         shaped=False,
         loose_type=False,
-        sequence_output_attrs=None,
-        text_token_attrs=None,
-        attention_mask_attrs=None,
-        attrs_num_blocks: int = 1,
-        pre_query_features=None,
     ):
         if shaped is False:
             attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
@@ -930,11 +887,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 attention_mask,
                 video_mask,
                 sim_header=self.sim_header,
-                sequence_output_attrs=sequence_output_attrs,
-                text_token_attrs=text_token_attrs,
-                attention_mask_attrs=attention_mask_attrs,
-                attrs_num_blocks=attrs_num_blocks,
-                pre_query_features=pre_query_features,
             )
             return loss
         else:
@@ -946,10 +898,5 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 attention_mask,
                 video_mask,
                 sim_header=self.sim_header,
-                sequence_output_attrs=sequence_output_attrs,
-                text_token_attrs=text_token_attrs,
-                attention_mask_attrs=attention_mask_attrs,
-                attrs_num_blocks=attrs_num_blocks,
-                pre_query_features=pre_query_features,
             )
             return retrieve_logits, {}

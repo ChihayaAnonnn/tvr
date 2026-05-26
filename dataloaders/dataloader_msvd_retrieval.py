@@ -155,7 +155,7 @@ class MSVD_DataLoader(Dataset):
         assert self.frame_order in [0, 1, 2]
         # 0: cut from head frames; 1: cut from tail frames; 2: extract frames uniformly.
         self.slice_framepos = slice_framepos
-        assert self.slice_framepos in [0, 1, 2]
+        assert self.slice_framepos in [0, 1, 2, 3]   # 3: TQFS 帧质量采样
 
         self.subset = subset
         assert self.subset in ["train", "val", "test"]
@@ -314,6 +314,15 @@ class MSVD_DataLoader(Dataset):
                         video_slice = raw_video_slice[:self.max_frames, ...]
                     elif self.slice_framepos == 1:
                         video_slice = raw_video_slice[-self.max_frames:, ...]
+                    elif self.slice_framepos == 3:
+                        from dataloaders.tqfs_util import select_tqfs_indices
+                        raw_result = self.rawVideoExtractor.get_raw_video_data(video_path)
+                        raw_frames = raw_result['video']
+                        if len(raw_frames) > 1:
+                            tqfs_indx = select_tqfs_indices(raw_frames, self.max_frames)
+                            video_slice = self.rawVideoExtractor.preprocess_raw_frames([raw_frames[i] for i in tqfs_indx])
+                        else:
+                            video_slice = raw_video_slice[:self.max_frames, ...]
                     else:
                         sample_indx = np.linspace(0, raw_video_slice.shape[0] - 1, num=self.max_frames, dtype=int)
                         video_slice = raw_video_slice[sample_indx, ...]

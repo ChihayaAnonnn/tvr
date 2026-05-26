@@ -1,7 +1,7 @@
 # 本地/占空间/非必要纳入版本管理的内容
 logs/
 docs/
-ref/
+
 deploy_qwen/
 ckpts/
 tmp/
