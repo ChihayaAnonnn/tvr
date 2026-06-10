@@ -38,64 +38,38 @@ def test_model_weight_defaults_match_uncertainty_only_setting():
     assert getattr(task_config, "w_uncertainty_reg", 1e-3) == 1e-3
 
 
-def test_lightweight_tas_entropy_is_higher_for_ambiguous_neighbors():
-    text_pooled = torch.tensor(
-        [
-            [1.0, 0.0, 0.0],
-            [0.99, 0.01, 0.0],
-            [0.0, 1.0, 0.0],
-        ]
-    )
+def test_evidential_similarity_penalizes_high_uncertainty():
+    """认知不确定性越高，evidential 相似度越低。"""
+    mu_video = torch.tensor([[1.0, 0.0], [0.0, 1.0]])  # [2, 2], 已 L2 norm
+    text_pooled = torch.tensor([[1.0, 0.0], [0.0, 1.0]])  # [2, 2]
+    # 低不确定性
+    epistemic_low = torch.full((2, 4, 2), 0.01)
+    sim_low = UATVR._evidential_similarity(mu_video, text_pooled, epistemic_low)
+    # 高不确定性
+    epistemic_high = torch.full((2, 4, 2), 5.0)
+    sim_high = UATVR._evidential_similarity(mu_video, text_pooled, epistemic_high)
+    # 低不确定性的对角值应大于高不确定性的
+    assert sim_low.diagonal().mean() > sim_high.diagonal().mean()
 
-    tas = UATVR._compute_lightweight_tas(text_pooled, top_k=3, temperature=0.05)
 
-    assert tas[0] > tas[2]
-    assert torch.all((tas >= 0.0) & (tas <= 1.0))
+def test_evidential_nll_loss_penalizes_weak_positives():
+    """正对分数越低，NLL loss 越高。"""
+    alpha_dir = torch.tensor([[10.0, 10.0], [10.0, 10.0]])
+    # 强正对
+    sim_strong = torch.tensor([[2.0, -0.5], [-0.5, 2.0]])
+    loss_strong = UATVR._evidential_nll_loss(sim_strong, alpha_dir)
+    # 弱正对
+    sim_weak = torch.tensor([[0.1, -0.5], [-0.5, 0.1]])
+    loss_weak = UATVR._evidential_nll_loss(sim_weak, alpha_dir)
+    assert loss_weak > loss_strong
 
 
-def test_dynamic_vib_loss_relaxes_text_kl_for_high_tas():
-    sampled_video = torch.zeros(2, 1, 2)
-    video_sigma = torch.zeros(2, 2)
-    sampled_text = torch.zeros(2, 1, 2)
-    text_sigma = torch.tensor([[0.5, 0.5], [0.5, 0.5]])
-    high_then_low_tas = torch.tensor([1.0, 0.0])
-    low_then_high_tas = torch.tensor([0.0, 1.0])
-
-    high_first_loss = UATVR._dynamic_vib_loss(
-        sampled_video,
-        video_sigma,
-        sampled_text,
-        text_sigma,
-        query_weight=high_then_low_tas,
-        tas_kl_scale=0.5,
-    )
-    low_first_loss = UATVR._dynamic_vib_loss(
-        sampled_video,
-        video_sigma,
-        sampled_text,
-        text_sigma,
-        query_weight=low_then_high_tas,
-        tas_kl_scale=0.5,
-    )
-
-    assert high_first_loss == low_first_loss
-
-    uneven_text_sigma = torch.tensor([[1.0, 1.0], [0.1, 0.1]])
-    high_uncertain_loss = UATVR._dynamic_vib_loss(
-        sampled_video,
-        video_sigma,
-        sampled_text,
-        uneven_text_sigma,
-        query_weight=high_then_low_tas,
-        tas_kl_scale=0.5,
-    )
-    low_uncertain_loss = UATVR._dynamic_vib_loss(
-        sampled_video,
-        video_sigma,
-        sampled_text,
-        uneven_text_sigma,
-        query_weight=low_then_high_tas,
-        tas_kl_scale=0.5,
-    )
-
-    assert high_uncertain_loss < low_uncertain_loss
+def test_evidential_neg_reg_loss_penalizes_high_negative_evidence():
+    """负对证据量越高，neg_reg loss 越高。"""
+    # 高负对分数
+    sim_high_neg = torch.tensor([[1.0, 3.0, 3.0], [3.0, 1.0, 3.0], [3.0, 3.0, 1.0]])
+    loss_high = UATVR._evidential_neg_reg_loss(sim_high_neg)
+    # 低负对分数
+    sim_low_neg = torch.tensor([[1.0, -1.0, -1.0], [-1.0, 1.0, -1.0], [-1.0, -1.0, 1.0]])
+    loss_low = UATVR._evidential_neg_reg_loss(sim_low_neg)
+    assert loss_high > loss_low

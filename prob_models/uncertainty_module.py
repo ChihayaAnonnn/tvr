@@ -225,45 +225,4 @@ class UncertaintyModuleTextMamba(nn.Module):
         }
 
 
-class EvidentialUncertaintyHead(nn.Module):
-    def __init__(self, d_model=512, n_anchors=16):
-        super().__init__()
-        self.n_anchors = n_anchors
-        self.d_model = d_model
 
-        # 1. 离散层：预测 16 个语义主观模态的证据量
-        self.dirichlet_layer = nn.Linear(d_model, 1)
-
-        # 2. 连续层：为每个模态预测 NIG 分布的 4 个参数 (γ, v, α_nig, β_nig)
-        # γ (mean), v (evidence scale), α (shape), β (scale)
-        self.nig_layer = nn.Linear(d_model, 4 * d_model)
-
-    def forward(self, anchor_features):
-        # anchor_features 形状: [B, 16, 512]
-        B, N, D = anchor_features.shape
-
-        # ---- 离散狄利克雷层 ----
-        dir_logits = self.dirichlet_layer(anchor_features).squeeze(-1)  # [B, 16]
-        # 证据量必须大于 0，通常公式为 softplus(x) + 1
-        alpha_dir = F.softplus(dir_logits) + 1.0
-        S = torch.sum(alpha_dir, dim=-1, keepdim=True)  # 总证据量 [B, 1]
-        u_mode = self.n_anchors / S  # 模态不确定性 [B, 1]
-
-        # ---- 连续 NIG 层 ----
-        nig_params = self.nig_layer(anchor_features)  # [B, 16, 4*512]
-        nig_params = nig_params.view(B, N, 4, D)
-
-        gamma = nig_params[:, :, 0, :]  # 核心表征向量（均值），无特定激活或用 tanh
-        v = F.softplus(nig_params[:, :, 1, :]) + 1e-6
-        alpha_nig = F.softplus(nig_params[:, :, 2, :]) + 1.0 + 1e-6
-        beta_nig = F.softplus(nig_params[:, :, 3, :]) + 1e-6
-
-        # 计算连续特征维度的认知不确定性 (Epistemic Uncertainty)
-        epistemic_cont = beta_nig / (v * (alpha_nig - 1.0))
-
-        return {
-            "alpha_dir": alpha_dir,  # [B, 16] 离散证据
-            "u_mode": u_mode,  # [B, 1] 离散不确定性
-            "gamma": gamma,  # [B, 16, 512] 连续特征中心
-            "epistemic_cont": epistemic_cont,  # [B, 16, 512] 连续不确定性
-        }

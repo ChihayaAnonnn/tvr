@@ -307,7 +307,8 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
     # Loss weights
     parser.add_argument("--w_mil", default=1e-2, type=float, help="Weight for MIL (probabilistic) loss.")
-    parser.add_argument("--w_vib", default=1e-4, type=float, help="Weight for VIB (KL to prior) loss.")
+    parser.add_argument("--w_evidential", default=1e-2, type=float, help="Weight for Evidential NLL loss.")
+    parser.add_argument("--w_neg_reg", default=1e-2, type=float, help="Weight for negative evidence regularization.")
     parser.add_argument(
         "--w_uncertainty_reg",
         default=1e-3,
@@ -316,33 +317,38 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
     parser.add_argument("--w_orth", default=0.1, type=float, help="Weight for anchor orthogonality loss.")
     parser.add_argument(
-        "--use_tas_uncertainty",
-        action="store_true",
-        help="Enable lightweight TAS to dynamically scale text-side VIB KL regularization.",
-    )
-    parser.add_argument(
-        "--tas_top_k",
-        default=5,
-        type=int,
-        help="Top-k batch neighbors used by lightweight TAS entropy.",
-    )
-    parser.add_argument(
-        "--tas_temperature",
-        default=0.05,
-        type=float,
-        help="Softmax temperature for lightweight TAS entropy.",
-    )
-    parser.add_argument(
-        "--tas_kl_scale",
-        default=0.5,
-        type=float,
-        help="Scale range for TAS-driven text-side KL weighting.",
-    )
-    parser.add_argument(
         "--w_query_sim",
         default=1e-2,
         type=float,
         help="Weight for query-branch independent contrastive loss.",
+    )
+    # 退火系数：默认关闭；需要时可对 evidential / neg_reg loss 做线性 warmup
+    parser.add_argument(
+        "--anneal_warmup_epochs",
+        default=0,
+        type=int,
+        help="Number of warmup epochs for annealing evidential/neg_reg losses. "
+             "Set <= 0 to disable annealing. During warmup, loss weight = epoch / warmup_epochs. "
+             "After warmup, weight = 1.0.",
+    )
+    # 不确定性置信度 warmup 步数（方案 A）
+    parser.add_argument(
+        "--warmup_steps",
+        default=500,
+        type=int,
+        help="Number of warmup steps for uncertainty-weighted retrieval (Plan A). "
+             "Set <= 0 to disable warmup and immediately use full uncertainty weighting. "
+             "During warmup: confidence = 1 - α + α / (1 + epistemic), α = step / warmup_steps.",
+    )
+    # 不确定性训练模式：nig_mil / none
+    parser.add_argument(
+        "--uncertainty_mode",
+        default="none",
+        type=str,
+        choices=["nig_mil", "none"],
+        help="How to train uncertainty parameters. "
+             "nig_mil: use NIG variance for MIL sampling (replaces mixture variance). "
+             "none: disable evidential/neg_reg losses, keep SAP architecture (baseline).",
     )
     # MoE fusion weight control
     parser.add_argument(
@@ -410,9 +416,10 @@ def set_seed_logger(args):
             "Model": ["pretrained_clip_name", "sim_header", "linear_patch", "fusion_mode",
                        "extra_video_cls_num", "extra_text_cls_num", "n_video_embeddings", "n_text_embeddings",
                        "uncertainty_text_head", "log_sigma_min", "log_sigma_max"],
-            "Query": ["w_query_sim", "w_uncertainty_reg",
-                      "use_tas_uncertainty", "tas_top_k", "tas_temperature", "tas_kl_scale",
+            "Query": ["w_query_sim", "w_uncertainty_reg", "w_evidential", "w_neg_reg",
                       "fusion_temperature", "num_queries", "num_expansion_tokens"],
+            "Annealing": ["anneal_warmup_epochs", "warmup_steps"],
+            "Uncertainty": ["uncertainty_mode"],
         }
         printed_keys = set()
         for group, keys in key_params.items():
@@ -603,6 +610,10 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     model.train()
     log_step = args.n_display
     gate_log_step = args.gate_log_interval if args.gate_log_interval is not None else args.n_display
+
+    # 更新模型的当前 epoch，用于退火系数计算
+    core = model.module if hasattr(model, "module") else model
+    core._current_epoch = epoch
     start_time = time.time()
     epoch_start_time = time.time()
     total_loss = 0
@@ -649,7 +660,8 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             except Exception:
                 continue
         if (step + 1) % args.gradient_accumulation_steps == 0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            # 梯度裁剪从 1.0 降到 0.5，防止 NIG 层训练中期梯度崩塌
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
             if scheduler is not None:
                 scheduler.step()  # Update learning rate schedule
@@ -674,7 +686,8 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 if _d is not None:
                     acc = _causal_acc[_key]
                     for k, v in _d.items():
-                        acc[k] = acc.get(k, 0.0) + v
+                        if isinstance(v, (int, float)):
+                            acc[k] = acc.get(k, 0.0) + v
             _causal_acc["n"] += 1
 
             if global_step % log_step == 0 and local_rank == 0:
@@ -722,16 +735,20 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     )
                 if _pc:
                     logger.info(
-                        "  [Chain-Prob] var_v=%.4f  var_t=%.4f  kl_v=%.4f±%.4f  kl_t=%.4f±%.4f",
-                        _pc["var_video_mean"], _pc["var_text_mean"],
-                        _pc["kl_video_mean"], _pc["kl_video_std"],
-                        _pc["kl_text_mean"], _pc["kl_text_std"],
+                        "  [Chain-Prob] u_mode=%.4f±%.4f  epistemic_v=%.4f  var_t=%.4f  kl_t=%.4f",
+                        _pc.get("u_mode_mean", 0), _pc.get("u_mode_std", 0),
+                        _pc.get("epistemic_v_mean", 0),
+                        _pc.get("var_text_mean", 0),
+                        _pc.get("kl_text_mean", 0),
                     )
                 if _ac:
                     logger.info(
-                        "  [Chain-Aux]  evid_unc=%.4f  logsig_v=%.4f",
+                        "  [Chain-Aux]  evid_loss=%.4f  neg_reg=%.4f  evid_unc=%.4f  logsig_v=%.4f  anneal=%.3f",
+                        _ac.get("evidential_loss_val", 0),
+                        _ac.get("neg_reg_loss_val", 0),
                         _ac.get("evidential_uncertainty", 0),
                         _ac["logsigma_v_mean"],
+                        _ac.get("anneal_factor", 1.0),
                     )
 
             if (
@@ -758,25 +775,24 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
         sc = _avg(_causal_acc["sap"])
         pc = _avg(_causal_acc["prob"])
         ac = _avg(_causal_acc.get("aux", {}))
-        if dc and sc and pc:
+        if dc and pc:
             logger.info(
                 "[Epoch %d Causal Summary]\n"
                 "  Ret  : pos=%.3f  neg=%.3f  gap=%.3f  pos_std=%.3f\n"
-                "  SAP  : gate_H=%.3f  norm_H=%.3f  top1=%.3f  beta=%.4f\n"
-                "  Prob : var_v=%.4f  var_t=%.4f  kl_v=%.4f±%.4f  kl_t=%.4f±%.4f\n"
-                "  Aux  : div_loss=%.4f  dir_div=%.4f  gate_ent=%.4f  logsigma_v=%.4f",
+                "  Evid : u_mode=%.4f±%.4f  epistemic_v=%.4f\n"
+                "  Text : var_t=%.4f  kl_t=%.4f\n"
+                "  Aux  : evid_loss=%.4f  neg_reg=%.4f  evid_unc=%.4f  logsig_v=%.4f",
                 epoch + 1,
                 dc.get("pos_mean", 0), dc.get("neg_mean", 0),
                 dc.get("gap", 0), dc.get("pos_std", 0),
-                sc.get("gate_entropy_mean", 0), sc.get("gate_norm_H", 0),
-                sc.get("gate_top1_mean", 0), sc.get("sap_beta", 0),
-                pc.get("var_video_mean", 0), pc.get("var_text_mean", 0),
-                pc.get("kl_video_mean", 0), pc.get("kl_video_std", 0),
-                pc.get("kl_text_mean", 0), pc.get("kl_text_std", 0),
-                ac.get("div_loss_val", 0), ac.get("dir_div_loss_val", 0),
-                ac.get("gate_ent_loss_val", 0), ac.get("logsigma_v_mean", 0),
+                pc.get("u_mode_mean", 0), pc.get("u_mode_std", 0),
+                pc.get("epistemic_v_mean", 0),
+                pc.get("var_text_mean", 0),
+                pc.get("kl_text_mean", 0),
+                ac.get("evidential_loss_val", 0), ac.get("neg_reg_loss_val", 0),
+                ac.get("evidential_uncertainty", 0), ac.get("logsigma_v_mean", 0),
             )
-            _log_causal_summary_tsv(args, epoch, dc, sc, pc, ac)
+            _log_causal_summary_tsv(args, epoch, dc, pc, ac)
     return total_loss, global_step
 
 
@@ -873,7 +889,7 @@ def _log_moe_weights_tsv(args, model, epoch: int, step: int, global_step: int):
         f.write(line)
 
 
-def _log_causal_summary_tsv(args, epoch: int, dc: dict, sc: dict, pc: dict, ac: dict = None):
+def _log_causal_summary_tsv(args, epoch: int, dc: dict, pc: dict, ac: dict = None):
     """Write epoch-level causal-chain summary to TSV. rank0 only."""
     import datetime as _dt
 
@@ -888,22 +904,20 @@ def _log_causal_summary_tsv(args, epoch: int, dc: dict, sc: dict, pc: dict, ac: 
     header = (
         "time\trun_id\tepoch\t"
         "ret_pos_mean\tret_neg_mean\tret_gap\tret_pos_std\t"
-        "sap_gate_H\tsap_gate_norm_H\tsap_gate_top1\tsap_beta\t"
-        "prob_var_v\tprob_var_t\tprob_kl_v_mean\tprob_kl_v_std\tprob_kl_t_mean\tprob_kl_t_std\t"
-        "aux_div_loss\taux_dir_div_loss\taux_gate_ent_loss\taux_logsigma_v\n"
+        "u_mode_mean\tu_mode_std\tepistemic_v_mean\t"
+        "var_text_mean\tkl_text_mean\t"
+        "evidential_loss\tneg_reg_loss\tevidential_unc\tlogsigma_v\n"
     )
     def _f(x): return f"{x:.6f}" if isinstance(x, float) else "nan"
     line = (
         f"{_dt.datetime.now().isoformat(timespec='seconds')}\t{run_id}\t{epoch + 1}\t"
         f"{_f(dc.get('pos_mean',0))}\t{_f(dc.get('neg_mean',0))}\t"
         f"{_f(dc.get('gap',0))}\t{_f(dc.get('pos_std',0))}\t"
-        f"{_f(sc.get('gate_entropy_mean',0))}\t{_f(sc.get('gate_norm_H',0))}\t"
-        f"{_f(sc.get('gate_top1_mean',0))}\t{_f(sc.get('sap_beta',0))}\t"
-        f"{_f(pc.get('var_video_mean',0))}\t{_f(pc.get('var_text_mean',0))}\t"
-        f"{_f(pc.get('kl_video_mean',0))}\t{_f(pc.get('kl_video_std',0))}\t"
-        f"{_f(pc.get('kl_text_mean',0))}\t{_f(pc.get('kl_text_std',0))}\t"
-        f"{_f(ac.get('div_loss_val',0))}\t{_f(ac.get('dir_div_loss_val',0))}\t"
-        f"{_f(ac.get('gate_ent_loss_val',0))}\t{_f(ac.get('logsigma_v_mean',0))}\n"
+        f"{_f(pc.get('u_mode_mean',0))}\t{_f(pc.get('u_mode_std',0))}\t"
+        f"{_f(pc.get('epistemic_v_mean',0))}\t"
+        f"{_f(pc.get('var_text_mean',0))}\t{_f(pc.get('kl_text_mean',0))}\t"
+        f"{_f(ac.get('evidential_loss_val',0))}\t{_f(ac.get('neg_reg_loss_val',0))}\t"
+        f"{_f(ac.get('evidential_uncertainty',0))}\t{_f(ac.get('logsigma_v_mean',0))}\n"
     )
     need_header = not os.path.exists(out_file) or os.path.getsize(out_file) == 0
     with open(out_file, "a", encoding="utf-8") as f:

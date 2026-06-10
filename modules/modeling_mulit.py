@@ -11,7 +11,7 @@ from modules.module_clip import CLIP, convert_weights
 from modules.module_cross import CrossConfig
 from modules.module_cross import Transformer as TransformerClip
 from modules.spatial_enhancer import SpatialEnhancer
-from modules.until_module import AllGather, CrossEn, KLdivergence, MILNCELoss_BoF, PreTrainedModel
+from modules.until_module import AllGather, CrossEn, MILNCELoss_BoF, PreTrainedModel
 from query_models.module_sap import SemanticAnchorProbing
 
 try:
@@ -253,9 +253,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 heads=transformer_heads,
             )
 
-        self.pie_net_video = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
-        # Video-side uncertainty now comes from SAP per-anchor decomposition.
-        # self.uncertain_net_video = UncertaintyModuleImage(embed_dim, embed_dim, embed_dim // 2)
+        # 视频侧 PIENet 已移除：SAP 的 Dirichlet 模态概率聚合替代了 PIENet 的 cross-modal attention
 
         self.pie_net_text = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
         # Text-side uncertainty head can be configured (default keeps previous lightweight head).
@@ -269,7 +267,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         self.use_ada_norm = getattr(self.task_config, "use_ada_norm", False)
         if self.use_ada_norm:
-            self.ada_norm_video = UncertaintyAdaNorm(embed_dim)
             self.ada_norm_text = UncertaintyAdaNorm(embed_dim)
 
         self.n_video_samples = self.task_config.n_video_embeddings  # numbers sampling from video distribution 7
@@ -313,17 +310,24 @@ class UATVR(CLIP4ClipPreTrainedModel):
         # Loss functions
         self.loss_fct = CrossEn()
         self.loss_MIL_fct = MILNCELoss_BoF()
-        self.vib_loss = KLdivergence()
 
         # Loss weights
         self.w_mil = getattr(self.task_config, "w_mil", 1e-2)
-        self.w_vib = getattr(self.task_config, "w_vib", 1e-4)
+        self.w_evidential = getattr(self.task_config, "w_evidential", 1e-2)
+        self.w_neg_reg = getattr(self.task_config, "w_neg_reg", 1e-2)
         self.w_uncertainty_reg = getattr(self.task_config, "w_uncertainty_reg", 1e-3)
         self.w_orth = getattr(self.task_config, "w_orth", 0.0)
-        self.use_tas_uncertainty = getattr(self.task_config, "use_tas_uncertainty", False)
-        self.tas_top_k = getattr(self.task_config, "tas_top_k", 5)
-        self.tas_temperature = getattr(self.task_config, "tas_temperature", 0.05)
-        self.tas_kl_scale = getattr(self.task_config, "tas_kl_scale", 0.5)
+
+        # 退火系数：默认关闭；warmup_epochs > 0 时前 N 个 epoch 线性增大到 1.0
+        self.anneal_warmup_epochs = getattr(self.task_config, "anneal_warmup_epochs", 0)
+        self._current_epoch = 0  # 由外部 train_loop 更新
+
+        # 方案 A：不确定性置信度 warmup（步数级别）
+        self._current_step = 0
+        self.warmup_steps = getattr(self.task_config, "warmup_steps", 500)
+
+        # 不确定性训练模式：nig_mil / none
+        self.uncertainty_mode = getattr(self.task_config, "uncertainty_mode", "none")
 
         # Optional clamp for log-variance to stabilize sampling/KL terms
         self.log_sigma_min = getattr(self.task_config, "log_sigma_min", None)
@@ -377,6 +381,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         visual_cls, visual_hidden = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_len)
 
         if self.training:
+            self._current_step += 1
             loss = 0.0
             res = self.get_similarity_logits(
                 sequence_output,
@@ -395,16 +400,16 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
             loss += sim_loss
             loss += res["MIL_loss"]
-            loss += res["vib_loss"]
-            loss += res["uncertainty_reg_loss"]
+            loss += res["evidential_loss"]
+            loss += res["neg_reg_loss"]
             loss += res["orth_loss"]
 
             loss_dict = {
                 "total": loss,
                 "sim_loss": sim_loss,
                 "mcsoft_loss": res["MIL_loss"],
-                "vib_loss": res["vib_loss"],
-                "uncertainty_reg": res["uncertainty_reg_loss"],
+                "evidential_loss": res["evidential_loss"],
+                "neg_reg_loss": res["neg_reg_loss"],
                 "orth_loss": res["orth_loss"],
             }
             return loss_dict
@@ -523,19 +528,18 @@ class UATVR(CLIP4ClipPreTrainedModel):
             sequence_output.contiguous(),
             visual_output.contiguous(),
         )  # visual_output [B, T, D]
-        visual_output_hidden = visual_output_hidden.contiguous()  # [B, T, 197, D] (ViT-B/16: 196 patches + 1 CLS)
-        frame_num = visual_output.size(1)  # 12 / 64
-        word_num = text_token.size(1)  # 32 /
+        visual_output_hidden = visual_output_hidden.contiguous()  # [B, T, 197, D]
+        frame_num = visual_output.size(1)
+        word_num = text_token.size(1)
 
         if sim_header == "seqTransf":
-            # Sequential type: Transformer Encoder +++++++++++++= extra token
             visual_output_original = visual_output
 
-            extra_token_num = self.extra_cls_frame_num  # extra 2
-            seq_length = visual_output.size(1) + extra_token_num  # extra 2 learnable token
+            extra_token_num = self.extra_cls_frame_num
+            seq_length = visual_output.size(1) + extra_token_num
             position_ids = torch.arange(seq_length, dtype=torch.long, device=visual_output.device)
             position_ids = position_ids.unsqueeze(0).expand(visual_output.size(0), -1)
-            frame_position_embeddings = self.frame_position_embeddings(position_ids)  # bs num+extra_token_num dim
+            frame_position_embeddings = self.frame_position_embeddings(position_ids)
             frame_position_embeddings[:, 0 : visual_output.size(1), :] += visual_output
             visual_output = frame_position_embeddings
 
@@ -544,16 +548,13 @@ class UATVR(CLIP4ClipPreTrainedModel):
             )
             extended_video_mask = (1.0 - tempo_mask.unsqueeze(1)) * -1000000.0
             extended_video_mask = extended_video_mask.expand(-1, tempo_mask.size(1), -1)
-            visual_output = visual_output.permute(1, 0, 2)  # NLD -> LND
+            visual_output = visual_output.permute(1, 0, 2)
             visual_output = self.transformerClip(visual_output, extended_video_mask)
-            visual_output = visual_output.permute(1, 0, 2).contiguous()  # LND -> NLD
-            # multi extra token
-            # visual_output = visual_output[:, :visual_output_original.size(1), :] + visual_output_original   # residual fusion
+            visual_output = visual_output.permute(1, 0, 2).contiguous()
             visual_output[:, : visual_output_original.size(1), :] += visual_output_original
             video_mask = tempo_mask
 
-            # sequential type: MLP for text with extra token
-            text_original = text_token  # save original
+            text_original = text_token
             extra_text_num = self.extra_cls_text_num
             seq_text_length = extra_text_num + text_token.size(1)
             position_ids_text = torch.arange(seq_text_length, dtype=torch.long, device=text_token.device)
@@ -573,13 +574,41 @@ class UATVR(CLIP4ClipPreTrainedModel):
             text_token[:, : text_original.size(1), :] += text_original
             attention_mask = tempo_mask_
 
-        if self.training:  # DDP all_gather
-            visual_output = allgather(visual_output, self.task_config)
-            visual_output_hidden = allgather(visual_output_hidden, self.task_config)
-            video_mask = allgather(video_mask, self.task_config)
-            sequence_output = allgather(sequence_output, self.task_config)
-            text_token = allgather(text_token, self.task_config)
-            attention_mask = allgather(attention_mask, self.task_config)
+        # ===== SAP: rank-local，先于 allgather，避免 4D hidden 张量广播 =====
+        B_vis = visual_output_hidden.size(0)
+        T_vis = visual_output_hidden.size(1)
+        S_vis = visual_output_hidden.size(2)
+        spatial_tokens = visual_output_hidden.reshape(B_vis, T_vis * S_vis, -1)
+        spatial_mask = video_mask[:, 0:frame_num].unsqueeze(-1).expand(-1, -1, S_vis).reshape(B_vis, -1)
+        sap_out = self.sap(
+            spatial_tokens.contiguous(),
+            padding_mask=(spatial_mask == 0),
+        )
+        anchors = sap_out["anchors"]           # [B, K, D] decoder 输出
+        mu_video = sap_out["mu_raw"]           # [B, D] 模态概率聚合均值 (L2 norm)
+        logsigma_video = sap_out["logsigma"]   # [B, D] mixture log 方差
+        epistemic_video = sap_out["epistemic_cont"]  # [B, K, D] 连续认知不确定性
+        u_mode = sap_out["u_mode"]             # [B] 离散模态不确定性
+        alpha_dir = sap_out["alpha_dir"]       # [B, K] Dirichlet 证据量
+        gamma = sap_out["gamma"]               # [B, K, D] NIG 均值
+        modal_probs = sap_out["modal_probs"]   # [B, K] 模态概率
+
+        if self.log_sigma_min is not None and self.log_sigma_max is not None:
+            logsigma_video = torch.clamp(logsigma_video, min=float(self.log_sigma_min), max=float(self.log_sigma_max))
+
+        # ===== DDP allgather：只广播紧凑张量，不再广播 visual_output_hidden =====
+        if self.training:
+            mu_video = allgather(mu_video.contiguous(), self.task_config)
+            logsigma_video = allgather(logsigma_video.contiguous(), self.task_config)
+            epistemic_video = allgather(epistemic_video.contiguous(), self.task_config)
+            u_mode = allgather(u_mode.contiguous(), self.task_config)
+            alpha_dir = allgather(alpha_dir.contiguous(), self.task_config)
+            gamma = allgather(gamma.contiguous(), self.task_config)
+            visual_output = allgather(visual_output.contiguous(), self.task_config)
+            video_mask = allgather(video_mask.contiguous(), self.task_config)
+            sequence_output = allgather(sequence_output.contiguous(), self.task_config)
+            text_token = allgather(text_token.contiguous(), self.task_config)
+            attention_mask = allgather(attention_mask.contiguous(), self.task_config)
 
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
 
@@ -590,93 +619,67 @@ class UATVR(CLIP4ClipPreTrainedModel):
             text_token[:, 0:word_num, :].contiguous(), attention_mask[:, 0:word_num].contiguous()
         )
         text_pooled = text_pooled / text_pooled.norm(dim=-1, keepdim=True)
-        query_weight = None
-        if self.training and self.use_tas_uncertainty:
-            with torch.no_grad():
-                query_weight = self._compute_lightweight_tas(
-                    text_pooled.detach(),
-                    top_k=self.tas_top_k,
-                    temperature=self.tas_temperature,
-                )
 
-        # ===== SAP: Semantic Anchor Probing =====
-        # 将时空 token [B, T, 197, D] 展平为 [B, T*197, D]，锚点聚焦局部 patch
-        B_vis = visual_output_hidden.size(0)
-        T_vis = visual_output_hidden.size(1)
-        S_vis = visual_output_hidden.size(2)  # 每帧 patch 数（含 CLS）
-        spatial_tokens = visual_output_hidden.reshape(B_vis, T_vis * S_vis, -1)
-        # 构造 padding mask：原始 video_mask [B, T] → [B, T*S]
-        spatial_mask = video_mask[:, 0:frame_num].unsqueeze(-1).expand(-1, -1, S_vis).reshape(B_vis, -1)
-        sap_out = self.sap(
-            spatial_tokens.contiguous(),
-            padding_mask=(spatial_mask == 0),
-        )
-        anchors = sap_out["anchors"]           # [B, N, D]
-        mu_raw = sap_out["mu_raw"]             # [B, D]
-        logsigma_video = sap_out["logsigma"]   # [B, D]
-        if self.log_sigma_min is not None and self.log_sigma_max is not None:
-            logsigma_video = torch.clamp(logsigma_video, min=float(self.log_sigma_min), max=float(self.log_sigma_max))
+        # ===== Evidential 相似度：cosine × epistemic 置信折扣 =====
+        ev_sim = self._evidential_similarity(mu_video, text_pooled, epistemic_video)
 
-        # 拼接 expansion tokens 到 anchor 序列
-        if self.num_expansion_tokens > 0:
-            B = anchors.size(0)
-            exp_tokens = self.expansion_tokens.expand(B, -1, -1)  # [B, E, D]
-            anchors = torch.cat([anchors, exp_tokens], dim=1)     # [B, N+E, D]
-
-        # ===== Probabilistic modeling (video side, from SAP anchors) =====
-        # PIENet: 用 text_pooled 做 cross-modal query 去 attend anchors，
-        # 而非用 mu_raw（已是 anchors 的加权聚合，信息增益有限）
-        out_v, _attn_v, _res_v = self.pie_net_video(text_pooled, anchors)
-        if self.use_ada_norm:
-            out_v = self.ada_norm_video(out_v, logsigma_video)
-        out_v = l2_normalize(out_v)
-        prob_video_embedding = sample_gaussian_tensors(out_v, logsigma_video, self.n_video_samples)
-        prob_video_logsigma = logsigma_video
-
-        # ===== Probabilistic modeling (text side, unchanged) =====
+        # ===== Text 侧概率建模（保持 Gaussian，非对称设计） =====
         prob_text = self.probabilistic_text(text_pooled, text_token[:, 0:word_num, :].contiguous())
         prob_text_embedding = prob_text["embedding"]
         prob_text_logsigma = prob_text["logsigma"]
 
-        # ===== Retrieval logits: frame WTI =====
+        # ===== WTI：帧级 token 交互打分 =====
         logit_scale = self.clip.logit_scale.exp()
         wti_logits = self.weighted_token_wise_intersection(
             text_token, visual_output, attention_mask, video_mask
         ) * logit_scale
 
         if self.training:
-            bs = prob_video_embedding.size(0)
+            bs = mu_video.size(0)
             n_video = self.n_video_samples
             n_text = self.n_text_samples
-            dim = prob_video_embedding.size(-1)
+            dim = mu_video.size(-1)
 
+            # MIL loss：从 N(gamma, logsigma) 采样做多实例对比
+            prob_video_embedding = sample_gaussian_tensors(mu_video, logsigma_video, n_video)
             prob_sim_v = torch.einsum("ad,bd->ab", prob_video_embedding.view(-1, dim), prob_text_embedding.view(-1, dim))
             prob_sim_t = torch.einsum("ad,bd->ab", prob_text_embedding.view(-1, dim), prob_video_embedding.view(-1, dim))
             MIL_loss = (self.loss_MIL_fct(prob_sim_v, bs, n_video, n_text)
                         + self.loss_MIL_fct(prob_sim_t, bs, n_video, n_text)) / 2
 
-            if query_weight is None:
-                vib_loss = self.vib_loss(prob_video_embedding, prob_video_logsigma, prob_text_embedding, prob_text_logsigma)
+            # Evidential NLL + neg_reg：仅在 uncertainty_mode=none 时保留（作为对照）
+            # 方案 A/B 通过 MIL 或 WTI confidence 训练不确定性，不再需要独立的 evidential loss
+            if self.uncertainty_mode == "none":
+                evidential_loss = self._evidential_nll_loss(ev_sim, alpha_dir)
+                neg_reg_loss = self._evidential_neg_reg_loss(ev_sim)
             else:
-                vib_loss = self._dynamic_vib_loss(
-                    prob_video_embedding,
-                    prob_video_logsigma,
-                    prob_text_embedding,
-                    prob_text_logsigma,
-                    query_weight=query_weight,
-                    tas_kl_scale=self.tas_kl_scale,
-                )
+                evidential_loss = torch.tensor(0.0, device=mu_video.device)
+                neg_reg_loss = torch.tensor(0.0, device=mu_video.device)
 
-            # detach 避免 evidential loss 与 CrossEn 的梯度方向冲突
-            uncertainty_reg_loss, evidential_uncertainty = self.evidential_matrix_loss(wti_logits.detach())
+            # 退火系数：warmup_epochs <= 0 时关闭退火，直接使用完整权重
+            if self.anneal_warmup_epochs <= 0:
+                anneal_factor = 1.0
+            else:
+                anneal_factor = min(1.0, self._current_epoch / self.anneal_warmup_epochs)
 
-            # ── 因果链诊断统计（不参与 loss，detach 后计算，每 N 步采集一次） ──
+            # 方案 A：不确定性置信度加权检索分数
+            # epistemic_cont [B, K, D] → mean → [B] 标量不确定性
+            epistemic_mean = epistemic_video.mean(dim=(1, 2))  # [B]
+            confidence = 1.0 / (1.0 + epistemic_mean)           # ∈ (0, 1]
+            if self.warmup_steps > 0:
+                alpha = min(1.0, self._current_step / self.warmup_steps)
+                confidence = 1.0 - alpha + alpha * confidence
+            else:
+                alpha = 1.0
+            # unsqueeze(1) 行方向缩放：T2V 行内抵消（主 loss 不受扰），V2T 转置后提供不确定性梯度
+            weighted_logits = wti_logits * confidence.unsqueeze(1)  # [B, B]
+
+            # ── 诊断统计（不参与 loss，detach 后计算，每 N 步采集一次） ──
             self._diag_step += 1
             if self._diag_step % self._diag_interval == 0:
                 with torch.no_grad():
-                    # 链一：检索头 — pos/neg gap
-                    S = wti_logits.detach()                  # [B, B]
-                    diag = S.diagonal()                      # [B]
+                    S = wti_logits.detach()
+                    diag = S.diagonal()
                     B_s = S.size(0)
                     mask_off = ~torch.eye(B_s, dtype=torch.bool, device=S.device)
                     off = S[mask_off]
@@ -687,91 +690,104 @@ class UATVR(CLIP4ClipPreTrainedModel):
                         "pos_std":  float(diag.std(unbiased=False)),
                     }
 
-                    # 链二：概率分支 — logsigma 量级 + per-sample KL
-                    ls_v = prob_video_logsigma.detach()       # [B, D]
+                    # 链二：Evidential 不确定性统计
                     ls_t = prob_text_logsigma.detach()
-                    var_v = float(ls_v.exp().mean())
-                    var_t = float(ls_t.exp().mean())
-                    kl_v  = 0.5 * (ls_v.exp() - 1 - ls_v).mean(dim=-1)   # [B]
-                    kl_t  = 0.5 * (ls_t.exp() - 1 - ls_t).mean(dim=-1)
+                    conf_val = confidence.detach()  # [B] 视频置信度
                     self._prob_chain = {
-                        "var_video_mean": var_v,
-                        "var_text_mean":  var_t,
-                        "kl_video_mean":  float(kl_v.mean()),
-                        "kl_video_std":   float(kl_v.std(unbiased=False)),
-                        "kl_text_mean":   float(kl_t.mean()),
-                        "kl_text_std":    float(kl_t.std(unbiased=False)),
+                        "u_mode_mean":  float(u_mode.detach().mean()),
+                        "u_mode_std":   float(u_mode.detach().std(unbiased=False)),
+                        "epistemic_v_mean": float(epistemic_video.detach().mean()),
+                        "var_text_mean":    float(ls_t.exp().mean()),
+                        "kl_text_mean":     float((0.5 * (ls_t.exp() - 1 - ls_t)).mean(dim=-1).mean()),
+                        "confidence_mean":  float(conf_val.mean()),
+                        "confidence_std":   float(conf_val.std(unbiased=False)),
+                        "warmup_alpha":     float(alpha),
                     }
-                    if query_weight is not None:
-                        self._prob_chain["tas_mean"] = float(query_weight.detach().mean())
-                        self._prob_chain["tas_std"] = float(query_weight.detach().std(unbiased=False))
 
                     # 链三：辅助 loss 子项
                     self._aux_chain = {
-                        "uncertainty_reg_loss_val": float(uncertainty_reg_loss.item()),
-                        "evidential_uncertainty": float(evidential_uncertainty.item()),
-                        "logsigma_v_mean":   float(logsigma_video.detach().mean().item()),
+                        "evidential_loss_val":      float(evidential_loss.item()),
+                        "neg_reg_loss_val":         float(neg_reg_loss.item()),
+                        "logsigma_v_mean":          float(logsigma_video.detach().mean().item()),
+                        "anneal_factor":            float(anneal_factor),
+                        "uncertainty_mode":         self.uncertainty_mode,
                     }
             # ──────────────────────────────────────────────────────────────────
 
-            # Anchor 正交损失：只对 SAP 的 N 个语义 anchor 做正交，排除 expansion tokens
+            # Anchor 正交损失：只对 SAP 的 K 个语义 anchor
             orth_loss = torch.tensor(0.0, device=anchors.device)
             if self.w_orth > 0:
-                sap_anchors = anchors[:, :self.num_anchors, :]  # [B, N, D]
-                anchor_norm = torch.nn.functional.normalize(sap_anchors, dim=-1)
-                sim_qq = torch.bmm(anchor_norm, anchor_norm.transpose(1, 2))  # [B, N, N]
+                anchor_norm = F.normalize(anchors, dim=-1)
+                sim_qq = torch.bmm(anchor_norm, anchor_norm.transpose(1, 2))
                 eye = torch.eye(sim_qq.size(1), device=sim_qq.device).unsqueeze(0)
                 orth_loss = ((sim_qq - eye) ** 2).mean()
 
             loss = {}
-            loss["retrieve_logits"] = wti_logits
+            loss["retrieve_logits"] = weighted_logits
             loss["MIL_loss"] = self.w_mil * MIL_loss
-            loss["vib_loss"] = self.w_vib * vib_loss
-            loss["uncertainty_reg_loss"] = self.w_uncertainty_reg * uncertainty_reg_loss
+            # 退火系数应用于 evidential_loss 和 neg_reg_loss，避免 Epoch 2 初期梯度崩塌
+            loss["evidential_loss"] = self.w_evidential * evidential_loss * anneal_factor
+            loss["neg_reg_loss"] = self.w_neg_reg * neg_reg_loss * anneal_factor
             loss["orth_loss"] = self.w_orth * orth_loss
-            if query_weight is not None:
-                loss["tas_weight"] = query_weight.detach().mean()
             return loss
         else:
             return wti_logits
 
     @staticmethod
-    def _compute_lightweight_tas(text_pooled, top_k=5, temperature=0.05):
-        """基于 batch 内文本相似度分布计算轻量 TAS。"""
-        batch_size = text_pooled.size(0)
-        if batch_size <= 1:
-            return text_pooled.new_zeros(batch_size)
+    def _evidential_similarity(mu_video, text_pooled, epistemic_video):
+        """Evidential 相似度：cosine sim × 认知不确定性折扣。
 
-        top_k = max(1, min(int(top_k), batch_size))
-        temperature = max(float(temperature), 1e-6)
-        text_norm = F.normalize(text_pooled, p=2, dim=-1)
-        sim_matrix = torch.matmul(text_norm, text_norm.t())
-        top_scores = torch.topk(sim_matrix, k=top_k, dim=-1).values
-        probs = torch.softmax(top_scores / temperature, dim=-1)
-        entropy = -(probs * (probs + 1e-9).log()).sum(dim=-1)
-        if top_k <= 1:
-            return torch.zeros_like(entropy)
-        return torch.clamp(entropy / math.log(top_k), min=0.0, max=1.0)
+        Args:
+            mu_video: [B, D] SAP 模态概率聚合均值 (L2 normalized)。
+            text_pooled: [B, D] 文本 pooled 表征 (L2 normalized)。
+            epistemic_video: [B, K, D] SAP 每锚点认知不确定性 β/(ν(α-1))。
 
-    @staticmethod
-    def _dynamic_vib_loss(sampled_video, video_sigma, sampled_text, text_sigma, query_weight=None, tas_kl_scale=0.5):
-        """按 TAS 对文本侧 KL 做逐样本动态缩放。"""
-        video_mu = sampled_video.mean(dim=1)
-        text_mu = sampled_text.mean(dim=1)
-        video_kl = UATVR._kl_divergence_per_sample(video_mu, video_sigma)
-        text_kl = UATVR._kl_divergence_per_sample(text_mu, text_sigma)
-        if query_weight is not None:
-            query_weight = query_weight.to(device=text_kl.device, dtype=text_kl.dtype).view(-1)
-            tas_kl_scale = max(float(tas_kl_scale), 0.0)
-            text_scale = 1.0 + tas_kl_scale * (1.0 - 2.0 * query_weight)
-            text_scale = torch.clamp(text_scale, min=0.0)
-            text_kl = text_kl * text_scale
-        return video_kl.mean() + text_kl.mean()
+        Returns:
+            sim_matrix: [B, B] cosine 相似度 × exp(-mean_epistemic)。
+        """
+        cosine_sim = torch.mm(mu_video, text_pooled.t())  # [B, B]
+        # 锚点维度平均 → 每视频的标量不确定性惩罚
+        epistemic_penalty = epistemic_video.mean(dim=(1, 2))  # [B]
+        confidence = torch.exp(-epistemic_penalty)  # [B]，不确定性越大，置信越低
+        sim_matrix = cosine_sim * confidence.unsqueeze(1)  # [B, B]
+        return sim_matrix
 
     @staticmethod
-    def _kl_divergence_per_sample(mu, logsigma):
-        """计算每个样本到标准高斯先验的 KL。"""
-        return -0.5 * (1 + logsigma - mu.pow(2) - logsigma.exp()).sum(dim=-1)
+    def _evidential_nll_loss(sim_matrix, alpha_dir):
+        """Evidential 负对数似然损失：鼓励正对高证据、抑制负对证据。
+
+        Args:
+            sim_matrix: [B, B] evidential 相似度（非 detach，梯度回传到 SAP 和 text）。
+            alpha_dir: [B, K] SAP 的 Dirichlet 证据量。
+
+        Returns:
+            loss: 标量，正对 NLL + 负对 evidence 正则。
+        """
+        B = sim_matrix.size(0)
+        diag_scores = sim_matrix.diagonal()  # [B] 正对分数
+        # 正对 NLL：relu 截断负值（cosine sim 可能为负），鼓励高证据
+        nll_pos = -torch.log(torch.relu(diag_scores) + 1e-8).mean()
+        # 负对 evidence 正则：对每行非对角元素求和
+        mask_off = ~torch.eye(B, dtype=torch.bool, device=sim_matrix.device)
+        neg_scores = sim_matrix[mask_off].view(B, B - 1)  # [B, B-1]
+        evidence_neg = torch.relu(neg_scores).sum(dim=-1)  # [B]
+        nll_neg = torch.log(1.0 + evidence_neg).mean()
+        return nll_pos + nll_neg
+
+    @staticmethod
+    def _evidential_neg_reg_loss(sim_matrix):
+        """负对 evidence 正则：独立的负对证据量惩罚项。
+
+        Args:
+            sim_matrix: [B, B] evidential 相似度（可 detach 也可不 detach）。
+
+        Returns:
+            loss: 标量，log(1 + sum(relu(neg))) 的均值。
+        """
+        B = sim_matrix.size(0)
+        mask_off = ~torch.eye(B, dtype=torch.bool, device=sim_matrix.device)
+        neg_scores = sim_matrix[mask_off].view(B, B - 1)
+        return torch.log(1.0 + torch.relu(neg_scores).sum(dim=-1)).mean()
 
     @staticmethod
     def evidential_matrix_loss(sim_matrix):

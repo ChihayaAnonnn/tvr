@@ -1,0 +1,60 @@
+{
+  "best_t2v_r1": 47.4,
+  "best_v2t_r1": 46.1,
+  "best_epoch": 3,
+  "all_epochs": [
+    {
+      "epoch": 1,
+      "t2v_r1": 45.8,
+      "t2v_r5": 73.7,
+      "t2v_r10": 82.6,
+      "v2t_r1": 46.8,
+      "v2t_r5": 74.5,
+      "v2t_r10": 83.6
+    },
+    {
+      "epoch": 2,
+      "t2v_r1": 47.0,
+      "t2v_r5": 74.8,
+      "t2v_r10": 83.1,
+      "v2t_r1": 46.2,
+      "v2t_r5": 75.1,
+      "v2t_r10": 84.3
+    },
+    {
+      "epoch": 3,
+      "t2v_r1": 47.4,
+      "t2v_r5": 74.6,
+      "t2v_r10": 83.8,
+      "v2t_r1": 46.1,
+      "v2t_r5": 74.4,
+      "v2t_r10": 83.4
+    },
+    {
+      "epoch": 4,
+      "t2v_r1": 47.4,
+      "t2v_r5": 74.6,
+      "t2v_r10": 83.8,
+      "v2t_r1": 46.1,
+      "v2t_r5": 74.4,
+      "v2t_r10": 83.4
+    }
+  ],
+  "trial_id": 0,
+  "params": {
+    "w_evidential": 0.001,
+    "w_neg_reg": 0.001,
+    "epochs": 3,
+    "log_sigma_min": -1.5,
+    "log_sigma_max": 4.0,
+    "fusion_temperature": 1.5,
+    "anneal_warmup_epochs": 2
+  },
+  "return_code": 0,
+  "elapsed_seconds": 33353.85389876366,
+  "output_dir": "ckpts/ckpt_msrvtt_search_0_20260528_155329",
+  "gpus": "1,2",
+  "batch_size": 256,
+  "accum_steps": 2,
+  "status": "completed"
+}

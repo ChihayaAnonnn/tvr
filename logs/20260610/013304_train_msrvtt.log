@@ -1,0 +1,989 @@
+[2026-06-10 01:33:05,939] torch.distributed.run: [WARNING] 
+[2026-06-10 01:33:05,939] torch.distributed.run: [WARNING] *****************************************
+[2026-06-10 01:33:05,939] torch.distributed.run: [WARNING] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+[2026-06-10 01:33:05,939] torch.distributed.run: [WARNING] *****************************************
+06/10/2026 01:33:09 - INFO -   Effective parameters:
+06/10/2026 01:33:09 - INFO -       [Experiment] PlanA+B1_colwise_warmup500_wEvid0
+06/10/2026 01:33:09 - INFO -     [Training] epochs=5 | batch_size=256 | lr=0.0001 | coef_lr=0.001 | gradient_accumulation_steps=1 | fp16=False | max_frames=8 | max_words=32 | seed=42
+06/10/2026 01:33:09 - INFO -     [Model] pretrained_clip_name=ViT-B/16 | sim_header=seqTransf | linear_patch=2d | fusion_mode=prob_mos | extra_video_cls_num=2 | extra_text_cls_num=2 | n_video_embeddings=7 | n_text_embeddings=7 | uncertainty_text_head=text | log_sigma_min=-1.5 | log_sigma_max=4.0
+06/10/2026 01:33:09 - INFO -     [Query] w_query_sim=0.5 | w_uncertainty_reg=0.001 | w_evidential=0.0 | w_neg_reg=0.0 | fusion_temperature=1.5 | num_expansion_tokens=0
+06/10/2026 01:33:09 - INFO -     [Annealing] anneal_warmup_epochs=0 | warmup_steps=500
+06/10/2026 01:33:09 - INFO -     [Uncertainty] uncertainty_mode=none
+06/10/2026 01:33:09 - INFO -     [Other] DSL=False | attr_num_blocks=4 | batch_size_val=16 | cache_dir= | cross_model=cross-base | cross_num_hidden_layers=4 | data_path=/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json | datatype=msrvtt | disable_query_gate_in_retrieval=False | disable_spatial_enhancer=False | do_eval=False | do_lower_case=False | do_pretrain=False | do_train=True | eval_branch_mode=default | eval_frame_order=0 | eval_vid_chunk_size=128 | expand_msrvtt_sentences=True | experiment_desc=PlanA+B1_colwise_warmup500_wEvid0 | feature_framerate=1 | features_path=/data2/hxj/data/MSRVTT/videos/compressed_videos/msrvtt_224_12fps/ | fp16_opt_level=O1 | freeze_layer_num=0 | gate_log_dir=logs/gate_scores | gate_log_interval=100 | hard_negative_rate=0.5 | init_model=None | local_rank=0 | log_moe_weights=True | log_mus_scores=False | loose_type=True | lr_decay=0.9 | mamba_lr_ratio=0.1 | margin=0.1 | max_words_attrs=None | moe_log_dir=logs/moe_weights | msrvtt_attributes_path= | msvd_attributes_path= | n_display=20 | n_gpu=1 | n_pair=1 | negative_weighting=1 | num_thread_reader=8 | output_dir=ckpts/ckpt_msrvtt_20260610_013304 | rank=0 | resume_model=None | rope_mode=2d | sampled_use_mil=False | slice_framepos=3 | strategy=2 | task_type=retrieval | text_num_hidden_layers=12 | train_csv=/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv | train_frame_order=0 | use_ada_norm=True | use_attributes=False | use_mil=False | val_csv=/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv | video_dim=1024 | visual_num_hidden_layers=12 | w_mil=0.01 | w_orth=0.1 | warmup_proportion=0.1 | world_size=4
+06/10/2026 01:33:09 - INFO -   device: cuda:0 n_gpu: 4
+06/10/2026 01:33:10 - INFO -   device: cuda:2 n_gpu: 4
+06/10/2026 01:33:10 - INFO -   device: cuda:3 n_gpu: 4
+06/10/2026 01:33:10 - INFO -   device: cuda:1 n_gpu: 4
+06/10/2026 01:33:10 - INFO -   loading archive file /data2/hxj/project/UATVR/modules/cross-base
+06/10/2026 01:33:10 - INFO -   Model config {
+  "attention_probs_dropout_prob": 0.1,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.1,
+  "hidden_size": 512,
+  "initializer_range": 0.02,
+  "intermediate_size": 2048,
+  "max_position_embeddings": 128,
+  "num_attention_heads": 8,
+  "num_hidden_layers": 4,
+  "type_vocab_size": 2,
+  "vocab_size": 512
+}
+
+06/10/2026 01:33:10 - INFO -   Weight doesn't exsits. /data2/hxj/project/UATVR/modules/cross-base/cross_pytorch_model.bin
+06/10/2026 01:33:10 - WARNING -   Test retrieval by loose type.
+06/10/2026 01:33:10 - WARNING -   	 embed_dim: 512
+06/10/2026 01:33:10 - WARNING -   	 image_resolution: 224
+06/10/2026 01:33:10 - WARNING -   	 vision_layers: 12
+06/10/2026 01:33:10 - WARNING -   	 vision_width: 768
+06/10/2026 01:33:10 - WARNING -   	 vision_patch_size: 16
+06/10/2026 01:33:10 - WARNING -   	 context_length: 77
+06/10/2026 01:33:10 - WARNING -   	 vocab_size: 49408
+06/10/2026 01:33:10 - WARNING -   	 transformer_width: 512
+06/10/2026 01:33:10 - WARNING -   	 transformer_heads: 8
+06/10/2026 01:33:10 - WARNING -   	 transformer_layers: 12
+06/10/2026 01:33:10 - WARNING -   		 linear_patch: 2d
+06/10/2026 01:33:10 - WARNING -   	 cut_top_layer: 0
+06/10/2026 01:33:12 - WARNING -   	 sim_header: seqTransf
+06/10/2026 01:33:12 - WARNING -   CLIP UATVR Model ......
+06/10/2026 01:33:12 - WARNING -   	 Extra video Class token number: 2
+06/10/2026 01:33:12 - WARNING -   	 Extra text Class token number: 2
+06/10/2026 01:33:12 - WARNING -   	 Number of video sampling probabilistic embeddings: 7
+06/10/2026 01:33:12 - WARNING -   	 Number of text sampling probabilistic embeddings: 7
+06/10/2026 01:33:21 - INFO -   --------------------
+06/10/2026 01:33:21 - INFO -   Weights of UATVR not initialized from pretrained model: 
+   word_position_embeddings.weight
+   pie_net_text.attention.w_1.weight
+   pie_net_text.attention.w_2.weight
+   pie_net_text.fc.weight
+   pie_net_text.fc.bias
+   pie_net_text.layer_norm.weight
+   pie_net_text.layer_norm.bias
+   uncertain_net_text.attention.w_1.weight
+   uncertain_net_text.attention.w_2.weight
+   uncertain_net_text.fc.weight
+   uncertain_net_text.fc.bias
+   uncertain_net_text.rnn.weight_ih_l0
+   uncertain_net_text.rnn.weight_hh_l0
+   uncertain_net_text.rnn.bias_ih_l0
+   uncertain_net_text.rnn.bias_hh_l0
+   uncertain_net_text.rnn.weight_ih_l0_reverse
+   uncertain_net_text.rnn.weight_hh_l0_reverse
+   uncertain_net_text.rnn.bias_ih_l0_reverse
+   uncertain_net_text.rnn.bias_hh_l0_reverse
+   uncertain_net_text.fc2.weight
+   uncertain_net_text.fc2.bias
+   ada_norm_text.proj.0.weight
+   ada_norm_text.proj.0.bias
+   ada_norm_text.proj.2.weight
+   ada_norm_text.proj.2.bias
+   spatial_enhancer.rope.angle
+   spatial_enhancer.attention.qkvo.weight
+   spatial_enhancer.attention.qkvo.bias
+   spatial_enhancer.attention.lepe.weight
+   spatial_enhancer.attention.lepe.bias
+   spatial_enhancer.attention.proj.weight
+   spatial_enhancer.attention.proj.bias
+   text_weight_fc.0.weight
+   text_weight_fc.0.bias
+   text_weight_fc.2.weight
+   text_weight_fc.2.bias
+   video_weight_fc.0.weight
+   video_weight_fc.0.bias
+   video_weight_fc.2.weight
+   video_weight_fc.2.bias
+   sap.anchor_tokens
+   sap.decoder.layers.0.self_attn.in_proj_weight
+   sap.decoder.layers.0.self_attn.in_proj_bias
+   sap.decoder.layers.0.self_attn.out_proj.weight
+   sap.decoder.layers.0.self_attn.out_proj.bias
+   sap.decoder.layers.0.multihead_attn.in_proj_weight
+   sap.decoder.layers.0.multihead_attn.in_proj_bias
+   sap.decoder.layers.0.multihead_attn.out_proj.weight
+   sap.decoder.layers.0.multihead_attn.out_proj.bias
+   sap.decoder.layers.0.linear1.weight
+   sap.decoder.layers.0.linear1.bias
+   sap.decoder.layers.0.linear2.weight
+   sap.decoder.layers.0.linear2.bias
+   sap.decoder.layers.0.norm1.weight
+   sap.decoder.layers.0.norm1.bias
+   sap.decoder.layers.0.norm2.weight
+   sap.decoder.layers.0.norm2.bias
+   sap.decoder.layers.0.norm3.weight
+   sap.decoder.layers.0.norm3.bias
+   sap.decoder.layers.1.self_attn.in_proj_weight
+   sap.decoder.layers.1.self_attn.in_proj_bias
+   sap.decoder.layers.1.self_attn.out_proj.weight
+   sap.decoder.layers.1.self_attn.out_proj.bias
+   sap.decoder.layers.1.multihead_attn.in_proj_weight
+   sap.decoder.layers.1.multihead_attn.in_proj_bias
+   sap.decoder.layers.1.multihead_attn.out_proj.weight
+   sap.decoder.layers.1.multihead_attn.out_proj.bias
+   sap.decoder.layers.1.linear1.weight
+   sap.decoder.layers.1.linear1.bias
+   sap.decoder.layers.1.linear2.weight
+   sap.decoder.layers.1.linear2.bias
+   sap.decoder.layers.1.norm1.weight
+   sap.decoder.layers.1.norm1.bias
+   sap.decoder.layers.1.norm2.weight
+   sap.decoder.layers.1.norm2.bias
+   sap.decoder.layers.1.norm3.weight
+   sap.decoder.layers.1.norm3.bias
+   sap.norm.weight
+   sap.norm.bias
+   sap.evidential_head.dirichlet_layer.weight
+   sap.evidential_head.dirichlet_layer.bias
+   sap.evidential_head.nig_layer.weight
+   sap.evidential_head.nig_layer.bias
+06/10/2026 01:33:21 - INFO -   Weights from pretrained model not used in UATVR: 
+   clip.input_resolution
+   clip.context_length
+   clip.vocab_size
+[uniform sampling with 30 fps]
+06/10/2026 01:33:22 - INFO -   ***** Running test *****
+06/10/2026 01:33:22 - INFO -     Test: 1000 samples, 63 steps (bs=16) | Val: 1000 samples | Frame order: sequential
+[uniform sampling with 30 fps]
+[uniform sampling with 30 fps]
+[uniform sampling with 30 fps]
+[uniform sampling 30 fps with a random offset]
+06/10/2026 01:33:22 - INFO -   [Optimizer] CLIP: 302 params (lr=1.00e-07) | Mamba: 0 params (lr=1.00e-05, ratio=0.10) | Other: 131 params (lr=1.00e-04)
+[uniform sampling 30 fps with a random offset]
+[uniform sampling 30 fps with a random offset]
+[uniform sampling 30 fps with a random offset]
+06/10/2026 01:33:23 - INFO -   ============================================================
+06/10/2026 01:33:23 - INFO -   ***** Running training *****
+06/10/2026 01:33:23 - INFO -     Samples: 180000 | Batch: 64 x 4 GPUs x 1 accum = 256 eff | Steps/epoch: 703 | Total opt steps: 3515
+06/10/2026 01:33:23 - INFO -   ============================================================
+06/10/2026 01:33:23 - INFO -   ============================================================
+06/10/2026 01:33:23 - INFO -   ============================================================
+/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/autograd/__init__.py:251: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [512, 1, 5, 5], strides() = [25, 1, 5, 1]
+bucket_view.sizes() = [512, 1, 5, 5], strides() = [25, 25, 5, 1] (Triggered internally at ../torch/csrc/distributed/c10d/reducer.cpp:320.)
+  Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/autograd/__init__.py:251: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [512, 1, 5, 5], strides() = [25, 1, 5, 1]
+bucket_view.sizes() = [512, 1, 5, 5], strides() = [25, 25, 5, 1] (Triggered internally at ../torch/csrc/distributed/c10d/reducer.cpp:320.)
+  Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/autograd/__init__.py:251: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [512, 1, 5, 5], strides() = [25, 1, 5, 1]
+bucket_view.sizes() = [512, 1, 5, 5], strides() = [25, 25, 5, 1] (Triggered internally at ../torch/csrc/distributed/c10d/reducer.cpp:320.)
+  Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/autograd/__init__.py:251: UserWarning: Grad strides do not match bucket view strides. This may indicate grad was not created according to the gradient layout contract, or that the param's strides changed since DDP was constructed.  This is not an error, but may impair performance.
+grad.sizes() = [512, 1, 5, 5], strides() = [25, 1, 5, 1]
+bucket_view.sizes() = [512, 1, 5, 5], strides() = [25, 25, 5, 1] (Triggered internally at ../torch/csrc/distributed/c10d/reducer.cpp:320.)
+  Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+06/10/2026 01:38:41 - INFO -   [Epoch 1/5] Step 20/703 (3%) | Loss: 4.2033 [sim_loss=2.6806 | mcsoft_loss=1.5226 | orth_loss=0.0002] | LR clip=1.00e-07 new=1.00e-04 | 15.89s/step | ETA: 3h00m55s
+06/10/2026 01:38:41 - INFO -     [Chain-Ret]  pos=26.750  neg=21.949  gap=4.802  pos_std=2.246
+06/10/2026 01:38:41 - INFO -     [Chain-Prob] u_mode=0.5845±0.0034  epistemic_v=5.9415  var_t=1.0001  kl_t=0.0006
+06/10/2026 01:38:41 - INFO -     [Chain-Aux]  evid_loss=8.7541  neg_reg=0.0469  evid_unc=0.0000  logsig_v=1.3427  anneal=1.000
+06/10/2026 01:42:27 - INFO -   [Epoch 1/5] Step 40/703 (6%) | Loss: 3.6533 [sim_loss=2.1640 | mcsoft_loss=1.4892 | orth_loss=0.0001] | LR clip=1.00e-07 new=1.00e-04 | 11.31s/step | ETA: 2h04m58s
+06/10/2026 01:42:27 - INFO -     [Chain-Ret]  pos=23.185  neg=16.927  gap=6.258  pos_std=2.359
+06/10/2026 01:42:27 - INFO -     [Chain-Prob] u_mode=0.5851±0.0032  epistemic_v=5.7954  var_t=0.9949  kl_t=0.0006
+06/10/2026 01:42:27 - INFO -     [Chain-Aux]  evid_loss=8.7821  neg_reg=0.0453  evid_unc=0.0000  logsig_v=1.3184  anneal=1.000
+06/10/2026 01:46:45 - INFO -   [Epoch 1/5] Step 60/703 (9%) | Loss: 3.2510 [sim_loss=1.8016 | mcsoft_loss=1.4493 | orth_loss=0.0001] | LR clip=1.00e-07 new=1.00e-04 | 12.86s/step | ETA: 2h17m48s
+06/10/2026 01:46:45 - INFO -     [Chain-Ret]  pos=22.051  neg=13.780  gap=8.271  pos_std=2.809
+06/10/2026 01:46:45 - INFO -     [Chain-Prob] u_mode=0.5843±0.0033  epistemic_v=5.5571  var_t=0.9865  kl_t=0.0006
+06/10/2026 01:46:45 - INFO -     [Chain-Aux]  evid_loss=8.8121  neg_reg=0.0566  evid_unc=0.0000  logsig_v=1.2779  anneal=1.000
+06/10/2026 01:49:49 - INFO -   [Epoch 1/5] Step 80/703 (11%) | Loss: 3.2194 [sim_loss=1.8042 | mcsoft_loss=1.4152 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.22s/step | ETA: 1h35m44s
+06/10/2026 01:49:49 - INFO -     [Chain-Ret]  pos=21.803  neg=12.769  gap=9.034  pos_std=3.164
+06/10/2026 01:49:49 - INFO -     [Chain-Prob] u_mode=0.5828±0.0038  epistemic_v=5.2515  var_t=0.9755  kl_t=0.0008
+06/10/2026 01:49:49 - INFO -     [Chain-Aux]  evid_loss=8.5438  neg_reg=0.0776  evid_unc=0.0000  logsig_v=1.2232  anneal=1.000
+06/10/2026 01:54:12 - INFO -   [Epoch 1/5] Step 100/703 (14%) | Loss: 3.0587 [sim_loss=1.7099 | mcsoft_loss=1.3489 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.15s/step | ETA: 2h12m09s
+06/10/2026 01:54:12 - INFO -     [Chain-Ret]  pos=21.908  neg=11.768  gap=10.140  pos_std=3.240
+06/10/2026 01:54:12 - INFO -     [Chain-Prob] u_mode=0.5784±0.0031  epistemic_v=4.9088  var_t=0.9615  kl_t=0.0010
+06/10/2026 01:54:12 - INFO -     [Chain-Aux]  evid_loss=8.1856  neg_reg=0.1209  evid_unc=0.0000  logsig_v=1.1584  anneal=1.000
+06/10/2026 01:58:09 - INFO -   [Epoch 1/5] Step 120/703 (17%) | Loss: 2.7631 [sim_loss=1.4699 | mcsoft_loss=1.2932 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.83s/step | ETA: 1h54m59s
+06/10/2026 01:58:09 - INFO -     [Chain-Ret]  pos=21.561  neg=10.620  gap=10.941  pos_std=3.252
+06/10/2026 01:58:09 - INFO -     [Chain-Prob] u_mode=0.5720±0.0030  epistemic_v=4.5359  var_t=0.9441  kl_t=0.0015
+06/10/2026 01:58:09 - INFO -     [Chain-Aux]  evid_loss=7.8462  neg_reg=0.1831  evid_unc=0.0000  logsig_v=1.0824  anneal=1.000
+06/10/2026 02:01:44 - INFO -   [Epoch 1/5] Step 140/703 (20%) | Loss: 2.8738 [sim_loss=1.6515 | mcsoft_loss=1.2223 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.76s/step | ETA: 1h40m56s
+06/10/2026 02:01:44 - INFO -     [Chain-Ret]  pos=22.241  neg=10.849  gap=11.392  pos_std=3.774
+06/10/2026 02:01:44 - INFO -     [Chain-Prob] u_mode=0.5654±0.0035  epistemic_v=4.1449  var_t=0.9207  kl_t=0.0024
+06/10/2026 02:01:44 - INFO -     [Chain-Aux]  evid_loss=7.4496  neg_reg=0.2547  evid_unc=0.0000  logsig_v=0.9958  anneal=1.000
+06/10/2026 02:05:43 - INFO -   [Epoch 1/5] Step 160/703 (23%) | Loss: 2.5666 [sim_loss=1.4290 | mcsoft_loss=1.1376 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.97s/step | ETA: 1h48m22s
+06/10/2026 02:05:43 - INFO -     [Chain-Ret]  pos=21.213  neg=8.941  gap=12.271  pos_std=3.538
+06/10/2026 02:05:43 - INFO -     [Chain-Prob] u_mode=0.5585±0.0034  epistemic_v=3.7400  var_t=0.8896  kl_t=0.0043
+06/10/2026 02:05:43 - INFO -     [Chain-Aux]  evid_loss=6.9695  neg_reg=0.3754  evid_unc=0.0000  logsig_v=0.8968  anneal=1.000
+06/10/2026 02:08:59 - INFO -   [Epoch 1/5] Step 180/703 (26%) | Loss: 2.5011 [sim_loss=1.4445 | mcsoft_loss=1.0565 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.80s/step | ETA: 1h25m24s
+06/10/2026 02:08:59 - INFO -     [Chain-Ret]  pos=22.871  neg=10.005  gap=12.866  pos_std=3.775
+06/10/2026 02:08:59 - INFO -     [Chain-Prob] u_mode=0.5497±0.0031  epistemic_v=3.3447  var_t=0.8462  kl_t=0.0085
+06/10/2026 02:08:59 - INFO -     [Chain-Aux]  evid_loss=6.7119  neg_reg=0.5147  evid_unc=0.0000  logsig_v=0.7880  anneal=1.000
+06/10/2026 02:12:21 - INFO -   [Epoch 1/5] Step 200/703 (28%) | Loss: 2.3298 [sim_loss=1.3753 | mcsoft_loss=0.9545 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.09s/step | ETA: 1h24m32s
+06/10/2026 02:12:21 - INFO -     [Chain-Ret]  pos=22.569  neg=8.712  gap=13.857  pos_std=4.074
+06/10/2026 02:12:21 - INFO -     [Chain-Prob] u_mode=0.5404±0.0032  epistemic_v=2.9535  var_t=0.7775  kl_t=0.0205
+06/10/2026 02:12:21 - INFO -     [Chain-Aux]  evid_loss=6.6692  neg_reg=0.7021  evid_unc=0.0000  logsig_v=0.6687  anneal=1.000
+06/10/2026 02:16:28 - INFO -   [Epoch 1/5] Step 220/703 (31%) | Loss: 2.0935 [sim_loss=1.2732 | mcsoft_loss=0.8203 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.35s/step | ETA: 1h39m23s
+06/10/2026 02:16:28 - INFO -     [Chain-Ret]  pos=23.515  neg=8.798  gap=14.717  pos_std=3.768
+06/10/2026 02:16:28 - INFO -     [Chain-Prob] u_mode=0.5298±0.0031  epistemic_v=2.5798  var_t=0.6716  kl_t=0.0594
+06/10/2026 02:16:28 - INFO -     [Chain-Aux]  evid_loss=6.5908  neg_reg=0.9384  evid_unc=0.0000  logsig_v=0.5390  anneal=1.000
+06/10/2026 02:19:46 - INFO -   [Epoch 1/5] Step 240/703 (34%) | Loss: 2.0549 [sim_loss=1.3216 | mcsoft_loss=0.7333 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.91s/step | ETA: 1h16m27s
+06/10/2026 02:19:46 - INFO -     [Chain-Ret]  pos=23.422  neg=9.013  gap=14.409  pos_std=4.072
+06/10/2026 02:19:46 - INFO -     [Chain-Prob] u_mode=0.5203±0.0031  epistemic_v=2.2705  var_t=0.6040  kl_t=0.0916
+06/10/2026 02:19:46 - INFO -     [Chain-Aux]  evid_loss=6.4234  neg_reg=1.0860  evid_unc=0.0000  logsig_v=0.4128  anneal=1.000
+06/10/2026 02:23:10 - INFO -   [Epoch 1/5] Step 260/703 (37%) | Loss: 1.9612 [sim_loss=1.3032 | mcsoft_loss=0.6580 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.18s/step | ETA: 1h15m09s
+06/10/2026 02:23:10 - INFO -     [Chain-Ret]  pos=23.774  neg=8.529  gap=15.245  pos_std=4.079
+06/10/2026 02:23:10 - INFO -     [Chain-Prob] u_mode=0.5101±0.0030  epistemic_v=1.9681  var_t=0.5656  kl_t=0.1085
+06/10/2026 02:23:10 - INFO -     [Chain-Aux]  evid_loss=6.6190  neg_reg=1.2866  evid_unc=0.0000  logsig_v=0.2742  anneal=1.000
+06/10/2026 02:26:59 - INFO -   [Epoch 1/5] Step 280/703 (40%) | Loss: 1.9803 [sim_loss=1.3879 | mcsoft_loss=0.5924 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.46s/step | ETA: 1h20m49s
+06/10/2026 02:26:59 - INFO -     [Chain-Ret]  pos=24.735  neg=9.555  gap=15.180  pos_std=4.685
+06/10/2026 02:26:59 - INFO -     [Chain-Prob] u_mode=0.5008±0.0032  epistemic_v=1.6976  var_t=0.5334  kl_t=0.1222
+06/10/2026 02:26:59 - INFO -     [Chain-Aux]  evid_loss=6.2023  neg_reg=1.5987  evid_unc=0.0000  logsig_v=0.1308  anneal=1.000
+06/10/2026 02:30:32 - INFO -   [Epoch 1/5] Step 300/703 (43%) | Loss: 1.7273 [sim_loss=1.1860 | mcsoft_loss=0.5413 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.63s/step | ETA: 1h11m24s
+06/10/2026 02:30:32 - INFO -     [Chain-Ret]  pos=24.990  neg=8.783  gap=16.207  pos_std=4.552
+06/10/2026 02:30:32 - INFO -     [Chain-Prob] u_mode=0.4900±0.0033  epistemic_v=1.4492  var_t=0.5102  kl_t=0.1327
+06/10/2026 02:30:32 - INFO -     [Chain-Aux]  evid_loss=6.2659  neg_reg=1.7629  evid_unc=0.0000  logsig_v=-0.0221  anneal=1.000
+06/10/2026 02:34:38 - INFO -   [Epoch 1/5] Step 320/703 (46%) | Loss: 1.7471 [sim_loss=1.2625 | mcsoft_loss=0.4846 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.34s/step | ETA: 1h18m45s
+06/10/2026 02:34:38 - INFO -     [Chain-Ret]  pos=25.220  neg=9.690  gap=15.530  pos_std=4.441
+06/10/2026 02:34:38 - INFO -     [Chain-Prob] u_mode=0.4799±0.0027  epistemic_v=1.2451  var_t=0.4807  kl_t=0.1467
+06/10/2026 02:34:38 - INFO -     [Chain-Aux]  evid_loss=6.1217  neg_reg=1.9513  evid_unc=0.0000  logsig_v=-0.1774  anneal=1.000
+06/10/2026 02:38:12 - INFO -   [Epoch 1/5] Step 340/703 (48%) | Loss: 1.6985 [sim_loss=1.2652 | mcsoft_loss=0.4334 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.67s/step | ETA: 1h04m33s
+06/10/2026 02:38:12 - INFO -     [Chain-Ret]  pos=25.486  neg=9.864  gap=15.622  pos_std=4.021
+06/10/2026 02:38:12 - INFO -     [Chain-Prob] u_mode=0.4695±0.0029  epistemic_v=1.0563  var_t=0.4557  kl_t=0.1599
+06/10/2026 02:38:12 - INFO -     [Chain-Aux]  evid_loss=5.9481  neg_reg=2.2655  evid_unc=0.0000  logsig_v=-0.3455  anneal=1.000
+06/10/2026 02:41:44 - INFO -   [Epoch 1/5] Step 360/703 (51%) | Loss: 1.5592 [sim_loss=1.1702 | mcsoft_loss=0.3889 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.59s/step | ETA: 1h00m32s
+06/10/2026 02:41:44 - INFO -     [Chain-Ret]  pos=24.480  neg=9.028  gap=15.452  pos_std=4.384
+06/10/2026 02:41:44 - INFO -     [Chain-Prob] u_mode=0.4596±0.0029  epistemic_v=0.9017  var_t=0.4316  kl_t=0.1740
+06/10/2026 02:41:44 - INFO -     [Chain-Aux]  evid_loss=6.1470  neg_reg=2.1818  evid_unc=0.0000  logsig_v=-0.5086  anneal=1.000
+06/10/2026 02:45:33 - INFO -   [Epoch 1/5] Step 380/703 (54%) | Loss: 1.4953 [sim_loss=1.1435 | mcsoft_loss=0.3518 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.48s/step | ETA: 1h01m47s
+06/10/2026 02:45:33 - INFO -     [Chain-Ret]  pos=25.858  neg=9.868  gap=15.990  pos_std=4.367
+06/10/2026 02:45:33 - INFO -     [Chain-Prob] u_mode=0.4498±0.0024  epistemic_v=0.7726  var_t=0.4122  kl_t=0.1862
+06/10/2026 02:45:33 - INFO -     [Chain-Aux]  evid_loss=5.9900  neg_reg=2.4731  evid_unc=0.0000  logsig_v=-0.6613  anneal=1.000
+06/10/2026 02:48:47 - INFO -   [Epoch 1/5] Step 400/703 (57%) | Loss: 1.3480 [sim_loss=1.0239 | mcsoft_loss=0.3240 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.69s/step | ETA: 48m57s
+06/10/2026 02:48:47 - INFO -     [Chain-Ret]  pos=25.845  neg=9.042  gap=16.803  pos_std=4.436
+06/10/2026 02:48:47 - INFO -     [Chain-Prob] u_mode=0.4406±0.0025  epistemic_v=0.6681  var_t=0.3910  kl_t=0.2010
+06/10/2026 02:48:47 - INFO -     [Chain-Aux]  evid_loss=6.2809  neg_reg=2.4467  evid_unc=0.0000  logsig_v=-0.7962  anneal=1.000
+06/10/2026 02:52:38 - INFO -   [Epoch 1/5] Step 420/703 (60%) | Loss: 1.5722 [sim_loss=1.2732 | mcsoft_loss=0.2990 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.57s/step | ETA: 54m33s
+06/10/2026 02:52:38 - INFO -     [Chain-Ret]  pos=24.912  neg=9.248  gap=15.664  pos_std=4.172
+06/10/2026 02:52:38 - INFO -     [Chain-Prob] u_mode=0.4323±0.0026  epistemic_v=0.5956  var_t=0.3673  kl_t=0.2183
+06/10/2026 02:52:38 - INFO -     [Chain-Aux]  evid_loss=6.0404  neg_reg=2.3966  evid_unc=0.0000  logsig_v=-0.9018  anneal=1.000
+06/10/2026 02:56:14 - INFO -   [Epoch 1/5] Step 440/703 (63%) | Loss: 1.5011 [sim_loss=1.2232 | mcsoft_loss=0.2778 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.81s/step | ETA: 47m22s
+06/10/2026 02:56:14 - INFO -     [Chain-Ret]  pos=24.917  neg=8.989  gap=15.928  pos_std=4.257
+06/10/2026 02:56:14 - INFO -     [Chain-Prob] u_mode=0.4237±0.0027  epistemic_v=0.5215  var_t=0.3522  kl_t=0.2303
+06/10/2026 02:56:14 - INFO -     [Chain-Aux]  evid_loss=6.3555  neg_reg=2.3828  evid_unc=0.0000  logsig_v=-1.0058  anneal=1.000
+06/10/2026 02:59:49 - INFO -   [Epoch 1/5] Step 460/703 (65%) | Loss: 1.4764 [sim_loss=1.2118 | mcsoft_loss=0.2646 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.74s/step | ETA: 43m30s
+06/10/2026 02:59:49 - INFO -     [Chain-Ret]  pos=26.673  neg=10.752  gap=15.920  pos_std=4.167
+06/10/2026 02:59:49 - INFO -     [Chain-Prob] u_mode=0.4160±0.0026  epistemic_v=0.4754  var_t=0.3406  kl_t=0.2390
+06/10/2026 02:59:49 - INFO -     [Chain-Aux]  evid_loss=7.3381  neg_reg=2.1326  evid_unc=0.0000  logsig_v=-1.0793  anneal=1.000
+06/10/2026 03:03:31 - INFO -   [Epoch 1/5] Step 480/703 (68%) | Loss: 1.4069 [sim_loss=1.1574 | mcsoft_loss=0.2496 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.08s/step | ETA: 41m10s
+06/10/2026 03:03:31 - INFO -     [Chain-Ret]  pos=26.326  neg=11.575  gap=14.751  pos_std=4.543
+06/10/2026 03:03:31 - INFO -     [Chain-Prob] u_mode=0.4101±0.0022  epistemic_v=0.4241  var_t=0.3245  kl_t=0.2505
+06/10/2026 03:03:31 - INFO -     [Chain-Aux]  evid_loss=7.3226  neg_reg=2.2469  evid_unc=0.0000  logsig_v=-1.1552  anneal=1.000
+06/10/2026 03:07:09 - INFO -   [Epoch 1/5] Step 500/703 (71%) | Loss: 1.4931 [sim_loss=1.2520 | mcsoft_loss=0.2410 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.92s/step | ETA: 36m56s
+06/10/2026 03:07:09 - INFO -     [Chain-Ret]  pos=26.853  neg=11.173  gap=15.680  pos_std=4.687
+06/10/2026 03:07:09 - INFO -     [Chain-Prob] u_mode=0.4036±0.0021  epistemic_v=0.3891  var_t=0.3174  kl_t=0.2555
+06/10/2026 03:07:09 - INFO -     [Chain-Aux]  evid_loss=7.4372  neg_reg=2.1973  evid_unc=0.0000  logsig_v=-1.2130  anneal=1.000
+06/10/2026 03:10:29 - INFO -   [Epoch 1/5] Step 520/703 (74%) | Loss: 1.2476 [sim_loss=1.0151 | mcsoft_loss=0.2325 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.01s/step | ETA: 30m31s
+06/10/2026 03:10:29 - INFO -     [Chain-Ret]  pos=27.666  neg=12.467  gap=15.199  pos_std=3.842
+06/10/2026 03:10:29 - INFO -     [Chain-Prob] u_mode=0.3982±0.0023  epistemic_v=0.3654  var_t=0.3080  kl_t=0.2626
+06/10/2026 03:10:29 - INFO -     [Chain-Aux]  evid_loss=8.3579  neg_reg=2.0134  evid_unc=0.0000  logsig_v=-1.2577  anneal=1.000
+06/10/2026 03:14:00 - INFO -   [Epoch 1/5] Step 540/703 (77%) | Loss: 1.3761 [sim_loss=1.1520 | mcsoft_loss=0.2241 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.51s/step | ETA: 28m32s
+06/10/2026 03:14:00 - INFO -     [Chain-Ret]  pos=28.026  neg=12.936  gap=15.090  pos_std=4.111
+06/10/2026 03:14:00 - INFO -     [Chain-Prob] u_mode=0.3926±0.0023  epistemic_v=0.3378  var_t=0.2965  kl_t=0.2721
+06/10/2026 03:14:00 - INFO -     [Chain-Aux]  evid_loss=7.4504  neg_reg=2.2057  evid_unc=0.0000  logsig_v=-1.3051  anneal=1.000
+06/10/2026 03:17:29 - INFO -   [Epoch 1/5] Step 560/703 (80%) | Loss: 1.2446 [sim_loss=1.0285 | mcsoft_loss=0.2161 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.47s/step | ETA: 24m56s
+06/10/2026 03:17:29 - INFO -     [Chain-Ret]  pos=28.302  neg=11.873  gap=16.428  pos_std=4.182
+06/10/2026 03:17:29 - INFO -     [Chain-Prob] u_mode=0.3877±0.0020  epistemic_v=0.3185  var_t=0.2897  kl_t=0.2781
+06/10/2026 03:17:29 - INFO -     [Chain-Aux]  evid_loss=7.2201  neg_reg=2.1350  evid_unc=0.0000  logsig_v=-1.3397  anneal=1.000
+06/10/2026 03:21:34 - INFO -   [Epoch 1/5] Step 580/703 (83%) | Loss: 1.4056 [sim_loss=1.1955 | mcsoft_loss=0.2101 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.26s/step | ETA: 25m08s
+06/10/2026 03:21:34 - INFO -     [Chain-Ret]  pos=28.281  neg=13.881  gap=14.401  pos_std=3.874
+06/10/2026 03:21:34 - INFO -     [Chain-Prob] u_mode=0.3837±0.0021  epistemic_v=0.3025  var_t=0.2801  kl_t=0.2874
+06/10/2026 03:21:34 - INFO -     [Chain-Aux]  evid_loss=7.7811  neg_reg=2.0203  evid_unc=0.0000  logsig_v=-1.3702  anneal=1.000
+06/10/2026 03:24:51 - INFO -   [Epoch 1/5] Step 600/703 (85%) | Loss: 1.1283 [sim_loss=0.9233 | mcsoft_loss=0.2050 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.83s/step | ETA: 16m52s
+06/10/2026 03:24:51 - INFO -     [Chain-Ret]  pos=28.061  neg=13.112  gap=14.949  pos_std=3.543
+06/10/2026 03:24:51 - INFO -     [Chain-Prob] u_mode=0.3787±0.0023  epistemic_v=0.2896  var_t=0.2718  kl_t=0.2957
+06/10/2026 03:24:51 - INFO -     [Chain-Aux]  evid_loss=8.6994  neg_reg=1.7312  evid_unc=0.0000  logsig_v=-1.3954  anneal=1.000
+06/10/2026 03:28:17 - INFO -   [Epoch 1/5] Step 620/703 (88%) | Loss: 1.1436 [sim_loss=0.9415 | mcsoft_loss=0.2021 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.31s/step | ETA: 14m16s
+06/10/2026 03:28:17 - INFO -     [Chain-Ret]  pos=29.037  neg=14.972  gap=14.065  pos_std=3.357
+06/10/2026 03:28:17 - INFO -     [Chain-Prob] u_mode=0.3743±0.0020  epistemic_v=0.2799  var_t=0.2656  kl_t=0.3026
+06/10/2026 03:28:17 - INFO -     [Chain-Aux]  evid_loss=9.3793  neg_reg=1.6895  evid_unc=0.0000  logsig_v=-1.4149  anneal=1.000
+06/10/2026 03:32:18 - INFO -   [Epoch 1/5] Step 640/703 (91%) | Loss: 1.2264 [sim_loss=1.0273 | mcsoft_loss=0.1990 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.03s/step | ETA: 12m37s
+06/10/2026 03:32:18 - INFO -     [Chain-Ret]  pos=28.856  neg=14.112  gap=14.744  pos_std=4.035
+06/10/2026 03:32:18 - INFO -     [Chain-Prob] u_mode=0.3712±0.0025  epistemic_v=0.2643  var_t=0.2598  kl_t=0.3092
+06/10/2026 03:32:18 - INFO -     [Chain-Aux]  evid_loss=10.7427  neg_reg=1.5097  evid_unc=0.0000  logsig_v=-1.4363  anneal=1.000
+06/10/2026 03:35:25 - INFO -   [Epoch 1/5] Step 660/703 (94%) | Loss: 1.3312 [sim_loss=1.1361 | mcsoft_loss=0.1951 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.34s/step | ETA: 6m41s
+06/10/2026 03:35:25 - INFO -     [Chain-Ret]  pos=28.792  neg=14.068  gap=14.724  pos_std=3.807
+06/10/2026 03:35:25 - INFO -     [Chain-Prob] u_mode=0.3677±0.0022  epistemic_v=0.2560  var_t=0.2534  kl_t=0.3172
+06/10/2026 03:35:25 - INFO -     [Chain-Aux]  evid_loss=10.0124  neg_reg=1.6476  evid_unc=0.0000  logsig_v=-1.4511  anneal=1.000
+06/10/2026 03:39:41 - INFO -   [Epoch 1/5] Step 680/703 (97%) | Loss: 1.2171 [sim_loss=1.0250 | mcsoft_loss=0.1921 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.81s/step | ETA: 4m54s
+06/10/2026 03:39:41 - INFO -     [Chain-Ret]  pos=29.283  neg=14.096  gap=15.187  pos_std=3.705
+06/10/2026 03:39:41 - INFO -     [Chain-Prob] u_mode=0.3643±0.0023  epistemic_v=0.2481  var_t=0.2484  kl_t=0.3236
+06/10/2026 03:39:41 - INFO -     [Chain-Aux]  evid_loss=7.8243  neg_reg=2.0307  evid_unc=0.0000  logsig_v=-1.4632  anneal=1.000
+06/10/2026 03:41:56 - INFO -   [Epoch 1/5] Step 700/703 (100%) | Loss: 1.1142 [sim_loss=0.9247 | mcsoft_loss=0.1895 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 6.78s/step | ETA: 20.3s
+06/10/2026 03:41:56 - INFO -     [Chain-Ret]  pos=30.222  neg=15.048  gap=15.174  pos_std=3.908
+06/10/2026 03:41:56 - INFO -     [Chain-Prob] u_mode=0.3614±0.0017  epistemic_v=0.2411  var_t=0.2410  kl_t=0.3339
+06/10/2026 03:41:56 - INFO -     [Chain-Aux]  evid_loss=9.9455  neg_reg=1.6700  evid_unc=0.0000  logsig_v=-1.4728  anneal=1.000
+06/10/2026 03:42:01 - INFO -   [Epoch 1/5] Training complete | Avg Loss: 2.0045 | Time: 2h08m37s
+06/10/2026 03:42:01 - INFO -   [Epoch 1 Causal Summary]
+  Ret  : pos=25.010  neg=11.480  gap=13.530  pos_std=3.774
+  Evid : u_mode=0.4656±0.0027  epistemic_v=1.9192
+  Text : var_t=0.5373  kl_t=0.1541
+  Aux  : evid_loss=7.3229  neg_reg=1.4140  evid_unc=0.0000  logsig_v=-0.2422
+06/10/2026 03:42:01 - INFO -     GPU Memory | Cur: 1.48 GB, Peak: 48.53 GB, Reserved: 51.62 GB
+06/10/2026 03:42:04 - INFO -   Model saved to ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.0
+06/10/2026 03:42:04 - INFO -   Optimizer saved to ckpts/ckpt_msrvtt_20260610_013304/pytorch_opt.bin.0
+Evaluating:   0%|          | 0/63 [00:00<?, ?it/s]Evaluating:   2%|▏         | 1/63 [00:15<15:38, 15.14s/it]Evaluating:   3%|▎         | 2/63 [00:19<08:54,  8.76s/it]Evaluating:   5%|▍         | 3/63 [00:24<06:59,  6.99s/it]Evaluating:   6%|▋         | 4/63 [00:24<04:13,  4.30s/it]Evaluating:   8%|▊         | 5/63 [00:24<02:43,  2.82s/it]Evaluating:  10%|▉         | 6/63 [00:24<01:49,  1.92s/it]Evaluating:  11%|█         | 7/63 [00:25<01:17,  1.38s/it]Evaluating:  13%|█▎        | 8/63 [00:25<00:55,  1.00s/it]Evaluating:  14%|█▍        | 9/63 [00:37<03:58,  4.43s/it]Evaluating:  16%|█▌        | 10/63 [00:42<04:08,  4.70s/it]Evaluating:  17%|█▋        | 11/63 [00:44<03:27,  3.99s/it]Evaluating:  19%|█▉        | 12/63 [00:47<03:03,  3.60s/it]Evaluating:  21%|██        | 13/63 [00:47<02:08,  2.57s/it]Evaluating:  22%|██▏       | 14/63 [00:48<01:30,  1.85s/it]Evaluating:  24%|██▍       | 15/63 [00:48<01:11,  1.49s/it]Evaluating:  25%|██▌       | 16/63 [00:48<00:51,  1.10s/it]Evaluating:  27%|██▋       | 17/63 [01:08<05:07,  6.67s/it]Evaluating:  29%|██▊       | 18/63 [01:08<03:32,  4.72s/it]Evaluating:  30%|███       | 19/63 [01:08<02:27,  3.36s/it]Evaluating:  32%|███▏      | 20/63 [01:10<02:06,  2.94s/it]Evaluating:  33%|███▎      | 21/63 [01:11<01:28,  2.11s/it]Evaluating:  35%|███▍      | 22/63 [01:11<01:02,  1.53s/it]Evaluating:  37%|███▋      | 23/63 [01:11<00:45,  1.13s/it]Evaluating:  38%|███▊      | 24/63 [01:11<00:32,  1.18it/s]Evaluating:  40%|███▉      | 25/63 [01:28<03:38,  5.74s/it]Evaluating:  41%|████▏     | 26/63 [01:28<02:30,  4.07s/it]Evaluating:  43%|████▎     | 27/63 [01:30<01:54,  3.19s/it]Evaluating:  44%|████▍     | 28/63 [01:30<01:24,  2.42s/it]Evaluating:  46%|████▌     | 29/63 [01:37<02:05,  3.70s/it]Evaluating:  48%|████▊     | 30/63 [01:37<01:27,  2.65s/it]Evaluating:  49%|████▉     | 31/63 [01:37<01:01,  1.91s/it]Evaluating:  51%|█████     | 32/63 [01:37<00:43,  1.39s/it]Evaluating:  52%|█████▏    | 33/63 [01:52<02:37,  5.24s/it]Evaluating:  54%|█████▍    | 34/63 [01:52<01:48,  3.73s/it]Evaluating:  56%|█████▌    | 35/63 [01:57<01:53,  4.06s/it]Evaluating:  57%|█████▋    | 36/63 [01:57<01:18,  2.90s/it]Evaluating:  59%|█████▊    | 37/63 [01:57<00:54,  2.08s/it]Evaluating:  60%|██████    | 38/63 [01:57<00:37,  1.50s/it]Evaluating:  62%|██████▏   | 39/63 [01:59<00:35,  1.49s/it]Evaluating:  63%|██████▎   | 40/63 [01:59<00:25,  1.10s/it]Evaluating:  65%|██████▌   | 41/63 [02:12<01:41,  4.62s/it]Evaluating:  67%|██████▋   | 42/63 [02:12<01:09,  3.29s/it]Evaluating:  68%|██████▊   | 43/63 [02:17<01:16,  3.82s/it]Evaluating:  70%|██████▉   | 44/63 [02:24<01:31,  4.84s/it]Evaluating:  71%|███████▏  | 45/63 [02:24<01:02,  3.45s/it]Evaluating:  73%|███████▎  | 46/63 [02:26<00:48,  2.87s/it]Evaluating:  75%|███████▍  | 47/63 [02:26<00:32,  2.06s/it]Evaluating:  76%|███████▌  | 48/63 [02:26<00:22,  1.50s/it]Evaluating:  78%|███████▊  | 49/63 [02:33<00:43,  3.08s/it]Evaluating:  79%|███████▉  | 50/63 [02:33<00:28,  2.21s/it]Evaluating:  81%|████████  | 51/63 [02:39<00:37,  3.15s/it]Evaluating:  83%|████████▎ | 52/63 [02:47<00:51,  4.64s/it]Evaluating:  84%|████████▍ | 53/63 [02:47<00:32,  3.30s/it]Evaluating:  86%|████████▌ | 54/63 [02:47<00:21,  2.36s/it]Evaluating:  87%|████████▋ | 55/63 [02:47<00:13,  1.70s/it]Evaluating:  89%|████████▉ | 56/63 [02:47<00:08,  1.25s/it]Evaluating:  90%|█████████ | 57/63 [02:52<00:13,  2.32s/it]Evaluating:  92%|█████████▏| 58/63 [02:52<00:08,  1.67s/it]Evaluating:  94%|█████████▎| 59/63 [02:52<00:04,  1.22s/it]Evaluating:  95%|█████████▌| 60/63 [02:54<00:04,  1.39s/it]Evaluating:  97%|█████████▋| 61/63 [02:54<00:02,  1.01s/it]Evaluating:  98%|█████████▊| 62/63 [02:55<00:00,  1.33it/s]Evaluating: 100%|██████████| 63/63 [02:55<00:00,  1.79it/s]                                                           06/10/2026 03:45:47 - INFO -   Retrieval Evaluation | #Text: 1000, #Video: 1000
+06/10/2026 03:45:47 - INFO -     T2V | R@1:  45.2  R@5:  75.7  R@10:  83.7  MdR:   2.0  MnR:  12.9
+06/10/2026 03:45:47 - INFO -     V2T | R@1:  46.7  R@5:  75.6  R@10:  83.8  MdR:   2.0  MnR:   8.9
+06/10/2026 03:45:48 - INFO -     Best so far | R@1: 45.2 | ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.0
+06/10/2026 03:45:48 - INFO -   ============================================================
+06/10/2026 03:49:11 - INFO -   [Epoch 2/5] Step 17/703 (2%) | Loss: 1.0334 [sim_loss=0.8468 | mcsoft_loss=0.1866 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.16s/step | ETA: 1h56m06s
+06/10/2026 03:49:11 - INFO -     [Chain-Ret]  pos=29.612  neg=13.818  gap=15.794  pos_std=3.616
+06/10/2026 03:49:11 - INFO -     [Chain-Prob] u_mode=0.3599±0.0024  epistemic_v=0.2327  var_t=0.2358  kl_t=0.3414
+06/10/2026 03:49:11 - INFO -     [Chain-Aux]  evid_loss=8.3265  neg_reg=1.8529  evid_unc=0.0000  logsig_v=-1.4813  anneal=1.000
+06/10/2026 03:52:12 - INFO -   [Epoch 2/5] Step 37/703 (5%) | Loss: 0.9574 [sim_loss=0.7719 | mcsoft_loss=0.1855 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.05s/step | ETA: 1h40m30s
+06/10/2026 03:52:12 - INFO -     [Chain-Ret]  pos=30.101  neg=14.262  gap=15.838  pos_std=3.355
+06/10/2026 03:52:12 - INFO -     [Chain-Prob] u_mode=0.3577±0.0022  epistemic_v=0.2286  var_t=0.2325  kl_t=0.3469
+06/10/2026 03:52:12 - INFO -     [Chain-Aux]  evid_loss=10.3009  neg_reg=1.6119  evid_unc=0.0000  logsig_v=-1.4861  anneal=1.000
+06/10/2026 03:55:52 - INFO -   [Epoch 2/5] Step 57/703 (8%) | Loss: 1.1391 [sim_loss=0.9557 | mcsoft_loss=0.1833 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.01s/step | ETA: 1h58m32s
+06/10/2026 03:55:52 - INFO -     [Chain-Ret]  pos=30.118  neg=14.695  gap=15.423  pos_std=3.751
+06/10/2026 03:55:52 - INFO -     [Chain-Prob] u_mode=0.3558±0.0023  epistemic_v=0.2256  var_t=0.2284  kl_t=0.3532
+06/10/2026 03:55:52 - INFO -     [Chain-Aux]  evid_loss=9.3079  neg_reg=1.8596  evid_unc=0.0000  logsig_v=-1.4898  anneal=1.000
+06/10/2026 03:59:46 - INFO -   [Epoch 2/5] Step 77/703 (11%) | Loss: 0.9438 [sim_loss=0.7608 | mcsoft_loss=0.1829 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.71s/step | ETA: 2h02m10s
+06/10/2026 03:59:46 - INFO -     [Chain-Ret]  pos=29.978  neg=13.932  gap=16.046  pos_std=3.504
+06/10/2026 03:59:46 - INFO -     [Chain-Prob] u_mode=0.3541±0.0023  epistemic_v=0.2235  var_t=0.2261  kl_t=0.3568
+06/10/2026 03:59:46 - INFO -     [Chain-Aux]  evid_loss=10.2141  neg_reg=1.7511  evid_unc=0.0000  logsig_v=-1.4919  anneal=1.000
+06/10/2026 04:02:38 - INFO -   [Epoch 2/5] Step 97/703 (14%) | Loss: 0.9886 [sim_loss=0.8070 | mcsoft_loss=0.1816 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 8.59s/step | ETA: 1h26m46s
+06/10/2026 04:02:38 - INFO -     [Chain-Ret]  pos=29.650  neg=13.840  gap=15.810  pos_std=3.756
+06/10/2026 04:02:38 - INFO -     [Chain-Prob] u_mode=0.3537±0.0017  epistemic_v=0.2199  var_t=0.2249  kl_t=0.3588
+06/10/2026 04:02:38 - INFO -     [Chain-Aux]  evid_loss=12.7621  neg_reg=1.2554  evid_unc=0.0000  logsig_v=-1.4943  anneal=1.000
+06/10/2026 04:06:51 - INFO -   [Epoch 2/5] Step 117/703 (17%) | Loss: 1.1509 [sim_loss=0.9695 | mcsoft_loss=0.1814 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.63s/step | ETA: 2h03m20s
+06/10/2026 04:06:51 - INFO -     [Chain-Ret]  pos=30.225  neg=15.051  gap=15.175  pos_std=3.857
+06/10/2026 04:06:51 - INFO -     [Chain-Prob] u_mode=0.3526±0.0021  epistemic_v=0.2184  var_t=0.2251  kl_t=0.3587
+06/10/2026 04:06:51 - INFO -     [Chain-Aux]  evid_loss=10.8446  neg_reg=1.6221  evid_unc=0.0000  logsig_v=-1.4952  anneal=1.000
+06/10/2026 04:10:00 - INFO -   [Epoch 2/5] Step 137/703 (19%) | Loss: 1.2115 [sim_loss=1.0297 | mcsoft_loss=0.1819 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.45s/step | ETA: 1h29m10s
+06/10/2026 04:10:00 - INFO -     [Chain-Ret]  pos=30.635  neg=15.151  gap=15.483  pos_std=3.700
+06/10/2026 04:10:00 - INFO -     [Chain-Prob] u_mode=0.3520±0.0022  epistemic_v=0.2171  var_t=0.2245  kl_t=0.3595
+06/10/2026 04:10:00 - INFO -     [Chain-Aux]  evid_loss=9.0695  neg_reg=1.7342  evid_unc=0.0000  logsig_v=-1.4962  anneal=1.000
+06/10/2026 04:14:26 - INFO -   [Epoch 2/5] Step 157/703 (22%) | Loss: 1.0420 [sim_loss=0.8612 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.30s/step | ETA: 2h01m00s
+06/10/2026 04:14:26 - INFO -     [Chain-Ret]  pos=30.626  neg=15.299  gap=15.327  pos_std=3.400
+06/10/2026 04:14:26 - INFO -     [Chain-Prob] u_mode=0.3518±0.0021  epistemic_v=0.2198  var_t=0.2243  kl_t=0.3598
+06/10/2026 04:14:26 - INFO -     [Chain-Aux]  evid_loss=11.5519  neg_reg=1.4955  evid_unc=0.0000  logsig_v=-1.4962  anneal=1.000
+06/10/2026 04:17:17 - INFO -   [Epoch 2/5] Step 177/703 (25%) | Loss: 1.2595 [sim_loss=1.0787 | mcsoft_loss=0.1808 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 8.57s/step | ETA: 1h15m08s
+06/10/2026 04:17:17 - INFO -     [Chain-Ret]  pos=30.166  neg=15.003  gap=15.164  pos_std=3.783
+06/10/2026 04:17:17 - INFO -     [Chain-Prob] u_mode=0.3508±0.0020  epistemic_v=0.2187  var_t=0.2235  kl_t=0.3610
+06/10/2026 04:17:17 - INFO -     [Chain-Aux]  evid_loss=10.0140  neg_reg=1.7931  evid_unc=0.0000  logsig_v=-1.4966  anneal=1.000
+06/10/2026 04:21:25 - INFO -   [Epoch 2/5] Step 197/703 (28%) | Loss: 1.2475 [sim_loss=1.0659 | mcsoft_loss=0.1816 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.39s/step | ETA: 1h44m30s
+06/10/2026 04:21:25 - INFO -     [Chain-Ret]  pos=30.384  neg=15.105  gap=15.279  pos_std=4.174
+06/10/2026 04:21:25 - INFO -     [Chain-Prob] u_mode=0.3503±0.0025  epistemic_v=0.2166  var_t=0.2251  kl_t=0.3588
+06/10/2026 04:21:25 - INFO -     [Chain-Aux]  evid_loss=11.6411  neg_reg=1.5182  evid_unc=0.0000  logsig_v=-1.4973  anneal=1.000
+06/10/2026 04:24:27 - INFO -   [Epoch 2/5] Step 217/703 (31%) | Loss: 1.0161 [sim_loss=0.8357 | mcsoft_loss=0.1804 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.10s/step | ETA: 1h13m41s
+06/10/2026 04:24:27 - INFO -     [Chain-Ret]  pos=31.002  neg=15.327  gap=15.675  pos_std=3.485
+06/10/2026 04:24:27 - INFO -     [Chain-Prob] u_mode=0.3494±0.0020  epistemic_v=0.2183  var_t=0.2237  kl_t=0.3606
+06/10/2026 04:24:27 - INFO -     [Chain-Aux]  evid_loss=11.8313  neg_reg=1.3307  evid_unc=0.0000  logsig_v=-1.4967  anneal=1.000
+06/10/2026 04:29:01 - INFO -   [Epoch 2/5] Step 237/703 (34%) | Loss: 0.9773 [sim_loss=0.7969 | mcsoft_loss=0.1804 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.73s/step | ETA: 1h46m35s
+06/10/2026 04:29:01 - INFO -     [Chain-Ret]  pos=31.499  neg=15.623  gap=15.876  pos_std=3.706
+06/10/2026 04:29:01 - INFO -     [Chain-Prob] u_mode=0.3485±0.0020  epistemic_v=0.2165  var_t=0.2240  kl_t=0.3603
+06/10/2026 04:29:01 - INFO -     [Chain-Aux]  evid_loss=10.5096  neg_reg=1.5253  evid_unc=0.0000  logsig_v=-1.4978  anneal=1.000
+06/10/2026 04:31:56 - INFO -   [Epoch 2/5] Step 257/703 (37%) | Loss: 1.0989 [sim_loss=0.9173 | mcsoft_loss=0.1816 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 8.75s/step | ETA: 1h05m02s
+06/10/2026 04:31:56 - INFO -     [Chain-Ret]  pos=31.444  neg=15.948  gap=15.496  pos_std=3.979
+06/10/2026 04:31:56 - INFO -     [Chain-Prob] u_mode=0.3480±0.0022  epistemic_v=0.2179  var_t=0.2244  kl_t=0.3598
+06/10/2026 04:31:56 - INFO -     [Chain-Aux]  evid_loss=11.9245  neg_reg=1.4994  evid_unc=0.0000  logsig_v=-1.4975  anneal=1.000
+06/10/2026 04:36:08 - INFO -   [Epoch 2/5] Step 277/703 (39%) | Loss: 0.9013 [sim_loss=0.7198 | mcsoft_loss=0.1814 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.57s/step | ETA: 1h29m13s
+06/10/2026 04:36:08 - INFO -     [Chain-Ret]  pos=31.709  neg=15.410  gap=16.299  pos_std=3.566
+06/10/2026 04:36:08 - INFO -     [Chain-Prob] u_mode=0.3472±0.0021  epistemic_v=0.2154  var_t=0.2234  kl_t=0.3611
+06/10/2026 04:36:08 - INFO -     [Chain-Aux]  evid_loss=12.1564  neg_reg=1.3581  evid_unc=0.0000  logsig_v=-1.4978  anneal=1.000
+06/10/2026 04:39:01 - INFO -   [Epoch 2/5] Step 297/703 (42%) | Loss: 1.1551 [sim_loss=0.9741 | mcsoft_loss=0.1810 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 8.68s/step | ETA: 58m45s
+06/10/2026 04:39:01 - INFO -     [Chain-Ret]  pos=31.713  neg=16.356  gap=15.357  pos_std=3.547
+06/10/2026 04:39:01 - INFO -     [Chain-Prob] u_mode=0.3464±0.0023  epistemic_v=0.2125  var_t=0.2240  kl_t=0.3602
+06/10/2026 04:39:01 - INFO -     [Chain-Aux]  evid_loss=10.7023  neg_reg=1.7806  evid_unc=0.0000  logsig_v=-1.4984  anneal=1.000
+06/10/2026 04:43:14 - INFO -   [Epoch 2/5] Step 317/703 (45%) | Loss: 0.9139 [sim_loss=0.7333 | mcsoft_loss=0.1806 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.64s/step | ETA: 1h21m17s
+06/10/2026 04:43:14 - INFO -     [Chain-Ret]  pos=31.765  neg=14.991  gap=16.774  pos_std=3.562
+06/10/2026 04:43:14 - INFO -     [Chain-Prob] u_mode=0.3457±0.0019  epistemic_v=0.2144  var_t=0.2244  kl_t=0.3597
+06/10/2026 04:43:14 - INFO -     [Chain-Aux]  evid_loss=11.7904  neg_reg=1.5730  evid_unc=0.0000  logsig_v=-1.4984  anneal=1.000
+06/10/2026 04:46:14 - INFO -   [Epoch 2/5] Step 337/703 (48%) | Loss: 0.9732 [sim_loss=0.7918 | mcsoft_loss=0.1814 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.01s/step | ETA: 54m59s
+06/10/2026 04:46:14 - INFO -     [Chain-Ret]  pos=31.867  neg=15.694  gap=16.173  pos_std=3.674
+06/10/2026 04:46:14 - INFO -     [Chain-Prob] u_mode=0.3452±0.0020  epistemic_v=0.2138  var_t=0.2236  kl_t=0.3610
+06/10/2026 04:46:14 - INFO -     [Chain-Aux]  evid_loss=11.9870  neg_reg=1.5187  evid_unc=0.0000  logsig_v=-1.4986  anneal=1.000
+06/10/2026 04:50:27 - INFO -   [Epoch 2/5] Step 357/703 (51%) | Loss: 0.9994 [sim_loss=0.8183 | mcsoft_loss=0.1811 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.64s/step | ETA: 1h12m51s
+06/10/2026 04:50:27 - INFO -     [Chain-Ret]  pos=31.999  neg=16.479  gap=15.521  pos_std=3.580
+06/10/2026 04:50:27 - INFO -     [Chain-Prob] u_mode=0.3449±0.0018  epistemic_v=0.2160  var_t=0.2238  kl_t=0.3606
+06/10/2026 04:50:27 - INFO -     [Chain-Aux]  evid_loss=9.5845  neg_reg=1.9768  evid_unc=0.0000  logsig_v=-1.4982  anneal=1.000
+06/10/2026 04:53:50 - INFO -   [Epoch 2/5] Step 377/703 (54%) | Loss: 1.0772 [sim_loss=0.8965 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.14s/step | ETA: 55m04s
+06/10/2026 04:53:50 - INFO -     [Chain-Ret]  pos=31.668  neg=16.547  gap=15.121  pos_std=3.738
+06/10/2026 04:53:50 - INFO -     [Chain-Prob] u_mode=0.3441±0.0020  epistemic_v=0.2148  var_t=0.2235  kl_t=0.3611
+06/10/2026 04:53:50 - INFO -     [Chain-Aux]  evid_loss=8.9582  neg_reg=2.0090  evid_unc=0.0000  logsig_v=-1.4983  anneal=1.000
+06/10/2026 04:57:49 - INFO -   [Epoch 2/5] Step 397/703 (56%) | Loss: 1.1124 [sim_loss=0.9318 | mcsoft_loss=0.1806 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.94s/step | ETA: 1h00m52s
+06/10/2026 04:57:49 - INFO -     [Chain-Ret]  pos=31.701  neg=16.428  gap=15.273  pos_std=3.647
+06/10/2026 04:57:49 - INFO -     [Chain-Prob] u_mode=0.3435±0.0019  epistemic_v=0.2143  var_t=0.2234  kl_t=0.3611
+06/10/2026 04:57:49 - INFO -     [Chain-Aux]  evid_loss=9.8089  neg_reg=1.8083  evid_unc=0.0000  logsig_v=-1.4985  anneal=1.000
+06/10/2026 05:00:59 - INFO -   [Epoch 2/5] Step 417/703 (59%) | Loss: 1.0764 [sim_loss=0.8963 | mcsoft_loss=0.1801 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.51s/step | ETA: 45m19s
+06/10/2026 05:00:59 - INFO -     [Chain-Ret]  pos=32.275  neg=16.565  gap=15.710  pos_std=3.528
+06/10/2026 05:00:59 - INFO -     [Chain-Prob] u_mode=0.3428±0.0021  epistemic_v=0.2149  var_t=0.2235  kl_t=0.3610
+06/10/2026 05:00:59 - INFO -     [Chain-Aux]  evid_loss=10.7869  neg_reg=1.5724  evid_unc=0.0000  logsig_v=-1.4984  anneal=1.000
+06/10/2026 05:05:36 - INFO -   [Epoch 2/5] Step 437/703 (62%) | Loss: 0.9145 [sim_loss=0.7338 | mcsoft_loss=0.1806 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.85s/step | ETA: 1h01m23s
+06/10/2026 05:05:36 - INFO -     [Chain-Ret]  pos=32.039  neg=16.045  gap=15.994  pos_std=3.421
+06/10/2026 05:05:36 - INFO -     [Chain-Prob] u_mode=0.3428±0.0021  epistemic_v=0.2112  var_t=0.2235  kl_t=0.3610
+06/10/2026 05:05:36 - INFO -     [Chain-Aux]  evid_loss=10.3204  neg_reg=1.7407  evid_unc=0.0000  logsig_v=-1.4990  anneal=1.000
+06/10/2026 05:08:22 - INFO -   [Epoch 2/5] Step 457/703 (65%) | Loss: 0.9275 [sim_loss=0.7464 | mcsoft_loss=0.1811 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 8.31s/step | ETA: 34m04s
+06/10/2026 05:08:22 - INFO -     [Chain-Ret]  pos=31.835  neg=15.891  gap=15.944  pos_std=3.471
+06/10/2026 05:08:22 - INFO -     [Chain-Prob] u_mode=0.3417±0.0020  epistemic_v=0.2109  var_t=0.2237  kl_t=0.3608
+06/10/2026 05:08:22 - INFO -     [Chain-Aux]  evid_loss=11.2091  neg_reg=1.5621  evid_unc=0.0000  logsig_v=-1.4988  anneal=1.000
+06/10/2026 05:12:41 - INFO -   [Epoch 2/5] Step 477/703 (68%) | Loss: 1.1494 [sim_loss=0.9682 | mcsoft_loss=0.1811 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.97s/step | ETA: 48m51s
+06/10/2026 05:12:41 - INFO -     [Chain-Ret]  pos=32.906  neg=17.178  gap=15.729  pos_std=3.811
+06/10/2026 05:12:41 - INFO -     [Chain-Prob] u_mode=0.3415±0.0020  epistemic_v=0.2127  var_t=0.2236  kl_t=0.3609
+06/10/2026 05:12:41 - INFO -     [Chain-Aux]  evid_loss=8.7748  neg_reg=2.0610  evid_unc=0.0000  logsig_v=-1.4989  anneal=1.000
+06/10/2026 05:15:47 - INFO -   [Epoch 2/5] Step 497/703 (71%) | Loss: 1.0698 [sim_loss=0.8888 | mcsoft_loss=0.1810 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.29s/step | ETA: 31m54s
+06/10/2026 05:15:47 - INFO -     [Chain-Ret]  pos=32.521  neg=17.231  gap=15.290  pos_std=3.975
+06/10/2026 05:15:47 - INFO -     [Chain-Prob] u_mode=0.3411±0.0020  epistemic_v=0.2128  var_t=0.2239  kl_t=0.3606
+06/10/2026 05:15:47 - INFO -     [Chain-Aux]  evid_loss=9.6636  neg_reg=1.8290  evid_unc=0.0000  logsig_v=-1.4989  anneal=1.000
+06/10/2026 05:19:37 - INFO -   [Epoch 2/5] Step 517/703 (74%) | Loss: 1.0254 [sim_loss=0.8437 | mcsoft_loss=0.1817 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.48s/step | ETA: 35m34s
+06/10/2026 05:19:37 - INFO -     [Chain-Ret]  pos=32.254  neg=16.364  gap=15.890  pos_std=3.727
+06/10/2026 05:19:37 - INFO -     [Chain-Prob] u_mode=0.3406±0.0022  epistemic_v=0.2108  var_t=0.2240  kl_t=0.3605
+06/10/2026 05:19:37 - INFO -     [Chain-Aux]  evid_loss=11.6487  neg_reg=1.4746  evid_unc=0.0000  logsig_v=-1.4990  anneal=1.000
+06/10/2026 05:22:51 - INFO -   [Epoch 2/5] Step 537/703 (76%) | Loss: 1.0057 [sim_loss=0.8253 | mcsoft_loss=0.1804 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.71s/step | ETA: 26m52s
+06/10/2026 05:22:51 - INFO -     [Chain-Ret]  pos=32.070  neg=16.813  gap=15.257  pos_std=3.516
+06/10/2026 05:22:51 - INFO -     [Chain-Prob] u_mode=0.3401±0.0021  epistemic_v=0.2130  var_t=0.2236  kl_t=0.3609
+06/10/2026 05:22:51 - INFO -     [Chain-Aux]  evid_loss=11.4396  neg_reg=1.6083  evid_unc=0.0000  logsig_v=-1.4989  anneal=1.000
+06/10/2026 05:27:05 - INFO -   [Epoch 2/5] Step 557/703 (79%) | Loss: 0.9612 [sim_loss=0.7801 | mcsoft_loss=0.1810 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.72s/step | ETA: 30m56s
+06/10/2026 05:27:05 - INFO -     [Chain-Ret]  pos=32.756  neg=17.328  gap=15.428  pos_std=3.681
+06/10/2026 05:27:05 - INFO -     [Chain-Prob] u_mode=0.3398±0.0020  epistemic_v=0.2130  var_t=0.2235  kl_t=0.3611
+06/10/2026 05:27:05 - INFO -     [Chain-Aux]  evid_loss=11.8404  neg_reg=1.4801  evid_unc=0.0000  logsig_v=-1.4990  anneal=1.000
+06/10/2026 05:30:07 - INFO -   [Epoch 2/5] Step 577/703 (82%) | Loss: 0.9538 [sim_loss=0.7733 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.09s/step | ETA: 19m05s
+06/10/2026 05:30:07 - INFO -     [Chain-Ret]  pos=32.890  neg=17.454  gap=15.435  pos_std=3.419
+06/10/2026 05:30:07 - INFO -     [Chain-Prob] u_mode=0.3392±0.0020  epistemic_v=0.2146  var_t=0.2236  kl_t=0.3610
+06/10/2026 05:30:07 - INFO -     [Chain-Aux]  evid_loss=9.2112  neg_reg=2.0180  evid_unc=0.0000  logsig_v=-1.4990  anneal=1.000
+06/10/2026 05:34:22 - INFO -   [Epoch 2/5] Step 597/703 (85%) | Loss: 1.1881 [sim_loss=1.0072 | mcsoft_loss=0.1809 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.74s/step | ETA: 22m30s
+06/10/2026 05:34:22 - INFO -     [Chain-Ret]  pos=31.958  neg=16.814  gap=15.144  pos_std=3.940
+06/10/2026 05:34:22 - INFO -     [Chain-Prob] u_mode=0.3384±0.0021  epistemic_v=0.2131  var_t=0.2232  kl_t=0.3615
+06/10/2026 05:34:22 - INFO -     [Chain-Aux]  evid_loss=10.5883  neg_reg=1.7779  evid_unc=0.0000  logsig_v=-1.4990  anneal=1.000
+06/10/2026 05:37:14 - INFO -   [Epoch 2/5] Step 617/703 (88%) | Loss: 0.8641 [sim_loss=0.6846 | mcsoft_loss=0.1795 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 8.60s/step | ETA: 12m19s
+06/10/2026 05:37:14 - INFO -     [Chain-Ret]  pos=32.315  neg=16.830  gap=15.485  pos_std=3.277
+06/10/2026 05:37:14 - INFO -     [Chain-Prob] u_mode=0.3384±0.0019  epistemic_v=0.2133  var_t=0.2234  kl_t=0.3611
+06/10/2026 05:37:14 - INFO -     [Chain-Aux]  evid_loss=9.4964  neg_reg=1.8567  evid_unc=0.0000  logsig_v=-1.4989  anneal=1.000
+06/10/2026 05:41:21 - INFO -   [Epoch 2/5] Step 637/703 (91%) | Loss: 1.0774 [sim_loss=0.8975 | mcsoft_loss=0.1799 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.35s/step | ETA: 13m35s
+06/10/2026 05:41:21 - INFO -     [Chain-Ret]  pos=32.474  neg=16.901  gap=15.573  pos_std=3.788
+06/10/2026 05:41:21 - INFO -     [Chain-Prob] u_mode=0.3383±0.0019  epistemic_v=0.2124  var_t=0.2240  kl_t=0.3604
+06/10/2026 05:41:21 - INFO -     [Chain-Aux]  evid_loss=9.6013  neg_reg=1.8443  evid_unc=0.0000  logsig_v=-1.4989  anneal=1.000
+06/10/2026 05:44:35 - INFO -   [Epoch 2/5] Step 657/703 (93%) | Loss: 0.9659 [sim_loss=0.7849 | mcsoft_loss=0.1810 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.68s/step | ETA: 7m25s
+06/10/2026 05:44:35 - INFO -     [Chain-Ret]  pos=32.496  neg=17.396  gap=15.100  pos_std=3.424
+06/10/2026 05:44:35 - INFO -     [Chain-Prob] u_mode=0.3377±0.0021  epistemic_v=0.2126  var_t=0.2232  kl_t=0.3615
+06/10/2026 05:44:35 - INFO -     [Chain-Aux]  evid_loss=9.8918  neg_reg=1.8755  evid_unc=0.0000  logsig_v=-1.4990  anneal=1.000
+06/10/2026 05:48:57 - INFO -   [Epoch 2/5] Step 677/703 (96%) | Loss: 0.9701 [sim_loss=0.7896 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.13s/step | ETA: 5m41s
+06/10/2026 05:48:57 - INFO -     [Chain-Ret]  pos=32.806  neg=16.727  gap=16.079  pos_std=3.644
+06/10/2026 05:48:57 - INFO -     [Chain-Prob] u_mode=0.3377±0.0022  epistemic_v=0.2095  var_t=0.2235  kl_t=0.3611
+06/10/2026 05:48:57 - INFO -     [Chain-Aux]  evid_loss=9.2953  neg_reg=1.9181  evid_unc=0.0000  logsig_v=-1.4991  anneal=1.000
+06/10/2026 05:51:35 - INFO -   [Epoch 2/5] Step 697/703 (99%) | Loss: 0.9440 [sim_loss=0.7626 | mcsoft_loss=0.1814 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 7.87s/step | ETA: 47.2s
+06/10/2026 05:51:35 - INFO -     [Chain-Ret]  pos=33.140  neg=17.381  gap=15.759  pos_std=3.548
+06/10/2026 05:51:35 - INFO -     [Chain-Prob] u_mode=0.3372±0.0020  epistemic_v=0.2125  var_t=0.2237  kl_t=0.3608
+06/10/2026 05:51:35 - INFO -     [Chain-Aux]  evid_loss=9.6288  neg_reg=1.8158  evid_unc=0.0000  logsig_v=-1.4989  anneal=1.000
+06/10/2026 05:51:57 - INFO -   [Epoch 2/5] Training complete | Avg Loss: 1.0265 | Time: 2h06m09s
+06/10/2026 05:51:57 - INFO -   [Epoch 2 Causal Summary]
+  Ret  : pos=31.555  neg=15.909  gap=15.646  pos_std=3.658
+  Evid : u_mode=0.3460±0.0021  epistemic_v=0.2165
+  Text : var_t=0.2249  kl_t=0.3588
+  Aux  : evid_loss=10.4216  neg_reg=1.7029  evid_unc=0.0000  logsig_v=-1.4964
+06/10/2026 05:51:58 - INFO -     GPU Memory | Cur: 1.48 GB, Peak: 48.53 GB, Reserved: 52.26 GB
+06/10/2026 05:52:00 - INFO -   Model saved to ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.1
+06/10/2026 05:52:00 - INFO -   Optimizer saved to ckpts/ckpt_msrvtt_20260610_013304/pytorch_opt.bin.1
+Evaluating:   0%|          | 0/63 [00:00<?, ?it/s]Evaluating:   2%|▏         | 1/63 [00:16<17:01, 16.47s/it]Evaluating:   3%|▎         | 2/63 [00:19<08:47,  8.65s/it]Evaluating:   5%|▍         | 3/63 [00:25<07:33,  7.55s/it]Evaluating:   6%|▋         | 4/63 [00:26<04:34,  4.65s/it]Evaluating:   8%|▊         | 5/63 [00:26<02:56,  3.04s/it]Evaluating:  10%|▉         | 6/63 [00:26<01:57,  2.07s/it]Evaluating:  11%|█         | 7/63 [00:26<01:21,  1.46s/it]Evaluating:  13%|█▎        | 8/63 [00:26<00:58,  1.06s/it]Evaluating:  14%|█▍        | 9/63 [00:37<03:34,  3.97s/it]Evaluating:  16%|█▌        | 10/63 [00:42<03:51,  4.37s/it]Evaluating:  17%|█▋        | 11/63 [00:46<03:42,  4.28s/it]Evaluating:  19%|█▉        | 12/63 [00:49<03:13,  3.79s/it]Evaluating:  21%|██        | 13/63 [00:49<02:14,  2.70s/it]Evaluating:  22%|██▏       | 14/63 [00:49<01:34,  1.94s/it]Evaluating:  24%|██▍       | 15/63 [00:49<01:07,  1.41s/it]Evaluating:  25%|██▌       | 16/63 [00:49<00:48,  1.04s/it]Evaluating:  27%|██▋       | 17/63 [01:07<04:31,  5.89s/it]Evaluating:  29%|██▊       | 18/63 [01:08<03:17,  4.38s/it]Evaluating:  30%|███       | 19/63 [01:08<02:17,  3.11s/it]Evaluating:  32%|███▏      | 20/63 [01:13<02:45,  3.85s/it]Evaluating:  33%|███▎      | 21/63 [01:13<01:55,  2.75s/it]Evaluating:  35%|███▍      | 22/63 [01:14<01:24,  2.05s/it]Evaluating:  37%|███▋      | 23/63 [01:14<01:00,  1.50s/it]Evaluating:  38%|███▊      | 24/63 [01:14<00:43,  1.11s/it]Evaluating:  40%|███▉      | 25/63 [01:28<03:09,  5.00s/it]Evaluating:  41%|████▏     | 26/63 [01:29<02:11,  3.55s/it]Evaluating:  43%|████▎     | 27/63 [01:29<01:31,  2.54s/it]Evaluating:  44%|████▍     | 28/63 [01:33<01:50,  3.17s/it]Evaluating:  46%|████▌     | 29/63 [01:40<02:19,  4.10s/it]Evaluating:  48%|████▊     | 30/63 [01:40<01:36,  2.93s/it]Evaluating:  49%|████▉     | 31/63 [01:40<01:07,  2.10s/it]Evaluating:  51%|█████     | 32/63 [01:40<00:47,  1.52s/it]Evaluating:  52%|█████▏    | 33/63 [01:51<02:06,  4.20s/it]Evaluating:  54%|█████▍    | 34/63 [01:51<01:26,  2.99s/it]Evaluating:  56%|█████▌    | 35/63 [01:51<01:00,  2.15s/it]Evaluating:  57%|█████▋    | 36/63 [01:56<01:22,  3.06s/it]Evaluating:  59%|█████▊    | 37/63 [01:58<01:07,  2.61s/it]Evaluating:  60%|██████    | 38/63 [02:05<01:41,  4.07s/it]Evaluating:  62%|██████▏   | 39/63 [02:05<01:09,  2.90s/it]Evaluating:  63%|██████▎   | 40/63 [02:06<00:48,  2.09s/it]Evaluating:  65%|██████▌   | 41/63 [02:10<01:02,  2.85s/it]Evaluating:  67%|██████▋   | 42/63 [02:10<00:43,  2.05s/it]Evaluating:  68%|██████▊   | 43/63 [02:10<00:29,  1.48s/it]Evaluating:  70%|██████▉   | 44/63 [02:27<01:51,  5.85s/it]Evaluating:  71%|███████▏  | 45/63 [02:27<01:14,  4.15s/it]Evaluating:  73%|███████▎  | 46/63 [02:34<01:25,  5.05s/it]Evaluating:  75%|███████▍  | 47/63 [02:34<00:57,  3.59s/it]Evaluating:  76%|███████▌  | 48/63 [02:34<00:38,  2.57s/it]Evaluating:  78%|███████▊  | 49/63 [02:34<00:25,  1.85s/it]Evaluating:  79%|███████▉  | 50/63 [02:35<00:17,  1.34s/it]Evaluating:  81%|████████  | 51/63 [02:35<00:11,  1.00it/s]Evaluating:  83%|████████▎ | 52/63 [02:45<00:41,  3.73s/it]Evaluating:  84%|████████▍ | 53/63 [02:45<00:26,  2.66s/it]Evaluating:  86%|████████▌ | 54/63 [02:48<00:24,  2.76s/it]Evaluating:  87%|████████▋ | 55/63 [02:48<00:15,  1.98s/it]Evaluating:  89%|████████▉ | 56/63 [02:48<00:10,  1.43s/it]Evaluating:  90%|█████████ | 57/63 [02:50<00:09,  1.53s/it]Evaluating:  92%|█████████▏| 58/63 [02:50<00:05,  1.12s/it]Evaluating:  94%|█████████▎| 59/63 [02:50<00:03,  1.21it/s]Evaluating:  95%|█████████▌| 60/63 [02:52<00:03,  1.10s/it]Evaluating:  97%|█████████▋| 61/63 [02:52<00:01,  1.23it/s]Evaluating:  98%|█████████▊| 62/63 [02:55<00:01,  1.49s/it]                                                           06/10/2026 05:55:41 - INFO -   Retrieval Evaluation | #Text: 1000, #Video: 1000
+06/10/2026 05:55:41 - INFO -     T2V | R@1:  47.3  R@5:  75.2  R@10:  83.2  MdR:   2.0  MnR:  12.5
+06/10/2026 05:55:41 - INFO -     V2T | R@1:  48.0  R@5:  74.5  R@10:  84.5  MdR:   2.0  MnR:   9.1
+06/10/2026 05:55:41 - INFO -     Best so far | R@1: 47.3 | ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.1
+06/10/2026 05:55:41 - INFO -   ============================================================
+06/10/2026 05:57:51 - INFO -   [Epoch 3/5] Step 14/703 (2%) | Loss: 0.7559 [sim_loss=0.5741 | mcsoft_loss=0.1818 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 6.48s/step | ETA: 1h14m25s
+06/10/2026 05:57:51 - INFO -     [Chain-Ret]  pos=33.523  neg=17.136  gap=16.386  pos_std=3.406
+06/10/2026 05:57:51 - INFO -     [Chain-Prob] u_mode=0.3368±0.0020  epistemic_v=0.2068  var_t=0.2238  kl_t=0.3606
+06/10/2026 05:57:51 - INFO -     [Chain-Aux]  evid_loss=11.0547  neg_reg=1.6802  evid_unc=0.0000  logsig_v=-1.4994  anneal=1.000
+06/10/2026 06:02:05 - INFO -   [Epoch 3/5] Step 34/703 (5%) | Loss: 0.8575 [sim_loss=0.6777 | mcsoft_loss=0.1798 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.71s/step | ETA: 2h21m43s
+06/10/2026 06:02:05 - INFO -     [Chain-Ret]  pos=32.468  neg=15.425  gap=17.043  pos_std=3.141
+06/10/2026 06:02:05 - INFO -     [Chain-Prob] u_mode=0.3370±0.0019  epistemic_v=0.2015  var_t=0.2232  kl_t=0.3614
+06/10/2026 06:02:05 - INFO -     [Chain-Aux]  evid_loss=10.3132  neg_reg=1.7194  evid_unc=0.0000  logsig_v=-1.4997  anneal=1.000
+06/10/2026 06:05:18 - INFO -   [Epoch 3/5] Step 54/703 (8%) | Loss: 0.7134 [sim_loss=0.5332 | mcsoft_loss=0.1801 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.65s/step | ETA: 1h44m20s
+06/10/2026 06:05:18 - INFO -     [Chain-Ret]  pos=32.462  neg=15.051  gap=17.411  pos_std=3.247
+06/10/2026 06:05:18 - INFO -     [Chain-Prob] u_mode=0.3366±0.0019  epistemic_v=0.1996  var_t=0.2231  kl_t=0.3616
+06/10/2026 06:05:18 - INFO -     [Chain-Aux]  evid_loss=12.2690  neg_reg=1.3158  evid_unc=0.0000  logsig_v=-1.4996  anneal=1.000
+06/10/2026 06:09:07 - INFO -   [Epoch 3/5] Step 74/703 (11%) | Loss: 0.8747 [sim_loss=0.6934 | mcsoft_loss=0.1813 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.43s/step | ETA: 1h59m47s
+06/10/2026 06:09:07 - INFO -     [Chain-Ret]  pos=31.854  neg=15.475  gap=16.379  pos_std=3.382
+06/10/2026 06:09:07 - INFO -     [Chain-Prob] u_mode=0.3368±0.0018  epistemic_v=0.1955  var_t=0.2232  kl_t=0.3615
+06/10/2026 06:09:07 - INFO -     [Chain-Aux]  evid_loss=11.0986  neg_reg=1.5612  evid_unc=0.0000  logsig_v=-1.4998  anneal=1.000
+06/10/2026 06:12:51 - INFO -   [Epoch 3/5] Step 94/703 (13%) | Loss: 0.7420 [sim_loss=0.5610 | mcsoft_loss=0.1810 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.23s/step | ETA: 1h53m59s
+06/10/2026 06:12:51 - INFO -     [Chain-Ret]  pos=33.010  neg=15.076  gap=17.934  pos_std=3.447
+06/10/2026 06:12:51 - INFO -     [Chain-Prob] u_mode=0.3363±0.0018  epistemic_v=0.1950  var_t=0.2235  kl_t=0.3610
+06/10/2026 06:12:51 - INFO -     [Chain-Aux]  evid_loss=11.3903  neg_reg=1.6002  evid_unc=0.0000  logsig_v=-1.4998  anneal=1.000
+06/10/2026 06:16:46 - INFO -   [Epoch 3/5] Step 114/703 (16%) | Loss: 0.8015 [sim_loss=0.6217 | mcsoft_loss=0.1798 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.71s/step | ETA: 1h54m57s
+06/10/2026 06:16:46 - INFO -     [Chain-Ret]  pos=32.853  neg=15.701  gap=17.152  pos_std=3.320
+06/10/2026 06:16:46 - INFO -     [Chain-Prob] u_mode=0.3367±0.0018  epistemic_v=0.1937  var_t=0.2233  kl_t=0.3612
+06/10/2026 06:16:46 - INFO -     [Chain-Aux]  evid_loss=11.5279  neg_reg=1.5563  evid_unc=0.0000  logsig_v=-1.4998  anneal=1.000
+06/10/2026 06:20:32 - INFO -   [Epoch 3/5] Step 134/703 (19%) | Loss: 0.7969 [sim_loss=0.6158 | mcsoft_loss=0.1811 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.33s/step | ETA: 1h47m24s
+06/10/2026 06:20:32 - INFO -     [Chain-Ret]  pos=33.093  neg=15.895  gap=17.198  pos_std=3.298
+06/10/2026 06:20:32 - INFO -     [Chain-Prob] u_mode=0.3364±0.0019  epistemic_v=0.1927  var_t=0.2237  kl_t=0.3608
+06/10/2026 06:20:32 - INFO -     [Chain-Aux]  evid_loss=10.9661  neg_reg=1.6088  evid_unc=0.0000  logsig_v=-1.4998  anneal=1.000
+06/10/2026 06:24:13 - INFO -   [Epoch 3/5] Step 154/703 (22%) | Loss: 0.7581 [sim_loss=0.5778 | mcsoft_loss=0.1802 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.05s/step | ETA: 1h41m04s
+06/10/2026 06:24:13 - INFO -     [Chain-Ret]  pos=33.217  neg=16.015  gap=17.201  pos_std=3.560
+06/10/2026 06:24:13 - INFO -     [Chain-Prob] u_mode=0.3363±0.0017  epistemic_v=0.1924  var_t=0.2235  kl_t=0.3610
+06/10/2026 06:24:13 - INFO -     [Chain-Aux]  evid_loss=11.5777  neg_reg=1.4873  evid_unc=0.0000  logsig_v=-1.4998  anneal=1.000
+06/10/2026 06:27:46 - INFO -   [Epoch 3/5] Step 174/703 (25%) | Loss: 0.8589 [sim_loss=0.6783 | mcsoft_loss=0.1806 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.62s/step | ETA: 1h33m40s
+06/10/2026 06:27:46 - INFO -     [Chain-Ret]  pos=32.588  neg=15.867  gap=16.721  pos_std=3.667
+06/10/2026 06:27:46 - INFO -     [Chain-Prob] u_mode=0.3363±0.0020  epistemic_v=0.1920  var_t=0.2237  kl_t=0.3608
+06/10/2026 06:27:46 - INFO -     [Chain-Aux]  evid_loss=11.5533  neg_reg=1.5266  evid_unc=0.0000  logsig_v=-1.4998  anneal=1.000
+06/10/2026 06:31:31 - INFO -   [Epoch 3/5] Step 194/703 (28%) | Loss: 0.8340 [sim_loss=0.6531 | mcsoft_loss=0.1809 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.29s/step | ETA: 1h35m47s
+06/10/2026 06:31:31 - INFO -     [Chain-Ret]  pos=32.465  neg=15.656  gap=16.809  pos_std=3.437
+06/10/2026 06:31:31 - INFO -     [Chain-Prob] u_mode=0.3363±0.0019  epistemic_v=0.1909  var_t=0.2232  kl_t=0.3615
+06/10/2026 06:31:31 - INFO -     [Chain-Aux]  evid_loss=11.2973  neg_reg=1.6263  evid_unc=0.0000  logsig_v=-1.4998  anneal=1.000
+06/10/2026 06:34:50 - INFO -   [Epoch 3/5] Step 214/703 (30%) | Loss: 0.7213 [sim_loss=0.5415 | mcsoft_loss=0.1798 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.91s/step | ETA: 1h20m46s
+06/10/2026 06:34:50 - INFO -     [Chain-Ret]  pos=32.743  neg=15.409  gap=17.334  pos_std=3.320
+06/10/2026 06:34:50 - INFO -     [Chain-Prob] u_mode=0.3365±0.0022  epistemic_v=0.1901  var_t=0.2239  kl_t=0.3605
+06/10/2026 06:34:50 - INFO -     [Chain-Aux]  evid_loss=10.9589  neg_reg=1.6333  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 06:38:46 - INFO -   [Epoch 3/5] Step 234/703 (33%) | Loss: 0.9800 [sim_loss=0.7983 | mcsoft_loss=0.1817 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.82s/step | ETA: 1h32m24s
+06/10/2026 06:38:46 - INFO -     [Chain-Ret]  pos=32.115  neg=15.209  gap=16.906  pos_std=3.540
+06/10/2026 06:38:46 - INFO -     [Chain-Prob] u_mode=0.3363±0.0020  epistemic_v=0.1897  var_t=0.2237  kl_t=0.3608
+06/10/2026 06:38:46 - INFO -     [Chain-Aux]  evid_loss=11.2336  neg_reg=1.6186  evid_unc=0.0000  logsig_v=-1.4998  anneal=1.000
+06/10/2026 06:42:27 - INFO -   [Epoch 3/5] Step 254/703 (36%) | Loss: 0.6897 [sim_loss=0.5088 | mcsoft_loss=0.1809 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.03s/step | ETA: 1h22m33s
+06/10/2026 06:42:27 - INFO -     [Chain-Ret]  pos=32.344  neg=14.978  gap=17.366  pos_std=3.127
+06/10/2026 06:42:27 - INFO -     [Chain-Prob] u_mode=0.3364±0.0021  epistemic_v=0.1888  var_t=0.2232  kl_t=0.3615
+06/10/2026 06:42:27 - INFO -     [Chain-Aux]  evid_loss=12.1367  neg_reg=1.3946  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 06:46:14 - INFO -   [Epoch 3/5] Step 274/703 (39%) | Loss: 0.7895 [sim_loss=0.6078 | mcsoft_loss=0.1817 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.38s/step | ETA: 1h21m23s
+06/10/2026 06:46:14 - INFO -     [Chain-Ret]  pos=32.405  neg=14.896  gap=17.509  pos_std=3.706
+06/10/2026 06:46:14 - INFO -     [Chain-Prob] u_mode=0.3367±0.0020  epistemic_v=0.1878  var_t=0.2245  kl_t=0.3597
+06/10/2026 06:46:14 - INFO -     [Chain-Aux]  evid_loss=12.1649  neg_reg=1.4849  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 06:49:31 - INFO -   [Epoch 3/5] Step 294/703 (42%) | Loss: 0.7970 [sim_loss=0.6167 | mcsoft_loss=0.1804 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.82s/step | ETA: 1h06m54s
+06/10/2026 06:49:31 - INFO -     [Chain-Ret]  pos=31.898  neg=14.956  gap=16.942  pos_std=3.483
+06/10/2026 06:49:31 - INFO -     [Chain-Prob] u_mode=0.3366±0.0016  epistemic_v=0.1878  var_t=0.2231  kl_t=0.3616
+06/10/2026 06:49:31 - INFO -     [Chain-Aux]  evid_loss=11.8897  neg_reg=1.4422  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 06:53:33 - INFO -   [Epoch 3/5] Step 314/703 (45%) | Loss: 0.8378 [sim_loss=0.6578 | mcsoft_loss=0.1800 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.10s/step | ETA: 1h18m25s
+06/10/2026 06:53:33 - INFO -     [Chain-Ret]  pos=32.426  neg=15.790  gap=16.636  pos_std=3.027
+06/10/2026 06:53:33 - INFO -     [Chain-Prob] u_mode=0.3363±0.0017  epistemic_v=0.1884  var_t=0.2233  kl_t=0.3613
+06/10/2026 06:53:33 - INFO -     [Chain-Aux]  evid_loss=11.9178  neg_reg=1.4747  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 06:57:07 - INFO -   [Epoch 3/5] Step 334/703 (48%) | Loss: 0.7980 [sim_loss=0.6173 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.72s/step | ETA: 1h05m54s
+06/10/2026 06:57:07 - INFO -     [Chain-Ret]  pos=32.705  neg=15.622  gap=17.083  pos_std=3.495
+06/10/2026 06:57:07 - INFO -     [Chain-Prob] u_mode=0.3369±0.0019  epistemic_v=0.1863  var_t=0.2234  kl_t=0.3612
+06/10/2026 06:57:07 - INFO -     [Chain-Aux]  evid_loss=11.3937  neg_reg=1.5924  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:01:09 - INFO -   [Epoch 3/5] Step 354/703 (50%) | Loss: 0.8067 [sim_loss=0.6259 | mcsoft_loss=0.1808 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.08s/step | ETA: 1h10m17s
+06/10/2026 07:01:09 - INFO -     [Chain-Ret]  pos=32.407  neg=15.478  gap=16.928  pos_std=3.317
+06/10/2026 07:01:09 - INFO -     [Chain-Prob] u_mode=0.3370±0.0021  epistemic_v=0.1873  var_t=0.2233  kl_t=0.3613
+06/10/2026 07:01:09 - INFO -     [Chain-Aux]  evid_loss=11.7801  neg_reg=1.5958  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:04:31 - INFO -   [Epoch 3/5] Step 374/703 (53%) | Loss: 0.7953 [sim_loss=0.6157 | mcsoft_loss=0.1796 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.12s/step | ETA: 55m29s
+06/10/2026 07:04:31 - INFO -     [Chain-Ret]  pos=32.621  neg=15.427  gap=17.194  pos_std=3.259
+06/10/2026 07:04:31 - INFO -     [Chain-Prob] u_mode=0.3367±0.0019  epistemic_v=0.1868  var_t=0.2234  kl_t=0.3612
+06/10/2026 07:04:31 - INFO -     [Chain-Aux]  evid_loss=11.3699  neg_reg=1.4876  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:08:08 - INFO -   [Epoch 3/5] Step 394/703 (56%) | Loss: 0.8141 [sim_loss=0.6343 | mcsoft_loss=0.1798 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.85s/step | ETA: 55m52s
+06/10/2026 07:08:08 - INFO -     [Chain-Ret]  pos=32.855  neg=15.275  gap=17.579  pos_std=3.477
+06/10/2026 07:08:08 - INFO -     [Chain-Prob] u_mode=0.3370±0.0020  epistemic_v=0.1855  var_t=0.2232  kl_t=0.3614
+06/10/2026 07:08:08 - INFO -     [Chain-Aux]  evid_loss=11.8603  neg_reg=1.3735  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:11:57 - INFO -   [Epoch 3/5] Step 414/703 (59%) | Loss: 0.7794 [sim_loss=0.5986 | mcsoft_loss=0.1808 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.46s/step | ETA: 55m10s
+06/10/2026 07:11:57 - INFO -     [Chain-Ret]  pos=32.678  neg=15.548  gap=17.130  pos_std=3.375
+06/10/2026 07:11:57 - INFO -     [Chain-Prob] u_mode=0.3366±0.0018  epistemic_v=0.1866  var_t=0.2237  kl_t=0.3608
+06/10/2026 07:11:57 - INFO -     [Chain-Aux]  evid_loss=11.0719  neg_reg=1.7085  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:15:18 - INFO -   [Epoch 3/5] Step 434/703 (62%) | Loss: 0.6857 [sim_loss=0.5052 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.06s/step | ETA: 45m05s
+06/10/2026 07:15:18 - INFO -     [Chain-Ret]  pos=32.768  neg=15.529  gap=17.239  pos_std=2.970
+06/10/2026 07:15:18 - INFO -     [Chain-Prob] u_mode=0.3370±0.0018  epistemic_v=0.1850  var_t=0.2232  kl_t=0.3614
+06/10/2026 07:15:18 - INFO -     [Chain-Aux]  evid_loss=10.9424  neg_reg=1.6233  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:19:21 - INFO -   [Epoch 3/5] Step 454/703 (65%) | Loss: 0.7991 [sim_loss=0.6193 | mcsoft_loss=0.1798 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.13s/step | ETA: 50m21s
+06/10/2026 07:19:21 - INFO -     [Chain-Ret]  pos=32.371  neg=15.796  gap=16.575  pos_std=3.300
+06/10/2026 07:19:21 - INFO -     [Chain-Prob] u_mode=0.3366±0.0019  epistemic_v=0.1846  var_t=0.2231  kl_t=0.3615
+06/10/2026 07:19:21 - INFO -     [Chain-Aux]  evid_loss=11.4728  neg_reg=1.4446  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:22:59 - INFO -   [Epoch 3/5] Step 474/703 (67%) | Loss: 0.7393 [sim_loss=0.5580 | mcsoft_loss=0.1813 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.89s/step | ETA: 41m34s
+06/10/2026 07:22:59 - INFO -     [Chain-Ret]  pos=32.657  neg=15.762  gap=16.896  pos_std=3.478
+06/10/2026 07:22:59 - INFO -     [Chain-Prob] u_mode=0.3370±0.0018  epistemic_v=0.1848  var_t=0.2232  kl_t=0.3615
+06/10/2026 07:22:59 - INFO -     [Chain-Aux]  evid_loss=12.0342  neg_reg=1.5150  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:26:36 - INFO -   [Epoch 3/5] Step 494/703 (70%) | Loss: 0.7198 [sim_loss=0.5390 | mcsoft_loss=0.1808 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.84s/step | ETA: 37m45s
+06/10/2026 07:26:36 - INFO -     [Chain-Ret]  pos=32.857  neg=14.977  gap=17.880  pos_std=3.387
+06/10/2026 07:26:36 - INFO -     [Chain-Prob] u_mode=0.3368±0.0018  epistemic_v=0.1849  var_t=0.2236  kl_t=0.3609
+06/10/2026 07:26:36 - INFO -     [Chain-Aux]  evid_loss=12.1447  neg_reg=1.4541  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:30:52 - INFO -   [Epoch 3/5] Step 514/703 (73%) | Loss: 0.9132 [sim_loss=0.7320 | mcsoft_loss=0.1812 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.84s/step | ETA: 40m26s
+06/10/2026 07:30:52 - INFO -     [Chain-Ret]  pos=32.076  neg=15.600  gap=16.476  pos_std=3.471
+06/10/2026 07:30:52 - INFO -     [Chain-Prob] u_mode=0.3370±0.0020  epistemic_v=0.1847  var_t=0.2235  kl_t=0.3611
+06/10/2026 07:30:52 - INFO -     [Chain-Aux]  evid_loss=10.8154  neg_reg=1.6253  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:34:32 - INFO -   [Epoch 3/5] Step 534/703 (76%) | Loss: 0.6423 [sim_loss=0.4619 | mcsoft_loss=0.1804 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.00s/step | ETA: 30m59s
+06/10/2026 07:34:32 - INFO -     [Chain-Ret]  pos=32.715  neg=15.157  gap=17.558  pos_std=3.376
+06/10/2026 07:34:32 - INFO -     [Chain-Prob] u_mode=0.3365±0.0019  epistemic_v=0.1848  var_t=0.2235  kl_t=0.3611
+06/10/2026 07:34:32 - INFO -     [Chain-Aux]  evid_loss=12.1163  neg_reg=1.5102  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:39:00 - INFO -   [Epoch 3/5] Step 554/703 (79%) | Loss: 0.8442 [sim_loss=0.6640 | mcsoft_loss=0.1803 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.39s/step | ETA: 33m15s
+06/10/2026 07:39:00 - INFO -     [Chain-Ret]  pos=32.403  neg=15.592  gap=16.811  pos_std=3.389
+06/10/2026 07:39:00 - INFO -     [Chain-Prob] u_mode=0.3367±0.0019  epistemic_v=0.1830  var_t=0.2234  kl_t=0.3612
+06/10/2026 07:39:00 - INFO -     [Chain-Aux]  evid_loss=11.0396  neg_reg=1.6879  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:43:15 - INFO -   [Epoch 3/5] Step 574/703 (82%) | Loss: 0.8408 [sim_loss=0.6606 | mcsoft_loss=0.1801 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.72s/step | ETA: 27m20s
+06/10/2026 07:43:15 - INFO -     [Chain-Ret]  pos=32.332  neg=15.170  gap=17.162  pos_std=3.441
+06/10/2026 07:43:15 - INFO -     [Chain-Prob] u_mode=0.3371±0.0019  epistemic_v=0.1833  var_t=0.2233  kl_t=0.3613
+06/10/2026 07:43:15 - INFO -     [Chain-Aux]  evid_loss=11.6936  neg_reg=1.3662  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:47:38 - INFO -   [Epoch 3/5] Step 594/703 (84%) | Loss: 0.7607 [sim_loss=0.5800 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.16s/step | ETA: 23m54s
+06/10/2026 07:47:38 - INFO -     [Chain-Ret]  pos=32.196  neg=15.107  gap=17.089  pos_std=3.269
+06/10/2026 07:47:38 - INFO -     [Chain-Prob] u_mode=0.3371±0.0017  epistemic_v=0.1830  var_t=0.2236  kl_t=0.3609
+06/10/2026 07:47:38 - INFO -     [Chain-Aux]  evid_loss=10.8597  neg_reg=1.5926  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:51:41 - INFO -   [Epoch 3/5] Step 614/703 (87%) | Loss: 0.8364 [sim_loss=0.6547 | mcsoft_loss=0.1817 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.15s/step | ETA: 18m00s
+06/10/2026 07:51:41 - INFO -     [Chain-Ret]  pos=32.223  neg=15.621  gap=16.602  pos_std=3.413
+06/10/2026 07:51:41 - INFO -     [Chain-Prob] u_mode=0.3369±0.0020  epistemic_v=0.1835  var_t=0.2235  kl_t=0.3611
+06/10/2026 07:51:41 - INFO -     [Chain-Aux]  evid_loss=11.1561  neg_reg=1.6398  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 07:56:38 - INFO -   [Epoch 3/5] Step 634/703 (90%) | Loss: 0.7399 [sim_loss=0.5594 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 14.85s/step | ETA: 17m04s
+06/10/2026 07:56:38 - INFO -     [Chain-Ret]  pos=32.633  neg=15.197  gap=17.436  pos_std=3.683
+06/10/2026 07:56:38 - INFO -     [Chain-Prob] u_mode=0.3371±0.0019  epistemic_v=0.1834  var_t=0.2232  kl_t=0.3615
+06/10/2026 07:56:38 - INFO -     [Chain-Aux]  evid_loss=13.2006  neg_reg=1.3737  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 08:00:13 - INFO -   [Epoch 3/5] Step 654/703 (93%) | Loss: 0.6972 [sim_loss=0.5161 | mcsoft_loss=0.1811 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.76s/step | ETA: 8m47s
+06/10/2026 08:00:13 - INFO -     [Chain-Ret]  pos=33.114  neg=15.005  gap=18.109  pos_std=3.426
+06/10/2026 08:00:13 - INFO -     [Chain-Prob] u_mode=0.3376±0.0021  epistemic_v=0.1815  var_t=0.2234  kl_t=0.3613
+06/10/2026 08:00:13 - INFO -     [Chain-Aux]  evid_loss=11.8257  neg_reg=1.5732  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 08:05:22 - INFO -   [Epoch 3/5] Step 674/703 (96%) | Loss: 0.7695 [sim_loss=0.5894 | mcsoft_loss=0.1801 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 15.44s/step | ETA: 7m27s
+06/10/2026 08:05:22 - INFO -     [Chain-Ret]  pos=32.726  neg=15.414  gap=17.312  pos_std=3.446
+06/10/2026 08:05:22 - INFO -     [Chain-Prob] u_mode=0.3371±0.0019  epistemic_v=0.1818  var_t=0.2238  kl_t=0.3606
+06/10/2026 08:05:22 - INFO -     [Chain-Aux]  evid_loss=12.9908  neg_reg=1.4101  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 08:08:45 - INFO -   [Epoch 3/5] Step 694/703 (99%) | Loss: 0.7155 [sim_loss=0.5346 | mcsoft_loss=0.1808 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.16s/step | ETA: 1m31s
+06/10/2026 08:08:45 - INFO -     [Chain-Ret]  pos=32.408  neg=15.169  gap=17.238  pos_std=3.289
+06/10/2026 08:08:45 - INFO -     [Chain-Prob] u_mode=0.3374±0.0020  epistemic_v=0.1814  var_t=0.2239  kl_t=0.3605
+06/10/2026 08:08:45 - INFO -     [Chain-Aux]  evid_loss=12.8735  neg_reg=1.3489  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 08:09:17 - INFO -   [Epoch 3/5] Training complete | Avg Loss: 0.7856 | Time: 2h13m35s
+06/10/2026 08:09:17 - INFO -   [Epoch 3 Causal Summary]
+  Ret  : pos=32.608  neg=15.453  gap=17.155  pos_std=3.390
+  Evid : u_mode=0.3368±0.0019  epistemic_v=0.1888
+  Text : var_t=0.2235  kl_t=0.3611
+  Aux  : evid_loss=11.5044  neg_reg=1.5436  evid_unc=0.0000  logsig_v=-1.4998
+06/10/2026 08:09:17 - INFO -     GPU Memory | Cur: 1.48 GB, Peak: 48.53 GB, Reserved: 52.26 GB
+06/10/2026 08:09:20 - INFO -   Model saved to ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.2
+06/10/2026 08:09:20 - INFO -   Optimizer saved to ckpts/ckpt_msrvtt_20260610_013304/pytorch_opt.bin.2
+Evaluating:   0%|          | 0/63 [00:00<?, ?it/s]Evaluating:   2%|▏         | 1/63 [00:18<19:37, 18.99s/it]Evaluating:   3%|▎         | 2/63 [00:22<10:12, 10.05s/it]Evaluating:   5%|▍         | 3/63 [00:28<08:12,  8.21s/it]Evaluating:   6%|▋         | 4/63 [00:29<04:57,  5.05s/it]Evaluating:   8%|▊         | 5/63 [00:29<03:11,  3.31s/it]Evaluating:  10%|▉         | 6/63 [00:29<02:08,  2.25s/it]Evaluating:  11%|█         | 7/63 [00:29<01:27,  1.57s/it]Evaluating:  13%|█▎        | 8/63 [00:29<01:02,  1.13s/it]Evaluating:  14%|█▍        | 9/63 [00:45<04:59,  5.54s/it]Evaluating:  16%|█▌        | 10/63 [00:49<04:42,  5.33s/it]Evaluating:  17%|█▋        | 11/63 [00:53<04:02,  4.67s/it]Evaluating:  19%|█▉        | 12/63 [00:57<03:55,  4.62s/it]Evaluating:  21%|██        | 13/63 [00:57<02:44,  3.29s/it]Evaluating:  22%|██▏       | 14/63 [00:58<01:56,  2.37s/it]Evaluating:  24%|██▍       | 15/63 [00:58<01:22,  1.72s/it]Evaluating:  25%|██▌       | 16/63 [00:58<00:59,  1.26s/it]Evaluating:  27%|██▋       | 17/63 [01:23<06:21,  8.30s/it]Evaluating:  29%|██▊       | 18/63 [01:23<04:23,  5.85s/it]Evaluating:  30%|███       | 19/63 [01:23<03:02,  4.15s/it]Evaluating:  32%|███▏      | 20/63 [01:28<03:14,  4.53s/it]Evaluating:  33%|███▎      | 21/63 [01:29<02:16,  3.24s/it]Evaluating:  35%|███▍      | 22/63 [01:29<01:40,  2.46s/it]Evaluating:  37%|███▋      | 23/63 [01:29<01:11,  1.78s/it]Evaluating:  38%|███▊      | 24/63 [01:30<00:50,  1.30s/it]Evaluating:  40%|███▉      | 25/63 [01:48<04:07,  6.51s/it]Evaluating:  41%|████▏     | 26/63 [01:48<02:50,  4.61s/it]Evaluating:  43%|████▎     | 27/63 [01:49<01:58,  3.28s/it]Evaluating:  44%|████▍     | 28/63 [01:51<01:46,  3.04s/it]Evaluating:  46%|████▌     | 29/63 [02:01<02:53,  5.09s/it]Evaluating:  48%|████▊     | 30/63 [02:01<01:59,  3.62s/it]Evaluating:  49%|████▉     | 31/63 [02:01<01:22,  2.58s/it]Evaluating:  51%|█████     | 32/63 [02:01<00:57,  1.86s/it]Evaluating:  52%|█████▏    | 33/63 [02:16<02:52,  5.77s/it]Evaluating:  54%|█████▍    | 34/63 [02:17<02:00,  4.14s/it]Evaluating:  56%|█████▌    | 35/63 [02:17<01:23,  2.96s/it]Evaluating:  57%|█████▋    | 36/63 [02:21<01:32,  3.42s/it]Evaluating:  59%|█████▊    | 37/63 [02:24<01:19,  3.07s/it]Evaluating:  60%|██████    | 38/63 [02:29<01:35,  3.83s/it]Evaluating:  62%|██████▏   | 39/63 [02:29<01:05,  2.74s/it]Evaluating:  63%|██████▎   | 40/63 [02:30<00:45,  1.98s/it]Evaluating:  65%|██████▌   | 41/63 [02:38<01:26,  3.93s/it]Evaluating:  67%|██████▋   | 42/63 [02:38<00:59,  2.82s/it]Evaluating:  68%|██████▊   | 43/63 [02:39<00:40,  2.03s/it]Evaluating:  70%|██████▉   | 44/63 [02:55<01:58,  6.25s/it]Evaluating:  71%|███████▏  | 45/63 [02:55<01:19,  4.43s/it]Evaluating:  73%|███████▎  | 46/63 [03:06<01:47,  6.31s/it]Evaluating:  75%|███████▍  | 47/63 [03:06<01:11,  4.47s/it]Evaluating:  76%|███████▌  | 48/63 [03:06<00:47,  3.18s/it]Evaluating:  78%|███████▊  | 49/63 [03:06<00:31,  2.28s/it]Evaluating:  79%|███████▉  | 50/63 [03:06<00:21,  1.65s/it]Evaluating:  81%|████████  | 51/63 [03:06<00:14,  1.21s/it]Evaluating:  83%|████████▎ | 52/63 [03:17<00:44,  4.08s/it]Evaluating:  84%|████████▍ | 53/63 [03:17<00:29,  2.90s/it]Evaluating:  86%|████████▌ | 54/63 [03:22<00:29,  3.29s/it]Evaluating:  87%|████████▋ | 55/63 [03:22<00:18,  2.35s/it]Evaluating:  89%|████████▉ | 56/63 [03:22<00:11,  1.69s/it]Evaluating:  90%|█████████ | 57/63 [03:22<00:08,  1.34s/it]Evaluating:  92%|█████████▏| 58/63 [03:23<00:04,  1.02it/s]Evaluating:  94%|█████████▎| 59/63 [03:23<00:02,  1.34it/s]Evaluating:  95%|█████████▌| 60/63 [03:25<00:03,  1.10s/it]Evaluating:  97%|█████████▋| 61/63 [03:25<00:01,  1.23it/s]Evaluating:  98%|█████████▊| 62/63 [03:29<00:01,  1.87s/it]Evaluating: 100%|██████████| 63/63 [03:29<00:00,  1.34s/it]                                                           06/10/2026 08:13:39 - INFO -   Retrieval Evaluation | #Text: 1000, #Video: 1000
+06/10/2026 08:13:40 - INFO -     T2V | R@1:  47.7  R@5:  74.9  R@10:  83.4  MdR:   2.0  MnR:  12.6
+06/10/2026 08:13:40 - INFO -     V2T | R@1:  47.8  R@5:  74.8  R@10:  83.7  MdR:   2.0  MnR:   9.0
+06/10/2026 08:13:40 - INFO -     Best so far | R@1: 47.7 | ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.2
+06/10/2026 08:13:40 - INFO -   ============================================================
+06/10/2026 08:15:53 - INFO -   [Epoch 4/5] Step 11/703 (2%) | Loss: 0.6861 [sim_loss=0.5049 | mcsoft_loss=0.1812 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 6.67s/step | ETA: 1h16m58s
+06/10/2026 08:15:53 - INFO -     [Chain-Ret]  pos=32.872  neg=14.627  gap=18.245  pos_std=3.096
+06/10/2026 08:15:53 - INFO -     [Chain-Prob] u_mode=0.3373±0.0018  epistemic_v=0.1804  var_t=0.2234  kl_t=0.3613
+06/10/2026 08:15:53 - INFO -     [Chain-Aux]  evid_loss=11.8248  neg_reg=1.4251  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 08:19:47 - INFO -   [Epoch 4/5] Step 31/703 (4%) | Loss: 0.6422 [sim_loss=0.4615 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.68s/step | ETA: 2h10m51s
+06/10/2026 08:19:47 - INFO -     [Chain-Ret]  pos=32.408  neg=14.396  gap=18.012  pos_std=2.960
+06/10/2026 08:19:47 - INFO -     [Chain-Prob] u_mode=0.3376±0.0019  epistemic_v=0.1769  var_t=0.2238  kl_t=0.3607
+06/10/2026 08:19:47 - INFO -     [Chain-Aux]  evid_loss=12.7147  neg_reg=1.4125  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 08:24:52 - INFO -   [Epoch 4/5] Step 51/703 (7%) | Loss: 0.6468 [sim_loss=0.4666 | mcsoft_loss=0.1802 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 15.23s/step | ETA: 2h45m30s
+06/10/2026 08:24:52 - INFO -     [Chain-Ret]  pos=32.291  neg=13.743  gap=18.548  pos_std=3.108
+06/10/2026 08:24:52 - INFO -     [Chain-Prob] u_mode=0.3373±0.0023  epistemic_v=0.1761  var_t=0.2233  kl_t=0.3613
+06/10/2026 08:24:52 - INFO -     [Chain-Aux]  evid_loss=12.6537  neg_reg=1.3148  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 08:28:27 - INFO -   [Epoch 4/5] Step 71/703 (10%) | Loss: 0.6609 [sim_loss=0.4811 | mcsoft_loss=0.1798 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.74s/step | ETA: 1h53m10s
+06/10/2026 08:28:27 - INFO -     [Chain-Ret]  pos=32.290  neg=13.476  gap=18.814  pos_std=3.100
+06/10/2026 08:28:27 - INFO -     [Chain-Prob] u_mode=0.3376±0.0018  epistemic_v=0.1740  var_t=0.2233  kl_t=0.3614
+06/10/2026 08:28:27 - INFO -     [Chain-Aux]  evid_loss=12.7785  neg_reg=1.3285  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 08:34:05 - INFO -   [Epoch 4/5] Step 91/703 (13%) | Loss: 0.7301 [sim_loss=0.5503 | mcsoft_loss=0.1798 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 16.91s/step | ETA: 2h52m26s
+06/10/2026 08:34:05 - INFO -     [Chain-Ret]  pos=32.193  neg=14.029  gap=18.164  pos_std=3.625
+06/10/2026 08:34:05 - INFO -     [Chain-Prob] u_mode=0.3377±0.0018  epistemic_v=0.1733  var_t=0.2233  kl_t=0.3614
+06/10/2026 08:34:05 - INFO -     [Chain-Aux]  evid_loss=12.1579  neg_reg=1.4403  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 08:37:23 - INFO -   [Epoch 4/5] Step 111/703 (16%) | Loss: 0.6126 [sim_loss=0.4324 | mcsoft_loss=0.1802 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.90s/step | ETA: 1h37m41s
+06/10/2026 08:37:23 - INFO -     [Chain-Ret]  pos=31.910  neg=13.876  gap=18.034  pos_std=2.806
+06/10/2026 08:37:23 - INFO -     [Chain-Prob] u_mode=0.3374±0.0020  epistemic_v=0.1724  var_t=0.2236  kl_t=0.3610
+06/10/2026 08:37:23 - INFO -     [Chain-Aux]  evid_loss=11.6851  neg_reg=1.4920  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 08:42:15 - INFO -   [Epoch 4/5] Step 131/703 (19%) | Loss: 0.6843 [sim_loss=0.5036 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 14.59s/step | ETA: 2h19m08s
+06/10/2026 08:42:15 - INFO -     [Chain-Ret]  pos=32.029  neg=13.927  gap=18.102  pos_std=3.235
+06/10/2026 08:42:15 - INFO -     [Chain-Prob] u_mode=0.3375±0.0017  epistemic_v=0.1714  var_t=0.2235  kl_t=0.3611
+06/10/2026 08:42:15 - INFO -     [Chain-Aux]  evid_loss=12.3536  neg_reg=1.4942  evid_unc=0.0000  logsig_v=-1.4999  anneal=1.000
+06/10/2026 08:45:45 - INFO -   [Epoch 4/5] Step 151/703 (21%) | Loss: 0.5230 [sim_loss=0.3411 | mcsoft_loss=0.1818 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.51s/step | ETA: 1h36m43s
+06/10/2026 08:45:45 - INFO -     [Chain-Ret]  pos=32.402  neg=13.870  gap=18.532  pos_std=3.062
+06/10/2026 08:45:45 - INFO -     [Chain-Prob] u_mode=0.3377±0.0017  epistemic_v=0.1706  var_t=0.2236  kl_t=0.3610
+06/10/2026 08:45:45 - INFO -     [Chain-Aux]  evid_loss=11.4336  neg_reg=1.5615  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 08:50:32 - INFO -   [Epoch 4/5] Step 171/703 (24%) | Loss: 0.6341 [sim_loss=0.4539 | mcsoft_loss=0.1802 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 14.36s/step | ETA: 2h07m22s
+06/10/2026 08:50:32 - INFO -     [Chain-Ret]  pos=32.042  neg=13.747  gap=18.295  pos_std=2.877
+06/10/2026 08:50:32 - INFO -     [Chain-Prob] u_mode=0.3376±0.0019  epistemic_v=0.1691  var_t=0.2234  kl_t=0.3611
+06/10/2026 08:50:32 - INFO -     [Chain-Aux]  evid_loss=10.7217  neg_reg=1.6525  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 08:54:06 - INFO -   [Epoch 4/5] Step 191/703 (27%) | Loss: 0.6456 [sim_loss=0.4658 | mcsoft_loss=0.1798 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.70s/step | ETA: 1h31m20s
+06/10/2026 08:54:06 - INFO -     [Chain-Ret]  pos=32.350  neg=14.240  gap=18.110  pos_std=3.023
+06/10/2026 08:54:06 - INFO -     [Chain-Prob] u_mode=0.3377±0.0020  epistemic_v=0.1685  var_t=0.2231  kl_t=0.3616
+06/10/2026 08:54:06 - INFO -     [Chain-Aux]  evid_loss=11.7737  neg_reg=1.4814  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 08:58:33 - INFO -   [Epoch 4/5] Step 211/703 (30%) | Loss: 0.6146 [sim_loss=0.4338 | mcsoft_loss=0.1808 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.34s/step | ETA: 1h49m21s
+06/10/2026 08:58:33 - INFO -     [Chain-Ret]  pos=32.429  neg=13.652  gap=18.777  pos_std=3.359
+06/10/2026 08:58:33 - INFO -     [Chain-Prob] u_mode=0.3374±0.0017  epistemic_v=0.1673  var_t=0.2236  kl_t=0.3609
+06/10/2026 08:58:33 - INFO -     [Chain-Aux]  evid_loss=13.0400  neg_reg=1.3643  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:01:33 - INFO -   [Epoch 4/5] Step 231/703 (33%) | Loss: 0.6437 [sim_loss=0.4616 | mcsoft_loss=0.1821 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.01s/step | ETA: 1h10m54s
+06/10/2026 09:01:33 - INFO -     [Chain-Ret]  pos=32.432  neg=13.808  gap=18.624  pos_std=3.499
+06/10/2026 09:01:33 - INFO -     [Chain-Prob] u_mode=0.3380±0.0019  epistemic_v=0.1677  var_t=0.2242  kl_t=0.3602
+06/10/2026 09:01:33 - INFO -     [Chain-Aux]  evid_loss=11.8356  neg_reg=1.4733  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:06:03 - INFO -   [Epoch 4/5] Step 251/703 (36%) | Loss: 0.6427 [sim_loss=0.4613 | mcsoft_loss=0.1814 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.48s/step | ETA: 1h41m34s
+06/10/2026 09:06:03 - INFO -     [Chain-Ret]  pos=32.013  neg=14.046  gap=17.967  pos_std=3.404
+06/10/2026 09:06:03 - INFO -     [Chain-Prob] u_mode=0.3378±0.0021  epistemic_v=0.1667  var_t=0.2234  kl_t=0.3612
+06/10/2026 09:06:03 - INFO -     [Chain-Aux]  evid_loss=11.5681  neg_reg=1.4890  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:09:07 - INFO -   [Epoch 4/5] Step 271/703 (39%) | Loss: 0.5862 [sim_loss=0.4058 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.20s/step | ETA: 1h06m14s
+06/10/2026 09:09:07 - INFO -     [Chain-Ret]  pos=31.975  neg=13.341  gap=18.634  pos_std=3.140
+06/10/2026 09:09:07 - INFO -     [Chain-Prob] u_mode=0.3378±0.0020  epistemic_v=0.1656  var_t=0.2232  kl_t=0.3615
+06/10/2026 09:09:07 - INFO -     [Chain-Aux]  evid_loss=12.6315  neg_reg=1.4334  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:13:31 - INFO -   [Epoch 4/5] Step 291/703 (41%) | Loss: 0.6456 [sim_loss=0.4654 | mcsoft_loss=0.1803 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.22s/step | ETA: 1h30m45s
+06/10/2026 09:13:31 - INFO -     [Chain-Ret]  pos=31.666  neg=13.442  gap=18.224  pos_std=2.995
+06/10/2026 09:13:31 - INFO -     [Chain-Prob] u_mode=0.3379±0.0018  epistemic_v=0.1651  var_t=0.2232  kl_t=0.3615
+06/10/2026 09:13:31 - INFO -     [Chain-Aux]  evid_loss=12.1770  neg_reg=1.3448  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:16:42 - INFO -   [Epoch 4/5] Step 311/703 (44%) | Loss: 0.5217 [sim_loss=0.3410 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.55s/step | ETA: 1h02m23s
+06/10/2026 09:16:42 - INFO -     [Chain-Ret]  pos=32.286  neg=13.086  gap=19.200  pos_std=3.220
+06/10/2026 09:16:42 - INFO -     [Chain-Prob] u_mode=0.3380±0.0019  epistemic_v=0.1647  var_t=0.2231  kl_t=0.3616
+06/10/2026 09:16:42 - INFO -     [Chain-Aux]  evid_loss=12.5943  neg_reg=1.3597  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:20:51 - INFO -   [Epoch 4/5] Step 331/703 (47%) | Loss: 0.6438 [sim_loss=0.4633 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.43s/step | ETA: 1h17m03s
+06/10/2026 09:20:51 - INFO -     [Chain-Ret]  pos=31.704  neg=13.149  gap=18.554  pos_std=3.163
+06/10/2026 09:20:51 - INFO -     [Chain-Prob] u_mode=0.3379±0.0020  epistemic_v=0.1637  var_t=0.2231  kl_t=0.3616
+06/10/2026 09:20:51 - INFO -     [Chain-Aux]  evid_loss=12.5363  neg_reg=1.4523  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:24:27 - INFO -   [Epoch 4/5] Step 351/703 (50%) | Loss: 0.6317 [sim_loss=0.4512 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.80s/step | ETA: 1h03m22s
+06/10/2026 09:24:27 - INFO -     [Chain-Ret]  pos=32.024  neg=14.135  gap=17.890  pos_std=3.178
+06/10/2026 09:24:27 - INFO -     [Chain-Prob] u_mode=0.3380±0.0020  epistemic_v=0.1636  var_t=0.2233  kl_t=0.3613
+06/10/2026 09:24:27 - INFO -     [Chain-Aux]  evid_loss=12.7319  neg_reg=1.4118  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:28:21 - INFO -   [Epoch 4/5] Step 371/703 (53%) | Loss: 0.7010 [sim_loss=0.5212 | mcsoft_loss=0.1797 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.70s/step | ETA: 1h04m45s
+06/10/2026 09:28:21 - INFO -     [Chain-Ret]  pos=31.760  neg=13.895  gap=17.865  pos_std=3.231
+06/10/2026 09:28:21 - INFO -     [Chain-Prob] u_mode=0.3378±0.0020  epistemic_v=0.1634  var_t=0.2231  kl_t=0.3616
+06/10/2026 09:28:21 - INFO -     [Chain-Aux]  evid_loss=12.1668  neg_reg=1.4739  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:32:34 - INFO -   [Epoch 4/5] Step 391/703 (56%) | Loss: 0.7025 [sim_loss=0.5213 | mcsoft_loss=0.1812 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.65s/step | ETA: 1h05m47s
+06/10/2026 09:32:34 - INFO -     [Chain-Ret]  pos=31.818  neg=13.550  gap=18.268  pos_std=3.136
+06/10/2026 09:32:34 - INFO -     [Chain-Prob] u_mode=0.3381±0.0016  epistemic_v=0.1637  var_t=0.2233  kl_t=0.3613
+06/10/2026 09:32:34 - INFO -     [Chain-Aux]  evid_loss=12.6509  neg_reg=1.3296  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:36:02 - INFO -   [Epoch 4/5] Step 411/703 (58%) | Loss: 0.6362 [sim_loss=0.4552 | mcsoft_loss=0.1810 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.38s/step | ETA: 50m31s
+06/10/2026 09:36:02 - INFO -     [Chain-Ret]  pos=31.814  neg=13.404  gap=18.410  pos_std=2.945
+06/10/2026 09:36:02 - INFO -     [Chain-Prob] u_mode=0.3381±0.0017  epistemic_v=0.1636  var_t=0.2234  kl_t=0.3612
+06/10/2026 09:36:02 - INFO -     [Chain-Aux]  evid_loss=12.5821  neg_reg=1.3998  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:40:18 - INFO -   [Epoch 4/5] Step 431/703 (61%) | Loss: 0.6120 [sim_loss=0.4310 | mcsoft_loss=0.1810 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.83s/step | ETA: 58m09s
+06/10/2026 09:40:18 - INFO -     [Chain-Ret]  pos=32.184  neg=13.719  gap=18.465  pos_std=3.276
+06/10/2026 09:40:18 - INFO -     [Chain-Prob] u_mode=0.3381±0.0016  epistemic_v=0.1627  var_t=0.2238  kl_t=0.3606
+06/10/2026 09:40:18 - INFO -     [Chain-Aux]  evid_loss=12.3587  neg_reg=1.4149  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:43:49 - INFO -   [Epoch 4/5] Step 451/703 (64%) | Loss: 0.6181 [sim_loss=0.4380 | mcsoft_loss=0.1800 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.53s/step | ETA: 44m13s
+06/10/2026 09:43:49 - INFO -     [Chain-Ret]  pos=32.311  neg=13.237  gap=19.075  pos_std=3.089
+06/10/2026 09:43:49 - INFO -     [Chain-Prob] u_mode=0.3380±0.0017  epistemic_v=0.1622  var_t=0.2232  kl_t=0.3615
+06/10/2026 09:43:49 - INFO -     [Chain-Aux]  evid_loss=12.2735  neg_reg=1.3763  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:48:20 - INFO -   [Epoch 4/5] Step 471/703 (67%) | Loss: 0.5318 [sim_loss=0.3518 | mcsoft_loss=0.1800 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.53s/step | ETA: 52m19s
+06/10/2026 09:48:20 - INFO -     [Chain-Ret]  pos=32.027  neg=13.432  gap=18.595  pos_std=3.078
+06/10/2026 09:48:20 - INFO -     [Chain-Prob] u_mode=0.3382±0.0021  epistemic_v=0.1619  var_t=0.2233  kl_t=0.3613
+06/10/2026 09:48:20 - INFO -     [Chain-Aux]  evid_loss=11.9750  neg_reg=1.4202  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:51:59 - INFO -   [Epoch 4/5] Step 491/703 (70%) | Loss: 0.6224 [sim_loss=0.4420 | mcsoft_loss=0.1804 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.99s/step | ETA: 38m50s
+06/10/2026 09:51:59 - INFO -     [Chain-Ret]  pos=31.692  neg=13.580  gap=18.112  pos_std=3.091
+06/10/2026 09:51:59 - INFO -     [Chain-Prob] u_mode=0.3383±0.0017  epistemic_v=0.1619  var_t=0.2233  kl_t=0.3613
+06/10/2026 09:51:59 - INFO -     [Chain-Aux]  evid_loss=13.1114  neg_reg=1.3073  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 09:56:38 - INFO -   [Epoch 4/5] Step 511/703 (73%) | Loss: 0.5908 [sim_loss=0.4100 | mcsoft_loss=0.1808 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.92s/step | ETA: 44m32s
+06/10/2026 09:56:38 - INFO -     [Chain-Ret]  pos=31.960  neg=13.079  gap=18.882  pos_std=3.475
+06/10/2026 09:56:38 - INFO -     [Chain-Prob] u_mode=0.3381±0.0019  epistemic_v=0.1608  var_t=0.2237  kl_t=0.3608
+06/10/2026 09:56:38 - INFO -     [Chain-Aux]  evid_loss=11.9108  neg_reg=1.4870  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:00:42 - INFO -   [Epoch 4/5] Step 531/703 (76%) | Loss: 0.6408 [sim_loss=0.4604 | mcsoft_loss=0.1804 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.21s/step | ETA: 35m00s
+06/10/2026 10:00:42 - INFO -     [Chain-Ret]  pos=31.578  neg=13.294  gap=18.285  pos_std=3.181
+06/10/2026 10:00:42 - INFO -     [Chain-Prob] u_mode=0.3383±0.0018  epistemic_v=0.1607  var_t=0.2236  kl_t=0.3609
+06/10/2026 10:00:42 - INFO -     [Chain-Aux]  evid_loss=12.8585  neg_reg=1.3012  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:05:04 - INFO -   [Epoch 4/5] Step 551/703 (78%) | Loss: 0.6290 [sim_loss=0.4481 | mcsoft_loss=0.1809 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.10s/step | ETA: 33m11s
+06/10/2026 10:05:04 - INFO -     [Chain-Ret]  pos=31.612  neg=13.430  gap=18.182  pos_std=3.098
+06/10/2026 10:05:04 - INFO -     [Chain-Prob] u_mode=0.3385±0.0018  epistemic_v=0.1604  var_t=0.2235  kl_t=0.3610
+06/10/2026 10:05:04 - INFO -     [Chain-Aux]  evid_loss=13.2981  neg_reg=1.2945  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:08:30 - INFO -   [Epoch 4/5] Step 571/703 (81%) | Loss: 0.6188 [sim_loss=0.4381 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.32s/step | ETA: 22m42s
+06/10/2026 10:08:30 - INFO -     [Chain-Ret]  pos=31.620  neg=13.717  gap=17.903  pos_std=3.168
+06/10/2026 10:08:30 - INFO -     [Chain-Prob] u_mode=0.3382±0.0019  epistemic_v=0.1605  var_t=0.2234  kl_t=0.3612
+06/10/2026 10:08:30 - INFO -     [Chain-Aux]  evid_loss=12.3249  neg_reg=1.3324  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:13:22 - INFO -   [Epoch 4/5] Step 591/703 (84%) | Loss: 0.6838 [sim_loss=0.5041 | mcsoft_loss=0.1797 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 14.60s/step | ETA: 27m15s
+06/10/2026 10:13:22 - INFO -     [Chain-Ret]  pos=31.869  neg=13.033  gap=18.836  pos_std=3.194
+06/10/2026 10:13:22 - INFO -     [Chain-Prob] u_mode=0.3383±0.0019  epistemic_v=0.1593  var_t=0.2231  kl_t=0.3615
+06/10/2026 10:13:22 - INFO -     [Chain-Aux]  evid_loss=13.2364  neg_reg=1.3226  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:16:32 - INFO -   [Epoch 4/5] Step 611/703 (87%) | Loss: 0.5487 [sim_loss=0.3687 | mcsoft_loss=0.1800 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.47s/step | ETA: 14m30s
+06/10/2026 10:16:32 - INFO -     [Chain-Ret]  pos=31.792  neg=13.213  gap=18.579  pos_std=3.046
+06/10/2026 10:16:32 - INFO -     [Chain-Prob] u_mode=0.3381±0.0018  epistemic_v=0.1592  var_t=0.2233  kl_t=0.3613
+06/10/2026 10:16:32 - INFO -     [Chain-Aux]  evid_loss=12.7718  neg_reg=1.3094  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:21:23 - INFO -   [Epoch 4/5] Step 631/703 (90%) | Loss: 0.6623 [sim_loss=0.4825 | mcsoft_loss=0.1798 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 14.58s/step | ETA: 17m30s
+06/10/2026 10:21:23 - INFO -     [Chain-Ret]  pos=31.800  neg=13.088  gap=18.712  pos_std=3.201
+06/10/2026 10:21:23 - INFO -     [Chain-Prob] u_mode=0.3384±0.0018  epistemic_v=0.1581  var_t=0.2237  kl_t=0.3609
+06/10/2026 10:21:23 - INFO -     [Chain-Aux]  evid_loss=12.3223  neg_reg=1.4702  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:24:46 - INFO -   [Epoch 4/5] Step 651/703 (93%) | Loss: 0.5383 [sim_loss=0.3584 | mcsoft_loss=0.1799 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.14s/step | ETA: 8m47s
+06/10/2026 10:24:46 - INFO -     [Chain-Ret]  pos=31.758  neg=13.157  gap=18.601  pos_std=2.764
+06/10/2026 10:24:46 - INFO -     [Chain-Prob] u_mode=0.3383±0.0017  epistemic_v=0.1595  var_t=0.2235  kl_t=0.3611
+06/10/2026 10:24:46 - INFO -     [Chain-Aux]  evid_loss=12.3769  neg_reg=1.4061  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:29:55 - INFO -   [Epoch 4/5] Step 671/703 (95%) | Loss: 0.6466 [sim_loss=0.4658 | mcsoft_loss=0.1808 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 15.45s/step | ETA: 8m14s
+06/10/2026 10:29:55 - INFO -     [Chain-Ret]  pos=31.674  neg=13.100  gap=18.575  pos_std=3.081
+06/10/2026 10:29:55 - INFO -     [Chain-Prob] u_mode=0.3384±0.0018  epistemic_v=0.1586  var_t=0.2241  kl_t=0.3603
+06/10/2026 10:29:55 - INFO -     [Chain-Aux]  evid_loss=12.7829  neg_reg=1.3859  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:33:14 - INFO -   [Epoch 4/5] Step 691/703 (98%) | Loss: 0.7141 [sim_loss=0.5331 | mcsoft_loss=0.1810 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.94s/step | ETA: 1m59s
+06/10/2026 10:33:14 - INFO -     [Chain-Ret]  pos=31.307  neg=13.074  gap=18.233  pos_std=3.093
+06/10/2026 10:33:14 - INFO -     [Chain-Prob] u_mode=0.3383±0.0018  epistemic_v=0.1587  var_t=0.2233  kl_t=0.3613
+06/10/2026 10:33:14 - INFO -     [Chain-Aux]  evid_loss=12.2408  neg_reg=1.3917  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:34:14 - INFO -   [Epoch 4/5] Training complete | Avg Loss: 0.6280 | Time: 2h20m33s
+06/10/2026 10:34:14 - INFO -   [Epoch 4 Causal Summary]
+  Ret  : pos=32.012  neg=13.618  gap=18.394  pos_std=3.163
+  Evid : u_mode=0.3379±0.0018  epistemic_v=0.1656
+  Text : var_t=0.2234  kl_t=0.3612
+  Aux  : evid_loss=12.2650  neg_reg=1.4284  evid_unc=0.0000  logsig_v=-1.5000
+06/10/2026 10:34:14 - INFO -     GPU Memory | Cur: 1.48 GB, Peak: 48.53 GB, Reserved: 52.26 GB
+06/10/2026 10:34:17 - INFO -   Model saved to ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.3
+06/10/2026 10:34:17 - INFO -   Optimizer saved to ckpts/ckpt_msrvtt_20260610_013304/pytorch_opt.bin.3
+Evaluating:   0%|          | 0/63 [00:00<?, ?it/s]Evaluating:   2%|▏         | 1/63 [00:16<16:57, 16.41s/it]Evaluating:   3%|▎         | 2/63 [00:19<08:49,  8.67s/it]Evaluating:   5%|▍         | 3/63 [00:27<08:29,  8.49s/it]Evaluating:   6%|▋         | 4/63 [00:28<05:07,  5.22s/it]Evaluating:   8%|▊         | 5/63 [00:28<03:17,  3.41s/it]Evaluating:  10%|▉         | 6/63 [00:28<02:11,  2.32s/it]Evaluating:  11%|█         | 7/63 [00:28<01:30,  1.62s/it]Evaluating:  13%|█▎        | 8/63 [00:28<01:04,  1.17s/it]Evaluating:  14%|█▍        | 9/63 [00:40<03:55,  4.35s/it]Evaluating:  16%|█▌        | 10/63 [00:42<03:15,  3.70s/it]Evaluating:  17%|█▋        | 11/63 [00:48<03:52,  4.46s/it]Evaluating:  19%|█▉        | 12/63 [00:50<02:58,  3.50s/it]Evaluating:  21%|██        | 13/63 [00:52<02:38,  3.16s/it]Evaluating:  22%|██▏       | 14/63 [00:52<01:51,  2.27s/it]Evaluating:  24%|██▍       | 15/63 [00:52<01:18,  1.64s/it]Evaluating:  25%|██▌       | 16/63 [00:52<00:56,  1.21s/it]Evaluating:  27%|██▋       | 17/63 [01:12<05:11,  6.78s/it]Evaluating:  29%|██▊       | 18/63 [01:12<03:36,  4.80s/it]Evaluating:  30%|███       | 19/63 [01:13<02:30,  3.41s/it]Evaluating:  32%|███▏      | 20/63 [01:17<02:44,  3.83s/it]Evaluating:  33%|███▎      | 21/63 [01:22<02:53,  4.13s/it]Evaluating:  35%|███▍      | 22/63 [01:22<02:00,  2.95s/it]Evaluating:  37%|███▋      | 23/63 [01:23<01:24,  2.12s/it]Evaluating:  38%|███▊      | 24/63 [01:23<01:00,  1.55s/it]Evaluating:  40%|███▉      | 25/63 [01:34<02:46,  4.38s/it]Evaluating:  41%|████▏     | 26/63 [01:34<01:55,  3.12s/it]Evaluating:  43%|████▎     | 27/63 [01:34<01:21,  2.25s/it]Evaluating:  44%|████▍     | 28/63 [01:40<01:54,  3.26s/it]Evaluating:  46%|████▌     | 29/63 [01:53<03:36,  6.35s/it]Evaluating:  48%|████▊     | 30/63 [01:54<02:28,  4.50s/it]Evaluating:  49%|████▉     | 31/63 [01:54<01:42,  3.20s/it]Evaluating:  51%|█████     | 32/63 [01:54<01:11,  2.29s/it]Evaluating:  52%|█████▏    | 33/63 [01:59<01:36,  3.23s/it]Evaluating:  54%|█████▍    | 34/63 [02:00<01:07,  2.32s/it]Evaluating:  56%|█████▌    | 35/63 [02:01<00:56,  2.02s/it]Evaluating:  57%|█████▋    | 36/63 [02:09<01:43,  3.82s/it]Evaluating:  59%|█████▊    | 37/63 [02:14<01:50,  4.24s/it]Evaluating:  60%|██████    | 38/63 [02:14<01:15,  3.02s/it]Evaluating:  62%|██████▏   | 39/63 [02:14<00:52,  2.17s/it]Evaluating:  63%|██████▎   | 40/63 [02:15<00:36,  1.57s/it]Evaluating:  65%|██████▌   | 41/63 [02:21<01:05,  2.97s/it]Evaluating:  67%|██████▋   | 42/63 [02:21<00:44,  2.13s/it]Evaluating:  68%|██████▊   | 43/63 [02:23<00:41,  2.08s/it]Evaluating:  70%|██████▉   | 44/63 [02:45<02:34,  8.11s/it]Evaluating:  71%|███████▏  | 45/63 [02:45<01:43,  5.73s/it]Evaluating:  73%|███████▎  | 46/63 [02:46<01:09,  4.06s/it]Evaluating:  75%|███████▍  | 47/63 [02:46<00:46,  2.90s/it]Evaluating:  76%|███████▌  | 48/63 [02:46<00:31,  2.08s/it]Evaluating:  78%|███████▊  | 49/63 [02:46<00:21,  1.51s/it]Evaluating:  79%|███████▉  | 50/63 [02:46<00:14,  1.11s/it]Evaluating:  81%|████████  | 51/63 [02:47<00:13,  1.14s/it]Evaluating:  83%|████████▎ | 52/63 [03:06<01:10,  6.45s/it]Evaluating:  84%|████████▍ | 53/63 [03:06<00:45,  4.57s/it]Evaluating:  86%|████████▌ | 54/63 [03:07<00:29,  3.25s/it]Evaluating:  87%|████████▋ | 55/63 [03:07<00:18,  2.32s/it]Evaluating:  89%|████████▉ | 56/63 [03:07<00:11,  1.67s/it]Evaluating:  90%|█████████ | 57/63 [03:07<00:07,  1.22s/it]Evaluating:  92%|█████████▏| 58/63 [03:07<00:04,  1.10it/s]Evaluating:  94%|█████████▎| 59/63 [03:07<00:02,  1.46it/s]Evaluating:  95%|█████████▌| 60/63 [03:14<00:07,  2.38s/it]Evaluating:  97%|█████████▋| 61/63 [03:14<00:03,  1.71s/it]Evaluating:  98%|█████████▊| 62/63 [03:14<00:01,  1.24s/it]                                                           06/10/2026 10:38:19 - INFO -   Retrieval Evaluation | #Text: 1000, #Video: 1000
+06/10/2026 10:38:19 - INFO -     T2V | R@1:  46.2  R@5:  74.3  R@10:  83.3  MdR:   2.0  MnR:  13.6
+06/10/2026 10:38:19 - INFO -     V2T | R@1:  45.8  R@5:  74.1  R@10:  82.8  MdR:   2.0  MnR:   9.5
+06/10/2026 10:38:20 - INFO -     Best so far | R@1: 47.7 | ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.2
+06/10/2026 10:38:20 - INFO -   ============================================================
+06/10/2026 10:39:14 - INFO -   [Epoch 5/5] Step 8/703 (1%) | Loss: 0.4581 [sim_loss=0.2785 | mcsoft_loss=0.1796 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 2.69s/step | ETA: 31m08s
+06/10/2026 10:39:14 - INFO -     [Chain-Ret]  pos=31.984  neg=12.766  gap=19.218  pos_std=2.748
+06/10/2026 10:39:14 - INFO -     [Chain-Prob] u_mode=0.3382±0.0019  epistemic_v=0.1579  var_t=0.2232  kl_t=0.3615
+06/10/2026 10:39:14 - INFO -     [Chain-Aux]  evid_loss=12.5949  neg_reg=1.3879  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:43:51 - INFO -   [Epoch 5/5] Step 28/703 (4%) | Loss: 0.5341 [sim_loss=0.3535 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.85s/step | ETA: 2h35m48s
+06/10/2026 10:43:51 - INFO -     [Chain-Ret]  pos=31.661  neg=12.910  gap=18.750  pos_std=3.087
+06/10/2026 10:43:51 - INFO -     [Chain-Prob] u_mode=0.3384±0.0017  epistemic_v=0.1578  var_t=0.2231  kl_t=0.3616
+06/10/2026 10:43:51 - INFO -     [Chain-Aux]  evid_loss=12.6962  neg_reg=1.4078  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:47:19 - INFO -   [Epoch 5/5] Step 48/703 (7%) | Loss: 0.5704 [sim_loss=0.3895 | mcsoft_loss=0.1809 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.40s/step | ETA: 1h53m34s
+06/10/2026 10:47:19 - INFO -     [Chain-Ret]  pos=31.749  neg=12.377  gap=19.371  pos_std=3.077
+06/10/2026 10:47:19 - INFO -     [Chain-Prob] u_mode=0.3383±0.0019  epistemic_v=0.1572  var_t=0.2236  kl_t=0.3610
+06/10/2026 10:47:19 - INFO -     [Chain-Aux]  evid_loss=12.6174  neg_reg=1.3509  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:52:25 - INFO -   [Epoch 5/5] Step 68/703 (10%) | Loss: 0.5599 [sim_loss=0.3785 | mcsoft_loss=0.1814 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 15.29s/step | ETA: 2h41m51s
+06/10/2026 10:52:25 - INFO -     [Chain-Ret]  pos=31.614  neg=12.294  gap=19.320  pos_std=3.226
+06/10/2026 10:52:25 - INFO -     [Chain-Prob] u_mode=0.3383±0.0018  epistemic_v=0.1560  var_t=0.2231  kl_t=0.3616
+06/10/2026 10:52:25 - INFO -     [Chain-Aux]  evid_loss=13.6972  neg_reg=1.2784  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 10:55:42 - INFO -   [Epoch 5/5] Step 88/703 (13%) | Loss: 0.5483 [sim_loss=0.3668 | mcsoft_loss=0.1815 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.86s/step | ETA: 1h41m04s
+06/10/2026 10:55:42 - INFO -     [Chain-Ret]  pos=31.503  neg=12.190  gap=19.313  pos_std=3.005
+06/10/2026 10:55:42 - INFO -     [Chain-Prob] u_mode=0.3384±0.0019  epistemic_v=0.1558  var_t=0.2233  kl_t=0.3613
+06/10/2026 10:55:42 - INFO -     [Chain-Aux]  evid_loss=12.4341  neg_reg=1.4125  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:00:37 - INFO -   [Epoch 5/5] Step 108/703 (15%) | Loss: 0.6409 [sim_loss=0.4600 | mcsoft_loss=0.1809 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 14.75s/step | ETA: 2h26m15s
+06/10/2026 11:00:37 - INFO -     [Chain-Ret]  pos=31.099  neg=12.604  gap=18.495  pos_std=3.044
+06/10/2026 11:00:37 - INFO -     [Chain-Prob] u_mode=0.3386±0.0019  epistemic_v=0.1557  var_t=0.2234  kl_t=0.3612
+06/10/2026 11:00:37 - INFO -     [Chain-Aux]  evid_loss=12.0398  neg_reg=1.4307  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:04:10 - INFO -   [Epoch 5/5] Step 128/703 (18%) | Loss: 0.5778 [sim_loss=0.3980 | mcsoft_loss=0.1797 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.67s/step | ETA: 1h42m15s
+06/10/2026 11:04:10 - INFO -     [Chain-Ret]  pos=31.472  neg=12.326  gap=19.146  pos_std=2.944
+06/10/2026 11:04:10 - INFO -     [Chain-Prob] u_mode=0.3382±0.0017  epistemic_v=0.1555  var_t=0.2235  kl_t=0.3610
+06/10/2026 11:04:10 - INFO -     [Chain-Aux]  evid_loss=12.5944  neg_reg=1.3836  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:09:27 - INFO -   [Epoch 5/5] Step 148/703 (21%) | Loss: 0.5692 [sim_loss=0.3886 | mcsoft_loss=0.1806 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 15.86s/step | ETA: 2h26m44s
+06/10/2026 11:09:27 - INFO -     [Chain-Ret]  pos=31.341  neg=12.463  gap=18.878  pos_std=2.970
+06/10/2026 11:09:27 - INFO -     [Chain-Prob] u_mode=0.3385±0.0018  epistemic_v=0.1552  var_t=0.2231  kl_t=0.3615
+06/10/2026 11:09:27 - INFO -     [Chain-Aux]  evid_loss=13.0716  neg_reg=1.3162  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:12:51 - INFO -   [Epoch 5/5] Step 168/703 (24%) | Loss: 0.5550 [sim_loss=0.3735 | mcsoft_loss=0.1815 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.18s/step | ETA: 1h30m47s
+06/10/2026 11:12:51 - INFO -     [Chain-Ret]  pos=31.359  neg=12.505  gap=18.855  pos_std=3.108
+06/10/2026 11:12:51 - INFO -     [Chain-Prob] u_mode=0.3383±0.0020  epistemic_v=0.1545  var_t=0.2237  kl_t=0.3608
+06/10/2026 11:12:51 - INFO -     [Chain-Aux]  evid_loss=12.7084  neg_reg=1.3743  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:17:53 - INFO -   [Epoch 5/5] Step 188/703 (27%) | Loss: 0.5333 [sim_loss=0.3523 | mcsoft_loss=0.1809 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 15.11s/step | ETA: 2h09m44s
+06/10/2026 11:17:53 - INFO -     [Chain-Ret]  pos=31.294  neg=12.616  gap=18.678  pos_std=2.822
+06/10/2026 11:17:53 - INFO -     [Chain-Prob] u_mode=0.3386±0.0021  epistemic_v=0.1548  var_t=0.2233  kl_t=0.3613
+06/10/2026 11:17:53 - INFO -     [Chain-Aux]  evid_loss=12.9906  neg_reg=1.3605  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:21:24 - INFO -   [Epoch 5/5] Step 208/703 (30%) | Loss: 0.5350 [sim_loss=0.3544 | mcsoft_loss=0.1806 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.52s/step | ETA: 1h26m45s
+06/10/2026 11:21:24 - INFO -     [Chain-Ret]  pos=31.447  neg=12.631  gap=18.815  pos_std=2.791
+06/10/2026 11:21:24 - INFO -     [Chain-Prob] u_mode=0.3383±0.0018  epistemic_v=0.1553  var_t=0.2236  kl_t=0.3609
+06/10/2026 11:21:24 - INFO -     [Chain-Aux]  evid_loss=12.0889  neg_reg=1.4866  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:26:33 - INFO -   [Epoch 5/5] Step 228/703 (32%) | Loss: 0.5712 [sim_loss=0.3911 | mcsoft_loss=0.1800 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 15.46s/step | ETA: 2h02m22s
+06/10/2026 11:26:33 - INFO -     [Chain-Ret]  pos=31.419  neg=12.462  gap=18.956  pos_std=3.107
+06/10/2026 11:26:33 - INFO -     [Chain-Prob] u_mode=0.3388±0.0018  epistemic_v=0.1546  var_t=0.2231  kl_t=0.3616
+06/10/2026 11:26:33 - INFO -     [Chain-Aux]  evid_loss=11.4641  neg_reg=1.5070  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:29:58 - INFO -   [Epoch 5/5] Step 248/703 (35%) | Loss: 0.6165 [sim_loss=0.4364 | mcsoft_loss=0.1801 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.28s/step | ETA: 1h17m57s
+06/10/2026 11:29:58 - INFO -     [Chain-Ret]  pos=31.586  neg=12.381  gap=19.205  pos_std=3.120
+06/10/2026 11:29:58 - INFO -     [Chain-Prob] u_mode=0.3387±0.0020  epistemic_v=0.1542  var_t=0.2233  kl_t=0.3613
+06/10/2026 11:29:58 - INFO -     [Chain-Aux]  evid_loss=12.9779  neg_reg=1.3685  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:34:38 - INFO -   [Epoch 5/5] Step 268/703 (38%) | Loss: 0.5611 [sim_loss=0.3798 | mcsoft_loss=0.1813 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.98s/step | ETA: 1h41m22s
+06/10/2026 11:34:38 - INFO -     [Chain-Ret]  pos=31.587  neg=12.390  gap=19.197  pos_std=2.856
+06/10/2026 11:34:38 - INFO -     [Chain-Prob] u_mode=0.3383±0.0019  epistemic_v=0.1543  var_t=0.2242  kl_t=0.3602
+06/10/2026 11:34:38 - INFO -     [Chain-Aux]  evid_loss=11.7351  neg_reg=1.4602  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:38:22 - INFO -   [Epoch 5/5] Step 288/703 (41%) | Loss: 0.6511 [sim_loss=0.4703 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.20s/step | ETA: 1h17m28s
+06/10/2026 11:38:22 - INFO -     [Chain-Ret]  pos=31.359  neg=12.312  gap=19.047  pos_std=2.942
+06/10/2026 11:38:22 - INFO -     [Chain-Prob] u_mode=0.3382±0.0018  epistemic_v=0.1543  var_t=0.2233  kl_t=0.3614
+06/10/2026 11:38:22 - INFO -     [Chain-Aux]  evid_loss=12.3791  neg_reg=1.4824  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:43:34 - INFO -   [Epoch 5/5] Step 308/703 (44%) | Loss: 0.5412 [sim_loss=0.3608 | mcsoft_loss=0.1803 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 15.59s/step | ETA: 1h42m38s
+06/10/2026 11:43:34 - INFO -     [Chain-Ret]  pos=31.759  neg=12.432  gap=19.328  pos_std=3.088
+06/10/2026 11:43:34 - INFO -     [Chain-Prob] u_mode=0.3384±0.0019  epistemic_v=0.1542  var_t=0.2234  kl_t=0.3613
+06/10/2026 11:43:34 - INFO -     [Chain-Aux]  evid_loss=12.5147  neg_reg=1.4417  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:47:01 - INFO -   [Epoch 5/5] Step 328/703 (47%) | Loss: 0.6243 [sim_loss=0.4431 | mcsoft_loss=0.1812 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.33s/step | ETA: 1h04m35s
+06/10/2026 11:47:01 - INFO -     [Chain-Ret]  pos=31.493  neg=12.563  gap=18.930  pos_std=2.999
+06/10/2026 11:47:01 - INFO -     [Chain-Prob] u_mode=0.3386±0.0017  epistemic_v=0.1542  var_t=0.2236  kl_t=0.3609
+06/10/2026 11:47:01 - INFO -     [Chain-Aux]  evid_loss=12.0508  neg_reg=1.5152  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:51:41 - INFO -   [Epoch 5/5] Step 348/703 (50%) | Loss: 0.6203 [sim_loss=0.4402 | mcsoft_loss=0.1801 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 14.01s/step | ETA: 1h22m54s
+06/10/2026 11:51:41 - INFO -     [Chain-Ret]  pos=31.348  neg=12.592  gap=18.756  pos_std=3.276
+06/10/2026 11:51:41 - INFO -     [Chain-Prob] u_mode=0.3384±0.0018  epistemic_v=0.1535  var_t=0.2231  kl_t=0.3616
+06/10/2026 11:51:41 - INFO -     [Chain-Aux]  evid_loss=12.4177  neg_reg=1.3918  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:55:02 - INFO -   [Epoch 5/5] Step 368/703 (52%) | Loss: 0.5449 [sim_loss=0.3642 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.04s/step | ETA: 56m01s
+06/10/2026 11:55:02 - INFO -     [Chain-Ret]  pos=31.527  neg=12.299  gap=19.228  pos_std=3.258
+06/10/2026 11:55:02 - INFO -     [Chain-Prob] u_mode=0.3381±0.0016  epistemic_v=0.1530  var_t=0.2231  kl_t=0.3616
+06/10/2026 11:55:02 - INFO -     [Chain-Aux]  evid_loss=13.1660  neg_reg=1.3744  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 11:59:44 - INFO -   [Epoch 5/5] Step 388/703 (55%) | Loss: 0.5581 [sim_loss=0.3774 | mcsoft_loss=0.1807 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 14.14s/step | ETA: 1h14m13s
+06/10/2026 11:59:44 - INFO -     [Chain-Ret]  pos=31.594  neg=12.272  gap=19.322  pos_std=3.043
+06/10/2026 11:59:44 - INFO -     [Chain-Prob] u_mode=0.3385±0.0019  epistemic_v=0.1529  var_t=0.2234  kl_t=0.3612
+06/10/2026 11:59:44 - INFO -     [Chain-Aux]  evid_loss=12.7015  neg_reg=1.2996  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:03:35 - INFO -   [Epoch 5/5] Step 408/703 (58%) | Loss: 0.5037 [sim_loss=0.3231 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.52s/step | ETA: 56m38s
+06/10/2026 12:03:35 - INFO -     [Chain-Ret]  pos=31.699  neg=12.049  gap=19.650  pos_std=3.028
+06/10/2026 12:03:35 - INFO -     [Chain-Prob] u_mode=0.3386±0.0017  epistemic_v=0.1534  var_t=0.2233  kl_t=0.3613
+06/10/2026 12:03:35 - INFO -     [Chain-Aux]  evid_loss=13.0902  neg_reg=1.2769  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:08:19 - INFO -   [Epoch 5/5] Step 428/703 (61%) | Loss: 0.5368 [sim_loss=0.3567 | mcsoft_loss=0.1801 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 14.22s/step | ETA: 1h05m10s
+06/10/2026 12:08:19 - INFO -     [Chain-Ret]  pos=31.442  neg=12.302  gap=19.140  pos_std=3.204
+06/10/2026 12:08:19 - INFO -     [Chain-Prob] u_mode=0.3387±0.0017  epistemic_v=0.1541  var_t=0.2231  kl_t=0.3616
+06/10/2026 12:08:19 - INFO -     [Chain-Aux]  evid_loss=12.3125  neg_reg=1.3392  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:11:47 - INFO -   [Epoch 5/5] Step 448/703 (64%) | Loss: 0.5736 [sim_loss=0.3918 | mcsoft_loss=0.1818 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.37s/step | ETA: 44m05s
+06/10/2026 12:11:47 - INFO -     [Chain-Ret]  pos=31.484  neg=12.710  gap=18.774  pos_std=3.205
+06/10/2026 12:11:47 - INFO -     [Chain-Prob] u_mode=0.3388±0.0020  epistemic_v=0.1530  var_t=0.2231  kl_t=0.3616
+06/10/2026 12:11:47 - INFO -     [Chain-Aux]  evid_loss=12.5088  neg_reg=1.3997  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:16:57 - INFO -   [Epoch 5/5] Step 468/703 (67%) | Loss: 0.5292 [sim_loss=0.3488 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 15.51s/step | ETA: 1h00m43s
+06/10/2026 12:16:57 - INFO -     [Chain-Ret]  pos=31.160  neg=12.439  gap=18.722  pos_std=2.682
+06/10/2026 12:16:57 - INFO -     [Chain-Prob] u_mode=0.3384±0.0016  epistemic_v=0.1533  var_t=0.2231  kl_t=0.3616
+06/10/2026 12:16:57 - INFO -     [Chain-Aux]  evid_loss=12.0024  neg_reg=1.3285  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:20:35 - INFO -   [Epoch 5/5] Step 488/703 (69%) | Loss: 0.5100 [sim_loss=0.3292 | mcsoft_loss=0.1808 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.94s/step | ETA: 39m11s
+06/10/2026 12:20:35 - INFO -     [Chain-Ret]  pos=31.260  neg=12.442  gap=18.818  pos_std=2.764
+06/10/2026 12:20:35 - INFO -     [Chain-Prob] u_mode=0.3387±0.0019  epistemic_v=0.1533  var_t=0.2236  kl_t=0.3610
+06/10/2026 12:20:35 - INFO -     [Chain-Aux]  evid_loss=12.3305  neg_reg=1.4011  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:25:42 - INFO -   [Epoch 5/5] Step 508/703 (72%) | Loss: 0.5546 [sim_loss=0.3732 | mcsoft_loss=0.1814 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 15.34s/step | ETA: 49m50s
+06/10/2026 12:25:42 - INFO -     [Chain-Ret]  pos=31.404  neg=12.354  gap=19.049  pos_std=3.119
+06/10/2026 12:25:42 - INFO -     [Chain-Prob] u_mode=0.3387±0.0018  epistemic_v=0.1535  var_t=0.2233  kl_t=0.3613
+06/10/2026 12:25:42 - INFO -     [Chain-Aux]  evid_loss=12.6020  neg_reg=1.3018  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:28:45 - INFO -   [Epoch 5/5] Step 528/703 (75%) | Loss: 0.4755 [sim_loss=0.2949 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.13s/step | ETA: 26m37s
+06/10/2026 12:28:45 - INFO -     [Chain-Ret]  pos=31.492  neg=12.460  gap=19.033  pos_std=2.847
+06/10/2026 12:28:45 - INFO -     [Chain-Prob] u_mode=0.3384±0.0018  epistemic_v=0.1530  var_t=0.2235  kl_t=0.3611
+06/10/2026 12:28:45 - INFO -     [Chain-Aux]  evid_loss=12.3308  neg_reg=1.3713  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:32:54 - INFO -   [Epoch 5/5] Step 548/703 (78%) | Loss: 0.5821 [sim_loss=0.4015 | mcsoft_loss=0.1806 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.49s/step | ETA: 32m16s
+06/10/2026 12:32:55 - INFO -     [Chain-Ret]  pos=31.492  neg=12.174  gap=19.318  pos_std=3.081
+06/10/2026 12:32:55 - INFO -     [Chain-Prob] u_mode=0.3386±0.0020  epistemic_v=0.1529  var_t=0.2238  kl_t=0.3606
+06/10/2026 12:32:55 - INFO -     [Chain-Aux]  evid_loss=12.2309  neg_reg=1.4763  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:36:25 - INFO -   [Epoch 5/5] Step 568/703 (81%) | Loss: 0.6409 [sim_loss=0.4605 | mcsoft_loss=0.1803 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 10.55s/step | ETA: 23m43s
+06/10/2026 12:36:25 - INFO -     [Chain-Ret]  pos=31.329  neg=12.557  gap=18.772  pos_std=3.186
+06/10/2026 12:36:25 - INFO -     [Chain-Prob] u_mode=0.3386±0.0018  epistemic_v=0.1528  var_t=0.2231  kl_t=0.3616
+06/10/2026 12:36:25 - INFO -     [Chain-Aux]  evid_loss=12.8379  neg_reg=1.4476  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:40:52 - INFO -   [Epoch 5/5] Step 588/703 (84%) | Loss: 0.6617 [sim_loss=0.4810 | mcsoft_loss=0.1806 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.31s/step | ETA: 25m30s
+06/10/2026 12:40:52 - INFO -     [Chain-Ret]  pos=31.350  neg=12.415  gap=18.935  pos_std=3.009
+06/10/2026 12:40:52 - INFO -     [Chain-Prob] u_mode=0.3388±0.0016  epistemic_v=0.1532  var_t=0.2231  kl_t=0.3616
+06/10/2026 12:40:52 - INFO -     [Chain-Aux]  evid_loss=12.5791  neg_reg=1.3431  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:43:57 - INFO -   [Epoch 5/5] Step 608/703 (86%) | Loss: 0.5420 [sim_loss=0.3611 | mcsoft_loss=0.1809 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.27s/step | ETA: 14m41s
+06/10/2026 12:43:57 - INFO -     [Chain-Ret]  pos=31.431  neg=12.436  gap=18.995  pos_std=2.847
+06/10/2026 12:43:57 - INFO -     [Chain-Prob] u_mode=0.3385±0.0017  epistemic_v=0.1525  var_t=0.2234  kl_t=0.3612
+06/10/2026 12:43:57 - INFO -     [Chain-Aux]  evid_loss=12.7173  neg_reg=1.3779  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:48:13 - INFO -   [Epoch 5/5] Step 628/703 (89%) | Loss: 0.4976 [sim_loss=0.3171 | mcsoft_loss=0.1805 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 12.81s/step | ETA: 16m00s
+06/10/2026 12:48:13 - INFO -     [Chain-Ret]  pos=31.454  neg=12.093  gap=19.361  pos_std=3.014
+06/10/2026 12:48:13 - INFO -     [Chain-Prob] u_mode=0.3384±0.0020  epistemic_v=0.1533  var_t=0.2233  kl_t=0.3613
+06/10/2026 12:48:13 - INFO -     [Chain-Aux]  evid_loss=13.0234  neg_reg=1.2669  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:51:28 - INFO -   [Epoch 5/5] Step 648/703 (92%) | Loss: 0.5504 [sim_loss=0.3710 | mcsoft_loss=0.1794 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 9.76s/step | ETA: 8m56s
+06/10/2026 12:51:28 - INFO -     [Chain-Ret]  pos=31.299  neg=12.397  gap=18.901  pos_std=3.102
+06/10/2026 12:51:28 - INFO -     [Chain-Prob] u_mode=0.3387±0.0018  epistemic_v=0.1532  var_t=0.2231  kl_t=0.3616
+06/10/2026 12:51:28 - INFO -     [Chain-Aux]  evid_loss=12.1374  neg_reg=1.4568  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:55:55 - INFO -   [Epoch 5/5] Step 668/703 (95%) | Loss: 0.4556 [sim_loss=0.2760 | mcsoft_loss=0.1796 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 13.34s/step | ETA: 7m46s
+06/10/2026 12:55:55 - INFO -     [Chain-Ret]  pos=31.431  neg=12.196  gap=19.235  pos_std=2.670
+06/10/2026 12:55:55 - INFO -     [Chain-Prob] u_mode=0.3382±0.0018  epistemic_v=0.1524  var_t=0.2240  kl_t=0.3603
+06/10/2026 12:55:55 - INFO -     [Chain-Aux]  evid_loss=12.8781  neg_reg=1.2691  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 12:59:46 - INFO -   [Epoch 5/5] Step 688/703 (98%) | Loss: 0.5979 [sim_loss=0.4177 | mcsoft_loss=0.1803 | orth_loss=0.0000] | LR clip=1.00e-07 new=1.00e-04 | 11.52s/step | ETA: 2m52s
+06/10/2026 12:59:46 - INFO -     [Chain-Ret]  pos=31.255  neg=12.380  gap=18.875  pos_std=3.072
+06/10/2026 12:59:46 - INFO -     [Chain-Prob] u_mode=0.3384±0.0019  epistemic_v=0.1531  var_t=0.2231  kl_t=0.3616
+06/10/2026 12:59:46 - INFO -     [Chain-Aux]  evid_loss=12.3446  neg_reg=1.4590  evid_unc=0.0000  logsig_v=-1.5000  anneal=1.000
+06/10/2026 13:01:25 - INFO -   [Epoch 5/5] Training complete | Avg Loss: 0.5457 | Time: 2h23m05s
+06/10/2026 13:01:25 - INFO -   [Epoch 5 Causal Summary]
+  Ret  : pos=31.446  neg=12.432  gap=19.013  pos_std=3.007
+  Evid : u_mode=0.3385±0.0018  epistemic_v=0.1542
+  Text : var_t=0.2234  kl_t=0.3612
+  Aux  : evid_loss=12.5134  neg_reg=1.3851  evid_unc=0.0000  logsig_v=-1.5000
+06/10/2026 13:01:25 - INFO -     GPU Memory | Cur: 1.48 GB, Peak: 48.53 GB, Reserved: 52.26 GB
+06/10/2026 13:01:28 - INFO -   Model saved to ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.4
+06/10/2026 13:01:28 - INFO -   Optimizer saved to ckpts/ckpt_msrvtt_20260610_013304/pytorch_opt.bin.4
+Evaluating:   0%|          | 0/63 [00:00<?, ?it/s]Evaluating:   2%|▏         | 1/63 [00:07<07:28,  7.24s/it]Evaluating:   3%|▎         | 2/63 [00:08<03:32,  3.48s/it]Evaluating:   5%|▍         | 3/63 [00:10<03:06,  3.11s/it]Evaluating:   6%|▋         | 4/63 [00:10<01:54,  1.94s/it]Evaluating:   8%|▊         | 5/63 [00:11<01:15,  1.30s/it]Evaluating:  10%|▉         | 6/63 [00:11<00:52,  1.09it/s]Evaluating:  11%|█         | 7/63 [00:11<00:37,  1.49it/s]Evaluating:  13%|█▎        | 8/63 [00:11<00:28,  1.96it/s]Evaluating:  14%|█▍        | 9/63 [00:15<01:32,  1.71s/it]Evaluating:  16%|█▌        | 10/63 [00:17<01:32,  1.74s/it]Evaluating:  17%|█▋        | 11/63 [00:18<01:22,  1.58s/it]Evaluating:  19%|█▉        | 12/63 [00:19<01:02,  1.22s/it]Evaluating:  21%|██        | 13/63 [00:19<00:45,  1.11it/s]Evaluating:  22%|██▏       | 14/63 [00:19<00:33,  1.47it/s]Evaluating:  24%|██▍       | 15/63 [00:19<00:25,  1.89it/s]Evaluating:  25%|██▌       | 16/63 [00:20<00:19,  2.37it/s]Evaluating:  27%|██▋       | 17/63 [00:27<02:02,  2.66s/it]Evaluating:  29%|██▊       | 18/63 [00:28<01:26,  1.91s/it]Evaluating:  30%|███       | 19/63 [00:28<01:01,  1.39s/it]Evaluating:  32%|███▏      | 20/63 [00:29<00:57,  1.34s/it]Evaluating:  33%|███▎      | 21/63 [00:30<00:51,  1.24s/it]Evaluating:  35%|███▍      | 22/63 [00:30<00:37,  1.09it/s]Evaluating:  37%|███▋      | 23/63 [00:30<00:27,  1.45it/s]Evaluating:  38%|███▊      | 24/63 [00:30<00:20,  1.86it/s]Evaluating:  40%|███▉      | 25/63 [00:36<01:17,  2.04s/it]Evaluating:  41%|████▏     | 26/63 [00:36<00:54,  1.48s/it]Evaluating:  43%|████▎     | 27/63 [00:36<00:39,  1.09s/it]Evaluating:  44%|████▍     | 28/63 [00:37<00:28,  1.23it/s]Evaluating:  46%|████▌     | 29/63 [00:41<01:02,  1.85s/it]Evaluating:  48%|████▊     | 30/63 [00:41<00:44,  1.34s/it]Evaluating:  49%|████▉     | 31/63 [00:41<00:31,  1.01it/s]Evaluating:  51%|█████     | 32/63 [00:41<00:23,  1.34it/s]Evaluating:  52%|█████▏    | 33/63 [00:45<00:49,  1.63s/it]Evaluating:  54%|█████▍    | 34/63 [00:45<00:34,  1.19s/it]Evaluating:  56%|█████▌    | 35/63 [00:45<00:24,  1.12it/s]Evaluating:  57%|█████▋    | 36/63 [00:46<00:18,  1.48it/s]Evaluating:  59%|█████▊    | 37/63 [00:48<00:33,  1.28s/it]Evaluating:  60%|██████    | 38/63 [00:48<00:23,  1.05it/s]Evaluating:  62%|██████▏   | 39/63 [00:49<00:17,  1.39it/s]Evaluating:  63%|██████▎   | 40/63 [00:49<00:12,  1.80it/s]Evaluating:  65%|██████▌   | 41/63 [00:52<00:33,  1.50s/it]Evaluating:  67%|██████▋   | 42/63 [00:53<00:23,  1.10s/it]Evaluating:  68%|██████▊   | 43/63 [00:53<00:16,  1.22it/s]Evaluating:  70%|██████▉   | 44/63 [00:57<00:34,  1.82s/it]Evaluating:  71%|███████▏  | 45/63 [00:57<00:23,  1.33s/it]Evaluating:  73%|███████▎  | 46/63 [00:58<00:19,  1.16s/it]Evaluating:  75%|███████▍  | 47/63 [00:58<00:13,  1.16it/s]Evaluating:  76%|███████▌  | 48/63 [00:58<00:09,  1.52it/s]Evaluating:  78%|███████▊  | 49/63 [01:01<00:16,  1.18s/it]Evaluating:  79%|███████▉  | 50/63 [01:01<00:11,  1.15it/s]Evaluating:  81%|████████  | 51/63 [01:01<00:07,  1.50it/s]Evaluating:  83%|████████▎ | 52/63 [01:06<00:21,  1.97s/it]Evaluating:  84%|████████▍ | 53/63 [01:06<00:14,  1.43s/it]Evaluating:  86%|████████▌ | 54/63 [01:06<00:09,  1.05s/it]Evaluating:  87%|████████▋ | 55/63 [01:07<00:06,  1.28it/s]Evaluating:  89%|████████▉ | 56/63 [01:07<00:04,  1.67it/s]Evaluating:  90%|█████████ | 57/63 [01:10<00:07,  1.31s/it]Evaluating:  92%|█████████▏| 58/63 [01:10<00:04,  1.04it/s]Evaluating:  94%|█████████▎| 59/63 [01:10<00:02,  1.39it/s]Evaluating:  95%|█████████▌| 60/63 [01:11<00:02,  1.07it/s]Evaluating:  97%|█████████▋| 61/63 [01:12<00:01,  1.42it/s]Evaluating:  98%|█████████▊| 62/63 [01:12<00:00,  1.86it/s]                                                           06/10/2026 13:03:27 - INFO -   Retrieval Evaluation | #Text: 1000, #Video: 1000
+06/10/2026 13:03:27 - INFO -     T2V | R@1:  46.3  R@5:  73.7  R@10:  83.2  MdR:   2.0  MnR:  13.6
+06/10/2026 13:03:27 - INFO -     V2T | R@1:  46.7  R@5:  73.5  R@10:  82.1  MdR:   2.0  MnR:   9.6
+06/10/2026 13:03:27 - INFO -     Best so far | R@1: 47.7 | ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.2
+06/10/2026 13:03:27 - INFO -   ============================================================
+/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/_utils.py:831: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  return self.fget.__get__(instance, owner)()
+06/10/2026 13:03:28 - INFO -   Model loaded from ckpts/ckpt_msrvtt_20260610_013304/pytorch_model.bin.2
+06/10/2026 13:03:28 - INFO -   loading archive file /data2/hxj/project/UATVR/modules/cross-base
+06/10/2026 13:03:28 - INFO -   Model config {
+  "attention_probs_dropout_prob": 0.1,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.1,
+  "hidden_size": 512,
+  "initializer_range": 0.02,
+  "intermediate_size": 2048,
+  "max_position_embeddings": 128,
+  "num_attention_heads": 8,
+  "num_hidden_layers": 4,
+  "type_vocab_size": 2,
+  "vocab_size": 512
+}
+
+06/10/2026 13:03:28 - INFO -   Weight doesn't exsits. /data2/hxj/project/UATVR/modules/cross-base/cross_pytorch_model.bin
+06/10/2026 13:03:28 - WARNING -   Test retrieval by loose type.
+06/10/2026 13:03:28 - WARNING -   	 embed_dim: 512
+06/10/2026 13:03:28 - WARNING -   	 image_resolution: 224
+06/10/2026 13:03:28 - WARNING -   	 vision_layers: 12
+06/10/2026 13:03:28 - WARNING -   	 vision_width: 768
+06/10/2026 13:03:28 - WARNING -   	 vision_patch_size: 16
+06/10/2026 13:03:28 - WARNING -   	 context_length: 77
+06/10/2026 13:03:28 - WARNING -   	 vocab_size: 49408
+06/10/2026 13:03:28 - WARNING -   	 transformer_width: 512
+06/10/2026 13:03:28 - WARNING -   	 transformer_heads: 8
+06/10/2026 13:03:28 - WARNING -   	 transformer_layers: 12
+06/10/2026 13:03:28 - WARNING -   		 linear_patch: 2d
+06/10/2026 13:03:28 - WARNING -   	 cut_top_layer: 0
+06/10/2026 13:03:29 - WARNING -   	 sim_header: seqTransf
+06/10/2026 13:03:30 - WARNING -   CLIP UATVR Model ......
+06/10/2026 13:03:30 - WARNING -   	 Extra video Class token number: 2
+06/10/2026 13:03:30 - WARNING -   	 Extra text Class token number: 2
+06/10/2026 13:03:30 - WARNING -   	 Number of video sampling probabilistic embeddings: 7
+06/10/2026 13:03:30 - WARNING -   	 Number of text sampling probabilistic embeddings: 7
+06/10/2026 13:03:39 - INFO -   --------------------
+06/10/2026 13:03:39 - INFO -   Weights from pretrained model not used in UATVR: 
+   clip.input_resolution
+   clip.context_length
+   clip.vocab_size
+Evaluating:   0%|          | 0/63 [00:00<?, ?it/s]Evaluating:   2%|▏         | 1/63 [00:07<07:56,  7.68s/it]Evaluating:   3%|▎         | 2/63 [00:08<03:41,  3.64s/it]Evaluating:   5%|▍         | 3/63 [00:10<03:00,  3.01s/it]Evaluating:   6%|▋         | 4/63 [00:10<01:51,  1.89s/it]Evaluating:   8%|▊         | 5/63 [00:11<01:13,  1.27s/it]Evaluating:  10%|▉         | 6/63 [00:11<00:51,  1.12it/s]Evaluating:  11%|█         | 7/63 [00:11<00:36,  1.52it/s]Evaluating:  13%|█▎        | 8/63 [00:11<00:27,  1.99it/s]Evaluating:  14%|█▍        | 9/63 [00:16<01:41,  1.89s/it]Evaluating:  16%|█▌        | 10/63 [00:18<01:34,  1.79s/it]Evaluating:  17%|█▋        | 11/63 [00:18<01:18,  1.51s/it]Evaluating:  19%|█▉        | 12/63 [00:19<01:00,  1.19s/it]Evaluating:  21%|██        | 13/63 [00:19<00:43,  1.14it/s]Evaluating:  22%|██▏       | 14/63 [00:19<00:32,  1.50it/s]Evaluating:  24%|██▍       | 15/63 [00:19<00:24,  1.93it/s]Evaluating:  25%|██▌       | 16/63 [00:20<00:19,  2.40it/s]Evaluating:  27%|██▋       | 17/63 [00:28<02:05,  2.72s/it]Evaluating:  29%|██▊       | 18/63 [00:28<01:28,  1.97s/it]Evaluating:  30%|███       | 19/63 [00:28<01:02,  1.43s/it]Evaluating:  32%|███▏      | 20/63 [00:28<00:45,  1.05s/it]Evaluating:  33%|███▎      | 21/63 [00:29<00:35,  1.17it/s]Evaluating:  35%|███▍      | 22/63 [00:29<00:26,  1.54it/s]Evaluating:  37%|███▋      | 23/63 [00:29<00:20,  1.98it/s]Evaluating:  38%|███▊      | 24/63 [00:29<00:15,  2.47it/s]Evaluating:  40%|███▉      | 25/63 [00:36<01:29,  2.36s/it]Evaluating:  41%|████▏     | 26/63 [00:36<01:02,  1.70s/it]Evaluating:  43%|████▎     | 27/63 [00:36<00:44,  1.24s/it]Evaluating:  44%|████▍     | 28/63 [00:37<00:32,  1.09it/s]Evaluating:  46%|████▌     | 29/63 [00:39<00:45,  1.34s/it]Evaluating:  48%|████▊     | 30/63 [00:39<00:32,  1.01it/s]Evaluating:  49%|████▉     | 31/63 [00:39<00:23,  1.34it/s]Evaluating:  51%|█████     | 32/63 [00:39<00:18,  1.72it/s]Evaluating:  52%|█████▏    | 33/63 [00:45<01:03,  2.12s/it]Evaluating:  54%|█████▍    | 34/63 [00:45<00:44,  1.53s/it]Evaluating:  56%|█████▌    | 35/63 [00:45<00:31,  1.13s/it]Evaluating:  57%|█████▋    | 36/63 [00:46<00:22,  1.19it/s]Evaluating:  59%|█████▊    | 37/63 [00:46<00:16,  1.55it/s]Evaluating:  60%|██████    | 38/63 [00:46<00:12,  1.98it/s]Evaluating:  62%|██████▏   | 39/63 [00:46<00:09,  2.47it/s]Evaluating:  63%|██████▎   | 40/63 [00:46<00:07,  3.00it/s]Evaluating:  65%|██████▌   | 41/63 [00:52<00:44,  2.01s/it]Evaluating:  67%|██████▋   | 42/63 [00:52<00:30,  1.46s/it]Evaluating:  68%|██████▊   | 43/63 [00:53<00:21,  1.07s/it]Evaluating:  70%|██████▉   | 44/63 [00:56<00:33,  1.78s/it]Evaluating:  71%|███████▏  | 45/63 [00:56<00:23,  1.30s/it]Evaluating:  73%|███████▎  | 46/63 [00:56<00:16,  1.04it/s]Evaluating:  75%|███████▍  | 47/63 [00:57<00:11,  1.38it/s]Evaluating:  76%|███████▌  | 48/63 [00:57<00:08,  1.78it/s]Evaluating:  78%|███████▊  | 49/63 [01:00<00:20,  1.45s/it]Evaluating:  79%|███████▉  | 50/63 [01:00<00:13,  1.07s/it]Evaluating:  81%|████████  | 51/63 [01:01<00:09,  1.26it/s]Evaluating:  83%|████████▎ | 52/63 [01:05<00:20,  1.88s/it]Evaluating:  84%|████████▍ | 53/63 [01:05<00:13,  1.37s/it]Evaluating:  86%|████████▌ | 54/63 [01:05<00:09,  1.01s/it]Evaluating:  87%|████████▋ | 55/63 [01:06<00:06,  1.32it/s]Evaluating:  89%|████████▉ | 56/63 [01:06<00:04,  1.73it/s]Evaluating:  90%|█████████ | 57/63 [01:09<00:08,  1.44s/it]Evaluating:  92%|█████████▏| 58/63 [01:09<00:05,  1.06s/it]Evaluating:  94%|█████████▎| 59/63 [01:10<00:03,  1.27it/s]Evaluating:  95%|█████████▌| 60/63 [01:10<00:02,  1.30it/s]Evaluating:  97%|█████████▋| 61/63 [01:10<00:01,  1.71it/s]Evaluating:  98%|█████████▊| 62/63 [01:11<00:00,  2.20it/s]                                                           06/10/2026 13:05:37 - INFO -   Retrieval Evaluation | #Text: 1000, #Video: 1000
+06/10/2026 13:05:37 - INFO -     T2V | R@1:  47.7  R@5:  74.9  R@10:  83.4  MdR:   2.0  MnR:  12.6
+06/10/2026 13:05:37 - INFO -     V2T | R@1:  47.8  R@5:  74.8  R@10:  83.7  MdR:   2.0  MnR:   9.0

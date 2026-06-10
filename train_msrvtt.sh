@@ -12,8 +12,9 @@ ATTR_NUM_BLOCKS=4
 RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
 OUTPUT_DIR=${OUTPUT_DIR:-ckpts/ckpt_msrvtt_${RUN_ID}}
 
-# 显存：batch 256 + accum 1，有效 batch = 256。2 卡时每卡 micro-batch 128。
-# 启动前请确认所选 GPU 无其他大进程（nvidia-smi）；默认避开常被占用的 GPU 4。
+# 显存：batch 256 + accum 1，有效 batch = 256。
+# 2 卡时每卡 micro-batch 128；4 卡时每卡 micro-batch 64。
+# 启动前请确认所选 GPU 无其他大进程（nvidia-smi）。
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1,2}"
 IFS=',' read -ra _GPUS <<< "${CUDA_VISIBLE_DEVICES}"
 NPROC="${NPROC:-${#_GPUS[@]}}"
@@ -22,7 +23,7 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     torchrun --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29548 \
     main_task_retrieval.py \
     --do_train --num_thread_reader=8 --epochs=5 \
-    --batch_size=256 --gradient_accumulation_steps=2 --n_display=20 \
+    --batch_size=256 --gradient_accumulation_steps=1 --n_display=20 \
     --train_csv "${DATA_PATH}/csv/MSRVTT_train.9k.csv" \
     --val_csv "${DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv" \
     --data_path "${DATA_PATH}/annotation/MSRVTT_v2.json" \
@@ -41,12 +42,12 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     --n_text_embeddings 7 \
     --mamba_lr_ratio 0.1 \
     --uncertainty_text_head text \
-    --log_sigma_min -3 \
-    --log_sigma_max 6 \
-    --w_vib 5e-2 \
+    --log_sigma_min -1.5 \
+    --log_sigma_max 4 \
+    --w_evidential 1e-2 \
+    --w_neg_reg 5e-2 \
     --w_orth 0.1 \
     --w_uncertainty_reg 1e-3 \
-    --use_tas_uncertainty \
     --gate_log_interval 100 \
     --log_moe_weights \
     --fusion_mode prob_mos \
@@ -55,7 +56,10 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     \
     --rope_mode 2d \
     --use_ada_norm \
-    --experiment_desc "${EXPERIMENT_DESC:-}" # --enhanced_fusion_input \
+    --anneal_warmup_epochs 0 \
+    --uncertainty_mode "${UNCERTAINTY_MODE:-none}" \
+    --experiment_desc "${EXPERIMENT_DESC:-}" \
+    "$@" # --enhanced_fusion_input \
 # --use_attributes \
 # --msrvtt_attributes_path "${ATTRIBUTES_PATH}" \
 # --max_words_attrs "${MAX_WORDS_ATTRS}" \

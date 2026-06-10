@@ -3,21 +3,22 @@ set -euo pipefail
 
 # Usage examples:
 #   # MSRVTT (caption only)
-#   INIT_MODEL=ckpts/ckpt_msrvtt_20260111_153216/pytorch_model.bin.3 bash eval.sh
+#   INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> bash eval.sh
 #
 #   # MSRVTT (caption+attrs, query_only)
-#   INIT_MODEL=ckpts/ckpt_msrvtt_20260111_153216/pytorch_model.bin.3 \
+#   INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> \
 #   USE_ATTRIBUTES=1 \
-#   ATTR_PATH=/data2/hxj/project/UATVR/deploy_qwen/attributes/msrvtt/final/msrvtt_train9k_attributes.json \
 #   EVAL_BRANCH_MODE=query_only \
 #   bash eval.sh
 #
-#   # MSVD (caption+attrs, default fusion)
+#   # MSVD (caption only)
 #   DATATYPE=msvd \
-#   INIT_MODEL=ckpts/ckpt_msvd_20260112_021453/pytorch_model.bin.1 \
-#   USE_ATTRIBUTES=1 \
-#   ATTR_PATH=/data2/hxj/project/UATVR/deploy_qwen/attributes/msvd/final/msvd_test_attributes.json \
-#   EVAL_BRANCH_MODE=default \
+#   INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> \
+#   bash eval.sh
+#
+#   # NIG-MIL mode
+#   INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> \
+#   UNCERTAINTY_MODE=nig_mil \
 #   bash eval.sh
 
 RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
@@ -25,7 +26,13 @@ DATATYPE=${DATATYPE:-msrvtt}                 # msrvtt | msvd
 EVAL_BRANCH_MODE=${EVAL_BRANCH_MODE:-default} # base_only | query_only | default
 USE_ATTRIBUTES=${USE_ATTRIBUTES:-0}          # 0 | 1
 ATTR_PATH=${ATTR_PATH:-}
-: "${INIT_MODEL:?请设置 INIT_MODEL=<checkpoint_path>，例如 ckpts/ckpt_msrvtt_20260111_153216/pytorch_model.bin.3}"
+: "${INIT_MODEL:?请设置 INIT_MODEL=<checkpoint_path>}"
+
+# 模型结构参数（需与训练配置一致）
+FUSION_MODE=${FUSION_MODE:-prob_mos}          # prob_mos | logits_linear
+ROPE_MODE=${ROPE_MODE:-2d}                    # none | 2d | 3d
+USE_ADA_NORM=${USE_ADA_NORM:-1}              # 0 | 1
+UNCERTAINTY_MODE=${UNCERTAINTY_MODE:-none}    # none | nig_mil
 
 MSRVTT_DATA_PATH=${MSRVTT_DATA_PATH:-/data2/hxj/data/MSRVTT}
 MSVD_DATA_PATH=${MSVD_DATA_PATH:-/data2/hxj/data/MSVD}
@@ -55,6 +62,15 @@ fi
 
 EXTRA_ARGS=()
 EXTRA_ARGS+=(--eval_branch_mode "${EVAL_BRANCH_MODE}")
+EXTRA_ARGS+=(--fusion_mode "${FUSION_MODE}")
+EXTRA_ARGS+=(--rope_mode "${ROPE_MODE}")
+EXTRA_ARGS+=(--uncertainty_mode "${UNCERTAINTY_MODE}")
+if [[ "${USE_ADA_NORM}" == "1" ]]; then
+  EXTRA_ARGS+=(--use_ada_norm)
+fi
+if [[ "${DATATYPE}" == "msrvtt" ]]; then
+  EXTRA_ARGS+=(--expand_msrvtt_sentences)
+fi
 if [[ "${USE_ATTRIBUTES}" == "1" ]]; then
   # Auto-pick MSRVTT JSFUSION test attributes if not explicitly provided.
   if [[ -z "${ATTR_PATH}" && "${DATATYPE}" == "msrvtt" ]]; then
@@ -87,6 +103,7 @@ fi
 # 单卡评测（用 torchrun 注入分布式环境变量）。注意：此脚本不传 --DSL，确保 DSL 关闭。
 echo "[eval.sh] RUN_ID=${RUN_ID}"
 echo "[eval.sh] DATATYPE=${DATATYPE} EVAL_BRANCH_MODE=${EVAL_BRANCH_MODE} USE_ATTRIBUTES=${USE_ATTRIBUTES}"
+echo "[eval.sh] FUSION_MODE=${FUSION_MODE} ROPE_MODE=${ROPE_MODE} USE_ADA_NORM=${USE_ADA_NORM} UNCERTAINTY_MODE=${UNCERTAINTY_MODE}"
 echo "[eval.sh] INIT_MODEL=${INIT_MODEL}"
 echo "[eval.sh] OUTPUT_DIR=${OUTPUT_DIR}"
 if [[ "${USE_ATTRIBUTES}" == "1" ]]; then
@@ -113,13 +130,15 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4}" \
   --extra_video_cls_num 2 \
   --extra_text_cls_num 2 \
   --max_words 32 \
-  --max_frames 12 \
+  --max_frames 8 \
   --feature_framerate 1 \
   --batch_size_val 8 \
   --loose_type \
   --slice_framepos 3 \
+  --n_video_embeddings 7 \
+  --n_text_embeddings 7 \
   --uncertainty_text_head text \
-  --log_sigma_min -3 \
-  --log_sigma_max 6 \
+  --log_sigma_min -1.5 \
+  --log_sigma_max 4 \
   "${EXTRA_ARGS[@]}" \
   2>&1 | tee "${LOG_FILE}"
