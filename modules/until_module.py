@@ -148,19 +148,21 @@ class PreTrainedModel(nn.Module):
         load(model, prefix="")
 
         if prefix is None and (task_config is None or task_config.local_rank == 0):
-            logger.info("-" * 20)
             if len(missing_keys) > 0:
+                # 按模块分组统计，避免逐行罗列上百个参数
+                _mod_cnt = {}
+                for k in missing_keys:
+                    _mod = k.split(".")[0] if "." in k else "(root)"
+                    _mod_cnt[_mod] = _mod_cnt.get(_mod, 0) + 1
+                _mod_summary = ", ".join(f"{m}×{c}" for m, c in sorted(_mod_cnt.items()))
                 logger.info(
-                    "Weights of {} not initialized from pretrained model: {}".format(
-                        model.__class__.__name__, "\n   " + "\n   ".join(missing_keys)
-                    )
+                    "%s: %d 个参数为新增模块，将随机初始化 (%s)",
+                    model.__class__.__name__, len(missing_keys), _mod_summary,
                 )
             if len(unexpected_keys) > 0:
                 logger.info(
-                    "Weights from pretrained model not used in {}: {}".format(
-                        model.__class__.__name__,
-                        "\n   " + "\n   ".join(unexpected_keys),
-                    )
+                    "%s: %d 个 pretrained 参数在当前模型中未使用（通常为 config 元数据），已忽略",
+                    model.__class__.__name__, len(unexpected_keys),
                 )
             if len(error_msgs) > 0:
                 logger.error(

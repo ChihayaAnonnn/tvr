@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 抑制 DDP 多卡重复警告（Grad strides do not match 等）
+export TORCH_WARN_ONCE=1
+
 DATA_PATH=/data2/hxj/data/MSVD
 
 # Auto-run id to avoid overwriting checkpoints/logs across runs

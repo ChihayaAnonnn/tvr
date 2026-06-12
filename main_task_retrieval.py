@@ -445,7 +445,8 @@ def init_device(args, local_rank):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu", local_rank)
 
     n_gpu = torch.cuda.device_count()
-    logger.info("device: {} n_gpu: {}".format(device, n_gpu))
+    if local_rank == 0:
+        logger.info("device: {} n_gpu: {}".format(device, n_gpu))
     args.n_gpu = n_gpu
 
     if args.batch_size % args.n_gpu != 0 or args.batch_size_val % args.n_gpu != 0:
@@ -1376,9 +1377,10 @@ def main():
 
         global_step = 0
 
-        if resumed_epoch > 0:
-            logger.info("Resuming training from epoch %d", resumed_epoch + 1)
-        logger.info("=" * 60)
+        if args.local_rank == 0:
+            if resumed_epoch > 0:
+                logger.info("Resuming training from epoch %d", resumed_epoch + 1)
+            logger.info("=" * 60)
 
         state = True  # everything is correct
 
@@ -1436,10 +1438,11 @@ def main():
                 state = False
                 continue
 
-        ## Uncomment if want to test on the best checkpoint
-        if args.local_rank == 0 and state:
-            model = load_model(-1, args, n_gpu, device, model_file=best_output_model_file)
-            eval_epoch(args, model, test_dataloader, device, n_gpu)
+        ## 训练中每轮评估已记录最佳分数，最终重新加载评估是冗余的。
+        ## 如需在最佳 checkpoint 上做最终测试，取消下面注释：
+        # if args.local_rank == 0 and state:
+        #     model = load_model(-1, args, n_gpu, device, model_file=best_output_model_file)
+        #     eval_epoch(args, model, test_dataloader, device, n_gpu)
 
     elif args.do_eval:
         if args.local_rank == 0:

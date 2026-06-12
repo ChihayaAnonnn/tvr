@@ -21,11 +21,8 @@ class RawFramesExtractorCV2():
         self.image_tmpl ='img_{:05d}.jpg'
         self.image_tmpn ='image_{:06d}.jpg'
 
-        if self.strategy == 1:
-            print('[uniform sampling with 30 fps]')
-        elif self.strategy == 2 : 
-            print('[uniform sampling 30 fps with a random offset]')
-        else: raise NotImplementedError
+        if self.strategy not in (1, 2):
+            raise NotImplementedError
 
 
     def _transform(self, n_px):

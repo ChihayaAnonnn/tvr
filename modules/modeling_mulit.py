@@ -61,8 +61,10 @@ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
             if new_key not in state_dict:
                 state_dict[new_key] = val.clone()
 
+        # 只加载 config，不需加载 weights（cross 模块随机初始化训练）。
+        # 传 state_dict={} 跳过 get_config 中"权重文件不存在"的检查。
         cross_config, _ = CrossConfig.get_config(
-            cross_model_name, cache_dir, type_vocab_size, state_dict=None, task_config=task_config
+            cross_model_name, cache_dir, type_vocab_size, state_dict={}, task_config=task_config
         )
 
         model = cls(cross_config, clip_state_dict, *inputs, **kwargs)  # -----------
@@ -590,7 +592,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         epistemic_video = sap_out["epistemic_cont"]  # [B, K, D] 连续认知不确定性
         u_mode = sap_out["u_mode"]             # [B] 离散模态不确定性
         alpha_dir = sap_out["alpha_dir"]       # [B, K] Dirichlet 证据量
-        gamma = sap_out["gamma"]               # [B, K, D] NIG 均值
         modal_probs = sap_out["modal_probs"]   # [B, K] 模态概率
 
         if self.log_sigma_min is not None and self.log_sigma_max is not None:
@@ -603,7 +604,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
             epistemic_video = allgather(epistemic_video.contiguous(), self.task_config)
             u_mode = allgather(u_mode.contiguous(), self.task_config)
             alpha_dir = allgather(alpha_dir.contiguous(), self.task_config)
-            gamma = allgather(gamma.contiguous(), self.task_config)
             visual_output = allgather(visual_output.contiguous(), self.task_config)
             video_mask = allgather(video_mask.contiguous(), self.task_config)
             sequence_output = allgather(sequence_output.contiguous(), self.task_config)

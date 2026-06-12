@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 抑制 DDP 多卡重复警告（Grad strides do not match 等）
+export TORCH_WARN_ONCE=1
+
 DATA_PATH=/data2/hxj/data/MSRVTT
 # Use a merged attributes map (train9k + jsfusion test1k) to ensure eval split coverage.
 # The MSRVTT dataloader supports comma-separated paths and will merge them at runtime.
