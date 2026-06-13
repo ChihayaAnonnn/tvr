@@ -1,11 +1,11 @@
-"""Semantic Anchor Probing (SAP) module — 标量化不确定性版本（方案 C）。
+"""Semantic Anchor Probing (SAP) module — 非学习不确定性版本（方向1）。
 
 以时空 token（T 帧 × S patches）为 memory，K 个可学习锚点通过
 cross-attention 聚焦到特定帧的特定 patch 区域，保留时空局部性。
 
-双层不确定性建模：
-  - 离散层：Dirichlet 证据量 α_dir → 模态概率 p_k = α_k / S
-  - 连续层：每 anchor 标量 log-variance → 认知不确定性
+不确定性从 anchor 表征的统计量直接计算，无需学习：
+  - 锚点多样性：anchor 间 cosine 差异度 → 视频内容复杂度
+  - 模态熵：Dirichlet 概率分布的熵 → 模态模糊度
 
 聚合方式：用模态概率 p_k 对 anchor 表征加权求和。
 
@@ -16,7 +16,7 @@ cross-attention 聚焦到特定帧的特定 patch 区域，保留时空局部性
   - alpha_dir         [B, K]      Dirichlet 证据量
   - modal_probs       [B, K]      模态概率 p_k = α_k / S
   - u_mode            [B]         离散模态不确定性 U = K / S
-  - epistemic_cont    [B, K, 1]   标量不确定性 (per-anchor variance)
+  - epistemic_cont    [B, 1, 1]   非学习不确定性 (anchor 多样性 × 模态熵)
 """
 
 import torch
@@ -25,11 +25,11 @@ import torch.nn.functional as F
 
 
 class EvidentialUncertaintyHead(nn.Module):
-    """不确定性头：Dirichlet 模态概率 + 标量 per-anchor 不确定性（方案 C）。
+    """Dirichlet 模态概率头。
 
-    输入 anchor 特征 [B, K, D]，输出：
-      - 离散层：Dirichlet 证据量 alpha_dir [B, K]
-      - 连续层：每 anchor 标量 log-variance [B, K]
+    输入 anchor 特征 [B, K, D]，输出 Dirichlet 证据量。
+    不确定性（epistemic_cont / logsigma）改由 SAP.forward() 中
+    从 anchor 统计量直接计算（方向1：非学习不确定性）。
     """
 
     def __init__(self, d_model=512, n_anchors=16):
@@ -40,36 +40,28 @@ class EvidentialUncertaintyHead(nn.Module):
         # 离散狄利克雷层：预测 K 个语义模态的证据量
         self.dirichlet_layer = nn.Linear(d_model, 1)
 
-        # 标量不确定性：每 anchor 一个 log-variance（参数量从 24K → 512）
-        self.uncertainty_fc = nn.Linear(d_model, 1)
-
     def forward(self, anchor_features):
         """
         Args:
-            anchor_features: [B, K, D] decoder 输出的锚点表征
+            anchor_features: [B, K, D] 投影后的锚点表征
         Returns:
-            dict: alpha_dir [B,K], u_mode [B], log_var_per_anchor [B,K]
+            dict: alpha_dir [B,K], u_mode [B]
         """
         B, K, D = anchor_features.shape
 
-        # ---- 离散狄利克雷层 ----
         dir_logits = self.dirichlet_layer(anchor_features).squeeze(-1)  # [B, K]
         alpha_dir = F.softplus(dir_logits) + 1.0  # [B, K]
         S = torch.sum(alpha_dir, dim=-1, keepdim=True)
         u_mode = (K / S).squeeze(-1)  # [B]
 
-        # ---- 标量不确定性 ----
-        log_var_per_anchor = self.uncertainty_fc(anchor_features).squeeze(-1)  # [B, K]
-
         return {
-            "alpha_dir": alpha_dir,                     # [B, K]
-            "u_mode": u_mode,                           # [B]
-            "log_var_per_anchor": log_var_per_anchor,   # [B, K]
+            "alpha_dir": alpha_dir,  # [B, K]
+            "u_mode": u_mode,        # [B]
         }
 
 
 class SemanticAnchorProbing(nn.Module):
-    """SAP — 标量化不确定性版本：Dirichlet 模态概率 + 标量 uncertainty。"""
+    """SAP — 非学习不确定性版本：Dirichlet 模态概率 + anchor 统计量不确定性。"""
 
     def __init__(self, d_model=512, num_anchors=16, nhead=8, num_layers=2,
                  log_sigma_min=None, log_sigma_max=None):
@@ -92,7 +84,7 @@ class SemanticAnchorProbing(nn.Module):
         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
         self.norm = nn.LayerNorm(d_model)
 
-        # 不确定性头：Dirichlet + 标量 per-anchor variance
+        # Dirichlet 模态概率头（不确定性改由 anchor 统计量计算）
         self.evidential_head = EvidentialUncertaintyHead(d_model, num_anchors)
 
         # 锚点投影层：替代原 NIG gamma 的 Linear 变换，给每个锚点聚合前的表征自由度
@@ -108,6 +100,7 @@ class SemanticAnchorProbing(nn.Module):
                   u_mode, epistemic_cont
         """
         B = video_features.shape[0]
+        K = self.num_anchors
         anchors = self.anchor_tokens.unsqueeze(0).expand(B, -1, -1)
 
         anchors = self.decoder(
@@ -116,31 +109,40 @@ class SemanticAnchorProbing(nn.Module):
         )
         anchors = self.norm(anchors)  # [B, K, D]
 
-        # ---- 锚点投影（替代原 NIG gamma 变换，给聚合前表征自由度）----
+        # ---- 锚点投影（给聚合前表征自由度）----
         projected = self.anchor_proj(anchors)            # [B, K, D]
 
-        # ---- 不确定性（detach 阻断梯度反传至 decoder）----
+        # ---- Dirichlet 模态概率（detach 阻断梯度反传至 decoder）----
         ev = self.evidential_head(projected.detach())
 
         alpha_dir = ev["alpha_dir"]                      # [B, K]
         modal_probs = alpha_dir / (alpha_dir.sum(dim=1, keepdim=True) + 1e-9)  # [B, K]
 
-        # 标量 log-variance：clamp 后转为方差
-        log_var = ev["log_var_per_anchor"]               # [B, K]
-        if self.log_sigma_min is not None and self.log_sigma_max is not None:
-            log_var = torch.clamp(log_var, min=self.log_sigma_min, max=self.log_sigma_max)
+        # ---- 非学习不确定性：从 anchor 统计量直接计算 ----
+        # 锚点多样性：anchor 间 cosine 差异度 → 视频内容复杂度
+        anchors_norm = F.normalize(anchors, dim=-1)               # [B, K, D]
+        anchor_sim = torch.bmm(anchors_norm, anchors_norm.transpose(1, 2))  # [B, K, K]
+        off_mask = ~torch.eye(K, dtype=torch.bool, device=anchors.device)
+        diversity = (1.0 - anchor_sim[:, off_mask].view(B, K, K - 1).mean(dim=-1)).mean(dim=-1)  # [B]
+
+        # 模态熵：Dirichlet 分布的离散程度
+        modal_entropy = -(modal_probs * torch.log(modal_probs + 1e-8)).sum(dim=-1)  # [B]
+        modal_entropy_norm = modal_entropy / torch.tensor(K, dtype=modal_entropy.dtype).log()  # [B] ∈ [0, 1]
+
+        # 复合不确定性
+        uncertainty = diversity * modal_entropy_norm  # [B]
+        epistemic_cont = uncertainty.unsqueeze(-1).unsqueeze(-1)  # [B, 1, 1]
 
         # ---- 模态概率加权聚合 ----
         mu_raw = (modal_probs.unsqueeze(-1) * projected).sum(dim=1)  # [B, D]
         mu_raw = mu_raw / (mu_raw.norm(dim=-1, keepdim=True) + 1e-9)
 
-        # mixture 方差：Σ p_k·σ_k² → 标量，广播到 D 维（兼容下游 MIL 采样）
-        anchor_var = torch.exp(log_var)                  # [B, K]
-        agg_var = (modal_probs * anchor_var).sum(dim=1, keepdim=True)  # [B, 1]
-        logsigma = torch.log(agg_var + 1e-8).expand(-1, self.d_model)  # [B, D]
-
-        # 标量不确定性 → [B, K, 1]（兼容下游 mean(dim=(1,2))）
-        epistemic_cont = anchor_var.unsqueeze(-1)        # [B, K, 1]
+        # logsigma：从 anchor 间方差计算（高 diversity → 高方差 → 高 logsigma）
+        anchor_dim_var = torch.var(anchors, dim=1).mean(dim=-1, keepdim=True)  # [B, 1]
+        logsigma = torch.log(anchor_dim_var + 1e-8)  # [B, 1]
+        if self.log_sigma_min is not None and self.log_sigma_max is not None:
+            logsigma = torch.clamp(logsigma, min=self.log_sigma_min, max=self.log_sigma_max)
+        logsigma = logsigma.expand(-1, self.d_model)  # [B, D]
 
         return {
             "anchors": anchors,           # [B, K, D] decoder 输出（供 orth_loss）
@@ -149,6 +151,6 @@ class SemanticAnchorProbing(nn.Module):
             "alpha_dir": alpha_dir,       # [B, K]    Dirichlet 证据量
             "modal_probs": modal_probs,   # [B, K]    模态概率 p_k
             "u_mode": ev["u_mode"],       # [B]       离散模态不确定性
-            "epistemic_cont": epistemic_cont,  # [B, K, 1] 标量不确定性
-            "per_anchor_var": anchor_var, # [B, K]    每 anchor 方差
+            "epistemic_cont": epistemic_cont,  # [B, 1, 1] 非学习不确定性
+            "per_anchor_var": torch.var(anchors, dim=-1),  # [B, K] 每 anchor 维度方差（诊断用）
         }
