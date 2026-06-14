@@ -1,303 +1,304 @@
 # UATVR 项目现状
 
-> 更新时间：2026-06-08
+> 更新时间：2026-06-14（此次会话完整重构）
 
 ## 一、项目概述
 
-UATVR（Uncertainty-Aware Text-Video Retrieval）基于 CLIP ViT-B/16，核心模块为 SAP（Semantic Anchor Probing）：K 个可学习 anchor 通过 TransformerDecoder 探测视频时空特征，输出门控聚合表征 + 双层不确定性估计。
+UATVR (Uncertainty-Aware Text-Video Retrieval) 基于 CLIP ViT-B/16。
+核心模块：SAP（Semantic Anchor Probing）— 16 个可学习 anchor token 通过 2 层
+TransformerDecoder 探测视频时空特征，输出概率化视频表征。
 
-- 数据集：MSRVTT（train 9k + test 1k）
-- 评估指标：T2V R@1 / V2T R@1
+- **数据集**：MSRVTT（train 9k + test 1k），MSVD（备用）
+- **主指标**：T2V R@1 / V2T R@1（取 T2V R@1 为优化目标）
+- **Git 分支**：`master`（当前所在）
+- **活跃模型**：`modules/modeling_mulit.py`（命名 typo "mulit" 是历史债务）
 
-## 二、当前最优结果
+> 2026-06-08 到 2026-06-14 期间，执行了从方案 F 到方向 1 的完整迭代。
+> 下文使用**当前状态**，不重复历史中间态。
 
-| 实验 | uncertainty_mode | w_evidential | w_neg_reg | Best T2V R@1 | Best Epoch |
-|------|-----------------|-------------|-----------|-------------|-----------|
-| **baseline_pure_sim** | none | **0** | **0** | **49.4** | 4 |
-| NIG-MIL | nig_mil | 0（跳过） | 0（跳过） | 49.0 | 4 |
-| baseline_no_evid | none | 0.01 | 0.05 | 48.1 | 3-4 |
+---
 
-最优 checkpoint：`ckpts/ckpt_msrvtt_20260607_102327/pytorch_model.bin.3`
+## 二、当前最优结果与关键实验
 
-## 三、不确定性机制分析结论
+| 实验 | commit | 关键改动 | Best T2V R@1 |
+|------|--------|---------|-------------|
+| Baseline pure sim | `169ba95` | uncertainty_mode=none, w_evid=0, w_neg=0 | **49.4** @ Epoch 4 |
+| Exp 1 (Plan A+B1, NIG) | ~ | unsqueeze(1), detach, NIG uncertainty | **50.0** @ Epoch 4 |
+| Dir1_colwise_warmup500 | `23c3065` | Dir1 + unsqueeze(0) + warmup=500 | **49.3** @ Epoch 3 |
+| Dir1_zscore_warmup500 | `6ec88b9` | Dir1 + unsqueeze(0) + batch z-score → sigmoid | ~46.5（实验中断，已废弃） |
 
-### 3.1 结论：不确定性机制零贡献
+**Exp 1 的 50.0 是历史最高，但其置信度加权对 T2V 实际贡献为零**（见第四节分析）。
+当前实际可复现的最优为 baseline 49.4。
 
-三组对照实验证明，SAP 的 EvidentialUncertaintyHead（NIG + Dirichlet）对检索精度无正向贡献。49.4 R@1 完全来自 sim_loss（WTI 对比学习），不确定性分支在训练中退化为常量。
+最优 checkpoint：`ckpts/ckpt_msrvtt_20260607_102327/pytorch_model.bin.3`（baseline）
 
-### 3.2 根因：结构性失效（非超参问题）
+---
 
-**根因 1：MIL loss 天然惩罚方差**
+## 三、当前架构（Direction 1 — 非学习不确定性）
 
-MILNCELoss_BoF 是对比学习 loss。方差越大 → 采样越分散 → 正负样本混淆越严重 → loss 越高。梯度方向永远是减小方差，没有任何对冲力量。`logsig_v` 在 200 步内撞到下界 -1.5，之后 93% 训练全程钉死。
-
-**根因 2：sim_loss 完全绕过不确定性路径**
+### 3.1 数据流
 
 ```
-sim_loss: text_token + visual_output → WTI → CrossEn
-                                    ↑
-                          不经过 SAP evidential_head
+视频帧 → CLIP ViT-B/16 → frame tokens [B, T×S, 512]
+                                │
+            ┌───────────────────┘
+            ▼
+   SAP.decoder (TransformerDecoder)
+      anchor_tokens [B, 16] × frame tokens
+            │
+            ▼
+      anchors [B, 16, 512]  ←─── LayerNorm 后
+            │
+   ┌───────┼───────────────────────┐
+   │       │                       │
+   │   anchor_proj (Linear)    [B1] detached
+   │       │                       │
+   │   projected [B, 16, 512]      ▼
+   │       │              EvidentialUncertaintyHead
+   │   modal_probs              (仅 Dirichlet layer)
+   │   加权聚合                      │
+   │       │                  alpha_dir, u_mode
+   │   mu_raw [B, 512]              │
+   │   (L2 归一化)             modal_probs
+   │                              （detached，用于熵计算）
+   │                                  │
+   │   非学习不确定性 ◄────────────────┘
+   │   - anchor 多样性 (1−cos_sim均值)
+   │   - 模态熵 (Dirichlet熵/K的log)
+   │   - e_c = diversity × entropy_norm
+   │     epistemic_cont [B, 1, 1]
+   │
+   │   logsigma: anchor 维度方差取 log
+   │
+   ▼
+mu_raw [B, 512] + logsigma [B, 512] + epistemic_cont [B, 1, 1]
+   │
+   ▼
+modeling_mulit.py: WTI 相似度 + confidence 加权
 ```
 
-主检索 loss 的梯度只更新 CLIP encoder + WTI 层，不确定性参数（NIG layer）零梯度。唯一训练信号 MIL_loss 在 Epoch 1 后饱和在 0.16（退化为 vanilla InfoNCE）。
+### 3.2 关键代码位置
 
-**根因 3：anchors 被迫同时服务两个冲突目标**
-
-SAP 的 decoder 输出 `anchors` 同时被两个 head 消费：
-- `dirichlet_layer`：驱动语义聚合（modal_probs）
-- `nig_layer`：驱动不确定性估计（v, alpha, beta）
-
-两个梯度流共享 decoder 作为瓶颈，互相干扰。evidential_loss（~5.9）的梯度量级远大于 sim_loss（~0.2-0.8），严重干扰语义表征学习。
-
-### 3.3 关键数据
-
-| 指标 | baseline_no_evid | NIG-MIL / baseline_pure_sim |
-|------|------------------|---------------------------|
-| logsig_v 坍缩 | step 20 撞 -1.5 | step 200 撞 -1.5 |
-| MIL_loss 饱和 | 0.16（Epoch 1 后） | 0.16（Epoch 1 后） |
-| evidential_loss | 5.9（有害梯度） | 0（跳过或 w=0） |
-| neg_reg_loss | 0.18 | 0 |
-| uncertainty_reg_loss | 1.0（detached，无梯度） | 同左 |
-| sim_loss 驱动 R@1 提升 | ✅ 唯一有效项 | ✅ 唯一有效项 |
-
-## 四、当前活跃 Loss 项
-
-| Loss | 权重 | 状态 | 说明 |
+| 组件 | 文件 | 行号 | 说明 |
 |------|------|------|------|
-| sim_loss (WTI CrossEn) | 1.0 | ✅ 唯一驱动 | 主检索 loss，不经过不确定性路径 |
-| MIL_loss | 0.01 | ⚠️ 饱和 | Epoch 1 后退化为 vanilla InfoNCE |
-| orth_loss | 0.1 | ✅ 有效 | Epoch 1 自行消解，锚点正交性 |
-| uncertainty_reg | 0.001 | ❌ 无梯度 | detached 输入，纯监控 |
-| evidential_loss | 0（已关闭） | ❌ 有害 | 干扰语义表征学习 |
-| neg_reg_loss | 0（已关闭） | ❌ 有害 | 同上 |
+| EvidentialUncertaintyHead | `query_models/module_sap.py` | 27–60 | 仅含 Dirichlet layer，输出 alpha_dir + u_mode |
+| SAP.__init__ | 同上 | 63–91 | anchor_tokens + decoder + evidential_head + anchor_proj |
+| SAP.forward | 同上 | 93–156 | decoder → anchor_proj → detach → head + 非学习不确定性 |
+| B1 梯度隔离 | 同上 | 116 | `ev = self.evidential_head(projected.detach())` |
+| 非学习不确定性 | 同上 | 121–134 | diversity × modal_entropy_norm |
+| logsigma 计算 | 同上 | 141–145 | `torch.var(anchors, dim=1).mean(dim=-1)` → log |
+| 置信度加权 | `modules/modeling_mulit.py` | 665–675 | `1/(1+x)` + warmup + `unsqueeze(0)` |
+| T2V 列方向折扣 | 同上 | 675 | `weighted_logits = wti_logits * confidence.unsqueeze(0)` |
+| V2T 路径 | 同上 | — | `confidence.unsqueeze(1)` 行方向缩放（转置交叉熵中抵消） |
+| diag 链 | 同上 | 677–734 | pos/neg/gap + epistemic + confidence + warmup_alpha |
+| MIL loss + 采样 | 同上 | — | 使用 logsigma 做高斯采样 |
+| orth_loss | 同上 | — | 锚点正交性正则 |
 
-## 五、当前超参（最优配置）
+### 3.3 已删除/废弃的组件
 
-| 参数 | 值 | 说明 |
-|------|-----|------|
-| `w_evidential` | 0 | 已关闭 |
-| `w_neg_reg` | 0 | 已关闭 |
-| `w_mil` | 0.01 | 保留但实际不贡献 |
-| `w_orth` | 0.1 | 有效 |
-| `w_uncertainty_reg` | 0.001 | 无梯度，可考虑移除 |
-| `log_sigma_min` | -1.5 | logsig_v 下界 |
-| `anneal_warmup_epochs` | 0 | 退火无效（evidential 已关闭） |
-| `uncertainty_mode` | none | 使用默认模式 |
-| `epochs` | 5 | Epoch 5 过拟合，最佳 Epoch 4 |
-
-## 六、待执行方向
-
-### 6.1 清理（低成本）
-
-- [ ] 移除 NIG-MIL 相关死代码（`uncertainty_mode=nig_mil` 分支、`EvidentialUncertaintyHead`）
-- [ ] 移除或标记 `uncertainty_reg_loss`（detached，无梯度）
-- [ ] 训练减到 4 epochs（避免 Epoch 5 过拟合）
-- [ ] 清理 argparse 中 `--w_evidential`、`--w_neg_reg` 参数（或保留但默认 0）
-
-### 6.2 架构改进（中成本）
-
-- [ ] 考虑移除 SAP 的 evidential_head，用简单 sigmoid 门控替代（降低参数量，消除冲突）
-- [ ] 保留 SAP 的 decoder + anchor_tokens（已证明有效的语义聚合结构）
-- [ ] 保留 Dirichlet modal_probs 聚合（如果它对 mu_raw 质量有贡献）
-
-### 6.3 新方向（见 plan.md）
-
-- [ ] E：不确定性课程学习 — 当前 evidential 已关闭，此方向需重新定义
-- [ ] F：Top-K 锚点过滤 — 仍然有效，可在简化后的 SAP 上实验
-- [ ] A：多粒度视频特征 — 与不确定性机制正交，可独立推进
-
-## 七、关键文件
-
-| 文件 | 说明 |
-|------|------|
-| `modules/modeling_mulit.py` | 主模型，~1018 行 |
-| `query_models/module_sap.py` | SAP + EvidentialUncertaintyHead |
-| `prob_models/tensor_utils.py` | `sample_gaussian_tensors` |
-| `prob_models/uncertainty_module.py` | 文本侧不确定性头（仍活跃） |
-| `main_task_retrieval.py` | 训练/评估入口 |
-| `train_msrvtt.sh` | MSRVTT 训练脚本 |
-| `hyperparam_search.py` | 超参搜索脚本 |
-
-## 八、已知问题
-
-1. **不确定性机制结构性失效**：见第三节分析，非超参问题
-2. **Epoch 5 过拟合**：所有实验在 Epoch 4 达峰，R@1 下降 0.8
-3. **MIL_loss 饱和**：退化为 vanilla InfoNCE，无额外贡献
-4. **modeling_mulit.py 文件名拼写错误**：历史债务，非 bug
-
-## 九、不确定性层优化方案
-
-> 基于 2026-06-08 完整代码审查，见 `query_models/module_sap.py`、`modules/modeling_mulit.py`、`prob_models/uncertainty_module.py`、`modules/until_module.py`。
-
-### 9.1 当前数据流（诊断用）
-
-```
-                    ┌─→ dirichlet_layer → alpha_dir → modal_probs ───┐
-anchors [B,16,512] ─┤                                                ├─→ mu_raw [B,512] (检索用)
-                    └─→ nig_layer → γ,ν,α,β → epistemic_cont         │
-                                         → per_anchor_logsigma ──────┘
-
-主检索路径: text_token + frame_token → WTI → CrossEntropy (sim_loss)
-           ↑ 完全不经过 SAP 不确定性输出
-
-不确定性梯度来源（仅 3 条）:
-  ① MIL_loss → logsigma_video → per_anchor_var/modal_probs → nig_layer/dirichlet_layer
-  ② evidential_loss → epistemic_cont/alpha_dir → 同上
-  ③ orth_loss → anchors → decoder → anchor_tokens
-
-  ❌ uncertainty_reg_loss: wti_logits.detach() → 零梯度
-```
-
-### 9.2 补充设计问题
-
-| # | 问题 | 位置 | 影响 |
-|---|------|------|------|
-| 1 | NIG 过参数化：每 anchor 每维度独立 ν,α,β，共 24,576 个不确定性参数 | `module_sap.py:66` | 训练困难，梯度噪声大 |
-| 2 | `_evidential_similarity` 不对称：仅视频侧有置信度折扣，文本侧无 | `modeling_mulit.py:730-746` | 相似度矩阵不对称 |
-| 3 | `epistemic_cont [B,16,512]` → `.mean(dim=(1,2))` 坍缩为标量，丢弃全部结构化信息 | `modeling_mulit.py:743` | 无法区分锚点/维度的不确定性 |
-| 4 | 两个 `EvidentialUncertaintyHead` 重复定义 | `module_sap.py:28` vs `uncertainty_module.py:228` | 死代码混淆 |
-| 5 | 文本侧不确定性独立运作，与视频侧无交叉约束 | `modeling_mulit.py:848-873` | 两侧分布无对齐 |
-
-### 9.3 方案 A：不确定性直接参与检索评分 🔴 高优先
-
-**动机**：当前不确定性输出不进入主检索路径，梯度完全断裂。
-
-**改动**（`modeling_mulit.py:_loose_similarity`）：
-
-```python
-# 当前：纯 WTI logits 作为检索分数
-retrieve_logits = wti_logits  # [B, B]
-
-# 改为：不确定性置信度加权
-confidence = 1.0 / (1.0 + epistemic_video.mean(dim=(1, 2)))  # [B]
-retrieve_logits = wti_logits * confidence.unsqueeze(1)         # [B, B]
-```
-
-**优点**：
-- 不确定性首次获得与检索目标的直接梯度连接
-- 改动极小（~3 行），不引入新模块
-- 高不确定性样本自动降权，天然实现困难样本软过滤
-- 使用 `1/(1+x)` 而非 `exp(-x)`，梯度更稳定（`exp(-x)` 在 x 大时梯度消失）
-
-**风险与缓解**：
-- 初期不确定性未校准可能拖累检索 → 加 linear warmup（前 500 step 纯 WTI，之后线性混入）
-- 需要监控 confidence 值的分布，防止全部坍缩到 0 或 1
+- **NIG 层**（γ/ν/α/β）：方案 C 标量化后完全移除
+- **EvidentialUncertaintyHead（重复副本）**：`prob_models/uncertainty_module.py:228-269` 已删除（方案 F2）
+- **uncertainty_reg_loss**：detached，无梯度，已删除（方案 F1）
+- **nig_mil 分支**：已删除（方案 F3）
+- **视频侧 PIENet**：更早前已移除
+- **工作二/QueryFormer/Qwen3-VL**：未接入，文档中已移除描述
 
 ---
 
-### 9.4 方案 B：解耦不确定性与语义路径 🔴 高优先
+## 四、核心发现：置信度加权对 R@1 不贡献
 
-**动机**：STATUS.md 根因 3 — decoder 输出的 anchors 同时服务语义聚合和不确定性估计，两路梯度冲突（evidential 梯度 ~5.9 vs sim_loss ~0.2-0.8）。
+### 4.1 为什么 Exp 1 达到 50.0
 
-**方案 B1（最小改动）**：stop_gradient 隔离。
+Exp 1 (50.0) 的收益来自 **B1 梯度隔离（anchors.detach()）**，而非置信度加权。
 
-```python
-# module_sap.py:140 — 在 EvidentialUncertaintyHead 前插入
-uncertainty_input = anchors.detach()  # 阻断语义梯度
-ev = self.evidential_head(uncertainty_input)
-```
-
-**方案 B2（彻底）**：独立不确定性编码器，不共享 decoder。
+Exp 1 使用 `unsqueeze(1)` 行方向缩放：
 
 ```python
-self.uncertainty_probe = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
-# 从 frame features 直接估计不确定性，绕过 anchor decoder
+weighted_logits = wti_logits * confidence.unsqueeze(1)  # [B, 1] × [B, B] → 行缩放
 ```
 
-**优点**：消除双头梯度冲突。方案 B1 仅 1 行改动。
+T2V cross_entropy 对每行做 softmax：
 
-**代价**：方案 B2 需新增模块，增加 ~1M 参数。
+```
+softmax_i = exp(w_i × c) / Σ_j exp(w_j × c)   =   exp(w_i) / Σ_j exp(w_j)
+// c 因子在分子分母同时出现 → 约掉 → 无 T2V 效果
+```
 
-**建议**：先用 B1 验证效果，若不确定性开始产生正向贡献再考虑 B2。
+**结论**：50.0 的 T2V R@1 收益来自 B1 梯度隔离改善了表征质量（ret_gap 从 ~15 → ~18），
+置信度加权对 T2V R@1 贡献为零。
+
+### 4.2 当加权真正生效时发生了什么
+
+改用 `unsqueeze(0)` 后加权终于进入了 T2V softmax：
+
+| 实验 | 加权方向 | T2V 实际生效? | Best T2V R@1 |
+|------|---------|-------------|-------------|
+| Exp 1 | unsqueeze(1) | ❌ 行方向抵消 | 50.0 |
+| Dir1_colwise | unsqueeze(0) | ✅ 列方向 | 49.3 |
+| Dir1_zscore | unsqueeze(0) | ✅ 列方向 | ~46.5 |
+
+真正生效后，最佳仅 49.3（低于 baseline 49.4）。
+Z-score 放大区分度后进一步恶化到 46.5。
+
+### 4.3 根本原因
+
+per-video 置信度缩放是对称的——一个视频作为正确答案和作为干扰项时
+被同等地缩放。给定视频 V：
+
+- 当 V 是正确答案（对角线）：confidence[V] 缩放了正确分数
+- 当 V 是干扰项（非对角线）：confidence[V] 缩放了干扰分数
+
+**正负影响对称抵消。** 除非不确定性有 **query-dependent** 信号
+（"视频 V 对当前查询有多不确定"），否则均匀的 per-video 缩放只能在
+batch 内重新分配分数水位，不能系统性地让正确答案浮上来。
 
 ---
 
-### 9.5 方案 C：标量化不确定性 🔶 中优先
+## 五、什么确实有效：B1 梯度隔离
 
-**动机**：当前 NIG 为每个 anchor 的每个维度估计独立的 ν, α, β（3×16×512=24,576 参数），过参数化导致训练困难。实际有用的信号只有一个标量：这个 anchor 有多可靠。
-
-**改动**（`module_sap.py:EvidentialUncertaintyHead`）：
-
-```python
-# 替换 nig_layer: Linear(512, 2048) → Linear(512, 1)
-self.uncertainty_fc = nn.Linear(d_model, 1)  # 每 anchor 一个标量 log-variance
-
-# 前向
-logsigma_per_anchor = self.uncertainty_fc(anchor_features).squeeze(-1)  # [B, K]
-# 低不确定 → 高聚合权重
-uncertainty_weight = F.softmax(-logsigma_per_anchor, dim=-1)  # [B, K]
-mu_raw = (uncertainty_weight.unsqueeze(-1) * anchors).sum(dim=1)  # [B, D]
-# 聚合不确定性
-logsigma = torch.logsumexp(logsigma_per_anchor - math.log(K), dim=-1)  # [B]
+```
++0.6 R@1（49.4 → 50.0）
 ```
 
-**优点**：
-- 参数量从 24K → 512（减少 98%）
-- 标量不确定性更易训练和校准
-- 保持 dirichlet_layer 用于模态概率（语义聚合），仅简化 NIG 连续层
-- 不确定性降权的聚合方式比模态概率加权更直观
+`projected.detach()` 阻止了 evidential_head 的梯度回传至 decoder
+和 anchor_tokens。原来两路梯度（语义聚合 vs 不确定性估计）在 decoder
+瓶颈处冲突：语义聚合需要 anchor 专注于模态建模，不确定性估计需要
+anchor 捕捉噪声/变化。
+
+分离后 decoder 只接收语义聚合的梯度，表征质量显著提升。
+
+**这是唯一被严格验证的正向收益。**
 
 ---
 
-### 9.6 方案 D：不确定性驱动的难负样本挖掘 🔶 中优先
+## 六、非学习不确定性（Direction 1）状态
 
-**动机**：不确定性可用于识别难样本（高不确定性 = 模型不确定 = 可能在决策边界附近），对这些样本加权可提升对比学习的判别力。
+### 6.1 设计
 
-**改动**（`modeling_mulit.py:forward`）：
-
-```python
-# 高不确定性 → 难样本 → 在 contrastive loss 中提权
-difficulty_weight = 1.0 + epistemic_video.mean(dim=(1, 2))  # [B]
-# 对 sim_loss 每样本加权
-sim_loss_per_sample = ...  # 提取 per-sample loss
-sim_loss = (sim_loss_per_sample * difficulty_weight).mean()
+```
+epistemic_video = diversity × modal_entropy_norm
+  diversity      = 1 − mean(cos_sim(anchor_i, anchor_j))  // [B]
+  entropy_norm   = H(modal_probs) / log(K)                // [B] ∈ [0,1]
 ```
 
-**优点**：不确定性服务于主 loss（sim_loss），梯度路径直接。
+0 个可学习参数，直接从 anchor 统计量计算。
 
-**注意**：CrossEn 不直接支持 per-sample 权重，需修改 `loss_fct` 或手动展开计算。
+### 6.2 行为
+
+- **epistemic_v_mean**：从 ~0.6 (Epoch 1) 稳定增长到 ~0.9 (Epoch 3+)
+- **u_mode_std**：仅 0.001-0.004 —— batch 内 anchor 几乎无差异化
+- **ret_gap**：27.5（历史最高，表征质量强）
+- **不坍缩**：与 NIG/标量不确定性不同，非学习不确定性不收敛到常量
+
+### 6.3 问题
+
+batch 内 per-video 的 epistemic 方差极低（u_mode_std ~0.002），
+意味着所有视频的不确定性几乎相同，`1/(1+x)` 映射后 confidence
+差异仅 ~6%，softmax 几乎无感。
+
+Diversity 计算（anchor 间 cosine 相似度的均值）在 batch 内区分度很低，
+因为同一个模型的所有视频使用同一组 anchor_tokens。
 
 ---
 
-### 9.7 方案 E：MIL 方差正则化反转 🔷 低优先
+## 七、当前 Loss 结构
 
-**动机**：MIL_loss 天然惩罚方差，logsig_v 在 200 步内撞击 -1.5 下界。需要一个对冲力维持最小方差。
+| Loss | 权重 | 状态 |
+|------|------|------|
+| sim_loss（WTI CrossEn） | 1.0 | ✅ 唯一驱动 R@1 的 loss |
+| MIL_loss | 0.01 | ⚠️ 饱和，退化为 vanilla InfoNCE |
+| orth_loss | 0.1 | ✅ Epoch 1 自行消解 |
+| evidential_loss | 0 | ❌ 已关闭（w_evid=0），干扰语义学习 |
+| neg_reg_loss | 0 | ❌ 已关闭（w_neg=0） |
 
-**改动**（`modeling_mulit.py:forward`）：
-
-```python
-variance_floor = -1.0  # target log-variance floor
-variance_penalty = F.relu(variance_floor - logsigma_video).mean()
-loss += 0.01 * variance_penalty
+训练命令模板：
+```bash
+EXPERIMENT_DESC="<desc>" CUDA_VISIBLE_DEVICES=<gpus> bash run_train_msrvtt_bg.sh \
+  --w_evidential 0 --w_neg_reg 0 --warmup_steps 500 \
+  --batch_size 64 --gradient_accumulation_steps 1
 ```
 
-**缺点**：
-- 人为设定方差目标不自然
-- 即使方差不坍缩，MIL_loss 本身在 Epoch 1 后已饱和（0.16），维持方差无实际收益
-- 仅当方案 A 使 MIL 采样重新产生价值时才有意义
+有效 batch = 64 × GPU数 × 1。4 GPU → eff_batch = 256。
 
 ---
 
-### 9.8 方案 F：清理死代码 🟢 清理
+## 八、Git 里程碑（master 分支）
 
-| 项 | 内容 | 位置 |
-|----|------|------|
-| F1 | 删除 `uncertainty_reg_loss`（`.detach()` 零梯度，纯噪音） | `modeling_mulit.py:669,723` |
-| F2 | 删除重复的 `EvidentialUncertaintyHead` | `prob_models/uncertainty_module.py:228-269` |
-| F3 | 删除 `uncertainty_mode=nig_mil` 分支（方案 A 直接替代） | `modeling_mulit.py:594-597` |
-| F4 | `evidential_loss` / `neg_reg_loss` 保留关闭状态（`w=0`），暂不删代码 | `modeling_mulit.py:655-660,721-722` |
+| Commit | 描述 | T2V R@1 |
+|--------|------|---------|
+| `169ba95` | 添加 log-analysis skill 与实验分析归档 | 49.4 |
+| `4d64c9b` | 方案 C：SAP 不确定性标量化 | — |
+| `21348d1` | 方案 F(清理) + 方案 A(置信度加权) + 方案 B1(梯度隔离) | 50.0 |
+| `61f91c2` | 方向 1：非学习不确定性（anchor 统计量） | — |
+| `23c3065` | unsqueeze(0) 修正 T2V 列方向折扣 | 49.3 |
+| `6ec88b9` | 文档精简（当前 HEAD） | — |
 
 ---
 
-### 9.9 推荐执行路径
+## 九、未解决问题与下步方向
+
+### 9.1 优先级排序
+
+| 优先级 | 方向 | 说明 |
+|--------|------|------|
+| 🟢 P0 | **去掉置信度加权** | 已验证不贡献 R@1，保留增加复杂度 |
+| 🟢 P0 | **保留 B1 梯度隔离** | 唯一正向收益（+0.6），已验证 |
+| 🟡 P1 | **优化表征质量** | ret_gap 27.5 说明正负分离强，但 R@1 未充分受益 |
+| 🟡 P1 | **提升 anchor 多样性区分度** | 当前 batch 内几乎无差异化 |
+| ⚪ P2 | **MIL loss 改革** | 当前饱和，可考虑新的方差利用方式 |
+
+### 9.2 可以考虑但需谨慎的
+
+1. **query-dependent 不确定性**：不是 per-video 均匀权重，而是 per (query, video) pair 的置信度。这样正负影响不再对称，可能真正提升 R@1。需要新的架构设计。
+2. **不确定性用作检索后校准**：不参与排序，而是输出每个结果的置信度。对 R@1 无帮助但对下游有用。
+3. **超参自动搜索**：当架构稳定 2+ 轮无结构变更后再启动。当前不建议。
+
+### 9.3 不建议的
+
+- ❌ **batch 标准化 / z-score**：破坏绝对参照，batch 内方差太低时放大噪声
+- ❌ **β sweep on 1/(1+βx)**：输入区间 [0.8,1.0] 太窄，任何绝对单调函数区分度都有限
+- ❌ **重新引入 NIG 层**：已验证坍缩到常量
+
+---
+
+## 十、文件速查
+
+| 文件 | 行数 | 用途 |
+|------|------|------|
+| `modules/modeling_mulit.py` | ~900 | 主模型 UATVR，forward + loss + diag |
+| `query_models/module_sap.py` | 157 | SAP + EvidentialUncertaintyHead（仅 Dirichlet） |
+| `prob_models/uncertainty_module.py` | ~200 | 文本侧不确定性头（attention/GRU/Mamba） |
+| `main_task_retrieval.py` | ~ | 训练/评估入口，argparse |
+| `train_msrvtt.sh` | ~ | MSRVTT 训练脚本（bash 包装） |
+| `run_train_msrvtt_bg.sh` | ~ | nohup 后台训练 |
+| `hyperparam_search.py` | ~ | 超参搜索（Bayesian + Grid） |
+| `tests/test_modeling_mulit_losses.py` | ~ | 单元测试 |
+| `AGENTS.md` | — | 项目架构文档 |
+| `CLAUDE.md` | — | 命令速查 |
+| `STATUS.md` | — | 本文件 |
+
+### 活跃实验日志
 
 ```
-第1步 (清理):   方案 F — 删除 uncertainty_reg_loss、重复类、nig_mil 分支
-第2步 (核心):   方案 A — 不确定性置信度融入 WTI 检索分数（~3 行，加 warmup）
-第3步 (加固):   方案 B1 — stop_gradient 隔离双头梯度冲突（~1 行）
-第4步 (简化):   方案 C — 标量化 NIG，减少 98% 不确定性参数
-第5步 (可选):   方案 D — 若方案 A 有效，叠加难负样本挖掘
-第6步 (暂缓):   方案 E — 仅当方案 A 已成功且 MIL 重新生效时考虑
+logs/20260608/   — Exp 1 (50.0, 首个 B1 + A)
+logs/20260609/   — 对称折扣实验
+logs/20260610/   — 列方向 + Plan C 实验
+logs/20260611/   — Plan C fixed
+logs/20260612/   — 方向 1 unsqueeze(1)
+logs/20260613/   — 方向 1 unsqueeze(0) (49.3)
+logs/20260614/   — z-score 实验（失败，已中断）
 ```
 
-**预期**：方案 A+B 组合应能让不确定性对 R@1 产生首次正向贡献。当前 baseline 49.4 来自纯 sim_loss，不确定性完全闲置 — 任何正向利用都是净收益。
+每个实验目录下 `analysis_*.md` 为详细分析文件。
+
+---
+
+## 十一、给下一个会话的摘要
+
+**一句话**：B1 梯度隔离是唯一被验证的收益来源（+0.6 → 50.0），
+置信度加权无论用 `1/(1+x)` 还是 z-score 都无法在 T2V softmax 中
+产生正贡献——per-video 均匀权重正负对称抵消。当前代码处于
+Direction 1 + `1/(1+x)` + `unsqueeze(0)` 状态（commit `6ec88b9`）。
+
+**推荐起点**：去掉 confidence 加权（仅保留 B1 detach），
+在 49.9-50.0 的基础上优化表征质量或尝试 query-dependent 不确定性。
