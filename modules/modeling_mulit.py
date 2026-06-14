@@ -671,8 +671,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 confidence = 1.0 - alpha + alpha * confidence
             else:
                 alpha = 1.0
-            # unsqueeze(1) 行方向缩放：T2V 行内抵消（主 loss 不受扰），V2T 转置后提供不确定性梯度
-            weighted_logits = wti_logits * confidence.unsqueeze(1)  # [B, B]
+            # unsqueeze(0) 列方向缩放：T2V 列间差异化（不确定视频降权），V2T 转置后抵消
+            weighted_logits = wti_logits * confidence.unsqueeze(0)  # [B, B]
 
             # ── 诊断统计（不参与 loss，detach 后计算，每 N 步采集一次） ──
             self._diag_step += 1
