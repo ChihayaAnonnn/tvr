@@ -736,10 +736,13 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     )
                 if _pc:
                     logger.info(
-                        "  [Chain-Prob] u_mode=%.4f±%.4f  epistemic_v=%.4f  var_t=%.4f  kl_t=%.4f",
+                        "  [Chain-Prob] u_mode=%.4f±%.4f  epi_v=%.4f  cnf=%.3f  cnf_d=%.3f  cnf_off=%.3f  gap=%.3f  kl_t=%.4f",
                         _pc.get("u_mode_mean", 0), _pc.get("u_mode_std", 0),
                         _pc.get("epistemic_v_mean", 0),
-                        _pc.get("var_text_mean", 0),
+                        _pc.get("confidence_mean", 0),
+                        _pc.get("confidence_diag", 0),
+                        _pc.get("confidence_off", 0),
+                        _pc.get("confidence_gap", 0),
                         _pc.get("kl_text_mean", 0),
                     )
                 if _ac:
