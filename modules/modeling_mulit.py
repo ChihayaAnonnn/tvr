@@ -324,20 +324,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.anneal_warmup_epochs = getattr(self.task_config, "anneal_warmup_epochs", 0)
         self._current_epoch = 0  # 由外部 train_loop 更新
 
-        # 方案 A：不确定性置信度 warmup（步数级别）
-        self._current_step = 0
-        self.warmup_steps = getattr(self.task_config, "warmup_steps", 500)
-
-        # per-pair 置信度编码器：从 text-anchor 注意力分布 → 匹配置信度
-        # 输入 detach 切断到 text/video encoder 的梯度，仅 ~150 可学习参数
-        num_anchors = self.sap.num_anchors
-        self.confidence_mlp = nn.Sequential(
-            nn.Linear(num_anchors, num_anchors // 2),
-            nn.ReLU(),
-            nn.Linear(num_anchors // 2, 1),
-            nn.Sigmoid(),
-        )
-
         # 不确定性训练模式：nig_mil / none
         self.uncertainty_mode = getattr(self.task_config, "uncertainty_mode", "none")
 
@@ -393,7 +379,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         visual_cls, visual_hidden = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_len)
 
         if self.training:
-            self._current_step += 1
             loss = 0.0
             res = self.get_similarity_logits(
                 sequence_output,
@@ -612,7 +597,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
             mu_video = allgather(mu_video.contiguous(), self.task_config)
             logsigma_video = allgather(logsigma_video.contiguous(), self.task_config)
             epistemic_video = allgather(epistemic_video.contiguous(), self.task_config)
-            anchors = allgather(anchors.contiguous(), self.task_config)
             u_mode = allgather(u_mode.contiguous(), self.task_config)
             alpha_dir = allgather(alpha_dir.contiguous(), self.task_config)
             visual_output = allgather(visual_output.contiguous(), self.task_config)
@@ -673,24 +657,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
             else:
                 anneal_factor = min(1.0, self._current_epoch / self.anneal_warmup_epochs)
 
-            # per-pair 置信度：独立 MLP 从 text-anchor 注意力分布预测匹配置信度
-            # 输入全部 detach，梯度只传 MLP（~150 参数），不污染 text/video encoder
-            anchors_n = F.normalize(anchors.detach(), dim=-1)              # [B, K, D]
-            text_n = F.normalize(text_pooled.detach(), dim=-1)              # [B, D]
-            pairwise_sim = torch.einsum('id,jkd->ijk', text_n, anchors_n)  # [B, B, K]
-            logit_scale = self.clip.logit_scale.exp()
-            anchor_attn = F.softmax(pairwise_sim * logit_scale, dim=-1)    # [B, B, K]
-            # 注意力熵（诊断用）
-            anchor_ent = -(anchor_attn * torch.log(anchor_attn + 1e-8)).sum(dim=-1)  # [B, B]
-            anchor_ent = anchor_ent / math.log(self.sap.num_anchors)        # ∈ [0, 1]
-            # 独立的置信度编码器
-            confidence = self.confidence_mlp(anchor_attn).squeeze(-1)       # [B, B]
-            if self.warmup_steps > 0:
-                alpha = min(1.0, self._current_step / self.warmup_steps)
-                confidence = 1.0 - alpha + alpha * confidence
-            else:
-                alpha = 1.0
-            weighted_logits = wti_logits * confidence  # [B, B] * [B, B]
+            # B1-only：置信度加权已移除，WTI logits 直接作为检索分数
+            weighted_logits = wti_logits
 
             # ── 诊断统计（不参与 loss，detach 后计算，每 N 步采集一次） ──
             self._diag_step += 1
@@ -708,25 +676,14 @@ class UATVR(CLIP4ClipPreTrainedModel):
                         "pos_std":  float(diag.std(unbiased=False)),
                     }
 
-                    # 链二：Per-pair 置信度统计
+                    # 链二：Evidential 不确定性统计
                     ls_t = prob_text_logsigma.detach()
-                    conf_val = confidence.detach()  # [B, B] per-pair 置信度
-                    conf_diag = conf_val.diagonal()
-                    B_c = conf_val.size(0)
-                    mask_off_c = ~torch.eye(B_c, dtype=torch.bool, device=conf_val.device)
-                    conf_off = conf_val[mask_off_c]
                     self._prob_chain = {
-                        "anchor_ent_mean":    float(anchor_ent.detach().mean()),
-                        "confidence_mean":    float(conf_val.mean()),
-                        "confidence_diag":    float(conf_diag.mean()),
-                        "confidence_off":     float(conf_off.mean()),
-                        "confidence_gap":     float(conf_diag.mean() - conf_off.mean()),
                         "u_mode_mean":        float(u_mode.detach().mean()),
                         "u_mode_std":         float(u_mode.detach().std(unbiased=False)),
                         "epistemic_v_mean":   float(epistemic_video.detach().mean()),
                         "var_text_mean":      float(ls_t.exp().mean()),
                         "kl_text_mean":       float((0.5 * (ls_t.exp() - 1 - ls_t)).mean(dim=-1).mean()),
-                        "warmup_alpha":       float(alpha),
                     }
 
                     # 链三：辅助 loss 子项

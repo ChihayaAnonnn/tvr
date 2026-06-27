@@ -175,6 +175,28 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
 
     parser.add_argument("--loose_type", action="store_true", help="Default using tight type for retrieval.")
     parser.add_argument("--expand_msrvtt_sentences", action="store_true", help="")
+    parser.add_argument(
+        "--use_hard_negative_packing",
+        action="store_true",
+        help="Pack query-mined hard negative samples into the same global training batch.",
+    )
+    parser.add_argument(
+        "--hard_negative_path",
+        # Raw pre-audit map kept for traceability:
+        # cache_dir/hard_negatives/msrvtt_train_hardneg.json
+        default="cache_dir/hard_negatives/msrvtt_train_hardneg_clean.json",
+        type=str,
+        help=(
+            "Path to MSRVTT hard negative mapping JSON. Defaults to the audited clean map; "
+            "the raw pre-audit map is cache_dir/hard_negatives/msrvtt_train_hardneg.json."
+        ),
+    )
+    parser.add_argument(
+        "--hard_negative_pack_seed",
+        default=42,
+        type=int,
+        help="Seed for hard-negative batch packing shuffle.",
+    )
 
     parser.add_argument(
         "--train_frame_order",
@@ -416,6 +438,7 @@ def set_seed_logger(args):
             "Model": ["pretrained_clip_name", "sim_header", "linear_patch", "fusion_mode",
                        "extra_video_cls_num", "extra_text_cls_num", "n_video_embeddings", "n_text_embeddings",
                        "uncertainty_text_head", "log_sigma_min", "log_sigma_max"],
+            "HardNeg": ["use_hard_negative_packing", "hard_negative_path", "hard_negative_pack_seed"],
             "Query": ["w_query_sim", "w_uncertainty_reg", "w_evidential", "w_neg_reg",
                       "fusion_temperature", "num_queries", "num_expansion_tokens"],
             "Annealing": ["anneal_warmup_epochs", "warmup_steps"],
@@ -736,13 +759,10 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     )
                 if _pc:
                     logger.info(
-                        "  [Chain-Prob] u_mode=%.4f±%.4f  epi_v=%.4f  cnf=%.3f  cnf_d=%.3f  cnf_off=%.3f  gap=%.3f  kl_t=%.4f",
+                        "  [Chain-Prob] u_mode=%.4f±%.4f  epi_v=%.4f  var_t=%.4f  kl_t=%.4f",
                         _pc.get("u_mode_mean", 0), _pc.get("u_mode_std", 0),
                         _pc.get("epistemic_v_mean", 0),
-                        _pc.get("confidence_mean", 0),
-                        _pc.get("confidence_diag", 0),
-                        _pc.get("confidence_off", 0),
-                        _pc.get("confidence_gap", 0),
+                        _pc.get("var_text_mean", 0),
                         _pc.get("kl_text_mean", 0),
                     )
                 if _ac:

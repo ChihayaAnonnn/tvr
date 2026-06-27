@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 
 from dataloaders.dataloader_msrvtt_retrieval import MSRVTT_DataLoader, MSRVTT_TrainDataLoader
 from dataloaders.dataloader_msvd_retrieval import MSVD_DataLoader
+from dataloaders.hard_negative_sampler import HardNegativeDistributedBatchSampler
 
 
 def dataloader_msrvtt_train(args, tokenizer):
@@ -24,16 +25,35 @@ def dataloader_msrvtt_train(args, tokenizer):
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
     )
 
-    train_sampler = torch.utils.data.distributed.DistributedSampler(msrvtt_dataset)
-    dataloader = DataLoader(
-        msrvtt_dataset,
-        batch_size=args.batch_size // args.n_gpu,
-        num_workers=args.num_thread_reader,
-        pin_memory=False,
-        shuffle=(train_sampler is None),
-        sampler=train_sampler,
-        drop_last=True,
-    )
+    local_batch_size = args.batch_size // args.n_gpu
+    if getattr(args, "use_hard_negative_packing", False):
+        train_sampler = HardNegativeDistributedBatchSampler(
+            msrvtt_dataset,
+            hard_negative_path=getattr(args, "hard_negative_path", ""),
+            batch_size=local_batch_size,
+            num_replicas=getattr(args, "world_size", args.n_gpu),
+            rank=getattr(args, "rank", 0),
+            seed=getattr(args, "hard_negative_pack_seed", 42),
+            drop_last=True,
+            shuffle=True,
+        )
+        dataloader = DataLoader(
+            msrvtt_dataset,
+            batch_sampler=train_sampler,
+            num_workers=args.num_thread_reader,
+            pin_memory=False,
+        )
+    else:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(msrvtt_dataset)
+        dataloader = DataLoader(
+            msrvtt_dataset,
+            batch_size=local_batch_size,
+            num_workers=args.num_thread_reader,
+            pin_memory=False,
+            shuffle=(train_sampler is None),
+            sampler=train_sampler,
+            drop_last=True,
+        )
 
     return dataloader, len(msrvtt_dataset), train_sampler
 
