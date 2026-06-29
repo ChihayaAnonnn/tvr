@@ -23,11 +23,11 @@ UATVR 的核心创新：
 
 完整实验档案见 [`STATUS.md`](STATUS.md)。新会话优先使用以下当前结论：
 
-- 2026-06-27 已在 `feat/uacl-explicit-hn-intra` 分支接入论文参考路线的第一版代码，默认均关闭：
-  - 显式 hard-negative loss：`--use_explicit_hard_negative_loss --w_hard_negative ...`
+- 2026-06-30 已在 `feat/uacl-explicit-hn-intra` 分支接入论文参考路线的第一版代码，默认均关闭：
+  - 显式 hard-negative InfoNCE loss：`--use_explicit_hard_negative_loss --w_hard_negative ...`；额外编码 clean-map hard-negative video，并把 hard-negative logits 作为附加列并入 query-to-video CE 分母。
   - UACL-style 模态内对齐：`--use_uacl_intra_alignment --w_uacl_intra ... --w_uacl_kl ... --uacl_temperature ...`
   - 训练 dataloader 会在显式 HN 开启时额外返回 `hard_video/hard_video_mask/hard_valid`；batch packing 仍保留为 legacy/diagnostic 开关。
-  - 当前仅完成代码接入和单测/编译检查，尚未跑新的训练结果。
+  - 2026-06-27/29 的三组旧实验使用的是早期 softplus/弱权重实现；2026-06-30 已改为更忠实论文/原版代码的 InfoNCE 分母扩展，尚未跑新训练结果。
 - 当前工作树为 **B1-only v2**：主检索分数退回 `weighted_logits = wti_logits`，per-pair `confidence_mlp` 已移除。
 - 2026-06-19 三组复现实验均已结束，均未复现历史 50.0：
 

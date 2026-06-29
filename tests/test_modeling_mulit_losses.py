@@ -83,17 +83,41 @@ def test_evidential_neg_reg_loss_penalizes_high_negative_evidence():
     assert loss_high > loss_low
 
 
-def test_hard_negative_softplus_loss_penalizes_hard_above_positive():
-    pos = torch.tensor([3.0, 3.0, 3.0])
-    easy_hard = torch.tensor([0.0, 0.5, 1.0])
-    bad_hard = torch.tensor([4.0, 5.0, 6.0])
+def test_explicit_hard_negative_infonce_matches_concatenated_denominator():
+    retrieval_logits = torch.tensor(
+        [
+            [3.0, 0.1, -0.2],
+            [0.0, 3.2, 0.4],
+            [0.1, -0.3, 2.8],
+        ]
+    )
+    hard_logits = torch.tensor(
+        [
+            [2.0, 4.0, 8.0],
+            [2.4, 0.2, 8.0],
+            [1.8, 0.3, 8.0],
+        ]
+    )
     valid = torch.tensor([1, 1, 0])
 
-    easy_loss = UATVR._hard_negative_softplus_loss(pos, easy_hard, valid)
-    bad_loss = UATVR._hard_negative_softplus_loss(pos, bad_hard, valid)
+    loss = UATVR._hard_negative_infonce_loss(retrieval_logits, hard_logits, valid)
 
-    assert bad_loss > easy_loss
-    assert torch.isfinite(easy_loss)
+    masked_hard = hard_logits.masked_fill(~valid.to(dtype=torch.bool).unsqueeze(0), torch.finfo(hard_logits.dtype).min)
+    expected = torch.nn.functional.cross_entropy(
+        torch.cat([retrieval_logits, masked_hard], dim=1),
+        torch.arange(retrieval_logits.size(0)),
+    )
+    assert torch.allclose(loss, expected)
+
+
+def test_explicit_hard_negative_infonce_ignores_all_invalid_hard_negatives():
+    retrieval_logits = torch.eye(3)
+    hard_logits = torch.full((3, 3), 100.0)
+    valid = torch.zeros(3, dtype=torch.long)
+
+    loss = UATVR._hard_negative_infonce_loss(retrieval_logits, hard_logits, valid)
+
+    assert torch.isclose(loss, torch.tensor(0.0))
 
 
 def test_select_closest_gaussian_sample_picks_highest_cosine_sample():

@@ -1,19 +1,21 @@
 # UACL + Query Hard Negative Implementation Plan
 
-更新日期：2026-06-22
+更新日期：2026-06-30
 
-## 当前执行状态（2026-06-27）
+## 当前执行状态（2026-06-30）
 
-- 已在 `feat/uacl-explicit-hn-intra` 分支接入 **显式 hard-negative loss**，默认关闭：
+- 已在 `feat/uacl-explicit-hn-intra` 分支接入论文/原版代码口径的 **显式 hard-negative InfoNCE loss**，默认关闭：
   - CLI：`--use_explicit_hard_negative_loss`
   - 权重：`--w_hard_negative`
   - 数据：复用 `--hard_negative_path`，默认 clean map。
 - MSRVTT 训练 dataloader 已支持在样本后额外返回 hard-negative video：
   - 无属性：`text/mask/segment/video/video_mask/sample_index/hard_video/hard_video_mask/hard_valid`
   - 有属性：在属性三元组后追加同样的 `sample_index/hard_*` 字段。
-- 模型侧已支持额外编码 hard-negative video，并对 `sim(q_i, v_hard_i)` 与 `sim(q_i, v_i)` 加 softplus margin-style 约束：
-  - `L_hn = softplus(sim_hard - sim_pos)`
-  - `hard_valid=0` 的样本会被忽略。
+- 模型侧已支持额外编码 hard-negative video，并将 hard-negative logits 作为额外列并入 query-to-video CrossEntropy 分母：
+  - `logits = concat([sim(q_i, v_j), sim(q_i, v_hard_j)], dim=1)`
+  - label 仍指向原始正样本列 `i`。
+  - `hard_valid=0` 的 hard-negative 列会被 mask，不参与分母竞争。
+- 2026-06-30 已将早期 softplus margin-style 约束清理为 InfoNCE 分母扩展；单测覆盖 invalid hard-negative mask 与拼接分母行为。
 - 已接入 **UACL-style 模态内对齐**，默认关闭：
   - CLI：`--use_uacl_intra_alignment`
   - 权重：`--w_uacl_intra`、`--w_uacl_kl`

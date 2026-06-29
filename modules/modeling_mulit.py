@@ -716,11 +716,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
                     attention_mask,
                     hard_video_mask,
                 ) * logit_scale
-                pos_diag = wti_logits.diagonal()
+                pos_diag = weighted_logits.diagonal()
                 hard_diag = hard_wti_logits.diagonal()
                 if hard_valid is None:
                     hard_valid = torch.ones_like(pos_diag, dtype=torch.bool)
-                hard_negative_loss = self._hard_negative_softplus_loss(pos_diag, hard_diag, hard_valid)
+                hard_negative_loss = self._hard_negative_infonce_loss(weighted_logits, hard_wti_logits, hard_valid)
                 valid_hard = hard_valid.to(device=pos_diag.device, dtype=torch.bool)
                 if bool(valid_hard.any().item()):
                     hard_diag_mean = float(hard_diag[valid_hard].detach().mean().item())
@@ -812,11 +812,27 @@ class UATVR(CLIP4ClipPreTrainedModel):
             return wti_logits
 
     @staticmethod
-    def _hard_negative_softplus_loss(pos_logits, hard_logits, valid_mask):
-        valid_mask = valid_mask.to(device=pos_logits.device, dtype=torch.bool)
+    def _hard_negative_infonce_loss(retrieval_logits, hard_logits, valid_mask):
+        valid_mask = valid_mask.to(device=retrieval_logits.device, dtype=torch.bool).view(-1)
         if valid_mask.numel() == 0 or not bool(valid_mask.any().item()):
-            return pos_logits.new_tensor(0.0)
-        return F.softplus(hard_logits[valid_mask] - pos_logits[valid_mask]).mean()
+            return retrieval_logits.new_tensor(0.0)
+        if retrieval_logits.size(0) != retrieval_logits.size(1):
+            raise ValueError(f"retrieval_logits must be square, got shape={tuple(retrieval_logits.shape)}")
+        if hard_logits.shape != retrieval_logits.shape:
+            raise ValueError(
+                f"hard_logits shape must match retrieval_logits, got "
+                f"{tuple(hard_logits.shape)} vs {tuple(retrieval_logits.shape)}"
+            )
+        if valid_mask.numel() != hard_logits.size(1):
+            raise ValueError(
+                f"valid_mask length must match hard-negative columns, got "
+                f"{valid_mask.numel()} vs {hard_logits.size(1)}"
+            )
+
+        masked_hard = hard_logits.masked_fill(~valid_mask.unsqueeze(0), torch.finfo(hard_logits.dtype).min)
+        logits = torch.cat([retrieval_logits, masked_hard], dim=1)
+        target = torch.arange(retrieval_logits.size(0), device=retrieval_logits.device)
+        return F.cross_entropy(logits, target)
 
     @staticmethod
     def _select_closest_gaussian_sample(mean, samples):
