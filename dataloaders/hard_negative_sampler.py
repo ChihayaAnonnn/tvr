@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import math
 import os
 import random
 from typing import Iterator
+
+from dataloaders.hard_negative_mapping import load_hard_negative_index
 
 
 class HardNegativeDistributedBatchSampler:
@@ -64,34 +65,8 @@ class HardNegativeDistributedBatchSampler:
             )
 
     def _load_hard_index(self) -> list[int]:
-        with open(self.hard_negative_path, "r", encoding="utf-8") as f:
-            obj = json.load(f)
-
-        mapping = obj.get("mapping")
-        if not isinstance(mapping, dict):
-            raise ValueError(f"hard negative file has no mapping object: {self.hard_negative_path}")
-
         n = len(self.dataset)
-        hard_index = [-1] * n
-        out_of_range = 0
-        for key, item in mapping.items():
-            if not isinstance(item, dict):
-                continue
-            try:
-                anchor = int(item.get("anchor_index", key))
-                hard = int(item["hard_index"])
-            except (TypeError, ValueError, KeyError):
-                continue
-            if anchor < 0 or anchor >= n or hard < 0 or hard >= n:
-                out_of_range += 1
-                continue
-            if hard == anchor:
-                continue
-            hard_index[anchor] = hard
-
-        if out_of_range and self.rank == 0:
-            print(f"{self.log_prefix} ignored {out_of_range} out-of-range links", flush=True)
-        return hard_index
+        return load_hard_negative_index(self.hard_negative_path, n)
 
     def set_epoch(self, epoch: int) -> None:
         self.epoch = int(epoch)
@@ -222,4 +197,3 @@ class HardNegativeDistributedBatchSampler:
                 if hard in batch_set:
                     hits += 1
         return hits
-

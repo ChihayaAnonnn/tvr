@@ -1,4 +1,5 @@
 import importlib
+import inspect
 import sys
 import types
 from argparse import Namespace
@@ -14,6 +15,13 @@ spatial_enhancer_stub = types.ModuleType("modules.spatial_enhancer")
 spatial_enhancer_stub.SpatialEnhancer = object
 sys.modules["modules.spatial_enhancer"] = spatial_enhancer_stub
 UATVR = importlib.import_module("modules.modeling_mulit").UATVR
+
+
+def test_forward_accepts_explicit_hard_negative_kwargs():
+    signature = inspect.signature(UATVR.forward)
+
+    for name in ["sample_index", "hard_video", "hard_video_mask", "hard_valid"]:
+        assert name in signature.parameters
 
 
 def test_evidential_matrix_loss_prefers_confident_diagonal():
@@ -73,3 +81,49 @@ def test_evidential_neg_reg_loss_penalizes_high_negative_evidence():
     sim_low_neg = torch.tensor([[1.0, -1.0, -1.0], [-1.0, 1.0, -1.0], [-1.0, -1.0, 1.0]])
     loss_low = UATVR._evidential_neg_reg_loss(sim_low_neg)
     assert loss_high > loss_low
+
+
+def test_hard_negative_softplus_loss_penalizes_hard_above_positive():
+    pos = torch.tensor([3.0, 3.0, 3.0])
+    easy_hard = torch.tensor([0.0, 0.5, 1.0])
+    bad_hard = torch.tensor([4.0, 5.0, 6.0])
+    valid = torch.tensor([1, 1, 0])
+
+    easy_loss = UATVR._hard_negative_softplus_loss(pos, easy_hard, valid)
+    bad_loss = UATVR._hard_negative_softplus_loss(pos, bad_hard, valid)
+
+    assert bad_loss > easy_loss
+    assert torch.isfinite(easy_loss)
+
+
+def test_select_closest_gaussian_sample_picks_highest_cosine_sample():
+    mean = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+    samples = torch.tensor(
+        [
+            [[0.0, 1.0], [0.8, 0.2], [1.0, 0.0]],
+            [[1.0, 0.0], [0.1, 0.9], [0.0, 1.0]],
+        ]
+    )
+
+    selected = UATVR._select_closest_gaussian_sample(mean, samples)
+
+    assert torch.allclose(selected, torch.tensor([[1.0, 0.0], [0.0, 1.0]]))
+
+
+def test_uacl_intra_contrastive_loss_prefers_aligned_pairs():
+    anchor = torch.eye(3)
+    aligned = anchor.clone()
+    shuffled = anchor[[1, 2, 0]]
+
+    aligned_loss = UATVR._uacl_intra_contrastive_loss(anchor, aligned, temperature=0.1)
+    shuffled_loss = UATVR._uacl_intra_contrastive_loss(anchor, shuffled, temperature=0.1)
+
+    assert aligned_loss < shuffled_loss
+
+
+def test_logvar_kl_is_zero_at_unit_variance_and_positive_otherwise():
+    unit_logvar = torch.zeros(2, 3)
+    shifted_logvar = torch.full((2, 3), 0.5)
+
+    assert torch.isclose(UATVR._logvar_kl(unit_logvar), torch.tensor(0.0))
+    assert UATVR._logvar_kl(shifted_logvar) > 0

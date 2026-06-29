@@ -8,11 +8,11 @@ ckpts/
 tmp/
 
 # 论文、参考文献、文档
-paper/
+# paper/
 papers/
 ref/
 *.png
-*.pdf
+# *.pdf
 # *.md
 !.gitignore
 

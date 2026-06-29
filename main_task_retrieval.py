@@ -181,6 +181,11 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         help="Pack query-mined hard negative samples into the same global training batch.",
     )
     parser.add_argument(
+        "--use_explicit_hard_negative_loss",
+        action="store_true",
+        help="Encode mapped hard-negative videos and add an explicit query-video hard-negative loss.",
+    )
+    parser.add_argument(
         "--hard_negative_path",
         # Raw pre-audit map kept for traceability:
         # cache_dir/hard_negatives/msrvtt_train_hardneg.json
@@ -331,6 +336,7 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--w_mil", default=1e-2, type=float, help="Weight for MIL (probabilistic) loss.")
     parser.add_argument("--w_evidential", default=1e-2, type=float, help="Weight for Evidential NLL loss.")
     parser.add_argument("--w_neg_reg", default=1e-2, type=float, help="Weight for negative evidence regularization.")
+    parser.add_argument("--w_hard_negative", default=5e-2, type=float, help="Weight for explicit hard-negative loss.")
     parser.add_argument(
         "--w_uncertainty_reg",
         default=1e-3,
@@ -343,6 +349,29 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         default=1e-2,
         type=float,
         help="Weight for query-branch independent contrastive loss.",
+    )
+    parser.add_argument(
+        "--use_uacl_intra_alignment",
+        action="store_true",
+        help="Enable UACL-style intra-modal contrastive alignment using Gaussian sampled views.",
+    )
+    parser.add_argument(
+        "--w_uacl_intra",
+        default=1e-2,
+        type=float,
+        help="Weight for UACL-style intra-modal alignment loss.",
+    )
+    parser.add_argument(
+        "--w_uacl_kl",
+        default=1e-4,
+        type=float,
+        help="Weight for lightweight Gaussian log-variance KL regularization in UACL alignment.",
+    )
+    parser.add_argument(
+        "--uacl_temperature",
+        default=0.07,
+        type=float,
+        help="Temperature for UACL-style intra-modal contrastive losses.",
     )
     # 退火系数：默认关闭；需要时可对 evidential / neg_reg loss 做线性 warmup
     parser.add_argument(
@@ -438,9 +467,13 @@ def set_seed_logger(args):
             "Model": ["pretrained_clip_name", "sim_header", "linear_patch", "fusion_mode",
                        "extra_video_cls_num", "extra_text_cls_num", "n_video_embeddings", "n_text_embeddings",
                        "uncertainty_text_head", "log_sigma_min", "log_sigma_max"],
-            "HardNeg": ["use_hard_negative_packing", "hard_negative_path", "hard_negative_pack_seed"],
+            "HardNeg": [
+                "use_hard_negative_packing", "use_explicit_hard_negative_loss",
+                "hard_negative_path", "hard_negative_pack_seed", "w_hard_negative",
+            ],
             "Query": ["w_query_sim", "w_uncertainty_reg", "w_evidential", "w_neg_reg",
                       "fusion_temperature", "num_queries", "num_expansion_tokens"],
+            "UACL": ["use_uacl_intra_alignment", "w_uacl_intra", "w_uacl_kl", "uacl_temperature"],
             "Annealing": ["anneal_warmup_epochs", "warmup_steps"],
             "Uncertainty": ["uncertainty_mode"],
         }
@@ -628,6 +661,98 @@ def _fmt_time(seconds):
     return f"{h}h{m:02d}m{s:02d}s"
 
 
+def _unpack_train_batch(batch, args):
+    use_attributes = bool(getattr(args, "use_attributes", False))
+    use_explicit_hn = bool(getattr(args, "use_explicit_hard_negative_loss", False))
+
+    unpacked = {
+        "input_ids": None,
+        "input_mask": None,
+        "segment_ids": None,
+        "video": None,
+        "video_mask": None,
+        "sample_index": None,
+        "hard_video": None,
+        "hard_video_mask": None,
+        "hard_valid": None,
+    }
+
+    if len(batch) == 5:
+        unpacked["input_ids"], unpacked["input_mask"], unpacked["segment_ids"], unpacked["video"], unpacked["video_mask"] = batch
+        return unpacked
+
+    if len(batch) == 8:
+        (
+            unpacked["input_ids"],
+            unpacked["input_mask"],
+            unpacked["segment_ids"],
+            _input_ids_a,
+            _input_mask_a,
+            _segment_ids_a,
+            unpacked["video"],
+            unpacked["video_mask"],
+        ) = batch
+        return unpacked
+
+    if len(batch) == 6 and not use_attributes:
+        (
+            unpacked["input_ids"],
+            unpacked["input_mask"],
+            unpacked["segment_ids"],
+            unpacked["video"],
+            unpacked["video_mask"],
+            unpacked["sample_index"],
+        ) = batch
+        return unpacked
+
+    if len(batch) == 9 and use_explicit_hn and not use_attributes:
+        (
+            unpacked["input_ids"],
+            unpacked["input_mask"],
+            unpacked["segment_ids"],
+            unpacked["video"],
+            unpacked["video_mask"],
+            unpacked["sample_index"],
+            unpacked["hard_video"],
+            unpacked["hard_video_mask"],
+            unpacked["hard_valid"],
+        ) = batch
+        return unpacked
+
+    if len(batch) == 9 and use_attributes and not use_explicit_hn:
+        (
+            unpacked["input_ids"],
+            unpacked["input_mask"],
+            unpacked["segment_ids"],
+            _input_ids_a,
+            _input_mask_a,
+            _segment_ids_a,
+            unpacked["video"],
+            unpacked["video_mask"],
+            unpacked["sample_index"],
+        ) = batch
+        return unpacked
+
+    if len(batch) == 12 and use_attributes and use_explicit_hn:
+        (
+            unpacked["input_ids"],
+            unpacked["input_mask"],
+            unpacked["segment_ids"],
+            _input_ids_a,
+            _input_mask_a,
+            _segment_ids_a,
+            unpacked["video"],
+            unpacked["video_mask"],
+            unpacked["sample_index"],
+            unpacked["hard_video"],
+            unpacked["hard_video_mask"],
+            unpacked["hard_valid"],
+        ) = batch
+        return unpacked
+
+    raise ValueError(f"Unexpected batch size={len(batch)} from dataloader.")
+
+
 def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, scheduler, global_step, local_rank=0):
     global logger
     torch.cuda.empty_cache()
@@ -652,13 +777,18 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             # multi-gpu does scattering it-self, not consider
             batch = tuple(t.to(device=device, non_blocking=True) for t in batch)
 
-        if len(batch) == 5:
-            input_ids, input_mask, segment_ids, video, video_mask = batch
-        elif len(batch) == 8:
-            input_ids, input_mask, segment_ids, _input_ids_a, _input_mask_a, _segment_ids_a, video, video_mask = batch
-        else:
-            raise ValueError(f"Unexpected batch size={len(batch)} from dataloader.")
-        loss_dict = model(input_ids, segment_ids, input_mask, video, video_mask)
+        batch_inputs = _unpack_train_batch(batch, args)
+        loss_dict = model(
+            batch_inputs["input_ids"],
+            batch_inputs["segment_ids"],
+            batch_inputs["input_mask"],
+            batch_inputs["video"],
+            batch_inputs["video_mask"],
+            sample_index=batch_inputs["sample_index"],
+            hard_video=batch_inputs["hard_video"],
+            hard_video_mask=batch_inputs["hard_video_mask"],
+            hard_valid=batch_inputs["hard_valid"],
+        )
         loss = loss_dict["total"]
 
         if n_gpu > 1:

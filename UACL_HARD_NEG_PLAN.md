@@ -2,6 +2,26 @@
 
 更新日期：2026-06-22
 
+## 当前执行状态（2026-06-27）
+
+- 已在 `feat/uacl-explicit-hn-intra` 分支接入 **显式 hard-negative loss**，默认关闭：
+  - CLI：`--use_explicit_hard_negative_loss`
+  - 权重：`--w_hard_negative`
+  - 数据：复用 `--hard_negative_path`，默认 clean map。
+- MSRVTT 训练 dataloader 已支持在样本后额外返回 hard-negative video：
+  - 无属性：`text/mask/segment/video/video_mask/sample_index/hard_video/hard_video_mask/hard_valid`
+  - 有属性：在属性三元组后追加同样的 `sample_index/hard_*` 字段。
+- 模型侧已支持额外编码 hard-negative video，并对 `sim(q_i, v_hard_i)` 与 `sim(q_i, v_i)` 加 softplus margin-style 约束：
+  - `L_hn = softplus(sim_hard - sim_pos)`
+  - `hard_valid=0` 的样本会被忽略。
+- 已接入 **UACL-style 模态内对齐**，默认关闭：
+  - CLI：`--use_uacl_intra_alignment`
+  - 权重：`--w_uacl_intra`、`--w_uacl_kl`
+  - 温度：`--uacl_temperature`
+  - 文本侧复用 `probabilistic_text()` 的 Gaussian samples，视频侧复用 SAP `mu_video/logsigma_video` 采样。
+- 旧的 `--use_hard_negative_packing` 保留为 legacy/diagnostic 路线，没有删除，避免影响 2026-06-19/22 的已完成对照实验。
+- 当前只是代码实现完成，尚未启动新的训练实验；下一步应先跑显式 HN 单独诊断，再跑 UACL 单独诊断，最后考虑两者组合。
+
 ## 当前执行状态（2026-06-22）
 
 - B1 离线构建 raw hard-negative 映射已完成：`cache_dir/hard_negatives/msrvtt_train_hardneg.json`，共 180000 条。

@@ -23,6 +23,9 @@ def dataloader_msrvtt_train(args, tokenizer):
         use_attributes=getattr(args, "use_attributes", False),
         attributes_path=getattr(args, "msrvtt_attributes_path", ""),
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
+        return_sample_index=getattr(args, "use_explicit_hard_negative_loss", False),
+        return_hard_negative=getattr(args, "use_explicit_hard_negative_loss", False),
+        hard_negative_path=getattr(args, "hard_negative_path", ""),
     )
 
     local_batch_size = args.batch_size // args.n_gpu

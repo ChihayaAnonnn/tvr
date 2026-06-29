@@ -319,6 +319,12 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.w_neg_reg = getattr(self.task_config, "w_neg_reg", 1e-2)
         self.w_uncertainty_reg = getattr(self.task_config, "w_uncertainty_reg", 1e-3)
         self.w_orth = getattr(self.task_config, "w_orth", 0.0)
+        self.use_explicit_hard_negative_loss = getattr(self.task_config, "use_explicit_hard_negative_loss", False)
+        self.w_hard_negative = getattr(self.task_config, "w_hard_negative", 5e-2)
+        self.use_uacl_intra_alignment = getattr(self.task_config, "use_uacl_intra_alignment", False)
+        self.w_uacl_intra = getattr(self.task_config, "w_uacl_intra", 1e-2)
+        self.w_uacl_kl = getattr(self.task_config, "w_uacl_kl", 1e-4)
+        self.uacl_temperature = getattr(self.task_config, "uacl_temperature", 0.07)
 
         # 退火系数：默认关闭；warmup_epochs > 0 时前 N 个 epoch 线性增大到 1.0
         self.anneal_warmup_epochs = getattr(self.task_config, "anneal_warmup_epochs", 0)
@@ -350,6 +356,14 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         self.apply(self.init_weights)
 
+    @staticmethod
+    def _flatten_video_input(video):
+        video = torch.as_tensor(video).float()
+        assert video.dim() == 7, f"Expected 7D video tensor, got shape={tuple(video.shape)}"
+        b, pair, num_frames, clips_per_frame, channel, h, w = video.shape
+        video = video.view(b * pair * num_frames * clips_per_frame, channel, h, w)
+        return video, num_frames * clips_per_frame
+
     def forward(
         self,
         input_ids,
@@ -357,6 +371,10 @@ class UATVR(CLIP4ClipPreTrainedModel):
         attention_mask,
         video,
         video_mask=None,
+        sample_index=None,
+        hard_video=None,
+        hard_video_mask=None,
+        hard_valid=None,
     ):
         # (B 1 32)  (B 1 132) (B 1 32)
         input_ids = input_ids.view(-1, input_ids.shape[-1])
@@ -366,19 +384,24 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_mask = video_mask.view(-1, video_mask.shape[-1])
 
         # T x 3 x H x W
-        video = torch.as_tensor(video).float()
-        # Expected video shape from dataloader:
-        #   [B, pair, num_frames, clips_per_frame(=1), 3, H, W]
-        assert video.dim() == 7, f"Expected 7D video tensor, got shape={tuple(video.shape)}"
-        b, pair, num_frames, clips_per_frame, channel, h, w = video.shape
-        video = video.view(b * pair * num_frames * clips_per_frame, channel, h, w)
-        video_len = num_frames * clips_per_frame
+        video, video_len = self._flatten_video_input(video)
 
         sequence_output, text_token = self.get_sequence_output(input_ids, token_type_ids, attention_mask, shaped=True)
 
         visual_cls, visual_hidden = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_len)
 
         if self.training:
+            hard_visual_cls = None
+            if self.use_explicit_hard_negative_loss and hard_video is not None and hard_video_mask is not None:
+                hard_video_mask = hard_video_mask.view(-1, hard_video_mask.shape[-1])
+                hard_video, hard_video_len = self._flatten_video_input(hard_video)
+                hard_visual_cls, _hard_visual_hidden = self.get_visual_output(
+                    hard_video,
+                    hard_video_mask,
+                    shaped=True,
+                    video_frame=hard_video_len,
+                )
+
             loss = 0.0
             res = self.get_similarity_logits(
                 sequence_output,
@@ -389,6 +412,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 video_mask,
                 shaped=True,
                 loose_type=self.loose_type,
+                hard_visual_output=hard_visual_cls,
+                hard_video_mask=hard_video_mask,
+                hard_valid=hard_valid,
             )
             sim_matrix = res["retrieve_logits"]
             sim_loss1 = self.loss_fct(sim_matrix)
@@ -400,6 +426,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
             loss += res["evidential_loss"]
             loss += res["neg_reg_loss"]
             loss += res["orth_loss"]
+            loss += res["hard_negative_loss"]
+            loss += res["uacl_intra_loss"]
+            loss += res["uacl_kl_loss"]
 
             loss_dict = {
                 "total": loss,
@@ -408,6 +437,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 "evidential_loss": res["evidential_loss"],
                 "neg_reg_loss": res["neg_reg_loss"],
                 "orth_loss": res["orth_loss"],
+                "hard_negative_loss": res["hard_negative_loss"],
+                "uacl_intra_loss": res["uacl_intra_loss"],
+                "uacl_kl_loss": res["uacl_kl_loss"],
             }
             return loss_dict
         else:  # for inference
@@ -520,6 +552,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
         attention_mask,
         video_mask,
         sim_header="seqTransf",
+        hard_visual_output=None,
+        hard_video_mask=None,
+        hard_valid=None,
     ):
         sequence_output, visual_output = (
             sequence_output.contiguous(),
@@ -601,11 +636,18 @@ class UATVR(CLIP4ClipPreTrainedModel):
             alpha_dir = allgather(alpha_dir.contiguous(), self.task_config)
             visual_output = allgather(visual_output.contiguous(), self.task_config)
             video_mask = allgather(video_mask.contiguous(), self.task_config)
+            if hard_visual_output is not None and hard_video_mask is not None:
+                hard_visual_output = allgather(hard_visual_output.contiguous(), self.task_config)
+                hard_video_mask = allgather(hard_video_mask.contiguous(), self.task_config)
+                if hard_valid is not None:
+                    hard_valid = allgather(hard_valid.contiguous().view(-1), self.task_config)
             sequence_output = allgather(sequence_output.contiguous(), self.task_config)
             text_token = allgather(text_token.contiguous(), self.task_config)
             attention_mask = allgather(attention_mask.contiguous(), self.task_config)
 
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
+        if hard_visual_output is not None:
+            hard_visual_output = hard_visual_output / hard_visual_output.norm(dim=-1, keepdim=True)
 
         sequence_output = sequence_output.squeeze(1)
         sequence_output = sequence_output / sequence_output.norm(dim=-1, keepdim=True)
@@ -660,6 +702,50 @@ class UATVR(CLIP4ClipPreTrainedModel):
             # B1-only：置信度加权已移除，WTI logits 直接作为检索分数
             weighted_logits = wti_logits
 
+            hard_negative_loss = torch.tensor(0.0, device=mu_video.device)
+            hard_diag_mean = None
+            hard_pos_gap = None
+            if (
+                self.use_explicit_hard_negative_loss
+                and hard_visual_output is not None
+                and hard_video_mask is not None
+            ):
+                hard_wti_logits = self.weighted_token_wise_intersection(
+                    text_token,
+                    hard_visual_output,
+                    attention_mask,
+                    hard_video_mask,
+                ) * logit_scale
+                pos_diag = wti_logits.diagonal()
+                hard_diag = hard_wti_logits.diagonal()
+                if hard_valid is None:
+                    hard_valid = torch.ones_like(pos_diag, dtype=torch.bool)
+                hard_negative_loss = self._hard_negative_softplus_loss(pos_diag, hard_diag, hard_valid)
+                valid_hard = hard_valid.to(device=pos_diag.device, dtype=torch.bool)
+                if bool(valid_hard.any().item()):
+                    hard_diag_mean = float(hard_diag[valid_hard].detach().mean().item())
+                    hard_pos_gap = float((pos_diag[valid_hard] - hard_diag[valid_hard]).detach().mean().item())
+
+            uacl_intra_loss = torch.tensor(0.0, device=mu_video.device)
+            uacl_kl_loss = torch.tensor(0.0, device=mu_video.device)
+            uacl_text_loss = torch.tensor(0.0, device=mu_video.device)
+            uacl_video_loss = torch.tensor(0.0, device=mu_video.device)
+            if self.use_uacl_intra_alignment:
+                text_aug = self._select_closest_gaussian_sample(prob_text["mean"], prob_text_embedding)
+                video_aug = self._select_closest_gaussian_sample(mu_video, prob_video_embedding)
+                uacl_text_loss = self._uacl_intra_contrastive_loss(
+                    prob_text["mean"],
+                    text_aug,
+                    temperature=self.uacl_temperature,
+                )
+                uacl_video_loss = self._uacl_intra_contrastive_loss(
+                    mu_video,
+                    video_aug,
+                    temperature=self.uacl_temperature,
+                )
+                uacl_intra_loss = (uacl_text_loss + uacl_video_loss) / 2.0
+                uacl_kl_loss = (self._logvar_kl(prob_text_logsigma) + self._logvar_kl(logsigma_video)) / 2.0
+
             # ── 诊断统计（不参与 loss，detach 后计算，每 N 步采集一次） ──
             self._diag_step += 1
             if self._diag_step % self._diag_interval == 0:
@@ -693,6 +779,13 @@ class UATVR(CLIP4ClipPreTrainedModel):
                         "logsigma_v_mean":          float(logsigma_video.detach().mean().item()),
                         "anneal_factor":            float(anneal_factor),
                         "uncertainty_mode":         self.uncertainty_mode,
+                        "hard_negative_loss_val":    float(hard_negative_loss.detach().item()),
+                        "hard_diag_mean":            hard_diag_mean if hard_diag_mean is not None else 0.0,
+                        "hard_pos_gap":              hard_pos_gap if hard_pos_gap is not None else 0.0,
+                        "uacl_intra_loss_val":       float(uacl_intra_loss.detach().item()),
+                        "uacl_text_loss_val":        float(uacl_text_loss.detach().item()),
+                        "uacl_video_loss_val":       float(uacl_video_loss.detach().item()),
+                        "uacl_kl_loss_val":          float(uacl_kl_loss.detach().item()),
                     }
             # ──────────────────────────────────────────────────────────────────
 
@@ -711,9 +804,40 @@ class UATVR(CLIP4ClipPreTrainedModel):
             loss["evidential_loss"] = self.w_evidential * evidential_loss * anneal_factor
             loss["neg_reg_loss"] = self.w_neg_reg * neg_reg_loss * anneal_factor
             loss["orth_loss"] = self.w_orth * orth_loss
+            loss["hard_negative_loss"] = self.w_hard_negative * hard_negative_loss
+            loss["uacl_intra_loss"] = self.w_uacl_intra * uacl_intra_loss
+            loss["uacl_kl_loss"] = self.w_uacl_kl * uacl_kl_loss
             return loss
         else:
             return wti_logits
+
+    @staticmethod
+    def _hard_negative_softplus_loss(pos_logits, hard_logits, valid_mask):
+        valid_mask = valid_mask.to(device=pos_logits.device, dtype=torch.bool)
+        if valid_mask.numel() == 0 or not bool(valid_mask.any().item()):
+            return pos_logits.new_tensor(0.0)
+        return F.softplus(hard_logits[valid_mask] - pos_logits[valid_mask]).mean()
+
+    @staticmethod
+    def _select_closest_gaussian_sample(mean, samples):
+        mean_norm = F.normalize(mean, dim=-1)
+        sample_norm = F.normalize(samples, dim=-1)
+        sim = torch.einsum("bd,bnd->bn", mean_norm, sample_norm)
+        idx = sim.argmax(dim=1)
+        return samples[torch.arange(samples.size(0), device=samples.device), idx]
+
+    @staticmethod
+    def _uacl_intra_contrastive_loss(anchor, positive, temperature=0.07):
+        temperature = max(float(temperature), 1e-6)
+        anchor = F.normalize(anchor, dim=-1)
+        positive = F.normalize(positive, dim=-1)
+        logits = torch.matmul(anchor, positive.t()) / temperature
+        target = torch.arange(logits.size(0), device=logits.device)
+        return F.cross_entropy(logits, target)
+
+    @staticmethod
+    def _logvar_kl(logsigma):
+        return (0.5 * (logsigma.exp() - 1.0 - logsigma)).mean()
 
     @staticmethod
     def _evidential_similarity(mu_video, text_pooled, epistemic_video):
@@ -871,6 +995,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_mask,
         shaped=False,
         loose_type=False,
+        hard_visual_output=None,
+        hard_video_mask=None,
+        hard_valid=None,
     ):
         if shaped is False:
             attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
@@ -885,6 +1012,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 attention_mask,
                 video_mask,
                 sim_header=self.sim_header,
+                hard_visual_output=hard_visual_output,
+                hard_video_mask=hard_video_mask,
+                hard_valid=hard_valid,
             )
             return loss
         else:
