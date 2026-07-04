@@ -34,6 +34,8 @@ def test_get_args_parses_explicit_hard_negative_and_uacl_flags(monkeypatch):
             "0.0003",
             "--uacl_temperature",
             "0.05",
+            "--uacl_sample_strategy",
+            "random",
         ],
     )
 
@@ -45,6 +47,7 @@ def test_get_args_parses_explicit_hard_negative_and_uacl_flags(monkeypatch):
     assert args.w_uacl_intra == 0.02
     assert args.w_uacl_kl == 0.0003
     assert args.uacl_temperature == 0.05
+    assert args.uacl_sample_strategy == "random"
 
 
 def test_unpack_train_batch_supports_explicit_hard_negative_without_attributes():

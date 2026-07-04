@@ -1,19 +1,20 @@
 # 本地/占空间/非必要纳入版本管理的内容
-# logs/
+logs/
 docs/
 cache_dir/
 
-deploy_qwen/
-ckpts/
-tmp/
+/deploy_qwen/
+/ckpts/
+/tmp/
 
 # 论文、参考文献、文档
-# paper/
-papers/
+paper/
+/papers/
 ref/
 *.png
-# *.pdf
-# *.md
+!docs/**/*.png
+*.pdf
+*.md
 !.gitignore
 
 # Python 缓存

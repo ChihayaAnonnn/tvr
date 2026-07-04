@@ -373,6 +373,12 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         type=float,
         help="Temperature for UACL-style intra-modal contrastive losses.",
     )
+    parser.add_argument(
+        "--uacl_sample_strategy",
+        default="closest",
+        choices=["closest", "random"],
+        help="Gaussian sample selection strategy for UACL intra-modal positives.",
+    )
     # 退火系数：默认关闭；需要时可对 evidential / neg_reg loss 做线性 warmup
     parser.add_argument(
         "--anneal_warmup_epochs",
@@ -473,7 +479,10 @@ def set_seed_logger(args):
             ],
             "Query": ["w_query_sim", "w_uncertainty_reg", "w_evidential", "w_neg_reg",
                       "fusion_temperature", "num_queries", "num_expansion_tokens"],
-            "UACL": ["use_uacl_intra_alignment", "w_uacl_intra", "w_uacl_kl", "uacl_temperature"],
+            "UACL": [
+                "use_uacl_intra_alignment", "w_uacl_intra", "w_uacl_kl",
+                "uacl_temperature", "uacl_sample_strategy",
+            ],
             "Annealing": ["anneal_warmup_epochs", "warmup_steps"],
             "Uncertainty": ["uncertainty_mode"],
         }
@@ -904,6 +913,14 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                         _ac["logsigma_v_mean"],
                         _ac.get("anneal_factor", 1.0),
                     )
+                    if args.use_uacl_intra_alignment:
+                        logger.info(
+                            "  [Chain-UACL] intra=%.4f  text=%.4f  video=%.4f  kl=%.4f",
+                            _ac.get("uacl_intra_loss_val", 0),
+                            _ac.get("uacl_text_loss_val", 0),
+                            _ac.get("uacl_video_loss_val", 0),
+                            _ac.get("uacl_kl_loss_val", 0),
+                        )
 
             if (
                 args.log_moe_weights
@@ -935,7 +952,8 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 "  Ret  : pos=%.3f  neg=%.3f  gap=%.3f  pos_std=%.3f\n"
                 "  Evid : u_mode=%.4f±%.4f  epistemic_v=%.4f\n"
                 "  Text : var_t=%.4f  kl_t=%.4f\n"
-                "  Aux  : evid_loss=%.4f  neg_reg=%.4f  evid_unc=%.4f  logsig_v=%.4f",
+                "  Aux  : evid_loss=%.4f  neg_reg=%.4f  evid_unc=%.4f  logsig_v=%.4f\n"
+                "  UACL : intra=%.4f  text=%.4f  video=%.4f  kl=%.4f",
                 epoch + 1,
                 dc.get("pos_mean", 0), dc.get("neg_mean", 0),
                 dc.get("gap", 0), dc.get("pos_std", 0),
@@ -945,6 +963,8 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 pc.get("kl_text_mean", 0),
                 ac.get("evidential_loss_val", 0), ac.get("neg_reg_loss_val", 0),
                 ac.get("evidential_uncertainty", 0), ac.get("logsigma_v_mean", 0),
+                ac.get("uacl_intra_loss_val", 0), ac.get("uacl_text_loss_val", 0),
+                ac.get("uacl_video_loss_val", 0), ac.get("uacl_kl_loss_val", 0),
             )
             _log_causal_summary_tsv(args, epoch, dc, pc, ac)
     return total_loss, global_step
@@ -1060,7 +1080,8 @@ def _log_causal_summary_tsv(args, epoch: int, dc: dict, pc: dict, ac: dict = Non
         "ret_pos_mean\tret_neg_mean\tret_gap\tret_pos_std\t"
         "u_mode_mean\tu_mode_std\tepistemic_v_mean\t"
         "var_text_mean\tkl_text_mean\t"
-        "evidential_loss\tneg_reg_loss\tevidential_unc\tlogsigma_v\n"
+        "evidential_loss\tneg_reg_loss\tevidential_unc\tlogsigma_v\t"
+        "uacl_intra_loss\tuacl_text_loss\tuacl_video_loss\tuacl_kl_loss\n"
     )
     def _f(x): return f"{x:.6f}" if isinstance(x, float) else "nan"
     line = (
@@ -1071,7 +1092,9 @@ def _log_causal_summary_tsv(args, epoch: int, dc: dict, pc: dict, ac: dict = Non
         f"{_f(pc.get('epistemic_v_mean',0))}\t"
         f"{_f(pc.get('var_text_mean',0))}\t{_f(pc.get('kl_text_mean',0))}\t"
         f"{_f(ac.get('evidential_loss_val',0))}\t{_f(ac.get('neg_reg_loss_val',0))}\t"
-        f"{_f(ac.get('evidential_uncertainty',0))}\t{_f(ac.get('logsigma_v_mean',0))}\n"
+        f"{_f(ac.get('evidential_uncertainty',0))}\t{_f(ac.get('logsigma_v_mean',0))}\t"
+        f"{_f(ac.get('uacl_intra_loss_val',0))}\t{_f(ac.get('uacl_text_loss_val',0))}\t"
+        f"{_f(ac.get('uacl_video_loss_val',0))}\t{_f(ac.get('uacl_kl_loss_val',0))}\n"
     )
     need_header = not os.path.exists(out_file) or os.path.getsize(out_file) == 0
     with open(out_file, "a", encoding="utf-8") as f:

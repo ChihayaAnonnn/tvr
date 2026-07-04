@@ -325,6 +325,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.w_uacl_intra = getattr(self.task_config, "w_uacl_intra", 1e-2)
         self.w_uacl_kl = getattr(self.task_config, "w_uacl_kl", 1e-4)
         self.uacl_temperature = getattr(self.task_config, "uacl_temperature", 0.07)
+        self.uacl_sample_strategy = getattr(self.task_config, "uacl_sample_strategy", "closest")
 
         # 退火系数：默认关闭；warmup_epochs > 0 时前 N 个 epoch 线性增大到 1.0
         self.anneal_warmup_epochs = getattr(self.task_config, "anneal_warmup_epochs", 0)
@@ -731,8 +732,16 @@ class UATVR(CLIP4ClipPreTrainedModel):
             uacl_text_loss = torch.tensor(0.0, device=mu_video.device)
             uacl_video_loss = torch.tensor(0.0, device=mu_video.device)
             if self.use_uacl_intra_alignment:
-                text_aug = self._select_closest_gaussian_sample(prob_text["mean"], prob_text_embedding)
-                video_aug = self._select_closest_gaussian_sample(mu_video, prob_video_embedding)
+                text_aug = self._select_uacl_gaussian_sample(
+                    prob_text["mean"],
+                    prob_text_embedding,
+                    strategy=self.uacl_sample_strategy,
+                )
+                video_aug = self._select_uacl_gaussian_sample(
+                    mu_video,
+                    prob_video_embedding,
+                    strategy=self.uacl_sample_strategy,
+                )
                 uacl_text_loss = self._uacl_intra_contrastive_loss(
                     prob_text["mean"],
                     text_aug,
@@ -841,6 +850,15 @@ class UATVR(CLIP4ClipPreTrainedModel):
         sim = torch.einsum("bd,bnd->bn", mean_norm, sample_norm)
         idx = sim.argmax(dim=1)
         return samples[torch.arange(samples.size(0), device=samples.device), idx]
+
+    @staticmethod
+    def _select_uacl_gaussian_sample(mean, samples, strategy="closest"):
+        if strategy == "closest":
+            return UATVR._select_closest_gaussian_sample(mean, samples)
+        if strategy == "random":
+            idx = torch.randint(samples.size(1), (samples.size(0),), device=samples.device)
+            return samples[torch.arange(samples.size(0), device=samples.device), idx]
+        raise ValueError(f"Unknown UACL sample strategy: {strategy}")
 
     @staticmethod
     def _uacl_intra_contrastive_loss(anchor, positive, temperature=0.07):

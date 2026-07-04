@@ -5,6 +5,7 @@ import types
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
 import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -132,6 +133,45 @@ def test_select_closest_gaussian_sample_picks_highest_cosine_sample():
     selected = UATVR._select_closest_gaussian_sample(mean, samples)
 
     assert torch.allclose(selected, torch.tensor([[1.0, 0.0], [0.0, 1.0]]))
+
+
+def test_select_uacl_gaussian_sample_keeps_closest_strategy_behavior():
+    mean = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+    samples = torch.tensor(
+        [
+            [[0.0, 1.0], [0.8, 0.2], [1.0, 0.0]],
+            [[1.0, 0.0], [0.1, 0.9], [0.0, 1.0]],
+        ]
+    )
+
+    selected = UATVR._select_uacl_gaussian_sample(mean, samples, strategy="closest")
+
+    assert torch.allclose(selected, UATVR._select_closest_gaussian_sample(mean, samples))
+
+
+def test_select_uacl_gaussian_sample_random_returns_one_sample_per_row():
+    torch.manual_seed(0)
+    mean = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+    samples = torch.tensor(
+        [
+            [[0.0, 1.0], [0.8, 0.2], [1.0, 0.0]],
+            [[1.0, 0.0], [0.1, 0.9], [0.0, 1.0]],
+        ]
+    )
+
+    selected = UATVR._select_uacl_gaussian_sample(mean, samples, strategy="random")
+
+    assert selected.shape == mean.shape
+    for row_idx in range(samples.size(0)):
+        assert any(torch.allclose(selected[row_idx], sample) for sample in samples[row_idx])
+
+
+def test_select_uacl_gaussian_sample_rejects_unknown_strategy():
+    mean = torch.tensor([[1.0, 0.0]])
+    samples = torch.tensor([[[1.0, 0.0]]])
+
+    with pytest.raises(ValueError, match="Unknown UACL sample strategy"):
+        UATVR._select_uacl_gaussian_sample(mean, samples, strategy="bad")
 
 
 def test_uacl_intra_contrastive_loss_prefers_aligned_pairs():

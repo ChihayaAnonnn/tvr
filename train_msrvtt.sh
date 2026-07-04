@@ -23,7 +23,7 @@ IFS=',' read -ra _GPUS <<< "${CUDA_VISIBLE_DEVICES}"
 NPROC="${NPROC:-${#_GPUS[@]}}"
 
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
-    torchrun --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29549 \
+    torchrun --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29547 \
     main_task_retrieval.py \
     --do_train --num_thread_reader=8 --epochs=5 \
     --batch_size=256 --gradient_accumulation_steps=1 --n_display=20 \
