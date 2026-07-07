@@ -338,6 +338,41 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--w_neg_reg", default=1e-2, type=float, help="Weight for negative evidence regularization.")
     parser.add_argument("--w_hard_negative", default=5e-2, type=float, help="Weight for explicit hard-negative loss.")
     parser.add_argument(
+        "--final_score_mode",
+        default="wti",
+        type=str,
+        choices=["wti", "wti_prob_mu", "wti_anchor_wti", "wti_qc_sap"],
+        help="Final retrieval score used by both training and evaluation. "
+        "wti: use WTI logits only. "
+        "wti_prob_mu: add lambda_prob * cosine(probabilistic text mean, SAP video mean). "
+        "wti_anchor_wti: add lambda_anchor * WTI(text tokens, SAP anchors). "
+        "wti_qc_sap: add lambda_qc_sap * query-conditioned SAP logits.",
+    )
+    parser.add_argument(
+        "--lambda_prob",
+        default=0.0,
+        type=float,
+        help="Weight for the probabilistic mean score when --final_score_mode=wti_prob_mu.",
+    )
+    parser.add_argument(
+        "--lambda_anchor",
+        default=0.0,
+        type=float,
+        help="Weight for the SAP AnchorWTI score when --final_score_mode=wti_anchor_wti.",
+    )
+    parser.add_argument(
+        "--lambda_qc_sap",
+        default=0.0,
+        type=float,
+        help="Weight for query-conditioned SAP score when --final_score_mode=wti_qc_sap.",
+    )
+    parser.add_argument(
+        "--qc_sap_temperature",
+        default=0.1,
+        type=float,
+        help="Softmax temperature for query-conditioned SAP anchor gate.",
+    )
+    parser.add_argument(
         "--w_uncertainty_reg",
         default=1e-3,
         type=float,
@@ -397,14 +432,15 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
              "Set <= 0 to disable warmup and immediately use full uncertainty weighting. "
              "During warmup: confidence = 1 - α + α / (1 + epistemic), α = step / warmup_steps.",
     )
-    # 不确定性训练模式：nig_mil / none
+    # 不确定性训练模式：evidential / nig_mil(deprecated) / none
     parser.add_argument(
         "--uncertainty_mode",
         default="none",
         type=str,
-        choices=["nig_mil", "none"],
+        choices=["evidential", "nig_mil", "none"],
         help="How to train uncertainty parameters. "
-             "nig_mil: use NIG variance for MIL sampling (replaces mixture variance). "
+             "evidential: enable current Dirichlet/evidential regularizers. "
+             "nig_mil: deprecated compatibility mode for old NIG-MIL experiments. "
              "none: disable evidential/neg_reg losses, keep SAP architecture (baseline).",
     )
     # MoE fusion weight control
@@ -420,7 +456,28 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         type=str,
         help="实验描述，会写入日志便于后续分析。",
     )
+    parser.add_argument(
+        "--experiment_profile",
+        default="default",
+        type=str,
+        choices=["default", "hygiene"],
+        help="Experiment profile. default preserves the historical mainline; "
+             "hygiene disables auxiliary losses for clean WTI-only attribution.",
+    )
     args = parser.parse_args()
+
+    if args.experiment_profile == "hygiene":
+        args.w_mil = 0.0
+        args.w_evidential = 0.0
+        args.w_neg_reg = 0.0
+        args.w_orth = 0.0
+        args.w_hard_negative = 0.0
+        args.w_uacl_intra = 0.0
+        args.w_uacl_kl = 0.0
+        args.uncertainty_mode = "none"
+        args.use_hard_negative_packing = False
+        args.use_explicit_hard_negative_loss = False
+        args.use_uacl_intra_alignment = False
 
     if args.sim_header == "tightTransf":
         args.loose_type = False
@@ -484,7 +541,11 @@ def set_seed_logger(args):
                 "uacl_temperature", "uacl_sample_strategy",
             ],
             "Annealing": ["anneal_warmup_epochs", "warmup_steps"],
-            "Uncertainty": ["uncertainty_mode"],
+            "Uncertainty": ["uncertainty_mode", "experiment_profile"],
+            "Scoring": [
+                "final_score_mode", "lambda_prob", "lambda_anchor",
+                "lambda_qc_sap", "qc_sap_temperature",
+            ],
         }
         printed_keys = set()
         for group, keys in key_params.items():
@@ -539,11 +600,15 @@ def init_model(args, device, n_gpu, local_rank):
     return model
 
 
+def _trainable_named_parameters(model):
+    return [(name, param) for name, param in model.named_parameters() if param.requires_grad]
+
+
 def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, local_rank, coef_lr=1.0):
     if hasattr(model, "module"):
         model = model.module
 
-    param_optimizer = list(model.named_parameters())
+    param_optimizer = _trainable_named_parameters(model)
 
     no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
 
@@ -906,12 +971,52 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     )
                 if _ac:
                     logger.info(
-                        "  [Chain-Aux]  evid_loss=%.4f  neg_reg=%.4f  evid_unc=%.4f  logsig_v=%.4f  anneal=%.3f",
+                        "  [Chain-Aux]  evid_loss=%.4f  neg_reg=%.4f  evid_unc=%.4f  "
+                        "logsig_v=%.4f  clamp_v=%.2f/%.2f  clamp_t=%.2f/%.2f  anneal=%.3f",
                         _ac.get("evidential_loss_val", 0),
                         _ac.get("neg_reg_loss_val", 0),
                         _ac.get("evidential_uncertainty", 0),
                         _ac["logsigma_v_mean"],
+                        _ac.get("logsigma_v_min_ratio", 0),
+                        _ac.get("logsigma_v_max_ratio", 0),
+                        _ac.get("logsigma_t_min_ratio", 0),
+                        _ac.get("logsigma_t_max_ratio", 0),
                         _ac.get("anneal_factor", 1.0),
+                    )
+                    logger.info(
+                        "  [Chain-Hygiene] score=%s profile=%s lambda_prob=%.3f lambda_anchor=%.3f "
+                        "lambda_qc_sap=%.3f qc_temp=%.3f "
+                        "mil=%d evid=%d neg=%d orth=%d hn=%d uacl=%d",
+                        _ac.get("score_source", "wti_logits"),
+                        _ac.get("experiment_profile", "default"),
+                        _ac.get("lambda_prob", 0),
+                        _ac.get("lambda_anchor", 0),
+                        _ac.get("lambda_qc_sap", 0),
+                        _ac.get("qc_sap_temperature", 0),
+                        int(_ac.get("active_mil", 0)),
+                        int(_ac.get("active_evidential", 0)),
+                        int(_ac.get("active_neg_reg", 0)),
+                        int(_ac.get("active_orth", 0)),
+                        int(_ac.get("active_hard_negative", 0)),
+                        int(_ac.get("active_uacl", 0)),
+                    )
+                    logger.info(
+                        "  [Chain-Score] prob_mu=%.3f/%.3f/%.3f  anchor_wti=%.3f/%.3f/%.3f  "
+                        "qc_sap=%.3f/%.3f/%.3f std=%.3f gate_ent=%.3f/%.3f gate_top1=%.3f/%.3f",
+                        _ac.get("prob_mu_diag", 0),
+                        _ac.get("prob_mu_off", 0),
+                        _ac.get("prob_mu_gap", 0),
+                        _ac.get("anchor_wti_diag", 0),
+                        _ac.get("anchor_wti_off", 0),
+                        _ac.get("anchor_wti_gap", 0),
+                        _ac.get("qc_sap_diag", 0),
+                        _ac.get("qc_sap_off", 0),
+                        _ac.get("qc_sap_gap", 0),
+                        _ac.get("qc_sap_std", 0),
+                        _ac.get("qc_gate_entropy_pos", 0),
+                        _ac.get("qc_gate_entropy_neg", 0),
+                        _ac.get("qc_gate_top1_mass_pos", 0),
+                        _ac.get("qc_gate_top1_mass_neg", 0),
                     )
                     if args.use_uacl_intra_alignment:
                         logger.info(
@@ -952,7 +1057,13 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 "  Ret  : pos=%.3f  neg=%.3f  gap=%.3f  pos_std=%.3f\n"
                 "  Evid : u_mode=%.4f±%.4f  epistemic_v=%.4f\n"
                 "  Text : var_t=%.4f  kl_t=%.4f\n"
-                "  Aux  : evid_loss=%.4f  neg_reg=%.4f  evid_unc=%.4f  logsig_v=%.4f\n"
+                "  Aux  : evid_loss=%.4f  neg_reg=%.4f  evid_unc=%.4f  logsig_v=%.4f  "
+                "clamp_v=%.2f/%.2f  clamp_t=%.2f/%.2f\n"
+                "  Hygiene : score=%s  profile=%s  lambda_prob=%.3f  lambda_anchor=%.3f  "
+                "lambda_qc_sap=%.3f  qc_temp=%.3f  "
+                "mil=%d  evid=%d  neg=%d  orth=%d  hn=%d  uacl=%d\n"
+                "  Score : prob_mu=%.3f/%.3f/%.3f  anchor_wti=%.3f/%.3f/%.3f  "
+                "qc_sap=%.3f/%.3f/%.3f std=%.3f gate_ent=%.3f/%.3f gate_top1=%.3f/%.3f\n"
                 "  UACL : intra=%.4f  text=%.4f  video=%.4f  kl=%.4f",
                 epoch + 1,
                 dc.get("pos_mean", 0), dc.get("neg_mean", 0),
@@ -963,6 +1074,26 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 pc.get("kl_text_mean", 0),
                 ac.get("evidential_loss_val", 0), ac.get("neg_reg_loss_val", 0),
                 ac.get("evidential_uncertainty", 0), ac.get("logsigma_v_mean", 0),
+                ac.get("logsigma_v_min_ratio", 0), ac.get("logsigma_v_max_ratio", 0),
+                ac.get("logsigma_t_min_ratio", 0), ac.get("logsigma_t_max_ratio", 0),
+                getattr(args, "final_score_mode", "wti"),
+                getattr(args, "experiment_profile", "default"),
+                getattr(args, "lambda_prob", 0),
+                getattr(args, "lambda_anchor", 0),
+                getattr(args, "lambda_qc_sap", 0),
+                getattr(args, "qc_sap_temperature", 0),
+                int(round(ac.get("active_mil", 0))),
+                int(round(ac.get("active_evidential", 0))),
+                int(round(ac.get("active_neg_reg", 0))),
+                int(round(ac.get("active_orth", 0))),
+                int(round(ac.get("active_hard_negative", 0))),
+                int(round(ac.get("active_uacl", 0))),
+                ac.get("prob_mu_diag", 0), ac.get("prob_mu_off", 0), ac.get("prob_mu_gap", 0),
+                ac.get("anchor_wti_diag", 0), ac.get("anchor_wti_off", 0), ac.get("anchor_wti_gap", 0),
+                ac.get("qc_sap_diag", 0), ac.get("qc_sap_off", 0), ac.get("qc_sap_gap", 0),
+                ac.get("qc_sap_std", 0),
+                ac.get("qc_gate_entropy_pos", 0), ac.get("qc_gate_entropy_neg", 0),
+                ac.get("qc_gate_top1_mass_pos", 0), ac.get("qc_gate_top1_mass_neg", 0),
                 ac.get("uacl_intra_loss_val", 0), ac.get("uacl_text_loss_val", 0),
                 ac.get("uacl_video_loss_val", 0), ac.get("uacl_kl_loss_val", 0),
             )
@@ -1081,9 +1212,18 @@ def _log_causal_summary_tsv(args, epoch: int, dc: dict, pc: dict, ac: dict = Non
         "u_mode_mean\tu_mode_std\tepistemic_v_mean\t"
         "var_text_mean\tkl_text_mean\t"
         "evidential_loss\tneg_reg_loss\tevidential_unc\tlogsigma_v\t"
+        "logsigma_v_min_ratio\tlogsigma_v_max_ratio\tlogsigma_t_min_ratio\tlogsigma_t_max_ratio\t"
+        "score_source\texperiment_profile\tfinal_score_mode\tlambda_prob\tlambda_anchor\t"
+        "lambda_qc_sap\tqc_sap_temperature\t"
+        "prob_mu_diag\tprob_mu_off\tprob_mu_gap\tanchor_wti_diag\tanchor_wti_off\tanchor_wti_gap\t"
+        "qc_sap_diag\tqc_sap_off\tqc_sap_gap\tqc_sap_std\t"
+        "qc_gate_entropy_pos\tqc_gate_entropy_neg\tqc_gate_top1_mass_pos\tqc_gate_top1_mass_neg\t"
+        "active_mil\tactive_evidential\tactive_neg_reg\tactive_orth\tactive_hard_negative\tactive_uacl\t"
         "uacl_intra_loss\tuacl_text_loss\tuacl_video_loss\tuacl_kl_loss\n"
     )
     def _f(x): return f"{x:.6f}" if isinstance(x, float) else "nan"
+    final_score_mode = getattr(args, "final_score_mode", "wti")
+    score_source = "wti_logits" if final_score_mode == "wti" else final_score_mode
     line = (
         f"{_dt.datetime.now().isoformat(timespec='seconds')}\t{run_id}\t{epoch + 1}\t"
         f"{_f(dc.get('pos_mean',0))}\t{_f(dc.get('neg_mean',0))}\t"
@@ -1093,6 +1233,23 @@ def _log_causal_summary_tsv(args, epoch: int, dc: dict, pc: dict, ac: dict = Non
         f"{_f(pc.get('var_text_mean',0))}\t{_f(pc.get('kl_text_mean',0))}\t"
         f"{_f(ac.get('evidential_loss_val',0))}\t{_f(ac.get('neg_reg_loss_val',0))}\t"
         f"{_f(ac.get('evidential_uncertainty',0))}\t{_f(ac.get('logsigma_v_mean',0))}\t"
+        f"{_f(ac.get('logsigma_v_min_ratio',0))}\t{_f(ac.get('logsigma_v_max_ratio',0))}\t"
+        f"{_f(ac.get('logsigma_t_min_ratio',0))}\t{_f(ac.get('logsigma_t_max_ratio',0))}\t"
+        f"{score_source}\t{getattr(args, 'experiment_profile', 'default')}\t"
+        f"{final_score_mode}\t{_f(getattr(args, 'lambda_prob', 0.0))}\t"
+        f"{_f(getattr(args, 'lambda_anchor', 0.0))}\t"
+        f"{_f(getattr(args, 'lambda_qc_sap', 0.0))}\t"
+        f"{_f(getattr(args, 'qc_sap_temperature', 0.0))}\t"
+        f"{_f(ac.get('prob_mu_diag',0))}\t{_f(ac.get('prob_mu_off',0))}\t{_f(ac.get('prob_mu_gap',0))}\t"
+        f"{_f(ac.get('anchor_wti_diag',0))}\t{_f(ac.get('anchor_wti_off',0))}\t"
+        f"{_f(ac.get('anchor_wti_gap',0))}\t"
+        f"{_f(ac.get('qc_sap_diag',0))}\t{_f(ac.get('qc_sap_off',0))}\t"
+        f"{_f(ac.get('qc_sap_gap',0))}\t{_f(ac.get('qc_sap_std',0))}\t"
+        f"{_f(ac.get('qc_gate_entropy_pos',0))}\t{_f(ac.get('qc_gate_entropy_neg',0))}\t"
+        f"{_f(ac.get('qc_gate_top1_mass_pos',0))}\t{_f(ac.get('qc_gate_top1_mass_neg',0))}\t"
+        f"{int(round(ac.get('active_mil',0)))}\t{int(round(ac.get('active_evidential',0)))}\t"
+        f"{int(round(ac.get('active_neg_reg',0)))}\t{int(round(ac.get('active_orth',0)))}\t"
+        f"{int(round(ac.get('active_hard_negative',0)))}\t{int(round(ac.get('active_uacl',0)))}\t"
         f"{_f(ac.get('uacl_intra_loss_val',0))}\t{_f(ac.get('uacl_text_loss_val',0))}\t"
         f"{_f(ac.get('uacl_video_loss_val',0))}\t{_f(ac.get('uacl_kl_loss_val',0))}\n"
     )

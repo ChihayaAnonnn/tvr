@@ -16,7 +16,7 @@ set -euo pipefail
 #   INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> \
 #   bash eval.sh
 #
-#   # NIG-MIL mode
+#   # Deprecated NIG-MIL compatibility mode
 #   INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> \
 #   UNCERTAINTY_MODE=nig_mil \
 #   bash eval.sh
@@ -32,7 +32,8 @@ ATTR_PATH=${ATTR_PATH:-}
 FUSION_MODE=${FUSION_MODE:-prob_mos}          # prob_mos | logits_linear
 ROPE_MODE=${ROPE_MODE:-2d}                    # none | 2d | 3d
 USE_ADA_NORM=${USE_ADA_NORM:-1}              # 0 | 1
-UNCERTAINTY_MODE=${UNCERTAINTY_MODE:-none}    # none | nig_mil
+UNCERTAINTY_MODE=${UNCERTAINTY_MODE:-evidential}    # evidential | none | nig_mil
+EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-default}   # default | hygiene
 
 MSRVTT_DATA_PATH=${MSRVTT_DATA_PATH:-/data2/hxj/data/MSRVTT}
 MSVD_DATA_PATH=${MSVD_DATA_PATH:-/data2/hxj/data/MSVD}
@@ -65,6 +66,12 @@ EXTRA_ARGS+=(--eval_branch_mode "${EVAL_BRANCH_MODE}")
 EXTRA_ARGS+=(--fusion_mode "${FUSION_MODE}")
 EXTRA_ARGS+=(--rope_mode "${ROPE_MODE}")
 EXTRA_ARGS+=(--uncertainty_mode "${UNCERTAINTY_MODE}")
+EXTRA_ARGS+=(--experiment_profile "${EXPERIMENT_PROFILE}")
+EXTRA_ARGS+=(--final_score_mode "${FINAL_SCORE_MODE:-wti}")
+EXTRA_ARGS+=(--lambda_prob "${LAMBDA_PROB:-0.0}")
+EXTRA_ARGS+=(--lambda_anchor "${LAMBDA_ANCHOR:-0.0}")
+EXTRA_ARGS+=(--lambda_qc_sap "${LAMBDA_QC_SAP:-0.0}")
+EXTRA_ARGS+=(--qc_sap_temperature "${QC_SAP_TEMPERATURE:-0.1}")
 if [[ "${USE_ADA_NORM}" == "1" ]]; then
   EXTRA_ARGS+=(--use_ada_norm)
 fi
@@ -103,7 +110,8 @@ fi
 # 单卡评测（用 torchrun 注入分布式环境变量）。注意：此脚本不传 --DSL，确保 DSL 关闭。
 echo "[eval.sh] RUN_ID=${RUN_ID}"
 echo "[eval.sh] DATATYPE=${DATATYPE} EVAL_BRANCH_MODE=${EVAL_BRANCH_MODE} USE_ATTRIBUTES=${USE_ATTRIBUTES}"
-echo "[eval.sh] FUSION_MODE=${FUSION_MODE} ROPE_MODE=${ROPE_MODE} USE_ADA_NORM=${USE_ADA_NORM} UNCERTAINTY_MODE=${UNCERTAINTY_MODE}"
+echo "[eval.sh] FUSION_MODE=${FUSION_MODE} ROPE_MODE=${ROPE_MODE} USE_ADA_NORM=${USE_ADA_NORM} UNCERTAINTY_MODE=${UNCERTAINTY_MODE} EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}"
+echo "[eval.sh] FINAL_SCORE_MODE=${FINAL_SCORE_MODE:-wti} LAMBDA_PROB=${LAMBDA_PROB:-0.0} LAMBDA_ANCHOR=${LAMBDA_ANCHOR:-0.0}"
 echo "[eval.sh] INIT_MODEL=${INIT_MODEL}"
 echo "[eval.sh] OUTPUT_DIR=${OUTPUT_DIR}"
 if [[ "${USE_ATTRIBUTES}" == "1" ]]; then

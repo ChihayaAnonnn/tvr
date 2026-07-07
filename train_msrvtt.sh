@@ -14,6 +14,15 @@ ATTR_NUM_BLOCKS=4
 # Auto-run id to avoid overwriting checkpoints/logs across runs
 RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
 OUTPUT_DIR=${OUTPUT_DIR:-ckpts/ckpt_msrvtt_${RUN_ID}}
+EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-default}
+if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
+    echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
+    exit 2
+fi
+EXTRA_PROFILE_ARGS=()
+if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
+    EXTRA_PROFILE_ARGS+=(--w_mil 0 --w_evidential 0 --w_neg_reg 0 --w_orth 0 --uncertainty_mode none)
+fi
 
 # 显存：batch 256 + accum 1，有效 batch = 256。
 # 2 卡时每卡 micro-batch 128；4 卡时每卡 micro-batch 64。
@@ -51,6 +60,11 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     --w_neg_reg 5e-2 \
     --w_orth 0.1 \
     --w_uncertainty_reg 1e-3 \
+    --final_score_mode "${FINAL_SCORE_MODE:-wti}" \
+    --lambda_prob "${LAMBDA_PROB:-0.0}" \
+    --lambda_anchor "${LAMBDA_ANCHOR:-0.0}" \
+    --lambda_qc_sap "${LAMBDA_QC_SAP:-0.0}" \
+    --qc_sap_temperature "${QC_SAP_TEMPERATURE:-0.1}" \
     --gate_log_interval 100 \
     --log_moe_weights \
     --fusion_mode prob_mos \
@@ -60,9 +74,11 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     --rope_mode 2d \
     --use_ada_norm \
     --anneal_warmup_epochs 0 \
-    --uncertainty_mode "${UNCERTAINTY_MODE:-none}" \
+    --uncertainty_mode "${UNCERTAINTY_MODE:-evidential}" \
+    --experiment_profile "${EXPERIMENT_PROFILE}" \
     --experiment_desc "${EXPERIMENT_DESC:-}" \
-    "$@" # --enhanced_fusion_input \
+    "$@" \
+    "${EXTRA_PROFILE_ARGS[@]}" # --enhanced_fusion_input \
 # --use_attributes \
 # --msrvtt_attributes_path "${ATTRIBUTES_PATH}" \
 # --max_words_attrs "${MAX_WORDS_ATTRS}" \

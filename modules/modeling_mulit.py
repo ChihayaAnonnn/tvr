@@ -160,6 +160,14 @@ def check_attr(target_name, task_config):
 
 
 class UATVR(CLIP4ClipPreTrainedModel):
+    HYGIENE_FROZEN_PARAMETER_PREFIXES = (
+        "sap.",
+        "pie_net_text.",
+        "uncertain_net_text.",
+        "ada_norm_text.",
+        "spatial_enhancer.",
+    )
+
     def __init__(self, cross_config, clip_state_dict, task_config):
         super(UATVR, self).__init__(cross_config)
         self.task_config = task_config
@@ -289,6 +297,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.video_weight_fc = nn.Sequential(
             nn.Linear(transformer_width, transformer_width), nn.ReLU(inplace=True), nn.Linear(transformer_width, 1)
         )
+        self.qc_sap_text_proj = nn.Linear(transformer_width, transformer_width)
+        self.qc_sap_anchor_proj = nn.Linear(transformer_width, transformer_width)
 
         # Semantic Anchor Probing (SAP): decomposes video into semantic anchors
         # with per-anchor uncertainty for the probabilistic pipeline.
@@ -319,6 +329,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.w_neg_reg = getattr(self.task_config, "w_neg_reg", 1e-2)
         self.w_uncertainty_reg = getattr(self.task_config, "w_uncertainty_reg", 1e-3)
         self.w_orth = getattr(self.task_config, "w_orth", 0.0)
+        self.final_score_mode = getattr(self.task_config, "final_score_mode", "wti")
+        self.lambda_prob = getattr(self.task_config, "lambda_prob", 0.0)
+        self.lambda_anchor = getattr(self.task_config, "lambda_anchor", 0.0)
+        self.lambda_qc_sap = getattr(self.task_config, "lambda_qc_sap", 0.0)
+        self.qc_sap_temperature = getattr(self.task_config, "qc_sap_temperature", 0.1)
         self.use_explicit_hard_negative_loss = getattr(self.task_config, "use_explicit_hard_negative_loss", False)
         self.w_hard_negative = getattr(self.task_config, "w_hard_negative", 5e-2)
         self.use_uacl_intra_alignment = getattr(self.task_config, "use_uacl_intra_alignment", False)
@@ -326,13 +341,15 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.w_uacl_kl = getattr(self.task_config, "w_uacl_kl", 1e-4)
         self.uacl_temperature = getattr(self.task_config, "uacl_temperature", 0.07)
         self.uacl_sample_strategy = getattr(self.task_config, "uacl_sample_strategy", "closest")
+        self.experiment_profile = getattr(self.task_config, "experiment_profile", "default")
 
         # 退火系数：默认关闭；warmup_epochs > 0 时前 N 个 epoch 线性增大到 1.0
         self.anneal_warmup_epochs = getattr(self.task_config, "anneal_warmup_epochs", 0)
         self._current_epoch = 0  # 由外部 train_loop 更新
 
-        # 不确定性训练模式：nig_mil / none
+        # 不确定性训练模式：evidential / nig_mil(deprecated) / none
         self.uncertainty_mode = getattr(self.task_config, "uncertainty_mode", "none")
+        self.loss_activations = self.resolve_loss_activations(self.task_config)
 
         # Optional clamp for log-variance to stabilize sampling/KL terms
         self.log_sigma_min = getattr(self.task_config, "log_sigma_min", None)
@@ -347,6 +364,16 @@ class UATVR(CLIP4ClipPreTrainedModel):
         show_log(task_config, "\t Extra text Class token number: {}".format(self.extra_cls_text_num))
         show_log(task_config, "\t Number of video sampling probabilistic embeddings: {}".format(self.n_video_samples))
         show_log(task_config, "\t Number of text sampling probabilistic embeddings: {}".format(self.n_text_samples))
+        show_log(
+            task_config,
+            "\t Final score mode: {} (lambda_prob={}, lambda_anchor={}, lambda_qc_sap={}, qc_temp={})".format(
+                self.final_score_mode,
+                self.lambda_prob,
+                self.lambda_anchor,
+                self.lambda_qc_sap,
+                self.qc_sap_temperature,
+            ),
+        )
 
         # 诊断统计步数计数器（每 N 步采集一次，减少显存和计算开销）
         self._diag_step = 0
@@ -356,6 +383,12 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self._aux_chain = {}
 
         self.apply(self.init_weights)
+        frozen_count = self.freeze_inactive_parameters_for_profile()
+        if frozen_count > 0:
+            show_log(
+                task_config,
+                "\t Frozen hygiene-only auxiliary parameters: {}".format(frozen_count),
+            )
 
     @staticmethod
     def _flatten_video_input(video):
@@ -393,7 +426,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         if self.training:
             hard_visual_cls = None
-            if self.use_explicit_hard_negative_loss and hard_video is not None and hard_video_mask is not None:
+            if self.loss_activations["hard_negative"] and hard_video is not None and hard_video_mask is not None:
                 hard_video_mask = hard_video_mask.view(-1, hard_video_mask.shape[-1])
                 hard_video, hard_video_len = self._flatten_video_input(hard_video)
                 hard_visual_cls, _hard_visual_hidden = self.get_visual_output(
@@ -635,6 +668,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
             epistemic_video = allgather(epistemic_video.contiguous(), self.task_config)
             u_mode = allgather(u_mode.contiguous(), self.task_config)
             alpha_dir = allgather(alpha_dir.contiguous(), self.task_config)
+            if self.final_score_mode in {"wti_anchor_wti", "wti_qc_sap"}:
+                anchors = allgather(anchors.contiguous(), self.task_config)
             visual_output = allgather(visual_output.contiguous(), self.task_config)
             video_mask = allgather(video_mask.contiguous(), self.task_config)
             if hard_visual_output is not None and hard_video_mask is not None:
@@ -661,9 +696,17 @@ class UATVR(CLIP4ClipPreTrainedModel):
         # ===== Evidential 相似度：cosine × epistemic 置信折扣 =====
         ev_sim = self._evidential_similarity(mu_video, text_pooled, epistemic_video)
 
+        active = self.loss_activations if self.training else None
+        needs_text_samples = bool(self.training and (active["mil"] or active["uacl_intra"]))
+
         # ===== Text 侧概率建模（保持 Gaussian，非对称设计） =====
-        prob_text = self.probabilistic_text(text_pooled, text_token[:, 0:word_num, :].contiguous())
-        prob_text_embedding = prob_text["embedding"]
+        prob_text = self.probabilistic_text(
+            text_pooled,
+            text_token[:, 0:word_num, :].contiguous(),
+            attention_mask[:, 0:word_num].contiguous(),
+            sample_embeddings=needs_text_samples,
+        )
+        prob_text_embedding = prob_text.get("embedding")
         prob_text_logsigma = prob_text["logsigma"]
 
         # ===== WTI：帧级 token 交互打分 =====
@@ -672,26 +715,79 @@ class UATVR(CLIP4ClipPreTrainedModel):
             text_token, visual_output, attention_mask, video_mask
         ) * logit_scale
 
+        prob_mu_logits = None
+        anchor_wti_logits = None
+        qc_sap_logits = None
+        qc_sap_stats = {}
+        if self.final_score_mode == "wti_prob_mu":
+            prob_mu_logits = torch.matmul(prob_text["mean"], mu_video.t()) * logit_scale
+        elif self.final_score_mode == "wti_anchor_wti":
+            anchor_video_mask = torch.ones(
+                anchors.size(0),
+                anchors.size(1),
+                dtype=video_mask.dtype,
+                device=anchors.device,
+            )
+            anchor_wti_logits = self.weighted_token_wise_intersection(
+                text_token,
+                F.normalize(anchors, dim=-1),
+                attention_mask,
+                anchor_video_mask,
+            ) * logit_scale
+        elif self.final_score_mode == "wti_qc_sap":
+            qc_sap_logits, qc_sap_stats = self.compute_query_conditioned_sap_logits(
+                self.qc_sap_text_proj(text_pooled),
+                self.qc_sap_anchor_proj(anchors),
+                logit_scale=logit_scale,
+                temperature=self.qc_sap_temperature,
+            )
+        weighted_logits, score_source = self.compose_final_retrieval_logits(
+            wti_logits,
+            final_score_mode=self.final_score_mode,
+            lambda_prob=self.lambda_prob,
+            lambda_anchor=self.lambda_anchor,
+            lambda_qc_sap=self.lambda_qc_sap,
+            prob_mu_logits=prob_mu_logits,
+            anchor_wti_logits=anchor_wti_logits,
+            qc_sap_logits=qc_sap_logits,
+        )
+
         if self.training:
             bs = mu_video.size(0)
             n_video = self.n_video_samples
             n_text = self.n_text_samples
             dim = mu_video.size(-1)
 
-            # MIL loss：从 N(gamma, logsigma) 采样做多实例对比
-            prob_video_embedding = sample_gaussian_tensors(mu_video, logsigma_video, n_video)
-            prob_sim_v = torch.einsum("ad,bd->ab", prob_video_embedding.view(-1, dim), prob_text_embedding.view(-1, dim))
-            prob_sim_t = torch.einsum("ad,bd->ab", prob_text_embedding.view(-1, dim), prob_video_embedding.view(-1, dim))
-            MIL_loss = (self.loss_MIL_fct(prob_sim_v, bs, n_video, n_text)
-                        + self.loss_MIL_fct(prob_sim_t, bs, n_video, n_text)) / 2
+            prob_video_embedding = None
+            if active["mil"] or active["uacl_intra"]:
+                prob_video_embedding = sample_gaussian_tensors(mu_video, logsigma_video, n_video)
 
-            # Evidential NLL + neg_reg：仅在 uncertainty_mode=none 时保留（作为对照）
-            # 方案 A/B 通过 MIL 或 WTI confidence 训练不确定性，不再需要独立的 evidential loss
-            if self.uncertainty_mode == "none":
+            if active["mil"]:
+                # MIL loss：从 N(gamma, logsigma) 采样做多实例对比
+                prob_sim_v = torch.einsum(
+                    "ad,bd->ab",
+                    prob_video_embedding.view(-1, dim),
+                    prob_text_embedding.view(-1, dim),
+                )
+                prob_sim_t = torch.einsum(
+                    "ad,bd->ab",
+                    prob_text_embedding.view(-1, dim),
+                    prob_video_embedding.view(-1, dim),
+                )
+                MIL_loss = (self.loss_MIL_fct(prob_sim_v, bs, n_video, n_text)
+                            + self.loss_MIL_fct(prob_sim_t, bs, n_video, n_text)) / 2
+            else:
+                MIL_loss = torch.tensor(0.0, device=mu_video.device)
+
+            # Evidential NLL + neg_reg：仅在 uncertainty_mode=evidential 时启用
+            if active["evidential"]:
                 evidential_loss = self._evidential_nll_loss(ev_sim, alpha_dir)
-                neg_reg_loss = self._evidential_neg_reg_loss(ev_sim)
             else:
                 evidential_loss = torch.tensor(0.0, device=mu_video.device)
+
+            if active["neg_reg"]:
+                neg_reg_loss = self._evidential_neg_reg_loss(ev_sim)
+            else:
                 neg_reg_loss = torch.tensor(0.0, device=mu_video.device)
 
             # 退火系数：warmup_epochs <= 0 时关闭退火，直接使用完整权重
@@ -700,14 +796,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
             else:
                 anneal_factor = min(1.0, self._current_epoch / self.anneal_warmup_epochs)
 
-            # B1-only：置信度加权已移除，WTI logits 直接作为检索分数
-            weighted_logits = wti_logits
-
             hard_negative_loss = torch.tensor(0.0, device=mu_video.device)
             hard_diag_mean = None
             hard_pos_gap = None
             if (
-                self.use_explicit_hard_negative_loss
+                active["hard_negative"]
                 and hard_visual_output is not None
                 and hard_video_mask is not None
             ):
@@ -731,7 +824,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
             uacl_kl_loss = torch.tensor(0.0, device=mu_video.device)
             uacl_text_loss = torch.tensor(0.0, device=mu_video.device)
             uacl_video_loss = torch.tensor(0.0, device=mu_video.device)
-            if self.use_uacl_intra_alignment:
+            if active["uacl_intra"]:
+                if prob_video_embedding is None:
+                    prob_video_embedding = sample_gaussian_tensors(mu_video, logsigma_video, n_video)
                 text_aug = self._select_uacl_gaussian_sample(
                     prob_text["mean"],
                     prob_text_embedding,
@@ -753,13 +848,14 @@ class UATVR(CLIP4ClipPreTrainedModel):
                     temperature=self.uacl_temperature,
                 )
                 uacl_intra_loss = (uacl_text_loss + uacl_video_loss) / 2.0
+            if active["uacl_kl"]:
                 uacl_kl_loss = (self._logvar_kl(prob_text_logsigma) + self._logvar_kl(logsigma_video)) / 2.0
 
             # ── 诊断统计（不参与 loss，detach 后计算，每 N 步采集一次） ──
             self._diag_step += 1
             if self._diag_step % self._diag_interval == 0:
                 with torch.no_grad():
-                    S = wti_logits.detach()
+                    S = weighted_logits.detach()
                     diag = S.diagonal()
                     B_s = S.size(0)
                     mask_off = ~torch.eye(B_s, dtype=torch.bool, device=S.device)
@@ -770,6 +866,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
                         "gap":      float(diag.mean() - off.mean()),
                         "pos_std":  float(diag.std(unbiased=False)),
                     }
+                    prob_stats = self._matrix_gap_stats(prob_mu_logits)
+                    anchor_stats = self._matrix_gap_stats(anchor_wti_logits)
 
                     # 链二：Evidential 不确定性统计
                     ls_t = prob_text_logsigma.detach()
@@ -786,8 +884,39 @@ class UATVR(CLIP4ClipPreTrainedModel):
                         "evidential_loss_val":      float(evidential_loss.item()),
                         "neg_reg_loss_val":         float(neg_reg_loss.item()),
                         "logsigma_v_mean":          float(logsigma_video.detach().mean().item()),
+                        "logsigma_v_min_ratio":     self._bound_ratio(logsigma_video.detach(), self.log_sigma_min, "min"),
+                        "logsigma_v_max_ratio":     self._bound_ratio(logsigma_video.detach(), self.log_sigma_max, "max"),
+                        "logsigma_t_min_ratio":     self._bound_ratio(prob_text_logsigma.detach(), self.log_sigma_min, "min"),
+                        "logsigma_t_max_ratio":     self._bound_ratio(prob_text_logsigma.detach(), self.log_sigma_max, "max"),
                         "anneal_factor":            float(anneal_factor),
                         "uncertainty_mode":         self.uncertainty_mode,
+                        "experiment_profile":       self.experiment_profile,
+                        "score_source":             score_source,
+                        "final_score_mode":         self.final_score_mode,
+                        "lambda_prob":              float(self.lambda_prob),
+                        "lambda_anchor":            float(self.lambda_anchor),
+                        "lambda_qc_sap":            float(self.lambda_qc_sap),
+                        "qc_sap_temperature":       float(self.qc_sap_temperature),
+                        "prob_mu_diag":             prob_stats["diag"],
+                        "prob_mu_off":              prob_stats["off"],
+                        "prob_mu_gap":              prob_stats["gap"],
+                        "anchor_wti_diag":          anchor_stats["diag"],
+                        "anchor_wti_off":           anchor_stats["off"],
+                        "anchor_wti_gap":           anchor_stats["gap"],
+                        "qc_sap_diag":              qc_sap_stats.get("diag", 0.0),
+                        "qc_sap_off":               qc_sap_stats.get("off", 0.0),
+                        "qc_sap_gap":               qc_sap_stats.get("gap", 0.0),
+                        "qc_sap_std":               qc_sap_stats.get("std", 0.0),
+                        "qc_gate_entropy_pos":      qc_sap_stats.get("gate_entropy_pos", 0.0),
+                        "qc_gate_entropy_neg":      qc_sap_stats.get("gate_entropy_neg", 0.0),
+                        "qc_gate_top1_mass_pos":    qc_sap_stats.get("gate_top1_mass_pos", 0.0),
+                        "qc_gate_top1_mass_neg":    qc_sap_stats.get("gate_top1_mass_neg", 0.0),
+                        "active_mil":               int(active["mil"]),
+                        "active_evidential":        int(active["evidential"]),
+                        "active_neg_reg":           int(active["neg_reg"]),
+                        "active_orth":              int(active["orth"]),
+                        "active_hard_negative":     int(active["hard_negative"]),
+                        "active_uacl":              int(active["uacl_intra"] or active["uacl_kl"]),
                         "hard_negative_loss_val":    float(hard_negative_loss.detach().item()),
                         "hard_diag_mean":            hard_diag_mean if hard_diag_mean is not None else 0.0,
                         "hard_pos_gap":              hard_pos_gap if hard_pos_gap is not None else 0.0,
@@ -800,7 +929,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
             # Anchor 正交损失：只对 SAP 的 K 个语义 anchor
             orth_loss = torch.tensor(0.0, device=anchors.device)
-            if self.w_orth > 0:
+            if active["orth"]:
                 anchor_norm = F.normalize(anchors, dim=-1)
                 sim_qq = torch.bmm(anchor_norm, anchor_norm.transpose(1, 2))
                 eye = torch.eye(sim_qq.size(1), device=sim_qq.device).unsqueeze(0)
@@ -818,7 +947,176 @@ class UATVR(CLIP4ClipPreTrainedModel):
             loss["uacl_kl_loss"] = self.w_uacl_kl * uacl_kl_loss
             return loss
         else:
-            return wti_logits
+            return weighted_logits
+
+    @staticmethod
+    def _positive_weight(task_config, name, default=0.0):
+        return float(getattr(task_config, name, default)) > 0.0
+
+    @staticmethod
+    def final_score_uses_sap(task_config):
+        return getattr(task_config, "final_score_mode", "wti") in {"wti_prob_mu", "wti_anchor_wti", "wti_qc_sap"}
+
+    @staticmethod
+    def final_score_uses_text_probability(task_config):
+        return getattr(task_config, "final_score_mode", "wti") == "wti_prob_mu"
+
+    @staticmethod
+    def compose_final_retrieval_logits(
+        wti_logits,
+        final_score_mode="wti",
+        lambda_prob=0.0,
+        lambda_anchor=0.0,
+        lambda_qc_sap=0.0,
+        prob_mu_logits=None,
+        anchor_wti_logits=None,
+        qc_sap_logits=None,
+    ):
+        if final_score_mode == "wti":
+            return wti_logits, "wti_logits"
+        if final_score_mode == "wti_prob_mu":
+            if prob_mu_logits is None:
+                raise ValueError("prob_mu_logits is required when final_score_mode=wti_prob_mu")
+            return wti_logits + float(lambda_prob) * prob_mu_logits, "wti_prob_mu"
+        if final_score_mode == "wti_anchor_wti":
+            if anchor_wti_logits is None:
+                raise ValueError("anchor_wti_logits is required when final_score_mode=wti_anchor_wti")
+            return wti_logits + float(lambda_anchor) * anchor_wti_logits, "wti_anchor_wti"
+        if final_score_mode == "wti_qc_sap":
+            if qc_sap_logits is None:
+                raise ValueError("qc_sap_logits is required when final_score_mode=wti_qc_sap")
+            return wti_logits + float(lambda_qc_sap) * qc_sap_logits, "wti_qc_sap"
+        raise ValueError(f"Unsupported final_score_mode={final_score_mode}")
+
+    @staticmethod
+    def _matrix_gap_stats(logits):
+        if logits is None:
+            return {"diag": 0.0, "off": 0.0, "gap": 0.0, "std": 0.0}
+        logits = logits.detach()
+        diag = logits.diagonal()
+        mask_off = ~torch.eye(logits.size(0), dtype=torch.bool, device=logits.device)
+        off = logits[mask_off]
+        return {
+            "diag": float(diag.mean().item()),
+            "off": float(off.mean().item()) if off.numel() > 0 else 0.0,
+            "gap": float((diag.mean() - off.mean()).item()) if off.numel() > 0 else 0.0,
+            "std": float(logits.std(unbiased=False).item()) if logits.numel() > 0 else 0.0,
+        }
+
+    @staticmethod
+    def compute_query_conditioned_sap_logits(text_pooled, anchors, logit_scale, temperature=0.1):
+        temperature = max(float(temperature), 1e-6)
+        text_norm = F.normalize(text_pooled, dim=-1)
+        anchor_norm = F.normalize(anchors, dim=-1)
+        gate_scores = torch.einsum("id,jkd->ijk", text_norm, anchor_norm) / temperature
+        gate = torch.softmax(gate_scores, dim=-1)
+        pair_video = torch.einsum("ijk,jkd->ijd", gate, anchor_norm)
+        pair_video = F.normalize(pair_video, dim=-1)
+        logits = torch.einsum("id,ijd->ij", text_norm, pair_video) * logit_scale
+
+        stats = UATVR._matrix_gap_stats(logits)
+        with torch.no_grad():
+            entropy = -(gate.detach() * torch.log(gate.detach() + 1e-8)).sum(dim=-1)
+            top1_mass = gate.detach().max(dim=-1).values
+            diag_len = min(gate.size(0), gate.size(1))
+            if diag_len > 0:
+                diag_idx = torch.arange(diag_len, device=gate.device)
+                pos_entropy = entropy[diag_idx, diag_idx]
+                pos_top1 = top1_mass[diag_idx, diag_idx]
+                off_mask = torch.ones_like(entropy, dtype=torch.bool)
+                off_mask[diag_idx, diag_idx] = False
+                neg_entropy = entropy[off_mask]
+                neg_top1 = top1_mass[off_mask]
+                stats.update(
+                    {
+                        "gate_entropy_pos": float(pos_entropy.mean().item()),
+                        "gate_entropy_neg": float(neg_entropy.mean().item()) if neg_entropy.numel() > 0 else 0.0,
+                        "gate_top1_mass_pos": float(pos_top1.mean().item()),
+                        "gate_top1_mass_neg": float(neg_top1.mean().item()) if neg_top1.numel() > 0 else 0.0,
+                    }
+                )
+            else:
+                stats.update(
+                    {
+                        "gate_entropy_pos": 0.0,
+                        "gate_entropy_neg": 0.0,
+                        "gate_top1_mass_pos": 0.0,
+                        "gate_top1_mass_neg": 0.0,
+                    }
+                )
+        return logits, stats
+
+    @classmethod
+    def should_freeze_parameter_for_profile(cls, name, task_config):
+        profile = getattr(task_config, "experiment_profile", "default")
+        final_score_mode = getattr(task_config, "final_score_mode", "wti")
+        if name.startswith("qc_sap_") and final_score_mode != "wti_qc_sap":
+            return True
+        if profile != "hygiene":
+            return False
+        if (
+            final_score_mode in {"wti_anchor_wti", "wti_qc_sap"}
+            and (name.startswith("sap.anchor_proj.") or name.startswith("sap.evidential_head."))
+        ):
+            return True
+        if name.startswith("sap.") and cls.final_score_uses_sap(task_config):
+            return False
+        if name.startswith("pie_net_text.") and cls.final_score_uses_text_probability(task_config):
+            return False
+        if (
+            cls.final_score_uses_text_probability(task_config)
+            and bool(getattr(task_config, "use_ada_norm", False))
+            and (name.startswith("uncertain_net_text.") or name.startswith("ada_norm_text."))
+        ):
+            return False
+        return name.startswith(cls.HYGIENE_FROZEN_PARAMETER_PREFIXES)
+
+    def freeze_inactive_parameters_for_profile(self):
+        frozen_count = 0
+        for name, param in self.named_parameters():
+            if self.should_freeze_parameter_for_profile(name, self.task_config):
+                param.requires_grad = False
+                frozen_count += 1
+        return frozen_count
+
+    @staticmethod
+    def resolve_loss_activations(task_config):
+        profile = getattr(task_config, "experiment_profile", "default")
+        if profile == "hygiene":
+            return {
+                "mil": False,
+                "evidential": False,
+                "neg_reg": False,
+                "orth": False,
+                "hard_negative": False,
+                "uacl_intra": False,
+                "uacl_kl": False,
+            }
+
+        uncertainty_mode = getattr(task_config, "uncertainty_mode", "none")
+        use_evidential = uncertainty_mode == "evidential"
+        use_uacl = bool(getattr(task_config, "use_uacl_intra_alignment", False))
+        use_hn = bool(getattr(task_config, "use_explicit_hard_negative_loss", False))
+        return {
+            "mil": UATVR._positive_weight(task_config, "w_mil", 1e-2),
+            "evidential": use_evidential and UATVR._positive_weight(task_config, "w_evidential", 1e-2),
+            "neg_reg": use_evidential and UATVR._positive_weight(task_config, "w_neg_reg", 1e-2),
+            "orth": UATVR._positive_weight(task_config, "w_orth", 0.0),
+            "hard_negative": use_hn and UATVR._positive_weight(task_config, "w_hard_negative", 5e-2),
+            "uacl_intra": use_uacl and UATVR._positive_weight(task_config, "w_uacl_intra", 1e-2),
+            "uacl_kl": use_uacl and UATVR._positive_weight(task_config, "w_uacl_kl", 1e-4),
+        }
+
+    @staticmethod
+    def _bound_ratio(values, bound, mode):
+        if bound is None:
+            return 0.0
+        bound = float(bound)
+        if mode == "min":
+            return float((values <= bound + 1e-6).to(dtype=torch.float).mean().item())
+        if mode == "max":
+            return float((values >= bound - 1e-6).to(dtype=torch.float).mean().item())
+        raise ValueError(f"Unknown bound ratio mode: {mode}")
 
     @staticmethod
     def _hard_negative_infonce_loss(retrieval_logits, hard_logits, valid_mask):
@@ -992,17 +1290,20 @@ class UATVR(CLIP4ClipPreTrainedModel):
         retrieve_logits = (t2v_logits + v2t_logits) / 2.0
         return retrieve_logits
 
-    def probabilistic_text(self, text_pooled, text_token):
+    def probabilistic_text(self, text_pooled, text_token, attention_mask=None, sample_embeddings=True):
         output = {}
+        pad_mask = None
+        if attention_mask is not None:
+            pad_mask = attention_mask == 0
 
         out, attn, residual = self.pie_net_text(
-            text_pooled, text_token
+            text_pooled, text_token, pad_mask=pad_mask
         )  # (B 512) (B 32 512)   multiheadatt + fc + sigmoid + (residual) + laynorm
         output["attention"] = attn
         output["residual"] = residual
 
         uncertain_out = self.uncertain_net_text(
-            text_pooled, text_token
+            text_pooled, text_token, pad_mask=pad_mask
         )  # (B 512) (B 32 512)   multiheadatt + fc + (residual)
         logsigma = uncertain_out["logsigma"]
         if self.log_sigma_min is not None and self.log_sigma_max is not None:
@@ -1015,7 +1316,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
         out = l2_normalize(out)
         output["mean"] = out
 
-        output["embedding"] = sample_gaussian_tensors(out, logsigma, self.n_text_samples)
+        if sample_embeddings:
+            output["embedding"] = sample_gaussian_tensors(out, logsigma, self.n_text_samples)
 
         return output
 

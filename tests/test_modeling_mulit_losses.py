@@ -16,6 +16,8 @@ spatial_enhancer_stub = types.ModuleType("modules.spatial_enhancer")
 spatial_enhancer_stub.SpatialEnhancer = object
 sys.modules["modules.spatial_enhancer"] = spatial_enhancer_stub
 UATVR = importlib.import_module("modules.modeling_mulit").UATVR
+PIENet = importlib.import_module("prob_models.pie_model").PIENet
+UncertaintyModuleText = importlib.import_module("prob_models.uncertainty_module").UncertaintyModuleText
 
 
 def test_forward_accepts_explicit_hard_negative_kwargs():
@@ -45,6 +47,251 @@ def test_model_weight_defaults_match_uncertainty_only_setting():
     task_config = Namespace()
 
     assert getattr(task_config, "w_uncertainty_reg", 1e-3) == 1e-3
+
+
+def test_loss_activation_resolver_disables_aux_losses_for_hygiene_profile():
+    task_config = Namespace(
+        experiment_profile="hygiene",
+        uncertainty_mode="evidential",
+        w_mil=0.01,
+        w_evidential=0.01,
+        w_neg_reg=0.05,
+        w_orth=0.1,
+        w_hard_negative=0.05,
+        use_explicit_hard_negative_loss=True,
+        use_uacl_intra_alignment=True,
+        w_uacl_intra=0.01,
+        w_uacl_kl=1e-4,
+    )
+
+    active = UATVR.resolve_loss_activations(task_config)
+
+    assert active["mil"] is False
+    assert active["evidential"] is False
+    assert active["neg_reg"] is False
+    assert active["orth"] is False
+    assert active["hard_negative"] is False
+    assert active["uacl_intra"] is False
+    assert active["uacl_kl"] is False
+
+
+def test_hygiene_profile_marks_auxiliary_parameter_names_as_frozen():
+    task_config = Namespace(experiment_profile="hygiene")
+
+    frozen_names = [
+        "sap.anchor_queries",
+        "pie_net_text.fc.weight",
+        "uncertain_net_text.fc_logsigma.weight",
+        "ada_norm_text.scale.weight",
+        "spatial_enhancer.proj.weight",
+    ]
+    trainable_names = [
+        "clip.visual.proj",
+        "transformerClip.resblocks.0.attn.in_proj_weight",
+        "text_weight_fc.0.weight",
+        "video_weight_fc.0.weight",
+        "frame_position_embeddings.weight",
+        "word_position_embeddings.weight",
+    ]
+
+    for name in frozen_names:
+        assert UATVR.should_freeze_parameter_for_profile(name, task_config)
+    for name in trainable_names:
+        assert not UATVR.should_freeze_parameter_for_profile(name, task_config)
+
+
+def test_hygiene_prob_mu_final_score_keeps_required_paths_trainable():
+    task_config = Namespace(
+        experiment_profile="hygiene",
+        final_score_mode="wti_prob_mu",
+        use_ada_norm=True,
+    )
+
+    trainable_names = [
+        "sap.anchor_queries",
+        "pie_net_text.fc.weight",
+        "uncertain_net_text.fc_logsigma.weight",
+        "ada_norm_text.scale.weight",
+    ]
+    frozen_names = [
+        "spatial_enhancer.proj.weight",
+    ]
+
+    for name in trainable_names:
+        assert not UATVR.should_freeze_parameter_for_profile(name, task_config)
+    for name in frozen_names:
+        assert UATVR.should_freeze_parameter_for_profile(name, task_config)
+
+
+def test_hygiene_anchor_wti_final_score_keeps_only_sap_trainable():
+    task_config = Namespace(
+        experiment_profile="hygiene",
+        final_score_mode="wti_anchor_wti",
+        use_ada_norm=True,
+    )
+
+    assert not UATVR.should_freeze_parameter_for_profile("sap.anchor_queries", task_config)
+    assert not UATVR.should_freeze_parameter_for_profile("sap.decoder.layers.0.self_attn.in_proj_weight", task_config)
+    assert UATVR.should_freeze_parameter_for_profile("sap.anchor_proj.weight", task_config)
+    assert UATVR.should_freeze_parameter_for_profile("sap.evidential_head.dirichlet_layer.weight", task_config)
+    assert UATVR.should_freeze_parameter_for_profile("pie_net_text.fc.weight", task_config)
+    assert UATVR.should_freeze_parameter_for_profile("uncertain_net_text.fc_logsigma.weight", task_config)
+    assert UATVR.should_freeze_parameter_for_profile("ada_norm_text.scale.weight", task_config)
+
+
+def test_hygiene_qc_sap_final_score_keeps_sap_and_gate_trainable():
+    task_config = Namespace(
+        experiment_profile="hygiene",
+        final_score_mode="wti_qc_sap",
+        use_ada_norm=True,
+    )
+
+    assert not UATVR.should_freeze_parameter_for_profile("sap.anchor_queries", task_config)
+    assert not UATVR.should_freeze_parameter_for_profile("sap.decoder.layers.0.self_attn.in_proj_weight", task_config)
+    assert not UATVR.should_freeze_parameter_for_profile("qc_sap_text_proj.weight", task_config)
+    assert not UATVR.should_freeze_parameter_for_profile("qc_sap_anchor_proj.weight", task_config)
+    assert UATVR.should_freeze_parameter_for_profile("sap.anchor_proj.weight", task_config)
+    assert UATVR.should_freeze_parameter_for_profile("sap.evidential_head.dirichlet_layer.weight", task_config)
+    assert UATVR.should_freeze_parameter_for_profile("pie_net_text.fc.weight", task_config)
+    assert UATVR.should_freeze_parameter_for_profile("uncertain_net_text.fc_logsigma.weight", task_config)
+
+
+def test_qc_sap_projection_layers_freeze_when_score_mode_is_inactive():
+    task_config = Namespace(
+        experiment_profile="default",
+        final_score_mode="wti",
+    )
+
+    assert UATVR.should_freeze_parameter_for_profile("qc_sap_text_proj.weight", task_config)
+    assert UATVR.should_freeze_parameter_for_profile("qc_sap_anchor_proj.weight", task_config)
+
+
+def test_compose_final_retrieval_logits_adds_prob_mu_component():
+    wti_logits = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    prob_mu_logits = torch.tensor([[0.5, -0.5], [1.0, -1.0]])
+
+    final_logits, score_source = UATVR.compose_final_retrieval_logits(
+        wti_logits,
+        final_score_mode="wti_prob_mu",
+        lambda_prob=0.25,
+        lambda_anchor=0.0,
+        prob_mu_logits=prob_mu_logits,
+        anchor_wti_logits=None,
+    )
+
+    assert score_source == "wti_prob_mu"
+    assert torch.allclose(final_logits, wti_logits + 0.25 * prob_mu_logits)
+
+
+def test_compose_final_retrieval_logits_adds_qc_sap_component():
+    wti_logits = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    qc_sap_logits = torch.tensor([[0.25, -0.25], [0.5, -0.5]])
+
+    final_logits, score_source = UATVR.compose_final_retrieval_logits(
+        wti_logits,
+        final_score_mode="wti_qc_sap",
+        lambda_prob=0.0,
+        lambda_anchor=0.0,
+        lambda_qc_sap=0.2,
+        prob_mu_logits=None,
+        anchor_wti_logits=None,
+        qc_sap_logits=qc_sap_logits,
+    )
+
+    assert score_source == "wti_qc_sap"
+    assert torch.allclose(final_logits, wti_logits + 0.2 * qc_sap_logits)
+
+
+def test_query_conditioned_sap_logits_return_pairwise_gate_diagnostics():
+    text_pooled = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+    anchors = torch.tensor(
+        [
+            [[1.0, 0.0], [-1.0, 0.0]],
+            [[0.0, 1.0], [0.0, -1.0]],
+        ]
+    )
+
+    logits, stats = UATVR.compute_query_conditioned_sap_logits(
+        text_pooled,
+        anchors,
+        logit_scale=torch.tensor(1.0),
+        temperature=0.1,
+    )
+
+    assert logits.shape == (2, 2)
+    assert stats["gate_entropy_pos"] < stats["gate_entropy_neg"]
+    assert stats["gate_top1_mass_pos"] > stats["gate_top1_mass_neg"]
+    assert stats["diag"] > stats["off"]
+    assert stats["gap"] > 0
+    assert stats["std"] > 0
+
+
+def test_loss_activation_resolver_matches_uncertainty_mode_semantics():
+    active = UATVR.resolve_loss_activations(
+        Namespace(
+            experiment_profile="default",
+            uncertainty_mode="evidential",
+            w_mil=0.01,
+            w_evidential=0.01,
+            w_neg_reg=0.05,
+            w_orth=0.1,
+            use_explicit_hard_negative_loss=False,
+            use_uacl_intra_alignment=False,
+            w_uacl_intra=0.0,
+            w_uacl_kl=0.0,
+        )
+    )
+    inactive = UATVR.resolve_loss_activations(
+        Namespace(
+            experiment_profile="default",
+            uncertainty_mode="none",
+            w_mil=0.01,
+            w_evidential=0.01,
+            w_neg_reg=0.05,
+            w_orth=0.1,
+            use_explicit_hard_negative_loss=False,
+            use_uacl_intra_alignment=False,
+            w_uacl_intra=0.0,
+            w_uacl_kl=0.0,
+        )
+    )
+
+    assert active["evidential"] is True
+    assert active["neg_reg"] is True
+    assert inactive["evidential"] is False
+    assert inactive["neg_reg"] is False
+
+
+def test_pienet_padding_mask_removes_padding_from_attention():
+    torch.manual_seed(0)
+    pie = PIENet(1, 4, 4, 2)
+    out = torch.zeros(1, 4)
+    x = torch.randn(1, 4, 4)
+    pad_mask = torch.tensor([[False, False, True, True]])
+
+    _out, attn, _residual = pie(out, x, pad_mask=pad_mask)
+
+    assert torch.allclose(attn[0, 2:, 0], torch.zeros(2), atol=1e-6)
+    assert torch.isclose(attn[0, :2, 0].sum(), torch.tensor(1.0), atol=1e-6)
+
+
+def test_uncertainty_module_text_uses_true_padding_mask_for_lengths():
+    torch.manual_seed(0)
+    module = UncertaintyModuleText(4, 4, 2)
+    out = torch.randn(2, 4)
+    x = torch.randn(2, 5, 4)
+    pad_mask = torch.tensor(
+        [
+            [False, False, False, True, True],
+            [False, True, True, True, True],
+        ]
+    )
+
+    result = module(out, x, pad_mask=pad_mask)
+
+    assert result["logsigma"].shape == (2, 4)
+    assert torch.allclose(result["attention"][0, 3:, 0], torch.zeros(2), atol=1e-6)
+    assert torch.allclose(result["attention"][1, 1:, 0], torch.zeros(4), atol=1e-6)
 
 
 def test_evidential_similarity_penalizes_high_uncertainty():
