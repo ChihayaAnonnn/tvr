@@ -98,9 +98,10 @@ class UncertaintyModuleText(nn.Module):
     def forward(self, out, x, pad_mask=None):
         residual, attn = self.attention(x, pad_mask)
 
-        # 从pad_mask计算序列长度，如果没有pad_mask则使用序列的最大长度
+        # pad_mask uses the attention convention: True = padding.
         if pad_mask is not None:
-            lengths = pad_mask.sum(dim=1).long()  # [B]
+            valid_mask = ~pad_mask.to(dtype=torch.bool)
+            lengths = valid_mask.sum(dim=1).long()  # [B]
         else:
             lengths = torch.full((x.size(0),), x.size(1), dtype=torch.long, device=x.device)
         # pack_padded_sequence 要求 length >= 1
@@ -175,15 +176,14 @@ class UncertaintyModuleTextMamba(nn.Module):
         Args:
             out: [B, D] - 全局池化特征 (text_pooled)
             x: [B, T, D] - token序列 (text_token)
-            pad_mask: [B, T] - padding mask，1表示有效token，0表示padding
+            pad_mask: [B, T] - padding mask, True 表示 padding
         """
         residual, attn = self.attention(x, pad_mask)
 
         # 对 padding 位置进行 mask（设置为 0）
         if pad_mask is not None:
-            # pad_mask: [B, T], 1=valid, 0=padding
-            # 将 padding 位置设为 0
-            mask_expanded = pad_mask.unsqueeze(-1).float()  # [B, T, 1]
+            valid_mask = ~pad_mask.to(dtype=torch.bool)
+            mask_expanded = valid_mask.unsqueeze(-1).float()  # [B, T, 1]
             x_masked = x * mask_expanded
         else:
             x_masked = x
@@ -195,7 +195,7 @@ class UncertaintyModuleTextMamba(nn.Module):
         # 提取最后时刻的输出（类似 GRU 的 last hidden state）
         if pad_mask is not None:
             # 获取每个序列的实际长度
-            lengths = pad_mask.sum(dim=1).long()  # [B]
+            lengths = valid_mask.sum(dim=1).long()  # [B]
             # 收集每个序列最后一个有效时刻的特征
             batch_indices = torch.arange(x_seq.size(0), device=x_seq.device)
             # 确保索引不越界
@@ -223,6 +223,5 @@ class UncertaintyModuleTextMamba(nn.Module):
             "logsigma": out,
             "attention": attn,
         }
-
 
 
