@@ -12,7 +12,12 @@ from modules.backbone_adapter import (
     get_eva_clip_backbone_spec,
     load_eva_clip_pretrained,
 )
-from modules.module_clip import CLIP, convert_weights
+from modules.module_clip import (
+    CLIP,
+    convert_weights,
+    set_layer_norm_precision,
+    validate_layer_norm_precision,
+)
 from modules.module_cross import CrossConfig
 from modules.module_cross import Transformer as TransformerClip
 from modules.spatial_enhancer import SpatialEnhancer
@@ -288,6 +293,13 @@ class UATVR(CLIP4ClipPreTrainedModel):
             raise ValueError("EVA backbone must support visual hidden tokens for SAP")
         return require_text_hidden, require_visual_hidden
 
+    @staticmethod
+    def configure_clip_layer_norm_precision(backbone, backbone_type, precision):
+        precision = validate_layer_norm_precision(precision)
+        if backbone_type != "openai_clip":
+            return 0
+        return set_layer_norm_precision(backbone, precision)
+
     def __init__(self, cross_config, clip_state_dict, task_config):
         super(UATVR, self).__init__(cross_config)
         self.task_config = task_config
@@ -300,6 +312,10 @@ class UATVR(CLIP4ClipPreTrainedModel):
             show_log(task_config, "Test retrieval by loose type.")
 
         self.backbone_type = getattr(task_config, "backbone_type", "openai_clip")
+        self.clip_layer_norm_precision = validate_layer_norm_precision(
+            getattr(task_config, "clip_layer_norm_precision", "fp16")
+        )
+        self.clip_layer_norm_module_count = 0
         if self.backbone_type == "openai_clip":
             # CLIP Encoders: From OpenAI: CLIP [https://github.com/openai/CLIP] ===>
             assert "visual.proj" in clip_state_dict, "Only ViT-based CLIP is supported"
@@ -380,6 +396,18 @@ class UATVR(CLIP4ClipPreTrainedModel):
                     del clip_state_dict[key]
 
             convert_weights(self.clip)
+            self.clip_layer_norm_module_count = self.configure_clip_layer_norm_precision(
+                self.clip,
+                backbone_type=self.backbone_type,
+                precision=self.clip_layer_norm_precision,
+            )
+            show_log(
+                task_config,
+                "\t OpenAI CLIP LayerNorm precision: {} (modules={})".format(
+                    self.clip_layer_norm_precision,
+                    self.clip_layer_norm_module_count,
+                ),
+            )
             # OpenAI CLIP's ViT implementation exposes both pooled and token
             # hidden states through encode_text/encode_image(return_hidden=True).
             self.clip.supports_text_hidden = True
@@ -399,6 +427,12 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 d_model=transformer_width,
                 require_text_hidden=require_text_hidden,
                 require_visual_hidden=require_visual_hidden,
+            )
+            show_log(
+                task_config,
+                "\t OpenAI CLIP LayerNorm precision: {} (not applied to EVA)".format(
+                    self.clip_layer_norm_precision
+                ),
             )
 
         self.sim_header = "meanP"

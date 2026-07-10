@@ -145,6 +145,38 @@ def test_get_args_accepts_eva_clip_backbone_options(monkeypatch):
     assert args.eva_clip_root == "ref/EVA/EVA-CLIP/rei"
 
 
+def test_clip_layer_norm_precision_defaults_to_fp16(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog",
+            "--do_train",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
+        ],
+    )
+
+    assert get_args().clip_layer_norm_precision == "fp16"
+
+
+def test_clip_layer_norm_precision_accepts_fp32(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog",
+            "--do_train",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
+            "--clip_layer_norm_precision",
+            "fp32",
+        ],
+    )
+
+    assert get_args().clip_layer_norm_precision == "fp32"
+
+
 def _run_with_fake_torchrun(script_name, tmp_path, xattn_value):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
