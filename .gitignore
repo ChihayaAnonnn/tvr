@@ -6,6 +6,7 @@ cache_dir/
 /deploy_qwen/
 /ckpts/
 /tmp/
+/data/generated/
 
 # 论文、参考文献、文档
 paper/
