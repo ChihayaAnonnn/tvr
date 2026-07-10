@@ -5,6 +5,7 @@ import datetime
 import os
 import random
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -12,6 +13,16 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from dataloaders.data_dataloaders import DATALOADER_DICT
+from dataloaders.msrvtt_protocol import load_trusted_manifest, validate_trusted_manifest
+from experiment_tracking import (
+    append_batch_protocol_stats,
+    atomic_write_json,
+    build_experiment_manifest,
+    collect_git_state,
+    compute_batch_semantics,
+    extract_batch_protocol_stats,
+    is_global_rank_zero,
+)
 from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_to_text_sim
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modules.modeling_mulit import UATVR
@@ -570,7 +581,12 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     if not args.do_train and not args.do_eval:
         raise ValueError("At least one of `do_train` or `do_eval` must be True.")
 
-    args.batch_size = int(args.batch_size / args.gradient_accumulation_steps)
+    args.requested_effective_batch_size = args.batch_size
+    if args.batch_size % args.gradient_accumulation_steps:
+        raise ValueError(
+            "--batch_size must be divisible by --gradient_accumulation_steps"
+        )
+    args.batch_size = args.batch_size // args.gradient_accumulation_steps
 
     return args
 
@@ -1009,6 +1025,30 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
         if n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu.
             loss_dict = {k: v.mean() if isinstance(v, torch.Tensor) else v for k, v in loss_dict.items()}
+        # Older test doubles (and checkpoints predating trusted-v1) may not
+        # expose the protocol telemetry fields.  Keep the training path
+        # backwards-compatible by skipping the optional sidecar row when any
+        # field is absent; once all fields are present, extraction remains
+        # strict so malformed/non-finite values still fail loudly.
+        if is_global_rank_zero(args) and all(
+            key in loss_dict
+            for key in (
+                "unique_video_count",
+                "duplicate_sample_count",
+                "mean_positive_count",
+            )
+        ):
+            batch_stats = extract_batch_protocol_stats(loss_dict)
+        else:
+            batch_stats = None
+        if batch_stats is not None:
+            append_batch_protocol_stats(
+                Path(args.output_dir) / "batch_protocol_stats.tsv",
+                epoch=epoch,
+                forward_step=step,
+                global_step=global_step,
+                stats=batch_stats,
+            )
         if args.gradient_accumulation_steps > 1:
             loss = loss / args.gradient_accumulation_steps
 
@@ -1020,7 +1060,11 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
         # 仅保留标量/可转 float 的项，避免把大矩阵（例如 retrieve_logits）塞进日志
         loss_details = {}
         for k, v in loss_dict.items():
-            if k == "total":
+            if k == "total" or k in {
+                "unique_video_count",
+                "duplicate_sample_count",
+                "mean_positive_count",
+            }:
                 continue
             if isinstance(v, torch.Tensor) and v.numel() != 1:
                 continue
@@ -1091,6 +1135,13 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     time_per_step,
                     _fmt_time(eta),
                 )
+                if batch_stats is not None:
+                    logger.info(
+                        "  [Batch Protocol] unique=%g duplicate=%g mean_positive=%g",
+                        batch_stats["unique_video_count"],
+                        batch_stats["duplicate_sample_count"],
+                        batch_stats["mean_positive_count"],
+                    )
 
                 # --- 因果链简报（每 log_step 打印一次当前值） ---
                 _dc = getattr(core, "_diag_chain", None)
@@ -1803,6 +1854,20 @@ def main():
 
     args = get_args()
 
+    # Validate the committed trusted-v1 manifest against the canonical source
+    # files before constructing a tokenizer, model, or dataloader.  Task10 will
+    # migrate the standard shell defaults to generated train/val CSVs; this
+    # gate intentionally keeps the source-of-truth check here.
+    split_summary = None
+    if args.datatype == "msrvtt":
+        manifest = load_trusted_manifest(args.split_manifest)
+        split_summary = validate_trusted_manifest(
+            manifest,
+            args.source_train_csv,
+            args.data_path,
+            args.test_csv,
+        )
+
     if "LOCAL_RANK" in os.environ:
         args.local_rank = int(os.environ["LOCAL_RANK"])
     else:
@@ -1838,6 +1903,30 @@ def main():
         prepare_requested_dataloaders(args, tokenizer)
     )
 
+    batch_semantics = None
+    if args.do_train:
+        train_dataloader = train_bundle[0]
+        batch_semantics = compute_batch_semantics(
+            requested_effective_batch=args.requested_effective_batch_size,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            world_size=args.world_size,
+            dataloader_steps=len(train_dataloader),
+            epochs=args.epochs,
+        )
+        tracking_payload = build_experiment_manifest(
+            args,
+            split_summary=split_summary,
+            batch_semantics=batch_semantics,
+            git_state=collect_git_state(Path(__file__).resolve().parent),
+        )
+        if is_global_rank_zero(args):
+            atomic_write_json(
+                Path(args.output_dir) / "experiment_manifest.json",
+                tracking_payload,
+            )
+            for key, value in batch_semantics.items():
+                logger.info("  Batch semantics | %s=%s", key, value)
+
     if args.local_rank == 0:
         logger.info("***** Running %s evaluation *****", eval_split)
         frame_order_name = {0: "sequential", 1: "reverse", 2: "shuffle"}.get(
@@ -1857,9 +1946,7 @@ def main():
     ## ####################################
     if args.do_train:
         train_dataloader, train_length, train_sampler = train_bundle
-        num_train_optimization_steps = (
-            int(len(train_dataloader) + args.gradient_accumulation_steps - 1) / args.gradient_accumulation_steps
-        ) * args.epochs
+        num_train_optimization_steps = batch_semantics["total_optimizer_steps"]
 
         coef_lr = args.coef_lr
         # distribute model by torch.nn.distributing
@@ -1875,8 +1962,8 @@ def main():
                 args.batch_size // args.n_gpu,
                 args.n_gpu,
                 args.gradient_accumulation_steps,
-                args.batch_size * args.gradient_accumulation_steps,
-                len(train_dataloader),
+                batch_semantics["optimizer_effective_batch"],
+                batch_semantics["forward_steps_per_epoch"],
                 num_train_optimization_steps,
             )
 
