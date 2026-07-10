@@ -305,6 +305,15 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         help="Backbone implementation. openai_clip keeps the legacy CLIP path; eva_clip uses the EVA-CLIP adapter.",
     )
     parser.add_argument(
+        "--clip_layer_norm_precision",
+        default="fp16",
+        choices=["fp16", "fp32"],
+        help=(
+            "Execution precision for project OpenAI CLIP LayerNorm modules. "
+            "fp16 is used only for CUDA FP16 inputs; fp32 preserves legacy behavior."
+        ),
+    )
+    parser.add_argument(
         "--backbone_name",
         default="EVA02-CLIP-B-16",
         type=str,
@@ -652,7 +661,8 @@ def set_seed_logger(args):
         key_params = {
             "Training": ["epochs", "batch_size", "lr", "coef_lr", "gradient_accumulation_steps", "fp16",
                          "max_frames", "max_words", "seed"],
-            "Model": ["pretrained_clip_name", "backbone_type", "backbone_name", "backbone_path", "eva_clip_root",
+            "Model": ["pretrained_clip_name", "backbone_type", "clip_layer_norm_precision", "backbone_name",
+                      "backbone_path", "eva_clip_root",
                        "eva_clip_use_xattn", "sim_header", "linear_patch", "fusion_mode",
                        "extra_video_cls_num", "extra_text_cls_num", "n_video_embeddings", "n_text_embeddings",
                        "uncertainty_text_head", "log_sigma_min", "log_sigma_max"],

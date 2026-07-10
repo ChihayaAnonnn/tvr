@@ -34,12 +34,17 @@ BACKBONE_NAME=${BACKBONE_NAME:-EVA02-CLIP-B-16}
 BACKBONE_PATH=${BACKBONE_PATH:-${ROOT_DIR}/ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
 EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-${ROOT_DIR}/ref/EVA/EVA-CLIP/rei}
 EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN:-0}
+CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION:-fp16}
 if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
     echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
     exit 2
 fi
 if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
     echo "Unsupported EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}; expected 0 or 1" >&2
+    exit 2
+fi
+if [[ "${CLIP_LAYER_NORM_PRECISION}" != "fp16" && "${CLIP_LAYER_NORM_PRECISION}" != "fp32" ]]; then
+    echo "Unsupported CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION}; expected fp16 or fp32" >&2
     exit 2
 fi
 EXTRA_PROFILE_ARGS=()
@@ -60,7 +65,7 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1,2}"
 IFS=',' read -ra _GPUS <<< "${CUDA_VISIBLE_DEVICES}"
 NPROC="${NPROC:-${#_GPUS[@]}}"
 
-echo "[train_msrvtt.sh] BACKBONE_TYPE=${BACKBONE_TYPE} BACKBONE_NAME=${BACKBONE_NAME} BACKBONE_PATH=${BACKBONE_PATH} EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}"
+echo "[train_msrvtt.sh] BACKBONE_TYPE=${BACKBONE_TYPE} BACKBONE_NAME=${BACKBONE_NAME} BACKBONE_PATH=${BACKBONE_PATH} EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN} CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION}"
 
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     torchrun --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29547 \
@@ -84,6 +89,7 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     --strategy 2 \
     --pretrained_clip_name ViT-B/16 \
     --backbone_type "${BACKBONE_TYPE}" \
+    --clip_layer_norm_precision "${CLIP_LAYER_NORM_PRECISION}" \
     --backbone_name "${BACKBONE_NAME}" \
     --backbone_path "${BACKBONE_PATH}" \
     --eva_clip_root "${EVA_CLIP_ROOT}" \

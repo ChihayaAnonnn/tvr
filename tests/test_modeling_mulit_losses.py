@@ -22,11 +22,28 @@ MultiPositiveCrossEn = importlib.import_module(
 ).MultiPositiveCrossEn
 PIENet = importlib.import_module("prob_models.pie_model").PIENet
 UncertaintyModuleText = importlib.import_module("prob_models.uncertainty_module").UncertaintyModuleText
+LayerNorm = importlib.import_module("modules.module_clip").LayerNorm
 
 
 class _ExplodingModule(torch.nn.Module):
     def forward(self, *args, **kwargs):
         raise AssertionError("inactive hygiene module was called")
+
+
+def test_openai_clip_layer_norm_precision_is_propagated():
+    clip = torch.nn.Sequential(LayerNorm(4), LayerNorm(4))
+    count = UATVR.configure_clip_layer_norm_precision(
+        clip, backbone_type="openai_clip", precision="fp32"
+    )
+    assert count == 2
+    assert all(module.precision == "fp32" for module in clip)
+
+
+def test_eva_backbone_is_not_modified_by_clip_layer_norm_precision():
+    backbone = torch.nn.Sequential(torch.nn.LayerNorm(4))
+    assert UATVR.configure_clip_layer_norm_precision(
+        backbone, backbone_type="eva_clip", precision="fp16"
+    ) == 0
 
 
 class _FakeClip(torch.nn.Module):

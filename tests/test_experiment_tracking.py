@@ -61,6 +61,7 @@ def _args(tmp_path):
         final_score_mode="wti",
         backbone_type="openai_clip",
         pretrained_clip_name="ViT-B/16",
+        clip_layer_norm_precision="fp16",
         backbone_name="",
         backbone_path="",
         output_dir=str(tmp_path),
@@ -90,6 +91,7 @@ def test_manifest_contains_protocol_code_data_and_backbone(tmp_path):
     assert payload["protocol_version"] == "trusted-v1"
     assert payload["git"]["dirty"] is True
     assert payload["backbone"]["type"] == "openai_clip"
+    assert payload["backbone"]["clip_layer_norm_precision"] == "fp16"
     assert payload["data"]["test_csv"] == "/data/MSRVTT_JSFUSION_test.csv"
     assert "argv" not in json.dumps(payload)
     path = tmp_path / "experiment_manifest.json"
