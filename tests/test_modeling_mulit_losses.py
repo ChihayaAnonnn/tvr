@@ -733,3 +733,259 @@ def test_logvar_kl_is_zero_at_unit_variance_and_positive_otherwise():
 
     assert torch.isclose(UATVR._logvar_kl(unit_logvar), torch.tensor(0.0))
     assert UATVR._logvar_kl(shifted_logvar) > 0
+
+
+def _tiny_wti_model(dtype=torch.float32):
+    model = UATVR.__new__(UATVR)
+    torch.nn.Module.__init__(model)
+    model.text_weight_fc = torch.nn.Linear(2, 1, bias=False, dtype=dtype)
+    model.video_weight_fc = torch.nn.Linear(2, 1, bias=False, dtype=dtype)
+    torch.nn.init.zeros_(model.text_weight_fc.weight)
+    torch.nn.init.zeros_(model.video_weight_fc.weight)
+    return model
+
+
+def _reference_uniform_wti(text, video, text_mask, video_mask):
+    expected = text.new_empty(text.size(0), video.size(0))
+    for text_index in range(text.size(0)):
+        valid_text = text[text_index, text_mask[text_index].bool()]
+        for video_index in range(video.size(0)):
+            valid_video = video[video_index, video_mask[video_index].bool()]
+            similarity = valid_text @ valid_video.T
+            expected[text_index, video_index] = (
+                similarity.max(dim=1).values.mean()
+                + similarity.max(dim=0).values.mean()
+            ) / 2
+    return expected
+
+
+def test_wti_padding_zero_cannot_beat_negative_valid_similarity():
+    model = _tiny_wti_model()
+    text = torch.tensor([[[1.0, 0.0], [0.0, 0.0]]])
+    video = torch.tensor([[[-1.0, 0.0], [0.0, 0.0]]])
+
+    logits = model.weighted_token_wise_intersection(
+        text,
+        video,
+        torch.tensor([[1, 0]]),
+        torch.tensor([[1, 0]]),
+    )
+
+    torch.testing.assert_close(logits, torch.tensor([[-1.0]]))
+
+
+def test_wti_supports_rectangular_batches_and_different_sequence_lengths():
+    model = _tiny_wti_model()
+    text = torch.tensor(
+        [
+            [[1.0, 0.0], [0.0, 1.0], [99.0, 99.0]],
+            [[-1.0, 0.0], [0.0, -1.0], [-1.0, -1.0]],
+        ]
+    )
+    video = torch.tensor(
+        [
+            [[-1.0, 0.0], [88.0, 88.0]],
+            [[0.0, -1.0], [-1.0, -1.0]],
+            [[1.0, 1.0], [1.0, 0.0]],
+        ]
+    )
+    text_mask = torch.tensor([[1, 1, 0], [1, 1, 1]])
+    video_mask = torch.tensor([[1, 0], [1, 1], [1, 1]])
+
+    logits = model.weighted_token_wise_intersection(
+        text, video, text_mask, video_mask
+    )
+
+    assert logits.shape == (2, 3)
+    torch.testing.assert_close(
+        logits,
+        _reference_uniform_wti(text, video, text_mask, video_mask),
+    )
+
+
+def test_wti_without_padding_matches_existing_formula_and_hand_calculation():
+    model = _tiny_wti_model()
+    text = torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])
+    video = torch.tensor([[[1.0, 0.0], [-1.0, 0.0], [0.0, -1.0]]])
+
+    logits = model.weighted_token_wise_intersection(
+        text,
+        video,
+        torch.ones(1, 2),
+        torch.ones(1, 3),
+    )
+
+    # T2V=(1+0)/2, V2T=(1+0+0)/3, final=(T2V+V2T)/2.
+    torch.testing.assert_close(logits, torch.tensor([[5.0 / 12.0]]))
+
+
+@pytest.mark.parametrize("mask_dtype", [torch.bool, torch.int64, torch.float32])
+def test_wti_accepts_binary_bool_integer_and_float_masks(mask_dtype):
+    model = _tiny_wti_model()
+    text = torch.tensor([[[1.0, 0.0], [9.0, 9.0]]])
+    video = torch.tensor([[[-1.0, 0.0], [8.0, 8.0]]])
+    text_mask = torch.tensor([[1, 0]], dtype=mask_dtype)
+    video_mask = torch.tensor([[1, 0]], dtype=mask_dtype)
+
+    logits = model.weighted_token_wise_intersection(
+        text, video, text_mask, video_mask
+    )
+
+    torch.testing.assert_close(logits, torch.tensor([[-1.0]]))
+
+
+@pytest.mark.parametrize(
+    ("dtype", "device"),
+    [
+        (torch.float32, "cpu"),
+        (torch.bfloat16, "cpu"),
+        (torch.float16, "cuda"),
+    ],
+)
+def test_wti_is_finite_for_supported_floating_dtypes(dtype, device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable for fp16 WTI coverage")
+    model = _tiny_wti_model(dtype=dtype).to(device)
+    text = torch.tensor(
+        [[[1.0, 0.0], [7.0, 7.0]]], dtype=dtype, device=device
+    )
+    video = torch.tensor(
+        [[[-1.0, 0.0], [6.0, 6.0]]], dtype=dtype, device=device
+    )
+    mask = torch.tensor([[1, 0]], device=device)
+
+    logits = model.weighted_token_wise_intersection(text, video, mask, mask)
+
+    assert logits.dtype == dtype
+    assert torch.isfinite(logits).all()
+    torch.testing.assert_close(logits.float().cpu(), torch.tensor([[-1.0]]))
+
+
+def test_wti_padding_path_has_finite_gradients():
+    model = _tiny_wti_model()
+    text = torch.tensor(
+        [
+            [[1.0, 0.0], [0.0, 1.0], [4.0, 4.0]],
+            [[-1.0, 0.0], [3.0, 3.0], [2.0, 2.0]],
+        ],
+        requires_grad=True,
+    )
+    video = torch.tensor(
+        [
+            [[-1.0, 0.0], [0.0, -1.0]],
+            [[1.0, 0.0], [5.0, 5.0]],
+            [[0.0, 1.0], [1.0, 1.0]],
+        ],
+        requires_grad=True,
+    )
+    text_mask = torch.tensor([[1, 1, 0], [1, 0, 0]])
+    video_mask = torch.tensor([[1, 1], [1, 0], [1, 1]])
+
+    logits = model.weighted_token_wise_intersection(
+        text, video, text_mask, video_mask
+    )
+    logits.sum().backward()
+
+    assert torch.isfinite(logits).all()
+    assert torch.isfinite(text.grad).all()
+    assert torch.isfinite(video.grad).all()
+    assert torch.isfinite(model.text_weight_fc.weight.grad).all()
+    assert torch.isfinite(model.video_weight_fc.weight.grad).all()
+
+
+@pytest.mark.parametrize(
+    ("text_mask", "video_mask", "message"),
+    [
+        (
+            torch.tensor([[1, 0], [0, 0], [1, 1]]),
+            torch.tensor([[1, 0], [1, 1], [1, 0], [1, 1]]),
+            r"no valid text token at batch indices=\[1\]",
+        ),
+        (
+            torch.tensor([[1, 0], [1, 1], [1, 0]]),
+            torch.tensor([[0, 0], [1, 1], [1, 0], [0, 0]]),
+            r"no valid video frame at batch indices=\[0, 3\]",
+        ),
+    ],
+)
+def test_wti_rejects_partially_empty_samples_with_exact_indices(
+    text_mask, video_mask, message
+):
+    model = _tiny_wti_model()
+    text = torch.zeros(3, 2, 2)
+    video = torch.zeros(4, 2, 2)
+
+    with pytest.raises(ValueError, match=message):
+        model.weighted_token_wise_intersection(
+            text, video, text_mask, video_mask
+        )
+
+
+@pytest.mark.parametrize(
+    ("text_shape", "video_shape", "text_mask_shape", "video_mask_shape", "message"),
+    [
+        ((2, 2), (3, 2, 2), (2, 2), (3, 2), "text_token must be 3D"),
+        ((2, 2, 2), (3, 2, 2, 1), (2, 2), (3, 2), "frame_token must be 3D"),
+        ((2, 2, 2), (3, 2, 3), (2, 2), (3, 2), "feature dimensions must match"),
+        (
+            (2, 2, 2),
+            (3, 2, 2),
+            (2, 1),
+            (3, 2),
+            r"attention_mask shape=\(2, 1\).*expected=\(2, 2\)",
+        ),
+        (
+            (2, 2, 2),
+            (3, 2, 2),
+            (2, 2),
+            (1, 2),
+            r"video_mask shape=\(1, 2\).*expected=\(3, 2\)",
+        ),
+    ],
+)
+def test_wti_rejects_invalid_shapes_before_broadcasting(
+    text_shape,
+    video_shape,
+    text_mask_shape,
+    video_mask_shape,
+    message,
+):
+    model = _tiny_wti_model()
+    text = torch.zeros(text_shape)
+    video = torch.zeros(video_shape)
+    text_mask = torch.ones(text_mask_shape)
+    video_mask = torch.ones(video_mask_shape)
+
+    with pytest.raises(ValueError, match=message):
+        model.weighted_token_wise_intersection(
+            text, video, text_mask, video_mask
+        )
+
+
+def test_wti_rejects_mask_device_mismatch_with_clear_error():
+    model = _tiny_wti_model()
+    text = torch.zeros(1, 2, 2)
+    video = torch.zeros(1, 2, 2)
+    attention_mask = torch.ones(1, 2, device="meta")
+    video_mask = torch.ones(1, 2)
+
+    with pytest.raises(
+        ValueError,
+        match=r"attention_mask device=meta.*text_token device=cpu",
+    ):
+        model.weighted_token_wise_intersection(
+            text, video, attention_mask, video_mask
+        )
+
+
+def test_wti_rejects_non_binary_masks():
+    model = _tiny_wti_model()
+    tokens = torch.zeros(1, 2, 2)
+
+    with pytest.raises(ValueError, match="attention_mask must be binary"):
+        model.weighted_token_wise_intersection(
+            tokens,
+            tokens,
+            torch.tensor([[1.0, 0.5]]),
+            torch.tensor([[1, 0]]),
+        )

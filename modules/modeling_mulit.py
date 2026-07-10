@@ -1548,31 +1548,100 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         return loss, uncertainty
 
-    def weighted_token_wise_intersection(self, text_token, frame_token, attention_mask, video_mask):
-        device = text_token.device
-        text_weight = self.text_weight_fc(text_token).squeeze(2)  # B x N_t x D -> B x N_t
-        # 构造与输入同设备/同形状的布尔mask
-        text_mask_bool = (attention_mask == 0).to(device=device, dtype=torch.bool)
-        text_weight.masked_fill_(text_mask_bool, float("-inf"))
-        text_weight = torch.softmax(text_weight, dim=-1)  # B x N_t
+    def weighted_token_wise_intersection(
+        self, text_token, frame_token, attention_mask, video_mask
+    ):
+        if text_token.dim() != 3:
+            raise ValueError(
+                f"text_token must be 3D [A,T,D], got shape={tuple(text_token.shape)}"
+            )
+        if frame_token.dim() != 3:
+            raise ValueError(
+                f"frame_token must be 3D [B,V,D], got shape={tuple(frame_token.shape)}"
+            )
+        if text_token.size(-1) != frame_token.size(-1):
+            raise ValueError(
+                "WTI feature dimensions must match: "
+                f"text={text_token.size(-1)} video={frame_token.size(-1)}"
+            )
+        if text_token.device != frame_token.device:
+            raise ValueError(
+                "WTI token devices must match: "
+                f"text_token device={text_token.device} "
+                f"frame_token device={frame_token.device}"
+            )
+        if text_token.dtype != frame_token.dtype:
+            raise ValueError(
+                "WTI token dtypes must match: "
+                f"text_token dtype={text_token.dtype} "
+                f"frame_token dtype={frame_token.dtype}"
+            )
+        if not text_token.is_floating_point():
+            raise ValueError(
+                f"WTI tokens must use a floating dtype, got {text_token.dtype}"
+            )
 
-        video_weight = self.video_weight_fc(frame_token).squeeze(2)  # B x N_v x D -> B x N_v
-        video_mask_bool = (video_mask == 0).to(device=device, dtype=torch.bool)
-        video_weight.masked_fill_(video_mask_bool, float("-inf"))
-        video_weight = torch.softmax(video_weight, dim=-1)  # B x N_v
+        expected_text_mask_shape = text_token.shape[:2]
+        expected_video_mask_shape = frame_token.shape[:2]
+        if attention_mask.shape != expected_text_mask_shape:
+            raise ValueError(
+                f"attention_mask shape={tuple(attention_mask.shape)} "
+                f"expected={tuple(expected_text_mask_shape)}"
+            )
+        if video_mask.shape != expected_video_mask_shape:
+            raise ValueError(
+                f"video_mask shape={tuple(video_mask.shape)} "
+                f"expected={tuple(expected_video_mask_shape)}"
+            )
+        if attention_mask.device != text_token.device:
+            raise ValueError(
+                f"attention_mask device={attention_mask.device} does not match "
+                f"text_token device={text_token.device}"
+            )
+        if video_mask.device != frame_token.device:
+            raise ValueError(
+                f"video_mask device={video_mask.device} does not match "
+                f"frame_token device={frame_token.device}"
+            )
+        if not bool(((attention_mask == 0) | (attention_mask == 1)).all().item()):
+            raise ValueError("attention_mask must be binary with values 0 or 1")
+        if not bool(((video_mask == 0) | (video_mask == 1)).all().item()):
+            raise ValueError("video_mask must be binary with values 0 or 1")
 
-        # token-wise interaction
-        retrieve_logits = torch.einsum("atd,bvd->abtv", [text_token, frame_token])
-        retrieve_logits = torch.einsum("abtv,at->abtv", [retrieve_logits, attention_mask])
-        retrieve_logits = torch.einsum("abtv,bv->abtv", [retrieve_logits, video_mask])
+        text_valid = attention_mask.to(dtype=torch.bool)
+        video_valid = video_mask.to(dtype=torch.bool)
+        empty_text = (~text_valid.any(dim=1)).nonzero(as_tuple=False).view(-1)
+        empty_video = (~video_valid.any(dim=1)).nonzero(as_tuple=False).view(-1)
+        if empty_text.numel():
+            raise ValueError(
+                f"WTI no valid text token at batch indices={empty_text.tolist()}"
+            )
+        if empty_video.numel():
+            raise ValueError(
+                f"WTI no valid video frame at batch indices={empty_video.tolist()}"
+            )
 
-        t2v_logits, max_idx1 = retrieve_logits.max(dim=-1)  # abtv -> abt
-        t2v_logits = torch.einsum("abt,at->ab", [t2v_logits, text_weight])
+        text_weight = self.text_weight_fc(text_token).squeeze(-1)
+        text_weight = text_weight.masked_fill(~text_valid, float("-inf"))
+        text_weight = torch.softmax(text_weight, dim=-1)
+        video_weight = self.video_weight_fc(frame_token).squeeze(-1)
+        video_weight = video_weight.masked_fill(~video_valid, float("-inf"))
+        video_weight = torch.softmax(video_weight, dim=-1)
 
-        v2t_logits, max_idx2 = retrieve_logits.max(dim=-2)  # abtv -> abv
-        v2t_logits = torch.einsum("abv,bv->ab", [v2t_logits, video_weight])
-        retrieve_logits = (t2v_logits + v2t_logits) / 2.0
-        return retrieve_logits
+        similarities = torch.einsum("atd,bvd->abtv", text_token, frame_token)
+        pair_valid = (
+            text_valid[:, None, :, None] & video_valid[None, :, None, :]
+        )
+        similarities = similarities.masked_fill(
+            ~pair_valid, torch.finfo(similarities.dtype).min
+        )
+        t2v_logits = similarities.max(dim=-1).values
+        t2v_logits = t2v_logits.masked_fill(~text_valid[:, None, :], 0.0)
+        t2v_logits = torch.einsum("abt,at->ab", t2v_logits, text_weight)
+        v2t_logits = similarities.max(dim=-2).values
+        v2t_logits = v2t_logits.masked_fill(~video_valid[None, :, :], 0.0)
+        v2t_logits = torch.einsum("abv,bv->ab", v2t_logits, video_weight)
+        return (t2v_logits + v2t_logits) / 2.0
 
     def probabilistic_text(self, text_pooled, text_token, attention_mask=None, sample_embeddings=True):
         output = {}
