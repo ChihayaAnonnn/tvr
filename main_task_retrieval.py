@@ -238,6 +238,36 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
 
     parser.add_argument("--pretrained_clip_name", default="ViT-B/32", type=str, help="Choose a CLIP version")
+    parser.add_argument(
+        "--backbone_type",
+        default="openai_clip",
+        type=str,
+        choices=["openai_clip", "eva_clip"],
+        help="Backbone implementation. openai_clip keeps the legacy CLIP path; eva_clip uses the EVA-CLIP adapter.",
+    )
+    parser.add_argument(
+        "--backbone_name",
+        default="EVA02-CLIP-B-16",
+        type=str,
+        help="Backbone architecture name for adapter-based backbones.",
+    )
+    parser.add_argument(
+        "--backbone_path",
+        default="ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt",
+        type=str,
+        help="Local pretrained checkpoint path for adapter-based backbones.",
+    )
+    parser.add_argument(
+        "--eva_clip_root",
+        default="ref/EVA/EVA-CLIP/rei",
+        type=str,
+        help="Python package root containing the local eva_clip reference implementation.",
+    )
+    parser.add_argument(
+        "--eva_clip_use_xattn",
+        action="store_true",
+        help="Use EVA-CLIP xformers attention. Default is disabled for low-dependency local training.",
+    )
     parser.add_argument("--strategy", default=1, type=int, help="Sampling strategies.")
     parser.add_argument("--extra_video_cls_num", default=2, type=int, help="extra video class aggregation token")
     parser.add_argument("--extra_text_cls_num", default=2, type=int, help="extra sentence class aggregation token")
@@ -527,7 +557,8 @@ def set_seed_logger(args):
         key_params = {
             "Training": ["epochs", "batch_size", "lr", "coef_lr", "gradient_accumulation_steps", "fp16",
                          "max_frames", "max_words", "seed"],
-            "Model": ["pretrained_clip_name", "sim_header", "linear_patch", "fusion_mode",
+            "Model": ["pretrained_clip_name", "backbone_type", "backbone_name", "backbone_path", "eva_clip_root",
+                       "eva_clip_use_xattn", "sim_header", "linear_patch", "fusion_mode",
                        "extra_video_cls_num", "extra_text_cls_num", "n_video_embeddings", "n_text_embeddings",
                        "uncertainty_text_head", "log_sigma_min", "log_sigma_max"],
             "HardNeg": [
@@ -602,6 +633,33 @@ def init_model(args, device, n_gpu, local_rank):
 
 def _trainable_named_parameters(model):
     return [(name, param) for name, param in model.named_parameters() if param.requires_grad]
+
+
+def _should_keep_clip_parameter_trainable(name, args):
+    if (
+        name.find("ln_final.") == 0
+        or name.find("text_projection") == 0
+        or name.find("logit_scale") == 0
+        or name.find("visual.ln_post.") == 0
+        or name.find("visual.proj") == 0
+        or name.find("visual.norm.") == 0
+        or name.find("visual.fc_norm.") == 0
+        or name.find("visual.head.") == 0
+    ):
+        return True
+
+    if name.find("visual.transformer.resblocks.") == 0 or name.find("transformer.resblocks.") == 0:
+        layer_num = int(name.split(".resblocks.")[1].split(".")[0])
+        return layer_num >= args.freeze_layer_num
+
+    if name.find("visual.blocks.") == 0:
+        layer_num = int(name.split(".blocks.")[1].split(".")[0])
+        return layer_num >= args.freeze_layer_num
+
+    if args.linear_patch == "3d" and name.find("conv2."):
+        return True
+
+    return False
 
 
 def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, local_rank, coef_lr=1.0):
@@ -920,7 +978,6 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
 
             if global_step % log_step == 0 and local_rank == 0:
                 # --- 计算进度 & ETA ---
-                elapsed = time.time() - epoch_start_time
                 opt_step = global_step % total_opt_steps or total_opt_steps
                 progress = opt_step / total_opt_steps * 100
                 time_per_step = (time.time() - start_time) / (log_step * args.gradient_accumulation_steps)
@@ -1046,9 +1103,10 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
         )
         # ── epoch 级因果链汇总行 ──────────────────────────────────────────
         _n = max(_causal_acc["n"], 1)
-        _avg = lambda d: {k: v / _n for k, v in d.items()}
+        def _avg(d):
+            return {k: v / _n for k, v in d.items()}
+
         dc = _avg(_causal_acc["diag"])
-        sc = _avg(_causal_acc["sap"])
         pc = _avg(_causal_acc["prob"])
         ac = _avg(_causal_acc.get("aux", {}))
         if dc and pc:
@@ -1267,6 +1325,7 @@ def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
     列：idx, mus_score
     """
     import datetime as _dt
+
     from modules.mus_util import compute_mus_batch
 
     date_str = _dt.datetime.now().strftime("%Y%m%d")
@@ -1620,24 +1679,7 @@ def main():
     assert args.freeze_layer_num <= 12 and args.freeze_layer_num >= -1
     if hasattr(model, "clip") and args.freeze_layer_num > -1:
         for name, param in model.clip.named_parameters():
-            # top layers always need to train
-            if (
-                name.find("ln_final.") == 0
-                or name.find("text_projection") == 0
-                or name.find("logit_scale") == 0
-                or name.find("visual.ln_post.") == 0
-                or name.find("visual.proj") == 0
-            ):
-                continue  # need to train
-            elif name.find("visual.transformer.resblocks.") == 0 or name.find("transformer.resblocks.") == 0:
-                layer_num = int(name.split(".resblocks.")[1].split(".")[0])
-                if layer_num >= args.freeze_layer_num:
-                    continue  # need to train
-
-            if args.linear_patch == "3d" and name.find("conv2."):
-                continue
-            else:
-                # paramenters which < freeze_layer_num will be freezed
+            if not _should_keep_clip_parameter_trainable(name, args):
                 param.requires_grad = False
 
     ## ####################################
@@ -1715,8 +1757,6 @@ def main():
                 logger.info("Resuming training from epoch %d", resumed_epoch + 1)
             logger.info("=" * 60)
 
-        state = True  # everything is correct
-
         for epoch in range(resumed_epoch, args.epochs):
             train_sampler.set_epoch(epoch)
             tr_loss, global_step = train_epoch(
@@ -1760,7 +1800,6 @@ def main():
                         best_output_model_file = output_model_file
                     logger.info("  Best so far | R@1: %.1f | %s", best_score, best_output_model_file)
                     logger.info("=" * 60)
-                    state = True
             except Exception as e:
                 logger.error("Error occurred during evaluation: %s", str(e))
                 logger.error("Error type: %s", type(e).__name__)
@@ -1768,7 +1807,6 @@ def main():
 
                 logger.error("Traceback:\n%s", traceback.format_exc())
                 logger.info("Skipping evaluation for this epoch. Testing model at the end!")
-                state = False
                 continue
 
         ## 训练中每轮评估已记录最佳分数，最终重新加载评估是冗余的。

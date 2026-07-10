@@ -27,6 +27,77 @@ def test_forward_accepts_explicit_hard_negative_kwargs():
         assert name in signature.parameters
 
 
+@pytest.mark.parametrize(
+    ("backbone_type", "checkpoint_key", "detected_type"),
+    [
+        ("openai_clip", "clip.visual.patch_embed.proj.weight", "eva_clip"),
+        ("eva_clip", "clip.visual.conv1.weight", "openai_clip"),
+    ],
+)
+def test_checkpoint_backbone_contract_rejects_opposite_backbone(
+    backbone_type,
+    checkpoint_key,
+    detected_type,
+):
+    with pytest.raises(ValueError, match=rf"backbone_type={backbone_type}.*{detected_type}"):
+        UATVR._validate_checkpoint_backbone({checkpoint_key: torch.ones(1)}, backbone_type)
+
+
+@pytest.mark.parametrize(
+    ("backbone_type", "checkpoint_key"),
+    [
+        ("openai_clip", "clip.visual.conv1.weight"),
+        ("eva_clip", "clip.visual.patch_embed.proj.weight"),
+    ],
+)
+def test_checkpoint_backbone_contract_accepts_matching_resume(backbone_type, checkpoint_key):
+    UATVR._validate_checkpoint_backbone({checkpoint_key: torch.ones(1)}, backbone_type)
+
+
+def test_checkpoint_backbone_contract_allows_upper_layers_without_backbone_identity():
+    state_dict = {
+        "transformerClip.resblocks.0.attn.in_proj_weight": torch.ones(1),
+        "sap.anchor_queries": torch.ones(1),
+    }
+
+    UATVR._validate_checkpoint_backbone(state_dict, "openai_clip")
+    UATVR._validate_checkpoint_backbone(state_dict, "eva_clip")
+
+
+def test_checkpoint_backbone_contract_rejects_mixed_backbone_keys():
+    state_dict = {
+        "clip.visual.conv1.weight": torch.ones(1),
+        "clip.visual.patch_embed.proj.weight": torch.ones(1),
+    }
+
+    with pytest.raises(ValueError, match="mixed.*openai_clip.*eva_clip"):
+        UATVR._validate_checkpoint_backbone(state_dict, "openai_clip")
+
+
+def test_uatvr_backbone_contract_rejects_output_and_model_dimension_mismatch():
+    adapter = types.SimpleNamespace(
+        output_dim=768,
+        supports_text_hidden=True,
+        supports_visual_hidden=True,
+    )
+
+    with pytest.raises(ValueError, match=r"output_dim=768.*embed_dim=512.*d_model=512"):
+        UATVR._validate_backbone_contract(adapter, embed_dim=512, d_model=512)
+
+
+@pytest.mark.parametrize("capability", ["supports_text_hidden", "supports_visual_hidden"])
+def test_uatvr_backbone_contract_rejects_missing_required_hidden_capability(capability):
+    adapter = types.SimpleNamespace(
+        output_dim=512,
+        supports_text_hidden=True,
+        supports_visual_hidden=True,
+    )
+    setattr(adapter, capability, False)
+
+    with pytest.raises(ValueError, match=capability):
+        UATVR._validate_backbone_contract(adapter, embed_dim=512, d_model=512)
+
+
 def test_evidential_matrix_loss_prefers_confident_diagonal():
     confident = torch.tensor(
         [
@@ -223,6 +294,22 @@ def test_query_conditioned_sap_logits_return_pairwise_gate_diagnostics():
     assert stats["gate_top1_mass_pos"] > stats["gate_top1_mass_neg"]
     assert stats["diag"] > stats["off"]
     assert stats["gap"] > 0
+    assert stats["std"] > 0
+
+
+def test_matrix_gap_stats_supports_rectangular_eval_chunks():
+    logits = torch.tensor(
+        [
+            [3.0, 1.0, 0.5],
+            [0.2, 4.0, 0.1],
+        ]
+    )
+
+    stats = UATVR._matrix_gap_stats(logits)
+
+    assert stats["diag"] == 3.5
+    assert stats["off"] == pytest.approx((1.0 + 0.5 + 0.2 + 0.1) / 4)
+    assert stats["gap"] == pytest.approx(3.5 - 0.45)
     assert stats["std"] > 0
 
 

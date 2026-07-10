@@ -1,9 +1,15 @@
-from types import SimpleNamespace
 import importlib.machinery
+import os
+import subprocess
 import sys
 import types
+from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 import torch
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 cv2_stub = types.ModuleType("cv2")
 cv2_stub.__spec__ = importlib.machinery.ModuleSpec("cv2", loader=None)
@@ -12,7 +18,12 @@ spatial_enhancer_stub = types.ModuleType("modules.spatial_enhancer")
 spatial_enhancer_stub.SpatialEnhancer = object
 sys.modules["modules.spatial_enhancer"] = spatial_enhancer_stub
 
-from main_task_retrieval import _trainable_named_parameters, _unpack_train_batch, get_args
+from main_task_retrieval import (  # noqa: E402
+    _should_keep_clip_parameter_trainable,
+    _trainable_named_parameters,
+    _unpack_train_batch,
+    get_args,
+)
 
 
 def tensor_id(value):
@@ -102,6 +113,87 @@ def test_get_args_accepts_final_score_mode_and_weights(monkeypatch):
     assert args.qc_sap_temperature == 0.2
 
 
+def test_get_args_accepts_eva_clip_backbone_options(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog",
+            "--do_train",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--backbone_type",
+            "eva_clip",
+            "--backbone_name",
+            "EVA02-CLIP-B-16",
+            "--backbone_path",
+            "ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt",
+            "--eva_clip_root",
+            "ref/EVA/EVA-CLIP/rei",
+        ],
+    )
+
+    args = get_args()
+
+    assert args.backbone_type == "eva_clip"
+    assert args.backbone_name == "EVA02-CLIP-B-16"
+    assert args.backbone_path == "ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt"
+    assert args.eva_clip_root == "ref/EVA/EVA-CLIP/rei"
+
+
+def _run_with_fake_torchrun(script_name, tmp_path, xattn_value):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    capture_path = tmp_path / f"{script_name}.args"
+    torchrun_path = fake_bin / "torchrun"
+    torchrun_path.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > \"${CAPTURE_PATH}\"\n",
+        encoding="utf-8",
+    )
+    torchrun_path.chmod(0o755)
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": f"{fake_bin}:{env['PATH']}",
+            "CAPTURE_PATH": str(capture_path),
+            "EVA_CLIP_USE_XATTN": xattn_value,
+            "RUN_ID": "xattn-test",
+            "OUTPUT_DIR": str(tmp_path / "output"),
+            "LOG_DIR": str(tmp_path / "logs"),
+            "INIT_MODEL": str(tmp_path / "checkpoint.pt"),
+            "CUDA_VISIBLE_DEVICES": "0",
+            "NPROC": "1",
+        }
+    )
+    return subprocess.run(
+        ["bash", str(PROJECT_ROOT / script_name)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    ), capture_path
+
+
+@pytest.mark.parametrize("script_name", ["train_msrvtt.sh", "eval.sh"])
+@pytest.mark.parametrize(("xattn_value", "expects_flag"), [("0", False), ("1", True)])
+def test_scripts_conditionally_forward_and_log_eva_clip_xattn(script_name, xattn_value, expects_flag, tmp_path):
+    result, capture_path = _run_with_fake_torchrun(script_name, tmp_path, xattn_value)
+
+    assert result.returncode == 0, result.stderr
+    captured_args = capture_path.read_text(encoding="utf-8").splitlines()
+    assert ("--eva_clip_use_xattn" in captured_args) is expects_flag
+    assert f"EVA_CLIP_USE_XATTN={xattn_value}" in result.stdout
+
+
+@pytest.mark.parametrize("script_name", ["train_msrvtt.sh", "eval.sh"])
+def test_scripts_reject_invalid_eva_clip_xattn_value(script_name, tmp_path):
+    result, capture_path = _run_with_fake_torchrun(script_name, tmp_path, "yes")
+
+    assert result.returncode == 2
+    assert "EVA_CLIP_USE_XATTN=yes" in result.stderr
+    assert not capture_path.exists()
+
+
 def test_get_args_normalizes_hygiene_profile_to_clean_wti_only(monkeypatch):
     monkeypatch.setattr(
         "sys.argv",
@@ -143,6 +235,15 @@ def test_get_args_normalizes_hygiene_profile_to_clean_wti_only(monkeypatch):
     assert args.lambda_anchor == 0.2
     assert args.use_explicit_hard_negative_loss is False
     assert args.use_uacl_intra_alignment is False
+
+
+def test_clip_freeze_policy_recognizes_eva_visual_blocks_and_heads():
+    args = SimpleNamespace(freeze_layer_num=0, linear_patch="2d")
+
+    assert _should_keep_clip_parameter_trainable("visual.blocks.0.attn.qkv.weight", args)
+    assert _should_keep_clip_parameter_trainable("visual.norm.weight", args)
+    assert _should_keep_clip_parameter_trainable("visual.head.weight", args)
+    assert not _should_keep_clip_parameter_trainable("visual.patch_embed.proj.weight", args)
 
 
 def test_trainable_named_parameters_excludes_frozen_parameters():

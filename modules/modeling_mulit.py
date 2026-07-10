@@ -7,6 +7,11 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from modules.backbone_adapter import (
+    build_eva_clip_backbone,
+    get_eva_clip_backbone_spec,
+    load_eva_clip_pretrained,
+)
 from modules.module_clip import CLIP, convert_weights
 from modules.module_cross import CrossConfig
 from modules.module_cross import Transformer as TransformerClip
@@ -41,6 +46,41 @@ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
         self.clip = None
         self.cross = None
 
+    @staticmethod
+    def _validate_checkpoint_backbone(state_dict, backbone_type):
+        """Reject checkpoints that explicitly identify a different visual backbone.
+
+        Checkpoints containing only UATVR layers do not carry enough information to
+        identify a backbone and are intentionally allowed; the selected backbone's
+        base weights will be supplied by the normal initialization path.
+        """
+        openai_markers = tuple(
+            key
+            for key in state_dict
+            if key.startswith("clip.visual.conv1.") or key.startswith("clip.visual.transformer.")
+        )
+        eva_markers = tuple(
+            key
+            for key in state_dict
+            if key.startswith("clip.visual.patch_embed.")
+            or key.startswith("clip.visual.blocks.")
+            or key.startswith("clip.visual.pos_embed")
+        )
+
+        if openai_markers and eva_markers:
+            raise ValueError(
+                "Checkpoint contains mixed backbone keys for openai_clip and eva_clip: "
+                f"openai_clip={openai_markers[:3]}, eva_clip={eva_markers[:3]}"
+            )
+
+        detected_type = "openai_clip" if openai_markers else "eva_clip" if eva_markers else None
+        if detected_type is not None and detected_type != backbone_type:
+            marker_keys = openai_markers if detected_type == "openai_clip" else eva_markers
+            raise ValueError(
+                f"backbone_type={backbone_type} is incompatible with detected checkpoint backbone "
+                f"{detected_type}; marker_keys={marker_keys[:5]}"
+            )
+
     @classmethod
     def from_pretrained(cls, cross_model_name, state_dict=None, cache_dir=None, type_vocab_size=2, *inputs, **kwargs):
         task_config = None
@@ -53,13 +93,20 @@ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
 
         if state_dict is None:
             state_dict = {}
-        if hasattr(task_config, "pretrained_clip_name"):
-            pretrained_clip_name = task_config.pretrained_clip_name
-        clip_state_dict = CLIP.get_config(pretrained_clip_name=pretrained_clip_name)
-        for key, val in clip_state_dict.items():
-            new_key = "clip." + key
-            if new_key not in state_dict:
-                state_dict[new_key] = val.clone()
+        backbone_type = getattr(task_config, "backbone_type", "openai_clip")
+        cls._validate_checkpoint_backbone(state_dict, backbone_type)
+        clip_state_dict = None
+        if backbone_type == "openai_clip":
+            pretrained_clip_name = getattr(task_config, "pretrained_clip_name", "ViT-B/32")
+            clip_state_dict = CLIP.get_config(pretrained_clip_name=pretrained_clip_name)
+            for key, val in clip_state_dict.items():
+                new_key = "clip." + key
+                if new_key not in state_dict:
+                    state_dict[new_key] = val.clone()
+        elif backbone_type == "eva_clip":
+            pass
+        else:
+            raise ValueError(f"Unsupported backbone_type={backbone_type}")
 
         # 只加载 config，不需加载 weights（cross 模块随机初始化训练）。
         # 传 state_dict={} 跳过 get_config 中"权重文件不存在"的检查。
@@ -70,7 +117,23 @@ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
         model = cls(cross_config, clip_state_dict, *inputs, **kwargs)  # -----------
 
         ## ===> Initialization trick [HARD CODE]
-        if model.linear_patch == "3d":
+        if backbone_type == "eva_clip":
+            has_eva_clip = any(
+                key.startswith("clip.visual.patch_embed.")
+                or key.startswith("clip.visual.blocks.")
+                or key.startswith("clip.visual.pos_embed")
+                for key in state_dict
+            )
+            if not has_eva_clip:
+                load_eva_clip_pretrained(
+                    model.clip,
+                    backbone_name=getattr(task_config, "backbone_name", "EVA02-CLIP-B-16"),
+                    backbone_path=getattr(task_config, "backbone_path", None),
+                    eva_clip_root=getattr(task_config, "eva_clip_root", None),
+                    use_xattn=getattr(task_config, "eva_clip_use_xattn", False),
+                )
+            model.prepare_seqtransf_init_from_backbone(state_dict)
+        elif model.linear_patch == "3d":
             contain_conv2 = False
             for key in state_dict.keys():
                 if key.find("visual.conv2.weight") > -1:
@@ -103,7 +166,7 @@ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
 
                 state_dict["clip.visual.conv2.weight"] = cp_weight
 
-        if model.sim_header == "seqTransf":
+        if backbone_type == "openai_clip" and model.sim_header == "seqTransf":
             contain_frame_position = False
             for key in state_dict.keys():
                 if key.find("frame_position_embeddings") > -1:
@@ -168,6 +231,20 @@ class UATVR(CLIP4ClipPreTrainedModel):
         "spatial_enhancer.",
     )
 
+    @staticmethod
+    def _validate_backbone_contract(backbone, embed_dim, d_model):
+        output_dim = getattr(backbone, "output_dim", None)
+        dimensions = f"output_dim={output_dim}, embed_dim={embed_dim}, d_model={d_model}"
+        if output_dim != embed_dim or output_dim != d_model:
+            raise ValueError(f"Backbone dimension contract mismatch: {dimensions}")
+
+        for capability in ("supports_text_hidden", "supports_visual_hidden"):
+            if not getattr(backbone, capability, False):
+                raise ValueError(
+                    f"Backbone capability contract mismatch: {capability}=False; "
+                    "the current UATVR path requires projected token/patch hidden states."
+                )
+
     def __init__(self, cross_config, clip_state_dict, task_config):
         super(UATVR, self).__init__(cross_config)
         self.task_config = task_config
@@ -179,22 +256,43 @@ class UATVR(CLIP4ClipPreTrainedModel):
             self.loose_type = True
             show_log(task_config, "Test retrieval by loose type.")
 
-        # CLIP Encoders: From OpenAI: CLIP [https://github.com/openai/CLIP] ===>
-        assert "visual.proj" in clip_state_dict, "Only ViT-based CLIP is supported"
-        vision_width = clip_state_dict["visual.conv1.weight"].shape[0]
-        vision_layers = len(
-            [k for k in clip_state_dict.keys() if k.startswith("visual.") and k.endswith(".attn.in_proj_weight")]
-        )
-        vision_patch_size = clip_state_dict["visual.conv1.weight"].shape[-1]
-        grid_size = round((clip_state_dict["visual.positional_embedding"].shape[0] - 1) ** 0.5)
-        image_resolution = vision_patch_size * grid_size
+        self.backbone_type = getattr(task_config, "backbone_type", "openai_clip")
+        if self.backbone_type == "openai_clip":
+            # CLIP Encoders: From OpenAI: CLIP [https://github.com/openai/CLIP] ===>
+            assert "visual.proj" in clip_state_dict, "Only ViT-based CLIP is supported"
+            vision_width = clip_state_dict["visual.conv1.weight"].shape[0]
+            vision_layers = len(
+                [k for k in clip_state_dict.keys() if k.startswith("visual.") and k.endswith(".attn.in_proj_weight")]
+            )
+            vision_patch_size = clip_state_dict["visual.conv1.weight"].shape[-1]
+            grid_size = round((clip_state_dict["visual.positional_embedding"].shape[0] - 1) ** 0.5)
+            image_resolution = vision_patch_size * grid_size
 
-        embed_dim = clip_state_dict["text_projection"].shape[1]
-        context_length = clip_state_dict["positional_embedding"].shape[0]
-        vocab_size = clip_state_dict["token_embedding.weight"].shape[0]
-        transformer_width = clip_state_dict["ln_final.weight"].shape[0]
-        transformer_heads = transformer_width // 64
-        transformer_layers = len(set(k.split(".")[2] for k in clip_state_dict if k.startswith("transformer.resblocks")))
+            embed_dim = clip_state_dict["text_projection"].shape[1]
+            context_length = clip_state_dict["positional_embedding"].shape[0]
+            vocab_size = clip_state_dict["token_embedding.weight"].shape[0]
+            transformer_width = clip_state_dict["ln_final.weight"].shape[0]
+            transformer_heads = transformer_width // 64
+            transformer_layers = len(
+                set(k.split(".")[2] for k in clip_state_dict if k.startswith("transformer.resblocks"))
+            )
+        elif self.backbone_type == "eva_clip":
+            spec = get_eva_clip_backbone_spec(
+                getattr(task_config, "backbone_name", "EVA02-CLIP-B-16"),
+                getattr(task_config, "eva_clip_root", None),
+            )
+            vision_width = spec.vision_width
+            vision_layers = spec.vision_layers
+            vision_patch_size = spec.vision_patch_size
+            image_resolution = spec.image_resolution
+            embed_dim = spec.embed_dim
+            context_length = spec.context_length
+            vocab_size = spec.vocab_size
+            transformer_width = spec.transformer_width
+            transformer_heads = spec.transformer_heads
+            transformer_layers = spec.transformer_layers
+        else:
+            raise ValueError(f"Unsupported backbone_type={self.backbone_type}")
 
         show_log(task_config, "\t embed_dim: {}".format(embed_dim))
         show_log(task_config, "\t image_resolution: {}".format(image_resolution))
@@ -212,29 +310,39 @@ class UATVR(CLIP4ClipPreTrainedModel):
             self.linear_patch = task_config.linear_patch
             show_log(task_config, "\t\t linear_patch: {}".format(self.linear_patch))
 
-        # use .float() to avoid overflow/underflow from fp16 weight. https://github.com/openai/CLIP/issues/40
         cut_top_layer = 0
         show_log(task_config, "\t cut_top_layer: {}".format(cut_top_layer))
-        self.clip = CLIP(
-            embed_dim,
-            image_resolution,
-            vision_layers - cut_top_layer,
-            vision_width,
-            vision_patch_size,
-            context_length,
-            vocab_size,
-            transformer_width,
-            transformer_heads,
-            transformer_layers - cut_top_layer,
-            linear_patch=self.linear_patch,
-        ).float()
+        if self.backbone_type == "openai_clip":
+            # use .float() to avoid overflow/underflow from fp16 weight. https://github.com/openai/CLIP/issues/40
+            self.clip = CLIP(
+                embed_dim,
+                image_resolution,
+                vision_layers - cut_top_layer,
+                vision_width,
+                vision_patch_size,
+                context_length,
+                vocab_size,
+                transformer_width,
+                transformer_heads,
+                transformer_layers - cut_top_layer,
+                linear_patch=self.linear_patch,
+            ).float()
 
-        for key in ["input_resolution", "context_length", "vocab_size"]:
-            if key in clip_state_dict:
-                del clip_state_dict[key]
+            for key in ["input_resolution", "context_length", "vocab_size"]:
+                if key in clip_state_dict:
+                    del clip_state_dict[key]
 
-        convert_weights(self.clip)
-        # <=== End of CLIP Encoders
+            convert_weights(self.clip)
+            # <=== End of CLIP Encoders
+        else:
+            self.clip = build_eva_clip_backbone(
+                backbone_name=getattr(task_config, "backbone_name", "EVA02-CLIP-B-16"),
+                backbone_path=getattr(task_config, "backbone_path", None),
+                eva_clip_root=getattr(task_config, "eva_clip_root", None),
+                use_xattn=getattr(task_config, "eva_clip_use_xattn", False),
+                load_pretrained=False,
+            ).float()
+            self._validate_backbone_contract(self.clip, embed_dim=embed_dim, d_model=transformer_width)
 
         self.sim_header = "meanP"
         if hasattr(task_config, "sim_header"):
@@ -389,6 +497,37 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 task_config,
                 "\t Frozen hygiene-only auxiliary parameters: {}".format(frozen_count),
             )
+
+    def prepare_seqtransf_init_from_backbone(self, state_dict):
+        if self.sim_header != "seqTransf":
+            return
+
+        contain_frame_position = any(key.find("frame_position_embeddings") > -1 for key in state_dict.keys())
+        if not contain_frame_position and hasattr(self, "frame_position_embeddings"):
+            source_pos = getattr(self.clip, "positional_embedding", None)
+            if source_pos is not None:
+                source_pos = source_pos.detach()
+                clip_pos_len = source_pos.shape[0]
+                model_pos_len = self.frame_position_embeddings.weight.shape[0]
+                if model_pos_len > clip_pos_len:
+                    new_val = self.frame_position_embeddings.weight.data.clone()
+                    new_val[:clip_pos_len] = source_pos.clone()
+                    state_dict["frame_position_embeddings.weight"] = new_val
+                else:
+                    state_dict["frame_position_embeddings.weight"] = source_pos[:model_pos_len].clone()
+
+        if not hasattr(self, "transformerClip") or not hasattr(self.clip, "transformer"):
+            return
+
+        for key, val in self.clip.transformer.state_dict().items():
+            if not key.startswith("resblocks."):
+                continue
+            num_layer = int(key.split(".")[1])
+            if num_layer >= self.task_config.cross_num_hidden_layers:
+                continue
+            target_key = "transformerClip." + key
+            if target_key not in state_dict:
+                state_dict[target_key] = val.detach().clone()
 
     @staticmethod
     def _flatten_video_input(video):
@@ -656,7 +795,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         epistemic_video = sap_out["epistemic_cont"]  # [B, K, D] 连续认知不确定性
         u_mode = sap_out["u_mode"]             # [B] 离散模态不确定性
         alpha_dir = sap_out["alpha_dir"]       # [B, K] Dirichlet 证据量
-        modal_probs = sap_out["modal_probs"]   # [B, K] 模态概率
 
         if self.log_sigma_min is not None and self.log_sigma_max is not None:
             logsigma_video = torch.clamp(logsigma_video, min=float(self.log_sigma_min), max=float(self.log_sigma_max))
@@ -993,13 +1131,17 @@ class UATVR(CLIP4ClipPreTrainedModel):
         if logits is None:
             return {"diag": 0.0, "off": 0.0, "gap": 0.0, "std": 0.0}
         logits = logits.detach()
-        diag = logits.diagonal()
-        mask_off = ~torch.eye(logits.size(0), dtype=torch.bool, device=logits.device)
+        diag_len = min(logits.size(0), logits.size(1))
+        diag = logits[:diag_len, :diag_len].diagonal()
+        mask_off = torch.ones_like(logits, dtype=torch.bool)
+        if diag_len > 0:
+            diag_idx = torch.arange(diag_len, device=logits.device)
+            mask_off[diag_idx, diag_idx] = False
         off = logits[mask_off]
         return {
-            "diag": float(diag.mean().item()),
+            "diag": float(diag.mean().item()) if diag.numel() > 0 else 0.0,
             "off": float(off.mean().item()) if off.numel() > 0 else 0.0,
-            "gap": float((diag.mean() - off.mean()).item()) if off.numel() > 0 else 0.0,
+            "gap": float((diag.mean() - off.mean()).item()) if diag.numel() > 0 and off.numel() > 0 else 0.0,
             "std": float(logits.std(unbiased=False).item()) if logits.numel() > 0 else 0.0,
         }
 

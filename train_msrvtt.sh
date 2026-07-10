@@ -15,13 +15,26 @@ ATTR_NUM_BLOCKS=4
 RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
 OUTPUT_DIR=${OUTPUT_DIR:-ckpts/ckpt_msrvtt_${RUN_ID}}
 EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-default}
+BACKBONE_TYPE=${BACKBONE_TYPE:-openai_clip}
+BACKBONE_NAME=${BACKBONE_NAME:-EVA02-CLIP-B-16}
+BACKBONE_PATH=${BACKBONE_PATH:-ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
+EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-ref/EVA/EVA-CLIP/rei}
+EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN:-0}
 if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
     echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
+    exit 2
+fi
+if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
+    echo "Unsupported EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}; expected 0 or 1" >&2
     exit 2
 fi
 EXTRA_PROFILE_ARGS=()
 if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
     EXTRA_PROFILE_ARGS+=(--w_mil 0 --w_evidential 0 --w_neg_reg 0 --w_orth 0 --uncertainty_mode none)
+fi
+EXTRA_BACKBONE_ARGS=()
+if [[ "${EVA_CLIP_USE_XATTN}" == "1" ]]; then
+    EXTRA_BACKBONE_ARGS+=(--eva_clip_use_xattn)
 fi
 
 # 显存：batch 256 + accum 1，有效 batch = 256。
@@ -30,6 +43,8 @@ fi
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1,2}"
 IFS=',' read -ra _GPUS <<< "${CUDA_VISIBLE_DEVICES}"
 NPROC="${NPROC:-${#_GPUS[@]}}"
+
+echo "[train_msrvtt.sh] BACKBONE_TYPE=${BACKBONE_TYPE} BACKBONE_NAME=${BACKBONE_NAME} BACKBONE_PATH=${BACKBONE_PATH} EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}"
 
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     torchrun --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29547 \
@@ -48,6 +63,11 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     --loose_type --linear_patch 2d --sim_header seqTransf \
     --strategy 2 \
     --pretrained_clip_name ViT-B/16 \
+    --backbone_type "${BACKBONE_TYPE}" \
+    --backbone_name "${BACKBONE_NAME}" \
+    --backbone_path "${BACKBONE_PATH}" \
+    --eva_clip_root "${EVA_CLIP_ROOT}" \
+    "${EXTRA_BACKBONE_ARGS[@]}" \
     --extra_video_cls_num 2 \
     --extra_text_cls_num 2 \
     --n_video_embeddings 7 \

@@ -34,6 +34,15 @@ ROPE_MODE=${ROPE_MODE:-2d}                    # none | 2d | 3d
 USE_ADA_NORM=${USE_ADA_NORM:-1}              # 0 | 1
 UNCERTAINTY_MODE=${UNCERTAINTY_MODE:-evidential}    # evidential | none | nig_mil
 EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-default}   # default | hygiene
+BACKBONE_TYPE=${BACKBONE_TYPE:-openai_clip}          # openai_clip | eva_clip
+BACKBONE_NAME=${BACKBONE_NAME:-EVA02-CLIP-B-16}
+BACKBONE_PATH=${BACKBONE_PATH:-ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
+EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-ref/EVA/EVA-CLIP/rei}
+EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN:-0}              # 0 | 1
+if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
+  echo "Unsupported EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}; expected 0 or 1" >&2
+  exit 2
+fi
 
 MSRVTT_DATA_PATH=${MSRVTT_DATA_PATH:-/data2/hxj/data/MSRVTT}
 MSVD_DATA_PATH=${MSVD_DATA_PATH:-/data2/hxj/data/MSVD}
@@ -67,6 +76,13 @@ EXTRA_ARGS+=(--fusion_mode "${FUSION_MODE}")
 EXTRA_ARGS+=(--rope_mode "${ROPE_MODE}")
 EXTRA_ARGS+=(--uncertainty_mode "${UNCERTAINTY_MODE}")
 EXTRA_ARGS+=(--experiment_profile "${EXPERIMENT_PROFILE}")
+EXTRA_ARGS+=(--backbone_type "${BACKBONE_TYPE}")
+EXTRA_ARGS+=(--backbone_name "${BACKBONE_NAME}")
+EXTRA_ARGS+=(--backbone_path "${BACKBONE_PATH}")
+EXTRA_ARGS+=(--eva_clip_root "${EVA_CLIP_ROOT}")
+if [[ "${EVA_CLIP_USE_XATTN}" == "1" ]]; then
+  EXTRA_ARGS+=(--eva_clip_use_xattn)
+fi
 EXTRA_ARGS+=(--final_score_mode "${FINAL_SCORE_MODE:-wti}")
 EXTRA_ARGS+=(--lambda_prob "${LAMBDA_PROB:-0.0}")
 EXTRA_ARGS+=(--lambda_anchor "${LAMBDA_ANCHOR:-0.0}")
@@ -111,6 +127,7 @@ fi
 echo "[eval.sh] RUN_ID=${RUN_ID}"
 echo "[eval.sh] DATATYPE=${DATATYPE} EVAL_BRANCH_MODE=${EVAL_BRANCH_MODE} USE_ATTRIBUTES=${USE_ATTRIBUTES}"
 echo "[eval.sh] FUSION_MODE=${FUSION_MODE} ROPE_MODE=${ROPE_MODE} USE_ADA_NORM=${USE_ADA_NORM} UNCERTAINTY_MODE=${UNCERTAINTY_MODE} EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}"
+echo "[eval.sh] BACKBONE_TYPE=${BACKBONE_TYPE} BACKBONE_NAME=${BACKBONE_NAME} BACKBONE_PATH=${BACKBONE_PATH} EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}"
 echo "[eval.sh] FINAL_SCORE_MODE=${FINAL_SCORE_MODE:-wti} LAMBDA_PROB=${LAMBDA_PROB:-0.0} LAMBDA_ANCHOR=${LAMBDA_ANCHOR:-0.0}"
 echo "[eval.sh] INIT_MODEL=${INIT_MODEL}"
 echo "[eval.sh] OUTPUT_DIR=${OUTPUT_DIR}"
