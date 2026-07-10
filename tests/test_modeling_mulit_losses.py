@@ -4,6 +4,7 @@ import sys
 import types
 from argparse import Namespace
 from pathlib import Path
+from types import MethodType
 
 import pytest
 import torch
@@ -16,6 +17,9 @@ spatial_enhancer_stub = types.ModuleType("modules.spatial_enhancer")
 spatial_enhancer_stub.SpatialEnhancer = object
 sys.modules["modules.spatial_enhancer"] = spatial_enhancer_stub
 UATVR = importlib.import_module("modules.modeling_mulit").UATVR
+MultiPositiveCrossEn = importlib.import_module(
+    "modules.until_module"
+).MultiPositiveCrossEn
 PIENet = importlib.import_module("prob_models.pie_model").PIENet
 UncertaintyModuleText = importlib.import_module("prob_models.uncertainty_module").UncertaintyModuleText
 
@@ -23,8 +27,160 @@ UncertaintyModuleText = importlib.import_module("prob_models.uncertainty_module"
 def test_forward_accepts_explicit_hard_negative_kwargs():
     signature = inspect.signature(UATVR.forward)
 
-    for name in ["sample_index", "hard_video", "hard_video_mask", "hard_valid"]:
+    for name in [
+        "video_group_id",
+        "sample_index",
+        "hard_video",
+        "hard_video_mask",
+        "hard_valid",
+    ]:
         assert name in signature.parameters
+
+
+def test_msrvtt_training_requires_video_group_id():
+    with pytest.raises(ValueError, match="MSRVTT training requires video_group_id"):
+        UATVR.resolve_video_group_ids(
+            None,
+            local_batch=2,
+            device=torch.device("cpu"),
+            task_config=Namespace(datatype="msrvtt"),
+        )
+
+
+def test_non_msrvtt_fallback_group_ids_are_disjoint_across_ranks():
+    rank0 = UATVR.resolve_video_group_ids(
+        None,
+        local_batch=2,
+        device=torch.device("cpu"),
+        task_config=Namespace(datatype="msvd", rank=0),
+    )
+    rank1 = UATVR.resolve_video_group_ids(
+        None,
+        local_batch=2,
+        device=torch.device("cpu"),
+        task_config=Namespace(datatype="msvd", rank=1),
+    )
+
+    assert set(rank0.tolist()).isdisjoint(rank1.tolist())
+
+
+def test_provided_video_group_ids_are_long_and_match_local_batch():
+    resolved = UATVR.resolve_video_group_ids(
+        torch.tensor([4, 5], dtype=torch.int32),
+        local_batch=2,
+        device=torch.device("cpu"),
+        task_config=Namespace(datatype="msrvtt"),
+    )
+
+    assert resolved.dtype == torch.long
+    with pytest.raises(ValueError, match="video_group_id must use an integer dtype"):
+        UATVR.resolve_video_group_ids(
+            torch.tensor([4.5, 5.5]),
+            local_batch=2,
+            device=torch.device("cpu"),
+            task_config=Namespace(datatype="msrvtt"),
+        )
+    with pytest.raises(ValueError, match="video_group_id length=1.*local batch=2"):
+        UATVR.resolve_video_group_ids(
+            torch.tensor([4]),
+            local_batch=2,
+            device=torch.device("cpu"),
+            task_config=Namespace(datatype="msrvtt"),
+        )
+
+
+def _make_forward_only_model(retrieval_logits, group_ids, hard_negative_loss=0.0):
+    model = UATVR.__new__(UATVR)
+    torch.nn.Module.__init__(model)
+    model.loss_fct = MultiPositiveCrossEn()
+    model.loss_activations = {"hard_negative": False}
+    model.task_config = Namespace(datatype="msrvtt", world_size=1, rank=0)
+    model.loose_type = True
+
+    def flatten_video_input(_self, video):
+        return video, 1
+
+    def get_sequence_output(_self, input_ids, token_type_ids, attention_mask, shaped):
+        batch = input_ids.size(0)
+        return torch.zeros(batch, 1, 2), torch.zeros(batch, 2, 2)
+
+    def get_visual_output(_self, video, video_mask, shaped, video_frame):
+        batch = video_mask.size(0)
+        return torch.zeros(batch, 1, 2), torch.zeros(batch, 1, 1, 2)
+
+    def get_similarity_logits(_self, *args, video_group_id=None, **kwargs):
+        assert torch.equal(video_group_id, group_ids)
+        zero = retrieval_logits.new_zeros(())
+        return {
+            "retrieve_logits": retrieval_logits,
+            "video_group_id": group_ids,
+            "MIL_loss": zero,
+            "evidential_loss": zero,
+            "neg_reg_loss": zero,
+            "orth_loss": zero,
+            "hard_negative_loss": retrieval_logits.new_tensor(hard_negative_loss),
+            "uacl_intra_loss": zero,
+            "uacl_kl_loss": zero,
+        }
+
+    model._flatten_video_input = MethodType(flatten_video_input, model)
+    model.get_sequence_output = MethodType(get_sequence_output, model)
+    model.get_visual_output = MethodType(get_visual_output, model)
+    model.get_similarity_logits = MethodType(get_similarity_logits, model)
+    model.train()
+    return model
+
+
+def test_forward_uses_bidirectional_multi_positive_loss_and_reports_telemetry():
+    retrieval_logits = torch.tensor(
+        [[4.0, 1.0, 0.0], [3.0, 2.0, -1.0], [0.0, 1.0, 5.0]],
+        requires_grad=True,
+    )
+    group_ids = torch.tensor([7, 7, 9])
+    model = _make_forward_only_model(retrieval_logits, group_ids)
+
+    loss_dict = model(
+        torch.zeros(3, 1, 2, dtype=torch.long),
+        torch.zeros(3, 1, 2, dtype=torch.long),
+        torch.ones(3, 1, 2, dtype=torch.long),
+        torch.zeros(3, 1, 1, 1, 1, 1, 1),
+        torch.ones(3, 1, 1, dtype=torch.long),
+        video_group_id=group_ids,
+    )
+    expected = (
+        model.loss_fct(retrieval_logits, group_ids, group_ids)
+        + model.loss_fct(retrieval_logits.T, group_ids, group_ids)
+    ) / 2
+
+    torch.testing.assert_close(loss_dict["sim_loss"], expected)
+    assert loss_dict["unique_video_count"].item() == 2
+    assert loss_dict["duplicate_sample_count"].item() == 1
+    assert loss_dict["mean_positive_count"].item() == pytest.approx(5 / 3)
+
+
+def test_hard_negative_loss_is_separate_from_multi_positive_candidates():
+    retrieval_logits = torch.tensor([[3.0, 0.0], [0.0, 2.0]])
+    group_ids = torch.tensor([1, 2])
+    model = _make_forward_only_model(
+        retrieval_logits, group_ids, hard_negative_loss=7.0
+    )
+
+    loss_dict = model(
+        torch.zeros(2, 1, 2, dtype=torch.long),
+        torch.zeros(2, 1, 2, dtype=torch.long),
+        torch.ones(2, 1, 2, dtype=torch.long),
+        torch.zeros(2, 1, 1, 1, 1, 1, 1),
+        torch.ones(2, 1, 1, dtype=torch.long),
+        video_group_id=group_ids,
+    )
+
+    expected_main = torch.nn.functional.cross_entropy(
+        retrieval_logits, torch.arange(2)
+    )
+    torch.testing.assert_close(loss_dict["sim_loss"], expected_main)
+    torch.testing.assert_close(
+        loss_dict["total"], expected_main + retrieval_logits.new_tensor(7.0)
+    )
 
 
 @pytest.mark.parametrize(
@@ -311,6 +467,58 @@ def test_matrix_gap_stats_supports_rectangular_eval_chunks():
     assert stats["off"] == pytest.approx((1.0 + 0.5 + 0.2 + 0.1) / 4)
     assert stats["gap"] == pytest.approx(3.5 - 0.45)
     assert stats["std"] > 0
+
+
+def test_matrix_gap_stats_treats_same_video_off_diagonal_as_positive():
+    logits = torch.tensor(
+        [[4.0, 3.0, 0.0], [2.0, 5.0, 1.0], [0.0, 1.0, 6.0]]
+    )
+    groups = torch.tensor([7, 7, 9])
+    mask = groups[:, None].eq(groups[None, :])
+
+    stats = UATVR._matrix_gap_stats(logits, positive_mask=mask)
+
+    assert stats["diag"] == pytest.approx((4.0 + 3.0 + 2.0 + 5.0 + 6.0) / 5)
+    assert stats["off"] == pytest.approx(0.5)
+
+
+def test_matrix_gap_stats_remain_finite_when_batch_has_no_negatives():
+    logits = torch.tensor([[2.0, 1.0], [3.0, 4.0]])
+    positive_mask = torch.ones_like(logits, dtype=torch.bool)
+
+    stats = UATVR._matrix_gap_stats(logits, positive_mask=positive_mask)
+
+    assert stats["diag"] == pytest.approx(2.5)
+    assert stats["off"] == 0.0
+    assert stats["gap"] == 0.0
+    assert all(torch.isfinite(torch.tensor(value)) for value in stats.values())
+
+
+def test_query_conditioned_sap_diagnostics_use_supplied_positive_mask():
+    text_pooled = torch.tensor([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+    anchors = torch.tensor(
+        [
+            [[1.0, 0.0], [-1.0, 0.0]],
+            [[1.0, 0.0], [-1.0, 0.0]],
+            [[0.0, 1.0], [0.0, -1.0]],
+        ]
+    )
+    groups = torch.tensor([7, 7, 9])
+    positive_mask = groups[:, None].eq(groups[None, :])
+
+    logits, stats = UATVR.compute_query_conditioned_sap_logits(
+        text_pooled,
+        anchors,
+        logit_scale=torch.tensor(1.0),
+        temperature=0.1,
+        positive_mask=positive_mask,
+    )
+    expected = UATVR._matrix_gap_stats(logits, positive_mask=positive_mask)
+
+    assert stats["diag"] == pytest.approx(expected["diag"])
+    assert stats["off"] == pytest.approx(expected["off"])
+    assert stats["gate_entropy_pos"] < stats["gate_entropy_neg"]
+    assert stats["gate_top1_mass_pos"] > stats["gate_top1_mass_neg"]
 
 
 def test_loss_activation_resolver_matches_uncertainty_mode_semantics():

@@ -224,6 +224,66 @@ class CrossEn(nn.Module):
         return sim_loss
 
 
+class MultiPositiveCrossEn(nn.Module):
+    _INTEGER_DTYPES = {
+        torch.uint8,
+        torch.int8,
+        torch.int16,
+        torch.int32,
+        torch.int64,
+    }
+
+    @classmethod
+    def _prepare_group_ids(cls, group_ids, name, device):
+        group_ids = torch.as_tensor(group_ids)
+        if group_ids.dtype not in cls._INTEGER_DTYPES:
+            raise ValueError(
+                f"{name} must use an integer dtype, got dtype={group_ids.dtype}"
+            )
+        return group_ids.reshape(-1).to(device=device, dtype=torch.long)
+
+    def forward(self, logits, query_group_ids, candidate_group_ids=None):
+        if logits.dim() != 2:
+            raise ValueError(f"logits must be 2D, got shape={tuple(logits.shape)}")
+        query_group_ids = self._prepare_group_ids(
+            query_group_ids, "query_group_ids", logits.device
+        )
+        if candidate_group_ids is None:
+            candidate_group_ids = query_group_ids
+        else:
+            candidate_group_ids = self._prepare_group_ids(
+                candidate_group_ids, "candidate_group_ids", logits.device
+            )
+        expected_shape = (
+            query_group_ids.numel(),
+            candidate_group_ids.numel(),
+        )
+        if tuple(logits.shape) != expected_shape:
+            raise ValueError(
+                f"logit/group shape mismatch: logits={tuple(logits.shape)} "
+                f"query={query_group_ids.numel()} "
+                f"candidate={candidate_group_ids.numel()}"
+            )
+
+        positive_mask = query_group_ids[:, None].eq(
+            candidate_group_ids[None, :]
+        )
+        missing = (~positive_mask.any(dim=1)).nonzero(as_tuple=False).reshape(-1)
+        if missing.numel():
+            missing_groups = query_group_ids[missing]
+            raise ValueError(
+                "multi-positive target missing positive "
+                f"query indices={missing.tolist()} "
+                f"group IDs={missing_groups.tolist()}"
+            )
+
+        positive_logits = logits.masked_fill(~positive_mask, float("-inf"))
+        return -(
+            torch.logsumexp(positive_logits, dim=1)
+            - torch.logsumexp(logits, dim=1)
+        ).mean()
+
+
 class MILNCELoss(nn.Module):
     def __init__(self):
         super(MILNCELoss, self).__init__()
@@ -343,18 +403,91 @@ class AllGather(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, tensor, args):
-        output = [torch.empty_like(tensor) for _ in range(args.world_size)]
+        world_size, rank = _distributed_context(args)
+        output = [torch.empty_like(tensor) for _ in range(world_size)]
         torch.distributed.all_gather(output, tensor)
-        ctx.rank = args.rank
+        ctx.args = args
+        ctx.world_size = world_size
+        ctx.rank = rank
         ctx.batch_size = tensor.shape[0]
         return torch.cat(output, dim=0)
 
     @staticmethod
     def backward(ctx, grad_output):
+        world_size, rank = _distributed_context(ctx.args)
+        if world_size != ctx.world_size or rank != ctx.rank:
+            raise RuntimeError(
+                "distributed context changed between all-gather forward and backward: "
+                f"forward world_size={ctx.world_size}, rank={ctx.rank}; "
+                f"backward world_size={world_size}, rank={rank}"
+            )
+        grad_output = grad_output.contiguous()
+        torch.distributed.all_reduce(
+            grad_output, op=torch.distributed.ReduceOp.SUM
+        )
         return (
             grad_output[ctx.batch_size * ctx.rank : ctx.batch_size * (ctx.rank + 1)],
             None,
         )
+
+
+def _distributed_context(args):
+    configured_world_size = getattr(args, "world_size", None)
+    configured_rank = getattr(args, "rank", None)
+    initialized = (
+        torch.distributed.is_available() and torch.distributed.is_initialized()
+    )
+
+    if initialized:
+        actual_world_size = torch.distributed.get_world_size()
+        actual_rank = torch.distributed.get_rank()
+        world_size = (
+            actual_world_size
+            if configured_world_size is None
+            else int(configured_world_size)
+        )
+        rank = actual_rank if configured_rank is None else int(configured_rank)
+        if world_size != actual_world_size or rank != actual_rank:
+            raise RuntimeError(
+                "distributed task config does not match initialized process group: "
+                f"configured world_size={world_size}, rank={rank}; "
+                f"actual world_size={actual_world_size}, rank={actual_rank}"
+            )
+    else:
+        world_size = (
+            1 if configured_world_size is None else int(configured_world_size)
+        )
+        rank = 0 if configured_rank is None else int(configured_rank)
+
+    if world_size < 1:
+        raise ValueError(f"world_size must be positive, got {world_size}")
+    if rank < 0 or rank >= world_size:
+        raise ValueError(
+            f"rank must be in [0, {world_size}), got rank={rank}"
+        )
+    if world_size > 1 and not initialized:
+        raise RuntimeError(
+            f"distributed all-gather requested with world_size={world_size}, "
+            "but the process group is not initialized"
+        )
+    return world_size, rank
+
+
+def allgather_no_grad(tensor, args):
+    world_size, _rank = _distributed_context(args)
+    if world_size == 1:
+        return tensor.detach()
+    with torch.no_grad():
+        output = [torch.empty_like(tensor) for _ in range(world_size)]
+        torch.distributed.all_gather(output, tensor)
+        return torch.cat(output, dim=0)
+
+
+def allgather_with_grad(tensor, args):
+    world_size, _rank = _distributed_context(args)
+    if world_size == 1:
+        return tensor
+    return AllGather.apply(tensor, args)
 
 
 class dual_softmax_loss(nn.Module):

@@ -16,7 +16,13 @@ from modules.module_clip import CLIP, convert_weights
 from modules.module_cross import CrossConfig
 from modules.module_cross import Transformer as TransformerClip
 from modules.spatial_enhancer import SpatialEnhancer
-from modules.until_module import AllGather, CrossEn, MILNCELoss_BoF, PreTrainedModel
+from modules.until_module import (
+    MILNCELoss_BoF,
+    MultiPositiveCrossEn,
+    PreTrainedModel,
+    allgather_no_grad,
+    allgather_with_grad,
+)
 from query_models.module_sap import SemanticAnchorProbing
 
 try:
@@ -32,7 +38,6 @@ except Exception as e:
     raise EnvironmentError("Failed to import probabilistic modules. Please check dependencies.") from e
 
 logger = logging.getLogger(__name__)
-allgather = AllGather.apply
 
 
 class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
@@ -428,7 +433,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
             nn.init.normal_(self.expansion_tokens, std=0.02)
 
         # Loss functions
-        self.loss_fct = CrossEn()
+        self.loss_fct = MultiPositiveCrossEn()
         self.loss_MIL_fct = MILNCELoss_BoF()
 
         # Loss weights
@@ -537,6 +542,49 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video = video.view(b * pair * num_frames * clips_per_frame, channel, h, w)
         return video, num_frames * clips_per_frame
 
+    @staticmethod
+    def resolve_video_group_ids(
+        video_group_id, local_batch, device, task_config
+    ):
+        if video_group_id is not None:
+            video_group_id = torch.as_tensor(video_group_id)
+            integer_dtypes = {
+                torch.uint8,
+                torch.int8,
+                torch.int16,
+                torch.int32,
+                torch.int64,
+            }
+            if video_group_id.dtype not in integer_dtypes:
+                raise ValueError(
+                    "video_group_id must use an integer dtype, "
+                    f"got dtype={video_group_id.dtype}"
+                )
+            resolved = video_group_id.reshape(-1).to(
+                device=device, dtype=torch.long
+            )
+            if resolved.numel() != int(local_batch):
+                raise ValueError(
+                    f"video_group_id length={resolved.numel()} does not match "
+                    f"local batch={int(local_batch)}"
+                )
+            return resolved
+        if getattr(task_config, "datatype", "msrvtt") == "msrvtt":
+            raise ValueError("trusted-v1 MSRVTT training requires video_group_id")
+        rank = getattr(task_config, "rank", None)
+        if rank is None:
+            if (
+                torch.distributed.is_available()
+                and torch.distributed.is_initialized()
+            ):
+                rank = torch.distributed.get_rank()
+            else:
+                rank = 0
+        return (
+            torch.arange(local_batch, device=device, dtype=torch.long)
+            + int(rank) * 10_000_000
+        )
+
     def forward(
         self,
         input_ids,
@@ -544,11 +592,19 @@ class UATVR(CLIP4ClipPreTrainedModel):
         attention_mask,
         video,
         video_mask=None,
+        video_group_id=None,
         sample_index=None,
         hard_video=None,
         hard_video_mask=None,
         hard_valid=None,
     ):
+        if self.training:
+            video_group_id = self.resolve_video_group_ids(
+                video_group_id,
+                local_batch=input_ids.size(0),
+                device=input_ids.device,
+                task_config=self.task_config,
+            )
         # (B 1 32)  (B 1 132) (B 1 32)
         input_ids = input_ids.view(-1, input_ids.shape[-1])
         token_type_ids = token_type_ids.view(-1, token_type_ids.shape[-1])
@@ -585,14 +641,25 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 video_mask,
                 shaped=True,
                 loose_type=self.loose_type,
+                video_group_id=video_group_id,
                 hard_visual_output=hard_visual_cls,
                 hard_video_mask=hard_video_mask,
                 hard_valid=hard_valid,
             )
             sim_matrix = res["retrieve_logits"]
-            sim_loss1 = self.loss_fct(sim_matrix)
-            sim_loss2 = self.loss_fct(sim_matrix.T)
-            sim_loss = (sim_loss1 + sim_loss2) / 2
+            global_group_ids = res["video_group_id"]
+            sim_loss_t2v = self.loss_fct(
+                sim_matrix, global_group_ids, global_group_ids
+            )
+            sim_loss_v2t = self.loss_fct(
+                sim_matrix.T, global_group_ids, global_group_ids
+            )
+            sim_loss = (sim_loss_t2v + sim_loss_v2t) / 2
+            positive_mask = global_group_ids[:, None].eq(
+                global_group_ids[None, :]
+            )
+            positive_counts = positive_mask.sum(dim=1).float()
+            unique_count = torch.unique(global_group_ids).numel()
 
             loss += sim_loss
             loss += res["MIL_loss"]
@@ -613,6 +680,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 "hard_negative_loss": res["hard_negative_loss"],
                 "uacl_intra_loss": res["uacl_intra_loss"],
                 "uacl_kl_loss": res["uacl_kl_loss"],
+                "unique_video_count": sim_matrix.new_tensor(float(unique_count)),
+                "duplicate_sample_count": sim_matrix.new_tensor(
+                    float(global_group_ids.numel() - unique_count)
+                ),
+                "mean_positive_count": positive_counts.mean(),
             }
             return loss_dict
         else:  # for inference
@@ -725,6 +797,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         attention_mask,
         video_mask,
         sim_header="seqTransf",
+        video_group_id=None,
         hard_visual_output=None,
         hard_video_mask=None,
         hard_valid=None,
@@ -800,24 +873,49 @@ class UATVR(CLIP4ClipPreTrainedModel):
             logsigma_video = torch.clamp(logsigma_video, min=float(self.log_sigma_min), max=float(self.log_sigma_max))
 
         # ===== DDP allgather：只广播紧凑张量，不再广播 visual_output_hidden =====
+        positive_mask = None
         if self.training:
-            mu_video = allgather(mu_video.contiguous(), self.task_config)
-            logsigma_video = allgather(logsigma_video.contiguous(), self.task_config)
-            epistemic_video = allgather(epistemic_video.contiguous(), self.task_config)
-            u_mode = allgather(u_mode.contiguous(), self.task_config)
-            alpha_dir = allgather(alpha_dir.contiguous(), self.task_config)
+            video_group_id = allgather_no_grad(
+                video_group_id.contiguous().reshape(-1), self.task_config
+            )
+            mu_video = allgather_with_grad(mu_video.contiguous(), self.task_config)
+            logsigma_video = allgather_with_grad(
+                logsigma_video.contiguous(), self.task_config
+            )
+            epistemic_video = allgather_with_grad(
+                epistemic_video.contiguous(), self.task_config
+            )
+            u_mode = allgather_with_grad(u_mode.contiguous(), self.task_config)
+            alpha_dir = allgather_with_grad(alpha_dir.contiguous(), self.task_config)
             if self.final_score_mode in {"wti_anchor_wti", "wti_qc_sap"}:
-                anchors = allgather(anchors.contiguous(), self.task_config)
-            visual_output = allgather(visual_output.contiguous(), self.task_config)
-            video_mask = allgather(video_mask.contiguous(), self.task_config)
+                anchors = allgather_with_grad(anchors.contiguous(), self.task_config)
+            visual_output = allgather_with_grad(
+                visual_output.contiguous(), self.task_config
+            )
+            video_mask = allgather_no_grad(
+                video_mask.contiguous(), self.task_config
+            )
             if hard_visual_output is not None and hard_video_mask is not None:
-                hard_visual_output = allgather(hard_visual_output.contiguous(), self.task_config)
-                hard_video_mask = allgather(hard_video_mask.contiguous(), self.task_config)
+                hard_visual_output = allgather_with_grad(
+                    hard_visual_output.contiguous(), self.task_config
+                )
+                hard_video_mask = allgather_no_grad(
+                    hard_video_mask.contiguous(), self.task_config
+                )
                 if hard_valid is not None:
-                    hard_valid = allgather(hard_valid.contiguous().view(-1), self.task_config)
-            sequence_output = allgather(sequence_output.contiguous(), self.task_config)
-            text_token = allgather(text_token.contiguous(), self.task_config)
-            attention_mask = allgather(attention_mask.contiguous(), self.task_config)
+                    hard_valid = allgather_no_grad(
+                        hard_valid.contiguous().reshape(-1), self.task_config
+                    )
+            sequence_output = allgather_with_grad(
+                sequence_output.contiguous(), self.task_config
+            )
+            text_token = allgather_with_grad(
+                text_token.contiguous(), self.task_config
+            )
+            attention_mask = allgather_no_grad(
+                attention_mask.contiguous(), self.task_config
+            )
+            positive_mask = video_group_id[:, None].eq(video_group_id[None, :])
 
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
         if hard_visual_output is not None:
@@ -878,6 +976,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 self.qc_sap_anchor_proj(anchors),
                 logit_scale=logit_scale,
                 temperature=self.qc_sap_temperature,
+                positive_mask=positive_mask,
             )
         weighted_logits, score_source = self.compose_final_retrieval_logits(
             wti_logits,
@@ -993,19 +1092,24 @@ class UATVR(CLIP4ClipPreTrainedModel):
             self._diag_step += 1
             if self._diag_step % self._diag_interval == 0:
                 with torch.no_grad():
-                    S = weighted_logits.detach()
-                    diag = S.diagonal()
-                    B_s = S.size(0)
-                    mask_off = ~torch.eye(B_s, dtype=torch.bool, device=S.device)
-                    off = S[mask_off]
+                    retrieval_stats = self._matrix_gap_stats(
+                        weighted_logits, positive_mask=positive_mask
+                    )
+                    positive_values = weighted_logits.detach()[positive_mask]
                     self._diag_chain = {
-                        "pos_mean": float(diag.mean()),
-                        "neg_mean": float(off.mean()),
-                        "gap":      float(diag.mean() - off.mean()),
-                        "pos_std":  float(diag.std(unbiased=False)),
+                        "pos_mean": retrieval_stats["diag"],
+                        "neg_mean": retrieval_stats["off"],
+                        "gap": retrieval_stats["gap"],
+                        "pos_std": float(
+                            positive_values.std(unbiased=False).item()
+                        ) if positive_values.numel() else 0.0,
                     }
-                    prob_stats = self._matrix_gap_stats(prob_mu_logits)
-                    anchor_stats = self._matrix_gap_stats(anchor_wti_logits)
+                    prob_stats = self._matrix_gap_stats(
+                        prob_mu_logits, positive_mask=positive_mask
+                    )
+                    anchor_stats = self._matrix_gap_stats(
+                        anchor_wti_logits, positive_mask=positive_mask
+                    )
 
                     # 链二：Evidential 不确定性统计
                     ls_t = prob_text_logsigma.detach()
@@ -1075,6 +1179,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
             loss = {}
             loss["retrieve_logits"] = weighted_logits
+            loss["video_group_id"] = video_group_id
             loss["MIL_loss"] = self.w_mil * MIL_loss
             # 退火系数应用于 evidential_loss 和 neg_reg_loss，避免 Epoch 2 初期梯度崩塌
             loss["evidential_loss"] = self.w_evidential * evidential_loss * anneal_factor
@@ -1127,26 +1232,53 @@ class UATVR(CLIP4ClipPreTrainedModel):
         raise ValueError(f"Unsupported final_score_mode={final_score_mode}")
 
     @staticmethod
-    def _matrix_gap_stats(logits):
+    def _matrix_gap_stats(logits, positive_mask=None):
         if logits is None:
             return {"diag": 0.0, "off": 0.0, "gap": 0.0, "std": 0.0}
         logits = logits.detach()
-        diag_len = min(logits.size(0), logits.size(1))
-        diag = logits[:diag_len, :diag_len].diagonal()
-        mask_off = torch.ones_like(logits, dtype=torch.bool)
-        if diag_len > 0:
-            diag_idx = torch.arange(diag_len, device=logits.device)
-            mask_off[diag_idx, diag_idx] = False
-        off = logits[mask_off]
+        if positive_mask is not None:
+            positive_mask = positive_mask.to(
+                device=logits.device, dtype=torch.bool
+            )
+            if positive_mask.shape != logits.shape:
+                raise ValueError(
+                    f"positive mask shape={tuple(positive_mask.shape)} "
+                    f"does not match logits={tuple(logits.shape)}"
+                )
+            positive = logits[positive_mask]
+            negative = logits[~positive_mask]
+        else:
+            diag_len = min(logits.size(0), logits.size(1))
+            diag_index = torch.arange(diag_len, device=logits.device)
+            positive = logits[diag_index, diag_index]
+            negative_mask = torch.ones_like(logits, dtype=torch.bool)
+            negative_mask[diag_index, diag_index] = False
+            negative = logits[negative_mask]
+        positive_mean = (
+            positive.mean() if positive.numel() else logits.new_zeros(())
+        )
+        negative_mean = (
+            negative.mean() if negative.numel() else logits.new_zeros(())
+        )
         return {
-            "diag": float(diag.mean().item()) if diag.numel() > 0 else 0.0,
-            "off": float(off.mean().item()) if off.numel() > 0 else 0.0,
-            "gap": float((diag.mean() - off.mean()).item()) if diag.numel() > 0 and off.numel() > 0 else 0.0,
-            "std": float(logits.std(unbiased=False).item()) if logits.numel() > 0 else 0.0,
+            "diag": float(positive_mean.item()),
+            "off": float(negative_mean.item()),
+            "gap": float((positive_mean - negative_mean).item())
+            if positive.numel() and negative.numel()
+            else 0.0,
+            "std": float(logits.std(unbiased=False).item())
+            if logits.numel()
+            else 0.0,
         }
 
     @staticmethod
-    def compute_query_conditioned_sap_logits(text_pooled, anchors, logit_scale, temperature=0.1):
+    def compute_query_conditioned_sap_logits(
+        text_pooled,
+        anchors,
+        logit_scale,
+        temperature=0.1,
+        positive_mask=None,
+    ):
         temperature = max(float(temperature), 1e-6)
         text_norm = F.normalize(text_pooled, dim=-1)
         anchor_norm = F.normalize(anchors, dim=-1)
@@ -1156,19 +1288,29 @@ class UATVR(CLIP4ClipPreTrainedModel):
         pair_video = F.normalize(pair_video, dim=-1)
         logits = torch.einsum("id,ijd->ij", text_norm, pair_video) * logit_scale
 
-        stats = UATVR._matrix_gap_stats(logits)
+        stats = UATVR._matrix_gap_stats(logits, positive_mask=positive_mask)
         with torch.no_grad():
             entropy = -(gate.detach() * torch.log(gate.detach() + 1e-8)).sum(dim=-1)
             top1_mass = gate.detach().max(dim=-1).values
-            diag_len = min(gate.size(0), gate.size(1))
-            if diag_len > 0:
+            if positive_mask is None:
+                diag_len = min(gate.size(0), gate.size(1))
+                positive_mask = torch.zeros_like(entropy, dtype=torch.bool)
                 diag_idx = torch.arange(diag_len, device=gate.device)
-                pos_entropy = entropy[diag_idx, diag_idx]
-                pos_top1 = top1_mass[diag_idx, diag_idx]
-                off_mask = torch.ones_like(entropy, dtype=torch.bool)
-                off_mask[diag_idx, diag_idx] = False
-                neg_entropy = entropy[off_mask]
-                neg_top1 = top1_mass[off_mask]
+                positive_mask[diag_idx, diag_idx] = True
+            else:
+                positive_mask = positive_mask.to(
+                    device=gate.device, dtype=torch.bool
+                )
+                if positive_mask.shape != entropy.shape:
+                    raise ValueError(
+                        f"positive mask shape={tuple(positive_mask.shape)} "
+                        f"does not match gate pairs={tuple(entropy.shape)}"
+                    )
+            pos_entropy = entropy[positive_mask]
+            pos_top1 = top1_mass[positive_mask]
+            neg_entropy = entropy[~positive_mask]
+            neg_top1 = top1_mass[~positive_mask]
+            if pos_entropy.numel():
                 stats.update(
                     {
                         "gate_entropy_pos": float(pos_entropy.mean().item()),
@@ -1473,6 +1615,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_mask,
         shaped=False,
         loose_type=False,
+        video_group_id=None,
         hard_visual_output=None,
         hard_video_mask=None,
         hard_valid=None,
@@ -1490,6 +1633,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 attention_mask,
                 video_mask,
                 sim_header=self.sim_header,
+                video_group_id=video_group_id,
                 hard_visual_output=hard_visual_output,
                 hard_video_mask=hard_video_mask,
                 hard_valid=hard_valid,

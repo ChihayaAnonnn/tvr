@@ -23,6 +23,7 @@ from main_task_retrieval import (  # noqa: E402
     _trainable_named_parameters,
     _unpack_train_batch,
     get_args,
+    train_epoch,
 )
 
 
@@ -290,7 +291,7 @@ def test_trainable_named_parameters_excludes_frozen_parameters():
 
 def test_unpack_train_batch_supports_explicit_hard_negative_without_attributes():
     args = SimpleNamespace(use_attributes=False, use_explicit_hard_negative_loss=True)
-    batch = tuple(tensor_id(i) for i in range(9))
+    batch = tuple(tensor_id(i) for i in range(10))
 
     unpacked = _unpack_train_batch(batch, args)
 
@@ -303,11 +304,12 @@ def test_unpack_train_batch_supports_explicit_hard_negative_without_attributes()
     assert unpacked["hard_video"] is batch[6]
     assert unpacked["hard_video_mask"] is batch[7]
     assert unpacked["hard_valid"] is batch[8]
+    assert unpacked["video_group_id"] is batch[9]
 
 
 def test_unpack_train_batch_supports_explicit_hard_negative_with_attributes():
     args = SimpleNamespace(use_attributes=True, use_explicit_hard_negative_loss=True)
-    batch = tuple(tensor_id(i) for i in range(12))
+    batch = tuple(tensor_id(i) for i in range(13))
 
     unpacked = _unpack_train_batch(batch, args)
 
@@ -320,3 +322,84 @@ def test_unpack_train_batch_supports_explicit_hard_negative_with_attributes():
     assert unpacked["hard_video"] is batch[9]
     assert unpacked["hard_video_mask"] is batch[10]
     assert unpacked["hard_valid"] is batch[11]
+    assert unpacked["video_group_id"] is batch[12]
+
+
+def test_unpack_train_batch_supports_trusted_base_group_id():
+    args = SimpleNamespace(use_attributes=False, use_explicit_hard_negative_loss=False)
+    batch = tuple(tensor_id(i) for i in range(6))
+
+    unpacked = _unpack_train_batch(batch, args)
+
+    assert unpacked["sample_index"] is None
+    assert unpacked["video_group_id"] is batch[5]
+
+
+def test_unpack_train_batch_supports_trusted_attributes_group_id():
+    args = SimpleNamespace(use_attributes=True, use_explicit_hard_negative_loss=False)
+    batch = tuple(tensor_id(i) for i in range(9))
+
+    unpacked = _unpack_train_batch(batch, args)
+
+    assert unpacked["video"] is batch[6]
+    assert unpacked["video_mask"] is batch[7]
+    assert unpacked["sample_index"] is None
+    assert unpacked["video_group_id"] is batch[8]
+
+
+def test_train_epoch_passes_video_group_id_to_model():
+    class CapturingModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.tensor(1.0))
+            self.clip = torch.nn.Module()
+            self.clip.logit_scale = torch.nn.Parameter(torch.tensor(0.0))
+            self.received_group_ids = None
+
+        def forward(
+            self,
+            input_ids,
+            segment_ids,
+            input_mask,
+            video,
+            video_mask,
+            video_group_id=None,
+            **_kwargs,
+        ):
+            self.received_group_ids = video_group_id
+            loss = self.weight.square()
+            return {"total": loss, "sim_loss": loss}
+
+    model = CapturingModel()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    group_ids = torch.tensor([17, 18])
+    batch = (
+        torch.zeros(2, 1, 2, dtype=torch.long),
+        torch.ones(2, 1, 2, dtype=torch.long),
+        torch.zeros(2, 1, 2, dtype=torch.long),
+        torch.zeros(2, 1, 1, 1, 1, 1, 1),
+        torch.ones(2, 1, 1, dtype=torch.long),
+        group_ids,
+    )
+    args = SimpleNamespace(
+        n_display=1,
+        gate_log_interval=None,
+        gradient_accumulation_steps=1,
+        epochs=1,
+        log_moe_weights=False,
+    )
+
+    train_epoch(
+        epoch=0,
+        args=args,
+        model=model,
+        train_dataloader=[batch],
+        device=torch.device("cpu"),
+        n_gpu=1,
+        optimizer=optimizer,
+        scheduler=None,
+        global_step=0,
+        local_rank=1,
+    )
+
+    assert torch.equal(model.received_group_ids, group_ids)

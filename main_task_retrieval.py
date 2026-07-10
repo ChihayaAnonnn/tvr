@@ -882,6 +882,7 @@ def _unpack_train_batch(batch, args):
         "segment_ids": None,
         "video": None,
         "video_mask": None,
+        "video_group_id": None,
         "sample_index": None,
         "hard_video": None,
         "hard_video_mask": None,
@@ -905,18 +906,18 @@ def _unpack_train_batch(batch, args):
         ) = batch
         return unpacked
 
-    if len(batch) == 6 and not use_attributes:
+    if len(batch) == 6 and not use_attributes and not use_explicit_hn:
         (
             unpacked["input_ids"],
             unpacked["input_mask"],
             unpacked["segment_ids"],
             unpacked["video"],
             unpacked["video_mask"],
-            unpacked["sample_index"],
+            unpacked["video_group_id"],
         ) = batch
         return unpacked
 
-    if len(batch) == 9 and use_explicit_hn and not use_attributes:
+    if len(batch) == 10 and use_explicit_hn and not use_attributes:
         (
             unpacked["input_ids"],
             unpacked["input_mask"],
@@ -927,6 +928,7 @@ def _unpack_train_batch(batch, args):
             unpacked["hard_video"],
             unpacked["hard_video_mask"],
             unpacked["hard_valid"],
+            unpacked["video_group_id"],
         ) = batch
         return unpacked
 
@@ -940,11 +942,11 @@ def _unpack_train_batch(batch, args):
             _segment_ids_a,
             unpacked["video"],
             unpacked["video_mask"],
-            unpacked["sample_index"],
+            unpacked["video_group_id"],
         ) = batch
         return unpacked
 
-    if len(batch) == 12 and use_attributes and use_explicit_hn:
+    if len(batch) == 13 and use_attributes and use_explicit_hn:
         (
             unpacked["input_ids"],
             unpacked["input_mask"],
@@ -958,6 +960,7 @@ def _unpack_train_batch(batch, args):
             unpacked["hard_video"],
             unpacked["hard_video_mask"],
             unpacked["hard_valid"],
+            unpacked["video_group_id"],
         ) = batch
         return unpacked
 
@@ -995,6 +998,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             batch_inputs["input_mask"],
             batch_inputs["video"],
             batch_inputs["video_mask"],
+            video_group_id=batch_inputs["video_group_id"],
             sample_index=batch_inputs["sample_index"],
             hard_video=batch_inputs["hard_video"],
             hard_video_mask=batch_inputs["hard_video_mask"],
