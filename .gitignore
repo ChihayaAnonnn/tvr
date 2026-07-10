@@ -1,6 +1,6 @@
 # 本地/占空间/非必要纳入版本管理的内容
 logs/
-docs/
+# docs/
 cache_dir/
 
 /deploy_qwen/
@@ -14,7 +14,7 @@ ref/
 *.png
 !docs/**/*.png
 *.pdf
-*.md
+# *.md
 !.gitignore
 
 # Python 缓存

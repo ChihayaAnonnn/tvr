@@ -12,7 +12,6 @@
 
 - [`analysis/query_branch_analysis.md`](analysis/query_branch_analysis.md)：Query 分支结构与数据流分析。
 - [`logs/README.md`](logs/README.md)：日志分析报告存放规则。
-- [`paper/开题报告_大纲.md`](paper/开题报告_大纲.md)：开题报告大纲材料。
 
 ## 工程说明与参考
 

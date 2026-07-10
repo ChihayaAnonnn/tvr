@@ -4,9 +4,9 @@
 
 在不夸大现有实验结论的前提下，统一 UATVR 的项目状态、实验归档、后续路线与论文表述；同时把当前未提交的 EVA02-CLIP-B/16 adapter 工作树整理为可验证、可回滚的独立提交。
 
-最终 Git 历史保留两个语义独立的本地提交：
+本轮文档归档与 adapter 实现保持为两个语义独立的本地提交：
 
-1. `docs: align research status and experiment archive`
+1. `docs: align research roadmap and current status`（Task 1 文档口径提交）
 2. `feat: add EVA-CLIP backbone adapter`
 
 不推送远端，不启动长期训练。
@@ -57,25 +57,12 @@
 
 归档结论统一为：UACL 达到过 49.3 门槛，单个 seed 达到 49.4，但没有形成跨配置、跨种子的稳定增益，因此冻结路线；不得再表述为“四组均未达到 49.3”。
 
-### 5. 论文口径：`docs/paper/开题报告_大纲.md`
-
-保留逐锚点可学习方差、不确定性调制门控和属性双视图等内容作为“拟研究方案”，但增加截至 2026-07-10 的实际进展与证据边界，并修正完成度表述：
-
-- 当前 SAP 使用 Dirichlet 模态概率和 anchor 统计量方差，不是逐锚点可学习对数方差；
-- 当前主排序仍主要由 WTI 驱动；
-- global `prob_mu`、AnchorWTI 与 QC-SAP 尚未证明稳定排序收益；
-- 属性输入和融合代码属于原型/可选路径，默认训练主线没有启用；
-- MSVD 完整实验尚未形成结果；
-- EVA adapter 已接入并通过单样本烟测，但首轮训练 OOM，尚无检索指标。
-
-论文可以把尚未实现的机制写成研究目标或后续方案，但不得写成已验证贡献。
-
 ## 科研结论口径
 
 ### 稳定事实
 
-- B1-only v2 repeat1 的 T2V R@1 为 49.3，是当前可靠主线门槛；历史 50.0 未稳定复现。
-- hygiene WTI-only 的 T2V R@1 为 48.2，是 backbone-only 干净归因基线。
+- legacy B1-only v2 repeat1 的 T2V R@1 为 49.3，仅作历史主线参照；历史 50.0 未稳定复现。
+- legacy loss-zero hygiene 的 T2V R@1 为 48.2，仅作历史归因参考，不是真正的 trusted-v1 WTI-only/backbone-only 基线。
 - Hard Negative 多条实现路线均未形成稳定 Top-1 收益，主线终止。
 - global `prob_mu`、AnchorWTI 与 QC-SAP 的正负分数 gap 接近零，不继续扩展简单 score 融合或 gate sweep。
 
@@ -107,24 +94,29 @@ adapter/code 提交包含：
 
 该提交同时保留当前工作树中的 QC-SAP 矩形评估诊断修复及相应测试，因为它属于同一批未提交的模型/评估稳定化改动。不得纳入 checkpoint、日志、模型权重或 `ref/` 第三方代码。
 
-文档提交包含：
+Task 1 文档口径提交的范围为：
 
-- `.gitignore` 中项目文档跟踪策略；
-- 本设计说明与实施计划；
-- Roadmap、STATUS、plan、UACL/HN 归档和开题报告大纲。
+- `.gitignore`
+- `AGENTS.md`
+- `docs/README.md`
+- `docs/project/RESEARCH_ISSUES_AND_ROADMAP.md`
+- `docs/project/STATUS.md`
+- `docs/superpowers/specs/2026-07-10-research-roadmap-and-adapter-commit-design.md`
+
+`docs/superpowers/plans/2026-07-10-trusted-experiment-foundation.md` 是此前独立加入的实施计划，不属于 Task 1。`docs/project/plan.md` 与 `docs/project/UACL_HARD_NEG_PLAN.md` 也不在 Task 1 范围内，不得将它们表述为本次已提交或已更新的归档文件。
 
 ## EVA 公平实验设计
 
-EVA 首轮重跑不能只与 4GPU hygiene=48.2 直接比较。梯度累积不会合并每次 forward 的 in-batch 对比矩阵，降低 micro-batch 会改变负样本数量。因此下一轮必须使用相同 GPU 数、`batch_size`、`gradient_accumulation_steps` 和每次 forward 全局 batch，分别运行 EVA02 与 OpenAI-CLIP hygiene WTI-only 对照。
+EVA 首轮重跑不能只与 4GPU hygiene=48.2 直接比较。梯度累积不会合并每次 forward 的 in-batch 对比矩阵，降低 micro-batch 会改变负样本数量。因此，在 trusted-v1 完成代码实施后，必须使用相同 seed、GPU 数、`batch_size`、`gradient_accumulation_steps` 和每次 forward 全局 batch，分别运行 EVA02 与 OpenAI-CLIP hygiene WTI-only 对照。
 
-首个 seed 只有在相对匹配 CLIP 对照出现明确提升时才补第二 seed；最终结论同时参考 48.2 的干净历史基线和 49.3 的可靠主线门槛。
+首个 seed 只有在相对匹配 OpenAI CLIP 对照出现明确提升时才补第二 seed；EVA 相对匹配对照的变化是首要判断依据，legacy 48.2/49.3 只作次要历史参考。
 
 ## 验证与提交门槛
 
 文档验证：
 
-- 搜索并清除所有“UACL 第 4 epoch 未达到 49.3”的旧表述；
-- 检查 Roadmap、STATUS、plan、归档和论文大纲之间不存在相互矛盾的完成度描述；
+- 在 Task 1 实际提交范围内搜索并清除所有“UACL 第 4 epoch 尚未完成/未达到 49.3”的旧表述；
+- 检查 `AGENTS.md`、Roadmap、STATUS 与本设计说明之间不存在相互矛盾的完成度描述；`plan.md` 与 UACL/HN 归档不属于 Task 1，不能记入本次验证覆盖；
 - `git diff --check` 无空白错误；
 - Markdown 中不出现未解释的占位内容。
 
