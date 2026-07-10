@@ -69,7 +69,7 @@ def _download(url: str, root: str = os.path.expanduser("~/.cache/clip")):
                 loop.update(len(buffer))
 
     if hashlib.sha256(open(download_target, "rb").read()).hexdigest() != expected_sha256:
-        raise RuntimeError(f"Model has been downloaded but the SHA256 checksum does not not match")
+        raise RuntimeError("Model has been downloaded but the SHA256 checksum does not not match")
 
     return download_target
 
@@ -233,13 +233,64 @@ class ModifiedResNet(nn.Module):
         return x
 
 
+LAYER_NORM_PRECISIONS = frozenset({"fp16", "fp32"})
+
+
+def validate_layer_norm_precision(value):
+    value = str(value).lower()
+    if value not in LAYER_NORM_PRECISIONS:
+        raise ValueError(
+            f"unsupported layer norm precision={value}; expected fp16 or fp32"
+        )
+    return value
+
+
 class LayerNorm(nn.LayerNorm):
-    """Subclass torch's LayerNorm to handle fp16."""
+    """CLIP LayerNorm with configurable CUDA FP16 execution."""
+
+    def __init__(
+        self,
+        normalized_shape,
+        eps=1e-5,
+        elementwise_affine=True,
+        precision="fp16",
+    ):
+        super().__init__(
+            normalized_shape,
+            eps=eps,
+            elementwise_affine=elementwise_affine,
+        )
+        self.precision = validate_layer_norm_precision(precision)
+
+    def set_precision(self, precision):
+        self.precision = validate_layer_norm_precision(precision)
 
     def forward(self, x: torch.Tensor):
-        orig_type = x.dtype
-        ret = super().forward(x.type(torch.float32))
-        return ret.type(orig_type)
+        precision = validate_layer_norm_precision(self.precision)
+        if precision == "fp16" and x.is_cuda and x.dtype == torch.float16:
+            weight = None if self.weight is None else self.weight.to(dtype=x.dtype)
+            bias = None if self.bias is None else self.bias.to(dtype=x.dtype)
+            return F.layer_norm(x, self.normalized_shape, weight, bias, self.eps)
+
+        original_dtype = x.dtype
+        result = F.layer_norm(
+            x.float(),
+            self.normalized_shape,
+            None if self.weight is None else self.weight.float(),
+            None if self.bias is None else self.bias.float(),
+            self.eps,
+        )
+        return result.to(dtype=original_dtype)
+
+
+def set_layer_norm_precision(module, precision):
+    precision = validate_layer_norm_precision(precision)
+    configured = 0
+    for child in module.modules():
+        if isinstance(child, LayerNorm):
+            child.set_precision(precision)
+            configured += 1
+    return configured
 
 
 class QuickGELU(nn.Module):
@@ -539,21 +590,21 @@ class CLIP(nn.Module):
 def convert_weights(model: nn.Module):
     """Convert applicable model parameters to fp16"""
 
-    def _convert_weights_to_fp16(l):
-        if isinstance(l, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
-            l.weight.data = l.weight.data.half()
-            if l.bias is not None:
-                l.bias.data = l.bias.data.half()
+    def _convert_weights_to_fp16(layer):
+        if isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            layer.weight.data = layer.weight.data.half()
+            if layer.bias is not None:
+                layer.bias.data = layer.bias.data.half()
 
-        if isinstance(l, nn.MultiheadAttention):
+        if isinstance(layer, nn.MultiheadAttention):
             for attr in [*[f"{s}_proj_weight" for s in ["in", "q", "k", "v"]], "in_proj_bias", "bias_k", "bias_v"]:
-                tensor = getattr(l, attr)
+                tensor = getattr(layer, attr)
                 if tensor is not None:
                     tensor.data = tensor.data.half()
 
         for name in ["text_projection", "proj"]:
-            if hasattr(l, name):
-                attr = getattr(l, name)
+            if hasattr(layer, name):
+                attr = getattr(layer, name)
                 if attr is not None:
                     attr.data = attr.data.half()
 
@@ -584,7 +635,7 @@ def build_model(state_dict: dict):
     vocab_size = state_dict["token_embedding.weight"].shape[0]
     transformer_width = state_dict["ln_final.weight"].shape[0]
     transformer_heads = transformer_width // 64
-    transformer_layers = len(set(k.split(".")[2] for k in state_dict if k.startswith(f"transformer.resblocks")))
+    transformer_layers = len(set(k.split(".")[2] for k in state_dict if k.startswith("transformer.resblocks")))
 
     model = CLIP(
         embed_dim,
