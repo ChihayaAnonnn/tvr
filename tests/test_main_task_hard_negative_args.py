@@ -165,6 +165,7 @@ def _run_with_fake_torchrun(script_name, tmp_path, xattn_value):
             "OUTPUT_DIR": str(tmp_path / "output"),
             "LOG_DIR": str(tmp_path / "logs"),
             "INIT_MODEL": str(tmp_path / "checkpoint.pt"),
+            "EVAL_SPLIT": "val",
             "CUDA_VISIBLE_DEVICES": "0",
             "NPROC": "1",
         }
