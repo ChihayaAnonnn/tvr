@@ -1,2 +1,0 @@
-time	run_id	epoch	ret_pos_mean	ret_neg_mean	ret_gap	ret_pos_std	u_mode_mean	u_mode_std	epistemic_v_mean	var_text_mean	kl_text_mean	evidential_loss	neg_reg_loss	evidential_unc	logsigma_v
-2026-06-14T02:11:39	ckpt_msrvtt_20260613_141304	5	34.522863	6.985781	27.537083	4.533376	0.468660	0.002340	0.910399	0.223225	0.361418	15.227579	0.070525	nan	-1.500000
