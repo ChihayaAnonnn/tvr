@@ -15,7 +15,7 @@ UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16 与语义锚点概率嵌入（SAP
 - 当前 P0 是 OpenAI CLIP hygiene WTI-only 新基线；完成前不判断 EVA adapter、SAP 或 uncertainty 的增益。
 - hygiene profile 真实绕过 SpatialEnhancer、SAP、概率分支、PIENet、不确定性头和辅助 loss，主分数固定为 `weighted_logits = wti_logits`。
 - OpenAI CLIP 自定义 LayerNorm 默认使用 native FP16，保留 FP32 master affine 参数；通过 `CLIP_LAYER_NORM_PRECISION=fp32` 回退。该设置不是全模型 AMP，也不影响 EVA LayerNorm。
-- 当前实现分支为 `feat/fp16-layernorm`；四卡可信基线应使用全局 forward batch 256、每卡 micro-batch 64、accum=1。
+- FP16 LayerNorm 实现已合并至 `main`；四卡可信基线应使用全局 forward batch 256、每卡 micro-batch 64、accum=1。
 
 ## 关键训练语义
 
