@@ -22,6 +22,38 @@ from util import get_logger, parallel_apply
 global logger
 
 
+def validate_trusted_cli(args):
+    """Validate the strict MSRVTT trusted-v1 command-line contract."""
+    if args.datatype != "msrvtt":
+        return
+
+    if args.do_train and args.eval_split == "test":
+        raise ValueError("trusted-v1 training cannot use eval_split=test")
+    if args.do_train and not args.expand_msrvtt_sentences:
+        raise ValueError(
+            "trusted-v1 MSRVTT training requires --expand_msrvtt_sentences"
+        )
+    if args.do_eval and not args.do_train and not args.init_model:
+        raise ValueError("--do_eval requires --init_model")
+
+    if args.experiment_profile == "hygiene":
+        for name in ("w_mil", "w_evidential", "w_neg_reg", "w_orth"):
+            if float(getattr(args, name)) != 0.0:
+                raise ValueError(f"hygiene requires {name}=0")
+        if args.uncertainty_mode != "none":
+            raise ValueError("hygiene requires uncertainty_mode=none")
+        if (
+            args.use_hard_negative_packing
+            or args.use_explicit_hard_negative_loss
+            or args.use_uacl_intra_alignment
+        ):
+            raise ValueError("hygiene forbids HN and UACL paths")
+        if args.final_score_mode != "wti":
+            raise ValueError(
+                "hygiene trusted baseline requires final_score_mode=wti"
+            )
+
+
 def get_args(description="CLIP4Clip on Retrieval Task"):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--do_pretrain", action="store_true", help="Whether to run training.")
@@ -30,6 +62,22 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
 
     parser.add_argument("--train_csv", type=str, default="data/.train.csv", help="")
     parser.add_argument("--val_csv", type=str, default="data/.val.csv", help="")
+    parser.add_argument("--test_csv", type=str, default="data/.test.csv", help="")
+    parser.add_argument(
+        "--source_train_csv", type=str, default="data/.source_train.csv", help=""
+    )
+    parser.add_argument(
+        "--split_manifest",
+        type=str,
+        default="dataloaders/splits/msrvtt_trusted_v1_seed42.json",
+        help="Versioned trusted-v1 MSRVTT split manifest.",
+    )
+    parser.add_argument(
+        "--eval_split",
+        choices=["val", "test"],
+        default="val",
+        help="Evaluation split. Training always evaluates internal val.",
+    )
     parser.add_argument("--data_path", type=str, default="data/caption.pickle", help="data pickle file path")
     parser.add_argument("--features_path", type=str, default="data/videos_feature.pickle", help="feature path")
 
@@ -496,7 +544,7 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
     args = parser.parse_args()
 
-    if args.experiment_profile == "hygiene":
+    if args.datatype != "msrvtt" and args.experiment_profile == "hygiene":
         args.w_mil = 0.0
         args.w_evidential = 0.0
         args.w_neg_reg = 0.0
@@ -508,6 +556,8 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         args.use_hard_negative_packing = False
         args.use_explicit_hard_negative_loss = False
         args.use_uacl_intra_alignment = False
+
+    validate_trusted_cli(args)
 
     if args.sim_header == "tightTransf":
         args.loose_type = False
@@ -523,6 +573,35 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     args.batch_size = int(args.batch_size / args.gradient_accumulation_steps)
 
     return args
+
+
+def prepare_requested_dataloaders(args, tokenizer):
+    """Build only the train/eval loaders required by the requested run mode."""
+    loaders = DATALOADER_DICT.get(args.datatype)
+    if loaders is None:
+        raise ValueError(f"unsupported datatype: {args.datatype}")
+
+    train_bundle = None
+    if args.do_train:
+        train_factory = loaders.get("train")
+        if train_factory is None:
+            raise ValueError(f"{args.datatype} has no train dataloader")
+        train_bundle = train_factory(args, tokenizer)
+
+    if args.do_train:
+        split = "val"
+        factory = loaders.get(split)
+        if factory is None and args.datatype != "msrvtt":
+            split = "test"
+            factory = loaders.get(split)
+    else:
+        split = args.eval_split
+        factory = loaders.get(split)
+
+    if factory is None:
+        raise ValueError(f"{args.datatype} has no {split} dataloader")
+    eval_loader, eval_length = factory(args, tokenizer, subset=split)
+    return train_bundle, eval_loader, eval_length, split
 
 
 def set_seed_logger(args):
@@ -1446,7 +1525,43 @@ def _run_on_single_gpu(
     return sim_matrix
 
 
-def eval_epoch(args, model, test_dataloader, device, n_gpu):
+def select_best_checkpoint(
+    best_score, best_path, candidate_score, candidate_path
+):
+    """Select by validation T2V R@1; ties deliberately prefer the later epoch."""
+    if candidate_score >= best_score:
+        return candidate_score, candidate_path
+    return best_score, best_path
+
+
+def select_multi_sentence_video_rows(batch_start, batch_size, cut_off_points):
+    """Return local rows for 1-based exclusive caption-group endpoints."""
+    batch_end = batch_start + batch_size
+    return [
+        int(cut_off) - 1 - batch_start
+        for cut_off in cut_off_points
+        if batch_start < int(cut_off) <= batch_end
+    ]
+
+
+def evaluate_training_checkpoint(
+    args,
+    model,
+    eval_dataloader,
+    device,
+    n_gpu,
+    best_score,
+    best_path,
+    candidate_path,
+):
+    """Evaluate one candidate without suppressing validation failures."""
+    candidate_score = eval_epoch(args, model, eval_dataloader, device, n_gpu)
+    return select_best_checkpoint(
+        best_score, best_path, candidate_score, candidate_path
+    )
+
+
+def eval_epoch(args, model, eval_dataloader, device, n_gpu):
     if hasattr(model, "module"):
         model = model.module.to(device)
     else:
@@ -1462,14 +1577,13 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
     multi_sentence_ = False
     cut_off_points_, sentence_num_, video_num_ = [], -1, -1
     if (
-        hasattr(test_dataloader.dataset, "multi_sentence_per_video")
-        and test_dataloader.dataset.multi_sentence_per_video
+        hasattr(eval_dataloader.dataset, "multi_sentence_per_video")
+        and eval_dataloader.dataset.multi_sentence_per_video
     ):
         multi_sentence_ = True
-        cut_off_points_ = test_dataloader.dataset.cut_off_points
-        sentence_num_ = test_dataloader.dataset.sentence_num
-        video_num_ = test_dataloader.dataset.video_num
-        cut_off_points_ = [itm - 1 for itm in cut_off_points_]
+        cut_off_points_ = eval_dataloader.dataset.cut_off_points
+        sentence_num_ = eval_dataloader.dataset.sentence_num
+        video_num_ = eval_dataloader.dataset.video_num
 
     if multi_sentence_:
         logger.warning("Eval under the multi-sentence per video clip setting.")
@@ -1486,7 +1600,7 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
         # 1. cache the features
         # ----------------------------
         progress_bar = tqdm(
-            test_dataloader, desc="Evaluating", leave=False, disable=getattr(args, "local_rank", 0) != 0
+            eval_dataloader, desc="Evaluating", leave=False, disable=getattr(args, "local_rank", 0) != 0
         )
         for bid, batch in enumerate(progress_bar):
             batch = tuple(t.to(device) for t in batch)
@@ -1515,7 +1629,11 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
                 )
 
                 s_, e_ = total_video_num, total_video_num + b
-                filter_inds = [itm - s_ for itm in cut_off_points_ if itm >= s_ and itm < e_]
+                filter_inds = select_multi_sentence_video_rows(
+                    batch_start=s_,
+                    batch_size=b,
+                    cut_off_points=cut_off_points_,
+                )
 
                 if len(filter_inds) > 0:
                     video, video_mask = video[filter_inds, ...], video_mask[filter_inds, ...]
@@ -1596,8 +1714,8 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
     if getattr(args, "log_mus_scores", False):
         _log_mus_scores_tsv(args, sim_matrix)
 
-    if args.DSL:  # using dual softmax for test
-        logger.info("\t Using Dual Softmax testing.")
+    if args.DSL:  # using dual softmax during evaluation
+        logger.info("\t Using Dual Softmax evaluation.")
         sim_matrix = torch.from_numpy(sim_matrix)
         v2t_matrix = sim_matrix.T
 
@@ -1609,10 +1727,12 @@ def eval_epoch(args, model, test_dataloader, device, n_gpu):
 
     if multi_sentence_:
         logger.info("before reshape, sim matrix size: {} x {}".format(sim_matrix.shape[0], sim_matrix.shape[1]))
-        cut_off_points2len_ = [itm + 1 for itm in cut_off_points_]
-        max_length = max([e_ - s_ for s_, e_ in zip([0] + cut_off_points2len_[:-1], cut_off_points2len_)])
+        max_length = max(
+            e_ - s_
+            for s_, e_ in zip([0] + cut_off_points_[:-1], cut_off_points_)
+        )
         sim_matrix_new = []
-        for s_, e_ in zip([0] + cut_off_points2len_[:-1], cut_off_points2len_):
+        for s_, e_ in zip([0] + cut_off_points_[:-1], cut_off_points_):
             sim_matrix_new.append(
                 np.concatenate(
                     (sim_matrix[s_:e_], np.full((max_length - e_ + s_, sim_matrix.shape[1]), -np.inf)), axis=0
@@ -1685,36 +1805,29 @@ def main():
     ## ####################################
     # dataloader loading
     ## ####################################
-    assert args.datatype in DATALOADER_DICT
-
-    assert DATALOADER_DICT[args.datatype]["test"] is not None or DATALOADER_DICT[args.datatype]["val"] is not None
-
-    test_dataloader, test_length = None, 0
-    if DATALOADER_DICT[args.datatype]["test"] is not None:  # false pass
-        test_dataloader, test_length = DATALOADER_DICT[args.datatype]["test"](args, tokenizer)
-
-    if DATALOADER_DICT[args.datatype]["val"] is not None:
-        val_dataloader, val_length = DATALOADER_DICT[args.datatype]["val"](
-            args, tokenizer, subset="val"
-        )  # through this
-    else:
-        val_dataloader, val_length = test_dataloader, test_length
-
-    ## report validation results if the ["test"] is None
-    if test_dataloader is None:  # false pass
-        test_dataloader, test_length = val_dataloader, val_length
+    train_bundle, eval_dataloader, eval_length, eval_split = (
+        prepare_requested_dataloaders(args, tokenizer)
+    )
 
     if args.local_rank == 0:
-        logger.info("***** Running test *****")
-        frame_order_name = {0: "sequential", 1: "reverse", 2: "shuffle"}.get(args.train_frame_order, "unknown")
-        logger.info("  Test: %d samples, %d steps (bs=%d) | Val: %d samples | Frame order: %s",
-                     test_length, len(test_dataloader), args.batch_size_val, val_length, frame_order_name)
+        logger.info("***** Running %s evaluation *****", eval_split)
+        frame_order_name = {0: "sequential", 1: "reverse", 2: "shuffle"}.get(
+            args.eval_frame_order, "unknown"
+        )
+        logger.info(
+            "  Split: %s | Samples: %d | Steps: %d | Batch: %d | Frame order: %s",
+            eval_split,
+            eval_length,
+            len(eval_dataloader),
+            args.batch_size_val,
+            frame_order_name,
+        )
 
     ## ####################################
     # train and eval
     ## ####################################
     if args.do_train:
-        train_dataloader, train_length, train_sampler = DATALOADER_DICT[args.datatype]["train"](args, tokenizer)
+        train_dataloader, train_length, train_sampler = train_bundle
         num_train_optimization_steps = (
             int(len(train_dataloader) + args.gradient_accumulation_steps - 1) / args.gradient_accumulation_steps
         ) * args.epochs
@@ -1738,7 +1851,7 @@ def main():
                 num_train_optimization_steps,
             )
 
-        best_score = 0.00001
+        best_score = float("-inf")
         best_output_model_file = "None"
         ## ##############################################################
         # resume optimizer state besides loss to continue train
@@ -1772,56 +1885,43 @@ def main():
                 local_rank=args.local_rank,
             )
 
-            try:
-                if args.local_rank == 0:
-                    # 打印显存占用信息
-                    if torch.cuda.is_available():
-                        current_memory = torch.cuda.memory_allocated(device) / 1024**3  # GB
-                        max_memory = torch.cuda.max_memory_allocated(device) / 1024**3  # GB
-                        reserved_memory = torch.cuda.memory_reserved(device) / 1024**3  # GB
-                        logger.info(
-                            "  GPU Memory | Cur: %.2f GB, Peak: %.2f GB, Reserved: %.2f GB",
-                            current_memory,
-                            max_memory,
-                            reserved_memory,
-                        )
-                        # 重置最大显存统计，以便下一轮重新统计
-                        torch.cuda.reset_peak_memory_stats(device)
+            if args.local_rank == 0:
+                if torch.cuda.is_available():
+                    current_memory = torch.cuda.memory_allocated(device) / 1024**3
+                    max_memory = torch.cuda.max_memory_allocated(device) / 1024**3
+                    reserved_memory = torch.cuda.memory_reserved(device) / 1024**3
+                    logger.info(
+                        "  GPU Memory | Cur: %.2f GB, Peak: %.2f GB, Reserved: %.2f GB",
+                        current_memory,
+                        max_memory,
+                        reserved_memory,
+                    )
+                    torch.cuda.reset_peak_memory_stats(device)
 
-                    output_model_file = save_model(epoch, args, model, optimizer, tr_loss, type_name="")
-
-                    # Run on val dataset, this process is *TIME-consuming*.
-                    # logger.info("Eval on val dataset")
-                    # R1 = eval_epoch(args, model, val_dataloader, device, n_gpu)
-
-                    R1 = eval_epoch(args, model, test_dataloader, device, n_gpu)
-                    if best_score <= R1:
-                        best_score = R1
-                        best_output_model_file = output_model_file
-                    logger.info("  Best so far | R@1: %.1f | %s", best_score, best_output_model_file)
-                    logger.info("=" * 60)
-            except Exception as e:
-                logger.error("Error occurred during evaluation: %s", str(e))
-                logger.error("Error type: %s", type(e).__name__)
-                import traceback
-
-                logger.error("Traceback:\n%s", traceback.format_exc())
-                logger.info("Skipping evaluation for this epoch. Testing model at the end!")
-                continue
-
-        ## 训练中每轮评估已记录最佳分数，最终重新加载评估是冗余的。
-        ## 如需在最佳 checkpoint 上做最终测试，取消下面注释：
-        # if args.local_rank == 0 and state:
-        #     model = load_model(-1, args, n_gpu, device, model_file=best_output_model_file)
-        #     eval_epoch(args, model, test_dataloader, device, n_gpu)
+                output_model_file = save_model(
+                    epoch, args, model, optimizer, tr_loss, type_name=""
+                )
+                best_score, best_output_model_file = evaluate_training_checkpoint(
+                    args=args,
+                    model=model,
+                    eval_dataloader=eval_dataloader,
+                    device=device,
+                    n_gpu=n_gpu,
+                    best_score=best_score,
+                    best_path=best_output_model_file,
+                    candidate_path=output_model_file,
+                )
+                logger.info(
+                    "  Best %s T2V R@1: %.1f | %s",
+                    eval_split,
+                    best_score,
+                    best_output_model_file,
+                )
+                logger.info("=" * 60)
 
     elif args.do_eval:
         if args.local_rank == 0:
-            # 复用主脚本评估，使用传入的 --init_model 作为权重路径
-            if args.init_model is None:
-                raise ValueError("--do_eval 需要指定 --init_model=<checkpoint_path>")
-            model = load_model(-1, args, n_gpu, device, model_file=args.init_model)
-            eval_epoch(args, model, test_dataloader, device, n_gpu)
+            eval_epoch(args, model, eval_dataloader, device, n_gpu)
 
 
 if __name__ == "__main__":

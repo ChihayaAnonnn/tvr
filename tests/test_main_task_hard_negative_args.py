@@ -38,6 +38,7 @@ def test_get_args_parses_explicit_hard_negative_and_uacl_flags(monkeypatch):
             "--do_train",
             "--output_dir",
             "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
             "--use_explicit_hard_negative_loss",
             "--w_hard_negative",
             "0.07",
@@ -72,6 +73,7 @@ def test_get_args_accepts_evidential_uncertainty_mode(monkeypatch):
             "--do_train",
             "--output_dir",
             "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
             "--uncertainty_mode",
             "evidential",
         ],
@@ -91,6 +93,7 @@ def test_get_args_accepts_final_score_mode_and_weights(monkeypatch):
             "--do_train",
             "--output_dir",
             "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
             "--final_score_mode",
             "wti_qc_sap",
             "--lambda_prob",
@@ -121,6 +124,7 @@ def test_get_args_accepts_eva_clip_backbone_options(monkeypatch):
             "--do_train",
             "--output_dir",
             "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
             "--backbone_type",
             "eva_clip",
             "--backbone_name",
@@ -194,7 +198,7 @@ def test_scripts_reject_invalid_eva_clip_xattn_value(script_name, tmp_path):
     assert not capture_path.exists()
 
 
-def test_get_args_normalizes_hygiene_profile_to_clean_wti_only(monkeypatch):
+def test_get_args_accepts_explicit_trusted_hygiene_contract(monkeypatch):
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -202,24 +206,23 @@ def test_get_args_normalizes_hygiene_profile_to_clean_wti_only(monkeypatch):
             "--do_train",
             "--output_dir",
             "/tmp/uatvr-test-out",
+            "--datatype",
+            "msrvtt",
             "--experiment_profile",
             "hygiene",
-            "--uncertainty_mode",
-            "evidential",
-            "--w_mil",
-            "0.01",
-            "--w_evidential",
-            "0.01",
-            "--w_neg_reg",
-            "0.05",
-            "--w_orth",
-            "0.1",
+            "--expand_msrvtt_sentences",
             "--final_score_mode",
-            "wti_anchor_wti",
-            "--lambda_anchor",
-            "0.2",
-            "--use_explicit_hard_negative_loss",
-            "--use_uacl_intra_alignment",
+            "wti",
+            "--w_mil",
+            "0",
+            "--w_evidential",
+            "0",
+            "--w_neg_reg",
+            "0",
+            "--w_orth",
+            "0",
+            "--uncertainty_mode",
+            "none",
         ],
     )
 
@@ -231,10 +234,36 @@ def test_get_args_normalizes_hygiene_profile_to_clean_wti_only(monkeypatch):
     assert args.w_evidential == 0
     assert args.w_neg_reg == 0
     assert args.w_orth == 0
-    assert args.final_score_mode == "wti_anchor_wti"
-    assert args.lambda_anchor == 0.2
+    assert args.final_score_mode == "wti"
     assert args.use_explicit_hard_negative_loss is False
     assert args.use_uacl_intra_alignment is False
+
+
+def test_get_args_keeps_non_msrvtt_hygiene_normalization(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog",
+            "--do_train",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--datatype",
+            "msvd",
+            "--experiment_profile",
+            "hygiene",
+            "--uncertainty_mode",
+            "evidential",
+            "--w_mil",
+            "0.01",
+            "--use_explicit_hard_negative_loss",
+        ],
+    )
+
+    args = get_args()
+
+    assert args.w_mil == 0.0
+    assert args.uncertainty_mode == "none"
+    assert args.use_explicit_hard_negative_loss is False
 
 
 def test_clip_freeze_policy_recognizes_eva_visual_blocks_and_heads():
