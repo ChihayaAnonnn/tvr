@@ -2,7 +2,7 @@
 
 **日期**：2026-07-11
 
-**状态**：已确认，待实施
+**状态**：已实施
 
 **适用主线**：`train_msrvtt.sh` → `main_task_retrieval.py` → `modules/modeling_mulit.py` → `modules/module_clip.py`
 

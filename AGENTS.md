@@ -170,3 +170,4 @@ UATVR 的核心创新：
 - (07-05) `uncertainty_mode` 新语义：`none` 真实关闭 evidential/neg_reg；`evidential` 启用当前 Dirichlet/evidential regularizer；`nig_mil` 仅作 deprecated 兼容。
 - (07-05) 文本概率分支已接入 attention mask，`PIENet` 与 `UncertaintyModuleText/TextMamba` 统一采用 `True = padding` 的 pad mask；日志新增 `logsigma_v/t` min/max clamp ratio，用于判断不确定性是否塌缩。
 - (07-10) `trusted-v1` 已实施：seed 42 固定 8500 train / 500 internal val，val 每个视频使用 20 条官方描述；JSFusion 1K 仅作显式盲测；主损失按精确 `video_id` 使用双向多正例 InfoNCE，checkpoint 只按 val T2V R@1 选择。完成匹配配置的 OpenAI CLIP hygiene 基线后再做 EVA02-CLIP-B/16 配对对照；HN/UACL 只作论文负结果与边界分析素材。
+- (07-11) OpenAI CLIP 自定义 LayerNorm 默认使用 native FP16；FP32 master affine 参数保留。可通过 `CLIP_LAYER_NORM_PRECISION=fp32` 回退。该设置不等于全模型 AMP，且不影响 EVA 自身 LayerNorm。
