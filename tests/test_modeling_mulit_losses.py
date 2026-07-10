@@ -24,6 +24,66 @@ PIENet = importlib.import_module("prob_models.pie_model").PIENet
 UncertaintyModuleText = importlib.import_module("prob_models.uncertainty_module").UncertaintyModuleText
 
 
+class _ExplodingModule(torch.nn.Module):
+    def forward(self, *args, **kwargs):
+        raise AssertionError("inactive hygiene module was called")
+
+
+class _FakeClip(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.logit_scale = torch.nn.Parameter(torch.tensor(0.0))
+        self.return_hidden_values = []
+
+    def encode_image(self, image, return_hidden=False, video_frame=-1):
+        self.return_hidden_values.append(return_hidden)
+        pooled = torch.ones(image.size(0), 2)
+        if return_hidden:
+            return pooled, pooled[:, None, :]
+        return pooled
+
+
+def test_hygiene_visual_encoder_does_not_request_patch_hidden():
+    model = UATVR.__new__(UATVR)
+    torch.nn.Module.__init__(model)
+    model.clip = _FakeClip()
+    model.hygiene_wti_only = True
+    model.spatial_enhancer = _ExplodingModule()
+    video = torch.zeros(2, 3, 2, 2)
+    cls, hidden = model.get_visual_output(
+        video,
+        torch.tensor([[1, 1]]),
+        shaped=True,
+        video_frame=2,
+    )
+    assert cls.shape == (1, 2, 2)
+    assert hidden is None
+    assert model.clip.return_hidden_values == [False]
+
+
+def test_hygiene_similarity_skips_sap_and_probability_modules():
+    model = UATVR.__new__(UATVR)
+    torch.nn.Module.__init__(model)
+    model.train()
+    model.hygiene_wti_only = True
+    model.task_config = Namespace(world_size=1, rank=0)
+    model.clip = _FakeClip()
+    model.sap = _ExplodingModule()
+    model.pie_net_text = _ExplodingModule()
+    model.uncertain_net_text = _ExplodingModule()
+    model.text_weight_fc = torch.nn.Linear(2, 1)
+    model.video_weight_fc = torch.nn.Linear(2, 1)
+    result = model._wti_only_similarity(
+        text_token=torch.tensor([[[1.0, 0.0]]]),
+        visual_output=torch.tensor([[[1.0, 0.0]]]),
+        attention_mask=torch.tensor([[1]]),
+        video_mask=torch.tensor([[1]]),
+        video_group_id=torch.tensor([5]),
+    )
+    assert result["retrieve_logits"].shape == (1, 1)
+    assert result["video_group_id"].tolist() == [5]
+
+
 def test_forward_accepts_explicit_hard_negative_kwargs():
     signature = inspect.signature(UATVR.forward)
 
@@ -252,6 +312,44 @@ def test_uatvr_backbone_contract_rejects_missing_required_hidden_capability(capa
 
     with pytest.raises(ValueError, match=capability):
         UATVR._validate_backbone_contract(adapter, embed_dim=512, d_model=512)
+
+
+def test_hygiene_eva_capability_requires_text_hidden_even_without_visual_hidden():
+    spec = types.SimpleNamespace(
+        supports_text_hidden=False,
+        supports_visual_hidden=False,
+    )
+
+    with pytest.raises(ValueError, match="text hidden"):
+        UATVR._validate_eva_spec_capabilities(
+            spec,
+            Namespace(experiment_profile="hygiene", final_score_mode="wti"),
+        )
+
+
+def test_hygiene_eva_capability_allows_missing_visual_hidden_for_wti():
+    spec = types.SimpleNamespace(
+        supports_text_hidden=True,
+        supports_visual_hidden=False,
+    )
+
+    assert UATVR._validate_eva_spec_capabilities(
+        spec,
+        Namespace(experiment_profile="hygiene", final_score_mode="wti"),
+    ) == (True, False)
+
+
+def test_default_eva_capability_requires_visual_hidden_for_sap():
+    spec = types.SimpleNamespace(
+        supports_text_hidden=True,
+        supports_visual_hidden=False,
+    )
+
+    with pytest.raises(ValueError, match="visual hidden"):
+        UATVR._validate_eva_spec_capabilities(
+            spec,
+            Namespace(experiment_profile="default", final_score_mode="wti"),
+        )
 
 
 def test_evidential_matrix_loss_prefers_confident_diagonal():

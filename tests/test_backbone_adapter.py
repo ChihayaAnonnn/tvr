@@ -85,6 +85,15 @@ def test_eva_clip_backbone_spec_matches_b16_interface_dimensions():
     assert spec.transformer_layers == 12
 
 
+def test_eva_backbone_spec_declares_hidden_feature_capabilities():
+    spec = get_eva_clip_backbone_spec(
+        "EVA02-CLIP-B-16",
+        PROJECT_ROOT / "ref/EVA/EVA-CLIP/rei",
+    )
+    assert spec.supports_text_hidden is True
+    assert spec.supports_visual_hidden is True
+
+
 def test_eva_clip_adapter_returns_projected_text_and_visual_hidden_tokens():
     adapter = EvaClipBackboneAdapter(FakeEvaClip())
     text = torch.tensor([[1, 2, 10], [3, 10, 0]])

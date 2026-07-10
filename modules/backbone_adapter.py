@@ -33,6 +33,8 @@ class BackboneSpec:
     transformer_width: int
     transformer_heads: int
     transformer_layers: int
+    supports_text_hidden: bool = True
+    supports_visual_hidden: bool = True
 
 
 def _resolve_path(path: str | os.PathLike | None, default: Path | None = None) -> Path:
@@ -86,6 +88,8 @@ def get_eva_clip_backbone_spec(
         transformer_width=int(text_cfg["width"]),
         transformer_heads=int(text_cfg["heads"]),
         transformer_layers=int(text_cfg["layers"]),
+        supports_text_hidden=True,
+        supports_visual_hidden=True,
     )
 
 

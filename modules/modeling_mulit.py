@@ -237,18 +237,56 @@ class UATVR(CLIP4ClipPreTrainedModel):
     )
 
     @staticmethod
-    def _validate_backbone_contract(backbone, embed_dim, d_model):
+    def _validate_backbone_contract(
+        backbone,
+        embed_dim,
+        d_model,
+        require_hidden=True,
+        require_text_hidden=None,
+        require_visual_hidden=None,
+    ):
         output_dim = getattr(backbone, "output_dim", None)
         dimensions = f"output_dim={output_dim}, embed_dim={embed_dim}, d_model={d_model}"
         if output_dim != embed_dim or output_dim != d_model:
             raise ValueError(f"Backbone dimension contract mismatch: {dimensions}")
 
-        for capability in ("supports_text_hidden", "supports_visual_hidden"):
-            if not getattr(backbone, capability, False):
+        if require_text_hidden is None:
+            require_text_hidden = require_hidden
+        if require_visual_hidden is None:
+            require_visual_hidden = require_hidden
+        for capability, required in (
+            ("supports_text_hidden", require_text_hidden),
+            ("supports_visual_hidden", require_visual_hidden),
+        ):
+            if required and not getattr(backbone, capability, False):
                 raise ValueError(
                     f"Backbone capability contract mismatch: {capability}=False; "
                     "the current UATVR path requires projected token/patch hidden states."
                 )
+
+    @classmethod
+    def _validate_eva_spec_capabilities(cls, spec, task_config):
+        """Validate capabilities before constructing an EVA adapter.
+
+        WTI always consumes text token hidden states.  Pooled-only visual
+        features are sufficient only for the fully-disabled hygiene WTI path;
+        every SAP/probabilistic path still requires visual hidden states.
+        """
+        profile = getattr(task_config, "experiment_profile", "default")
+        final_score_mode = getattr(task_config, "final_score_mode", "wti")
+        loss_activations = cls.resolve_loss_activations(task_config)
+        hygiene_wti_only = (
+            profile == "hygiene"
+            and final_score_mode == "wti"
+            and not any(loss_activations.values())
+        )
+        require_text_hidden = True
+        require_visual_hidden = not hygiene_wti_only
+        if require_text_hidden and not getattr(spec, "supports_text_hidden", False):
+            raise ValueError("EVA backbone must support text hidden tokens")
+        if require_visual_hidden and not getattr(spec, "supports_visual_hidden", False):
+            raise ValueError("EVA backbone must support visual hidden tokens for SAP")
+        return require_text_hidden, require_visual_hidden
 
     def __init__(self, cross_config, clip_state_dict, task_config):
         super(UATVR, self).__init__(cross_config)
@@ -296,6 +334,10 @@ class UATVR(CLIP4ClipPreTrainedModel):
             transformer_width = spec.transformer_width
             transformer_heads = spec.transformer_heads
             transformer_layers = spec.transformer_layers
+            require_text_hidden, require_visual_hidden = self._validate_eva_spec_capabilities(
+                spec,
+                task_config,
+            )
         else:
             raise ValueError(f"Unsupported backbone_type={self.backbone_type}")
 
@@ -338,6 +380,10 @@ class UATVR(CLIP4ClipPreTrainedModel):
                     del clip_state_dict[key]
 
             convert_weights(self.clip)
+            # OpenAI CLIP's ViT implementation exposes both pooled and token
+            # hidden states through encode_text/encode_image(return_hidden=True).
+            self.clip.supports_text_hidden = True
+            self.clip.supports_visual_hidden = True
             # <=== End of CLIP Encoders
         else:
             self.clip = build_eva_clip_backbone(
@@ -347,7 +393,13 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 use_xattn=getattr(task_config, "eva_clip_use_xattn", False),
                 load_pretrained=False,
             ).float()
-            self._validate_backbone_contract(self.clip, embed_dim=embed_dim, d_model=transformer_width)
+            self._validate_backbone_contract(
+                self.clip,
+                embed_dim=embed_dim,
+                d_model=transformer_width,
+                require_text_hidden=require_text_hidden,
+                require_visual_hidden=require_visual_hidden,
+            )
 
         self.sim_header = "meanP"
         if hasattr(task_config, "sim_header"):
@@ -463,6 +515,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
         # 不确定性训练模式：evidential / nig_mil(deprecated) / none
         self.uncertainty_mode = getattr(self.task_config, "uncertainty_mode", "none")
         self.loss_activations = self.resolve_loss_activations(self.task_config)
+        self.hygiene_wti_only = (
+            getattr(self.task_config, "experiment_profile", "default") == "hygiene"
+            and self.final_score_mode == "wti"
+            and not any(self.loss_activations.values())
+        )
 
         # Optional clamp for log-variance to stabilize sampling/KL terms
         self.log_sigma_min = getattr(self.task_config, "log_sigma_min", None)
@@ -706,28 +763,43 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         return sequence_output, text_token
 
-    def get_visual_output(self, video, video_mask, shaped=False, video_frame=-1):
+    def get_visual_output(
+        self, video, video_mask, shaped=False, video_frame=-1, require_hidden=None
+    ):
         if shaped is False:
             video_mask = video_mask.view(-1, video_mask.shape[-1])
             video = torch.as_tensor(video).float()
-            assert video.dim() == 7, f"Expected 7D video tensor, got shape={tuple(video.shape)}"
+            if video.dim() != 7:
+                raise ValueError(
+                    f"Expected 7D video tensor, got shape={tuple(video.shape)}"
+                )
             b, pair, num_frames, clips_per_frame, channel, h, w = video.shape
             video = video.view(b * pair * num_frames * clips_per_frame, channel, h, w)
             video_frame = num_frames * clips_per_frame
 
         bs_pair = video_mask.size(0)  # video: bs*2*frame       video_frame:2*frame   video_mask:bs 2 frame
-        # 使用 return_hidden=True 获取双输出: CLS + all tokens
-        visual_cls, visual_hidden = self.clip.encode_image(video, return_hidden=True, video_frame=video_frame)
+        if require_hidden is None:
+            require_hidden = not getattr(self, "hygiene_wti_only", False)
+        encoded = self.clip.encode_image(
+            video, return_hidden=require_hidden, video_frame=video_frame
+        )
+        if require_hidden:
+            visual_cls, visual_hidden = encoded
+            visual_hidden = visual_hidden.float()
+        else:
+            visual_cls, visual_hidden = encoded, None
         visual_cls = visual_cls.float()
-        visual_hidden = visual_hidden.float()
 
         # visual_cls: [bs*pair*bs*ts, 512] -> [bs_pair, video_frame, 512]
         visual_cls = visual_cls.view(bs_pair, -1, visual_cls.size(-1))
 
         # visual_hidden: [bs*pair*bs*ts, 197, 512] -> [bs_pair, video_frame, 197, 512]
-        visual_hidden = visual_hidden.view(bs_pair, video_frame, visual_hidden.size(-2), visual_hidden.size(-1))
+        if visual_hidden is not None:
+            visual_hidden = visual_hidden.view(
+                bs_pair, video_frame, visual_hidden.size(-2), visual_hidden.size(-1)
+            )
 
-        if hasattr(self, "spatial_enhancer") and self.spatial_enhancer is not None:
+        if visual_hidden is not None and hasattr(self, "spatial_enhancer") and self.spatial_enhancer is not None:
             B, T, L, D = visual_hidden.shape
             if L > 1:
                 spatial_tokens = visual_hidden[:, :, 1:, :]
@@ -788,6 +860,53 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_out = torch.sum(visual_output, dim=1) / video_mask_un_sum
         return video_out
 
+    def _wti_only_similarity(
+        self,
+        text_token,
+        visual_output,
+        attention_mask,
+        video_mask,
+        video_group_id=None,
+    ):
+        """Compute the clean WTI score without any probabilistic/SAP branches."""
+        if self.training:
+            visual_output = allgather_with_grad(
+                visual_output.contiguous(), self.task_config
+            )
+            video_mask = allgather_no_grad(
+                video_mask.contiguous(), self.task_config
+            )
+            text_token = allgather_with_grad(
+                text_token.contiguous(), self.task_config
+            )
+            attention_mask = allgather_no_grad(
+                attention_mask.contiguous(), self.task_config
+            )
+            if video_group_id is None:
+                raise ValueError("hygiene WTI training requires video_group_id")
+            video_group_id = allgather_no_grad(
+                video_group_id.contiguous().view(-1), self.task_config
+            )
+        text_token = F.normalize(text_token, dim=-1)
+        visual_output = F.normalize(visual_output, dim=-1)
+        logits = self.weighted_token_wise_intersection(
+            text_token, visual_output, attention_mask, video_mask
+        ) * self.clip.logit_scale.exp()
+        if not self.training:
+            return logits
+        zero = logits.new_zeros(())
+        return {
+            "retrieve_logits": logits,
+            "video_group_id": video_group_id,
+            "MIL_loss": zero,
+            "evidential_loss": zero,
+            "neg_reg_loss": zero,
+            "orth_loss": zero,
+            "hard_negative_loss": zero,
+            "uacl_intra_loss": zero,
+            "uacl_kl_loss": zero,
+        }
+
     def _loose_similarity(
         self,
         sequence_output,
@@ -806,7 +925,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
             sequence_output.contiguous(),
             visual_output.contiguous(),
         )  # visual_output [B, T, D]
-        visual_output_hidden = visual_output_hidden.contiguous()  # [B, T, 197, D]
         frame_num = visual_output.size(1)
         word_num = text_token.size(1)
 
@@ -851,6 +969,18 @@ class UATVR(CLIP4ClipPreTrainedModel):
             text_token = text_token.permute(1, 0, 2).contiguous()
             text_token[:, : text_original.size(1), :] += text_original
             attention_mask = tempo_mask_
+
+        if getattr(self, "hygiene_wti_only", False):
+            return self._wti_only_similarity(
+                text_token,
+                visual_output,
+                attention_mask,
+                video_mask,
+                video_group_id=video_group_id,
+            )
+        if visual_output_hidden is None:
+            raise ValueError("default profile requires visual hidden tokens for SAP")
+        visual_output_hidden = visual_output_hidden.contiguous()  # [B, T, 197, D]
 
         # ===== SAP: rank-local，先于 allgather，避免 4D hidden 张量广播 =====
         B_vis = visual_output_hidden.size(0)
