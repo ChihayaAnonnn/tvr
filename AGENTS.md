@@ -25,7 +25,7 @@ UATVR 的核心创新：
 
 - 当前决策：**Hard negative 主线终止**。相关代码保留为消融/诊断工具，训练主线不再继续跑 `--use_hard_negative_packing`、`--use_explicit_hard_negative_loss`、`w_hard_negative` sweep 或同机制 repeat。
 - 当前 UACL 决策：**epoch-4 已归档并冻结路线**。四组 T2V R@1 为 49.3、49.2、49.4、49.0；seed 43 的单次 49.4 仅比 B1-only v2 的 49.3 高 0.1，同配置 seed 42 为 49.2，未形成跨配置、跨种子的稳定增益。不再追加 UACL sweep 或同机制 repeat。
-- `trusted-v1` 是已确认、尚待代码实施的唯一后续 MSRVTT 协议：seed 42 固定 8500 train / 500 internal val，val 每视频恰好 20 条官方描述；JSFusion 1K test 只作训练后独立显式评估，训练不得构造 test dataloader；正例仅按精确 `video_id` 定义，双向多正例 InfoNCE 是唯一主检索损失，禁止语义软正例与伪标签。真正的 hygiene WTI-only 还必须从 forward 绕过 SpatialEnhancer、SAP、概率分支、文本 PIENet、不确定性头及采样张量构造；该执行路径待实现、待验证，不能以 loss 权重置零代替。
+- MSRVTT 唯一有效协议为 `trusted-v1`：8500/500 内部拆分，JSFusion 1K 只作显式盲测，主损失按精确 `video_id` 使用双向多正例 InfoNCE。
 - 论文叙事口径：Hard negative 与 UACL 均可作为“负结果/边界分析”记录：
   - HN 不适合当前 MSRVTT 语义近邻/多正例式歧义场景。
   - UACL 对当前 SAP Gaussian 辅助路径收益不足，主要作为模态内对齐边界验证。
@@ -52,8 +52,9 @@ UATVR 的核心创新：
   - model-mined explicit HN：Best T2V R@1 = **48.6**，fixed/regressed = 31/38，净变化 -7。
 - Hard negative 不适合当前 MSRVTT 主线的原因：训练信号确实能扩大 `ret_gap`、改善部分 GT rank，但验证 Top-1 fixed/regressed 不占优；MSRVTT 存在大量语义近邻/多正例式歧义，训练 hard negatives 与验证 Top-1 错误不够对齐，容易把同主题近邻边界扰动成退化样本。
 - UACL 第 3 epoch 中途汇总见 [`logs/20260704/uacl_summary_report.md`](logs/20260704/uacl_summary_report.md)，完整 epoch-4 状态见 `logs/20260704/uacl_running_status_20260705.md`；最终四组为 **49.3/49.2/49.4/49.0 T2V R@1**，已冻结。
-- 当前 `EXPERIMENT_PROFILE=hygiene` 只关闭 MIL/evidential/neg/orth/HN/UACL 并保留 `weighted_logits = wti_logits`；它尚未绕过 SAP/概率辅助 forward，因此只能视为 legacy loss-zero 对照，不能冒充 trusted-v1 的纯 WTI 基线。
-- 当前下一步：**先实施并验证 trusted-v1，再在完全匹配的 GPU、batch、accum 和每次 forward 全局 batch 下成对运行 OpenAI CLIP / EVA02-CLIP-B/16 hygiene WTI-only**。首要依据是 EVA 相对匹配 OpenAI 对照的提升；legacy 48.2/49.3 只作历史参考。
+- 当前 `EXPERIMENT_PROFILE=hygiene` 执行 trusted-v1 的 WTI-only forward，关闭 MIL/evidential/neg/orth/HN/UACL，并保留 `weighted_logits = wti_logits`。
+- 下一步先重跑 OpenAI CLIP hygiene WTI-only 新基线；未完成前不判断 EVA adapter、SAP 或 uncertainty 收益。
+- 科研决策以 `docs/project/RESEARCH_ISSUES_AND_ROADMAP.md` 为唯一主入口，`STATUS.md` 只提供摘要。
 
 ---
 
@@ -106,7 +107,7 @@ UATVR 的核心创新：
 | 任务 | 入口 | 说明 |
 |------|------|------|
 | **训练** | `train_msrvtt.sh` / `train_msvd.sh` | 训练脚本；查看脚本内 SAP / 概率建模参数 |
-| **评估** | `eval.sh` | 通过环境变量配置：`INIT_MODEL`, `EVAL_BRANCH_MODE`, `USE_ATTRIBUTES` |
+| **评估** | `eval.sh` | 通过环境变量配置：`INIT_MODEL`, `EVAL_BRANCH_MODE`, `USE_ATTRIBUTES`；必须显式设置 `EVAL_SPLIT=val`（内部验证集）或 `EVAL_SPLIT=test`（JSFusion 1K 盲测） |
 | **测试** | `pytest` | 全部测试；`pytest tests/test_modeling_mulit_losses.py -k test_name` 运行单个 |
 | **Lint** | `ruff check .` | 检查代码风格；`ruff check --fix .` 自动修复 |
 | **查看日志** | `logs/` / `docs/logs/` | 原始日志在 `logs/`，Markdown 分析报告见 [`docs/logs/README.md`](docs/logs/README.md) |
@@ -126,9 +127,9 @@ UATVR 的核心创新：
 | 文档总入口 | [`docs/README.md`](docs/README.md) | 项目文档集中索引 |
 | 日志说明 | [`docs/logs/README.md`](docs/logs/README.md) | 各类日志分析报告与存放规则 |
 | 视频检索技能 | `.cursor/skills/video-text-retrieval/SKILL.md` | 注意力机制、不确定性学习指南 |
-| 实验计划与消融 | [`docs/project/plan.md`](docs/project/plan.md) | 实验追踪表（13+ 组）、已验证结论、待实现方案 |
+| 科研决策与路线 | [`docs/project/RESEARCH_ISSUES_AND_ROADMAP.md`](docs/project/RESEARCH_ISSUES_AND_ROADMAP.md) | 科研决策唯一主文档、证据与停止条件 |
 | Query 分支分析 | [`docs/analysis/query_branch_analysis.md`](docs/analysis/query_branch_analysis.md) | Query 分支详细分析笔记 |
-| 当前状态 | [`docs/project/STATUS.md`](docs/project/STATUS.md) | 最新实验结果、当前结论、下一步路线 |
+| 当前状态 | [`docs/project/STATUS.md`](docs/project/STATUS.md) | 当前摘要 |
 | UACL/Hard Negative 计划 | [`docs/project/UACL_HARD_NEG_PLAN.md`](docs/project/UACL_HARD_NEG_PLAN.md) | UACL 与 query hard negative 的迁移计划、诊断与终止结论 |
 | UACL 汇总报告 | [`logs/20260704/uacl_summary_report.md`](logs/20260704/uacl_summary_report.md) | epoch-3 中途汇总；epoch-4 最终状态见同目录 `uacl_running_status_20260705.md` |
 | Qwen 属性生成说明 | [`docs/deploy_qwen/README.md`](docs/deploy_qwen/README.md) | Qwen3-VL 属性生成服务使用说明 |
@@ -165,7 +166,7 @@ UATVR 的核心创新：
 - (07-04) hard-negative 不适合当前 MSRVTT 主线的主要原因：语义近邻/多正例式歧义导致 hard negatives 不是干净负例；训练 `ret_gap`/中段 rank 可改善，但 fixed/regressed 不占优，无法稳定提升 T2V R@1。
 - (07-10) UACL epoch-4 已归档：四组 T2V R@1 为 49.3、49.2、49.4、49.0；单次 49.4 属噪声级，无跨配置/种子稳定增益，路线冻结且不再 sweep/repeat。
 - (07-05) 当前已准备 backbone 升级参考与首批权重：`ref/` 下有 SigLIP/SigLIP2、EVA-CLIP、InternVideo2、Video-ColBERT、UATVR official 等论文/仓库；`ref/model_weights/` 下已有 EVA02-CLIP B/L/L336、SigLIP2 base/large、InternVideo2 Stage2-1B 与 BERT tokenizer。
-- (07-05) 已新增 `EXPERIMENT_PROFILE=default|hygiene`：default 保持历史行为并默认 `uncertainty_mode=evidential`；hygiene 强制 `w_mil=w_evidential=w_neg_reg=w_orth=0`、`uncertainty_mode=none`，HN/UACL 关闭。该版本只完成 loss-zero 配置，尚未绕过概率辅助 forward，不能视为真正的 WTI-only 基线。
+- (07-10) `EXPERIMENT_PROFILE=default|hygiene` 已接入 trusted-v1：default 保持历史行为并默认 `uncertainty_mode=evidential`；hygiene 强制 `w_mil=w_evidential=w_neg_reg=w_orth=0`、`uncertainty_mode=none`，关闭 HN/UACL，并在 forward 中真实绕过 SpatialEnhancer、SAP、概率分支、PIENet、不确定性头及采样张量，作为可信 WTI-only 基线执行。
 - (07-05) `uncertainty_mode` 新语义：`none` 真实关闭 evidential/neg_reg；`evidential` 启用当前 Dirichlet/evidential regularizer；`nig_mil` 仅作 deprecated 兼容。
 - (07-05) 文本概率分支已接入 attention mask，`PIENet` 与 `UncertaintyModuleText/TextMamba` 统一采用 `True = padding` 的 pad mask；日志新增 `logsigma_v/t` min/max clamp ratio，用于判断不确定性是否塌缩。
-- (07-10) `trusted-v1` 协议已确认但尚待代码实施；真正的 hygiene WTI-only 必须绕过 SpatialEnhancer、SAP、概率分支、PIENet、不确定性与采样张量构造，当前 loss-zero profile 尚未满足且待测试验证。完成后先跑匹配配置的 OpenAI CLIP hygiene 基线，再跑 EVA02-CLIP-B/16 配对对照。HN/UACL 只作论文负结果与边界分析素材。
+- (07-10) `trusted-v1` 已实施：seed 42 固定 8500 train / 500 internal val，val 每个视频使用 20 条官方描述；JSFusion 1K 仅作显式盲测；主损失按精确 `video_id` 使用双向多正例 InfoNCE，checkpoint 只按 val T2V R@1 选择。完成匹配配置的 OpenAI CLIP hygiene 基线后再做 EVA02-CLIP-B/16 配对对照；HN/UACL 只作论文负结果与边界分析素材。

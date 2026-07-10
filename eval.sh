@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+: "${EVAL_SPLIT:?请显式设置 EVAL_SPLIT=val 或 EVAL_SPLIT=test}"
+if [[ "${EVAL_SPLIT}" != "val" && "${EVAL_SPLIT}" != "test" ]]; then
+  echo "EVAL_SPLIT 只能是 val 或 test" >&2
+  exit 2
+fi
+
 # Usage examples:
 #   # MSRVTT (caption only)
-#   INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> bash eval.sh
+#   EVAL_SPLIT=val INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> bash eval.sh
+#   EVAL_SPLIT=test INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> bash eval.sh
 #
 #   # MSRVTT (caption+attrs, query_only)
-#   INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> \
+#   EVAL_SPLIT=val INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> \
 #   USE_ATTRIBUTES=1 \
 #   EVAL_BRANCH_MODE=query_only \
 #   bash eval.sh
 #
 #   # MSVD (caption only)
 #   DATATYPE=msvd \
-#   INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> \
+#   EVAL_SPLIT=val INIT_MODEL=ckpts/<run>/pytorch_model.bin.<N> \
 #   bash eval.sh
 #
 #   # Deprecated NIG-MIL compatibility mode
@@ -22,10 +29,12 @@ set -euo pipefail
 #   bash eval.sh
 
 RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATATYPE=${DATATYPE:-msrvtt}                 # msrvtt | msvd
 EVAL_BRANCH_MODE=${EVAL_BRANCH_MODE:-default} # base_only | query_only | default
 USE_ATTRIBUTES=${USE_ATTRIBUTES:-0}          # 0 | 1
 ATTR_PATH=${ATTR_PATH:-}
+MAX_WORDS_ATTRS=${MAX_WORDS_ATTRS:-77}
 : "${INIT_MODEL:?请设置 INIT_MODEL=<checkpoint_path>}"
 
 # 模型结构参数（需与训练配置一致）
@@ -36,15 +45,16 @@ UNCERTAINTY_MODE=${UNCERTAINTY_MODE:-evidential}    # evidential | none | nig_mi
 EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-default}   # default | hygiene
 BACKBONE_TYPE=${BACKBONE_TYPE:-openai_clip}          # openai_clip | eva_clip
 BACKBONE_NAME=${BACKBONE_NAME:-EVA02-CLIP-B-16}
-BACKBONE_PATH=${BACKBONE_PATH:-ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
-EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-ref/EVA/EVA-CLIP/rei}
+BACKBONE_PATH=${BACKBONE_PATH:-${ROOT_DIR}/ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
+EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-${ROOT_DIR}/ref/EVA/EVA-CLIP/rei}
 EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN:-0}              # 0 | 1
 if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
   echo "Unsupported EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}; expected 0 or 1" >&2
   exit 2
 fi
 
-MSRVTT_DATA_PATH=${MSRVTT_DATA_PATH:-/data2/hxj/data/MSRVTT}
+DATA_PATH=${DATA_PATH:-/data2/hxj/data/MSRVTT}
+MSRVTT_DATA_PATH=${MSRVTT_DATA_PATH:-${DATA_PATH}}
 MSVD_DATA_PATH=${MSVD_DATA_PATH:-/data2/hxj/data/MSVD}
 
 OUTPUT_DIR=${OUTPUT_DIR:-ckpts/eval_${DATATYPE}_${EVAL_BRANCH_MODE}_${RUN_ID}}
@@ -56,8 +66,19 @@ mkdir -p "${LOG_DIR}"
 LOG_FILE=${LOG_FILE:-${LOG_DIR}/${RUN_ID}_${DATATYPE}_${EVAL_BRANCH_MODE}_ua${USE_ATTRIBUTES}.log}
 
 if [[ "${DATATYPE}" == "msrvtt" ]]; then
-  VAL_CSV="${MSRVTT_DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv"
-  DATA_PATH_ARG="${MSRVTT_DATA_PATH}/annotation/MSRVTT_v2.json"
+  SOURCE_TRAIN_CSV="${MSRVTT_DATA_PATH}/csv/MSRVTT_train.9k.csv"
+  TEST_CSV="${MSRVTT_DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv"
+  ANNOTATION_JSON="${MSRVTT_DATA_PATH}/annotation/MSRVTT_v2.json"
+  SPLIT_MANIFEST="${ROOT_DIR}/dataloaders/splits/msrvtt_trusted_v1_seed42.json"
+  GENERATED_SPLIT_DIR="${ROOT_DIR}/data/generated/msrvtt_trusted_v1"
+  python3 "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
+    --train-csv "${SOURCE_TRAIN_CSV}" \
+    --annotation-json "${ANNOTATION_JSON}" \
+    --test-csv "${TEST_CSV}" \
+    --manifest "${SPLIT_MANIFEST}" \
+    --output-dir "${GENERATED_SPLIT_DIR}"
+  VAL_CSV="${GENERATED_SPLIT_DIR}/val.csv"
+  DATA_PATH_ARG="${ANNOTATION_JSON}"
   FEATURES_PATH_ARG="${MSRVTT_DATA_PATH}/videos/compressed_videos/msrvtt_224_12fps/"
 elif [[ "${DATATYPE}" == "msvd" ]]; then
   # MSVD dataloader mainly uses --data_path (desc_files folder) + --features_path (YouTubeClips).
@@ -92,7 +113,16 @@ if [[ "${USE_ADA_NORM}" == "1" ]]; then
   EXTRA_ARGS+=(--use_ada_norm)
 fi
 if [[ "${DATATYPE}" == "msrvtt" ]]; then
-  EXTRA_ARGS+=(--expand_msrvtt_sentences)
+  EXTRA_ARGS+=(--source_train_csv "${SOURCE_TRAIN_CSV}")
+  EXTRA_ARGS+=(--test_csv "${TEST_CSV}")
+  EXTRA_ARGS+=(--split_manifest "${SPLIT_MANIFEST}")
+  EXTRA_ARGS+=(--eval_split "${EVAL_SPLIT}")
+fi
+EXTRA_PROFILE_ARGS=()
+if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
+  EXTRA_PROFILE_ARGS+=(--final_score_mode wti)
+  EXTRA_PROFILE_ARGS+=(--w_mil 0 --w_evidential 0 --w_neg_reg 0 --w_orth 0)
+  EXTRA_PROFILE_ARGS+=(--uncertainty_mode none)
 fi
 if [[ "${USE_ATTRIBUTES}" == "1" ]]; then
   # Auto-pick MSRVTT JSFUSION test attributes if not explicitly provided.
@@ -125,7 +155,7 @@ fi
 
 # 单卡评测（用 torchrun 注入分布式环境变量）。注意：此脚本不传 --DSL，确保 DSL 关闭。
 echo "[eval.sh] RUN_ID=${RUN_ID}"
-echo "[eval.sh] DATATYPE=${DATATYPE} EVAL_BRANCH_MODE=${EVAL_BRANCH_MODE} USE_ATTRIBUTES=${USE_ATTRIBUTES}"
+echo "[eval.sh] DATATYPE=${DATATYPE} EVAL_SPLIT=${EVAL_SPLIT} EVAL_BRANCH_MODE=${EVAL_BRANCH_MODE} USE_ATTRIBUTES=${USE_ATTRIBUTES}"
 echo "[eval.sh] FUSION_MODE=${FUSION_MODE} ROPE_MODE=${ROPE_MODE} USE_ADA_NORM=${USE_ADA_NORM} UNCERTAINTY_MODE=${UNCERTAINTY_MODE} EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}"
 echo "[eval.sh] BACKBONE_TYPE=${BACKBONE_TYPE} BACKBONE_NAME=${BACKBONE_NAME} BACKBONE_PATH=${BACKBONE_PATH} EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}"
 echo "[eval.sh] FINAL_SCORE_MODE=${FINAL_SCORE_MODE:-wti} LAMBDA_PROB=${LAMBDA_PROB:-0.0} LAMBDA_ANCHOR=${LAMBDA_ANCHOR:-0.0}"
@@ -139,7 +169,7 @@ echo "[eval.sh] LOG_FILE=${LOG_FILE}"
 set -o pipefail
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4}" \
   torchrun --nproc_per_node=1 --master_addr=127.0.0.9 --master_port="${MASTER_PORT:-29520}" \
-  main_task_retrieval.py \
+  "${ROOT_DIR}/main_task_retrieval.py" \
   --do_eval \
   --log_mus_scores \
   --init_model "${INIT_MODEL}" \
@@ -166,4 +196,5 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4}" \
   --log_sigma_min -1.5 \
   --log_sigma_max 4 \
   "${EXTRA_ARGS[@]}" \
+  "${EXTRA_PROFILE_ARGS[@]}" \
   2>&1 | tee "${LOG_FILE}"

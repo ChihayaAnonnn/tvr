@@ -50,15 +50,25 @@
 - `uncertainty_mode=none/evidential/nig_mil` 语义已修正，`none` 真实关闭 evidential/neg_reg。见 R-main-fix-1、R-unc-6。
 - 文本概率分支已接入 attention/padding mask。见 R-main-6、R-unc-7。
 - `logsigma_v/t_min_ratio/max_ratio` 已进入日志，应作为后续判断方差塌缩的主要依据。见 R-main-3。
-- `EXPERIMENT_PROFILE=hygiene` 当前只提供辅助 loss/开关归零的配置入口；它仍可能执行 SAP、SpatialEnhancer 和概率辅助前向，因此不能视为已完成的纯 WTI 执行路径。
+- `EXPERIMENT_PROFILE=hygiene` 当前执行 trusted-v1 的 WTI-only forward；SAP、SpatialEnhancer 和概率辅助前向均应由代码路径绕过，并由测试持续验证。
 
-已确认但**尚待代码实施**的实验协议：
+### P0：可信实验基座与新基线（2026-07-10）
+
+- 旧结果存在 JSFusion test 逐 epoch 选模、同视频描述被当作负例、WTI padding 最大池化三项混杂，只保留为历史档案。
+- 新协议固定为 trusted-v1：8500 train / 500 internal val / JSFusion 1K blind test。
+- 主损失按精确 video_id 使用双向多正例 InfoNCE。
+- 下一次可解释实验必须先重跑 OpenAI CLIP hygiene WTI-only；未完成该基线前，不判断 EVA adapter、SAP 或不确定性模块收益。
+- OpenAI hygiene 新基线建立后，EVA02-CLIP-B/16 只能在相同 split、global contrastive batch、optimizer steps 和 checkpoint-selection 指标下比较。
+
+**停止条件**：trusted-v1 的固定拆分、独立 test 隔离、精确 `video_id` 多正例损失、WTI padding 修复和 hygiene WTI-only 前向绕过必须通过代码与测试验证；任一项未通过，不启动 backbone 对照或新的模型主线实验。
+
+已实施、后续按停止条件运行验证的实验协议：
 
 - MSRVTT 后续唯一有效协议为 `trusted-v1`：seed 42 固定拆分 8500 train / 500 internal val，val 每个视频恰好使用 20 条官方描述。
 - JSFusion 1K test 只能在训练结束后通过独立、显式 test eval 使用；训练阶段不得构造或评估 test dataloader。
 - 正例矩阵只能由精确相同 `video_id` 构造；双向多正例 InfoNCE 是唯一主检索损失。语义相似度只允许用于只读诊断，不得生成软正例、伪标签或改变训练 target。
 - trusted-v1 hygiene WTI-only 必须在 forward 路径直接绕过 SpatialEnhancer、SAP、视频概率分支、文本 PIENet、不确定性头，以及概率采样和相关中间张量构造；仅把辅助 loss 权重置零不满足该约束。
-- 上述纯 WTI forward 绕过、dataloader、loss 和训练/test 隔离均**待实现、待测试验证**；历史 48.2/49.3 等结果只作历史参照，不能冒充 trusted-v1 基线。
+- 上述纯 WTI forward 绕过、dataloader、loss 和训练/test 隔离已在代码中实施；历史 48.2/49.3 等结果只作历史参照，不能冒充 trusted-v1 基线。
 
 仍然成立的核心问题：
 
@@ -164,7 +174,7 @@
 3. UACL 路线已冻结，不再追加 epoch、sweep 或同机制 repeat。
 4. `w_uncertainty_reg` 等 dead knobs 已标记为 inactive/compatibility，不再 sweep。
 
-**结论**：Phase 0 的旧路线排查已关闭；48.2 是 legacy hygiene 历史参考，不是尚待实施的 trusted-v1 基线。真正的 hygiene WTI-only forward 绕过属于当前 trusted-v1 P0，仍待实现并用 spy/mock 测试验证 SpatialEnhancer、SAP、PIENet、不确定性与采样路径均未调用。
+**结论**：Phase 0 的旧路线排查已关闭；48.2 是 legacy hygiene 历史参考，不是 trusted-v1 基线。真正的 hygiene WTI-only forward 绕过已在当前 trusted-v1 P0 实施，须用 spy/mock 测试验证 SpatialEnhancer、SAP、PIENet、不确定性与采样路径均未调用。
 
 **索引**：R-main-6、R-unc-14。
 
@@ -210,7 +220,8 @@
 **2026-07-09 更新**：已完成 `FINAL_SCORE_MODE=wti_qc_sap, lambda_qc_sap=0.1` 的 hygiene 止损验证。
 ckpt2 eval T2V R@1 = 47.9，低于 hygiene WTI-only 48.2 和 B1-only v2 49.3；训练诊断中
 `qc_sap_gap` 长期接近 0，正负样本 gate entropy/top1 mass 无有效差异。结论：Phase 2 不继续扩展，
-不做 hard top-k anchor selection，也不继续叠 query-conditioned uncertainty；下一步转 backbone upgrade。
+不做 hard top-k anchor selection，也不继续叠 query-conditioned uncertainty；后续先执行 trusted-v1 P0，
+只有在 OpenAI hygiene 基线建立后才进行 backbone 对照。
 
 **索引**：R-sap-8、R-sap-11。
 
@@ -292,7 +303,7 @@ uncertainty_i = K / sum_j alpha_ij
 1. **Phase 0 已完成**：legacy hygiene=48.2；UACL epoch-4 已归档并冻结。
 2. **Phase 1 已完成**：global `prob_mu` 与 AnchorWTI 无稳定收益，停止继续 sweep。
 3. **Phase 2 已完成**：query-conditioned SAP 未证明收益，停止 SAP gate/top-k/uncertainty 复杂化。
-4. **当前先实施 trusted-v1**：完成固定 8500/500 split、独立 test eval、多正例 InfoNCE、WTI padding 修复，以及真正绕过 SpatialEnhancer/SAP/概率分支/PIENet/不确定性/采样张量构造的 hygiene 前向；在代码与绕过测试完成前不启动新的可信主线实验。
+4. **当前先运行 trusted-v1 验证**：确认固定 8500/500 split、独立 test eval、多正例 InfoNCE、WTI padding 修复，以及真正绕过 SpatialEnhancer/SAP/概率分支/PIENet/不确定性/采样张量构造的 hygiene 前向；在代码与绕过测试完成前不启动新的可信主线实验。
 5. **随后做匹配 backbone 对照**：用同一 seed、GPU 数、`batch_size`、`gradient_accumulation_steps` 和每次 forward 全局对比 batch，成对运行 OpenAI CLIP 与 EVA02-CLIP-B/16。
 6. **首要判断依据**：EVA 相对同配置 OpenAI CLIP 的提升；legacy 48.2/49.3 只作历史参考。
 7. **Phase 6 已终止**：不得恢复语义 soft target、伪标签或 soft-positive BCE。
@@ -310,7 +321,7 @@ uncertainty_i = K / sum_j alpha_ij
 
 如果只做一轮最小改进，建议执行：
 
-1. 先按已确认设计实施并验证 `trusted-v1`；当前文档确认的是协议，不代表 dataloader/loss、test 隔离或真正的 hygiene WTI-only 前向绕过已完成。
+1. 先按已实施设计验证 `trusted-v1`，包括 dataloader/loss、test 隔离和真正的 hygiene WTI-only 前向绕过。
 2. 以 seed 42 和完全匹配的设备/batch 配置重跑 OpenAI CLIP trusted hygiene WTI-only 基线。
 3. 仅在同一协议、同一设备/batch 配置下运行 EVA02-CLIP-B/16 配对实验。
 4. 以 EVA 相对匹配 OpenAI CLIP 的差值作为首要判断依据，48.2/49.3 只作 legacy 历史参考。

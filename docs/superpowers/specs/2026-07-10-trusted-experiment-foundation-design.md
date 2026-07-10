@@ -1,7 +1,7 @@
 # 可信实验基座设计规格
 
 **日期**：2026-07-10
-**状态**：已确认，待实施
+**状态**：已实施
 **适用主线**：MSRVTT `train_msrvtt.sh` → `main_task_retrieval.py` → `modules/modeling_mulit.py`
 
 ## 1. 背景与决策

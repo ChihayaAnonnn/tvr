@@ -4,7 +4,21 @@ set -euo pipefail
 # 抑制 DDP 多卡重复警告（Grad strides do not match 等）
 export TORCH_WARN_ONCE=1
 
-DATA_PATH=/data2/hxj/data/MSRVTT
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DATA_PATH=${DATA_PATH:-/data2/hxj/data/MSRVTT}
+SOURCE_TRAIN_CSV="${DATA_PATH}/csv/MSRVTT_train.9k.csv"
+TEST_CSV="${DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv"
+ANNOTATION_JSON="${DATA_PATH}/annotation/MSRVTT_v2.json"
+SPLIT_MANIFEST="${ROOT_DIR}/dataloaders/splits/msrvtt_trusted_v1_seed42.json"
+GENERATED_SPLIT_DIR="${ROOT_DIR}/data/generated/msrvtt_trusted_v1"
+
+python3 "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
+    --train-csv "${SOURCE_TRAIN_CSV}" \
+    --annotation-json "${ANNOTATION_JSON}" \
+    --test-csv "${TEST_CSV}" \
+    --manifest "${SPLIT_MANIFEST}" \
+    --output-dir "${GENERATED_SPLIT_DIR}"
+
 # Use a merged attributes map (train9k + jsfusion test1k) to ensure eval split coverage.
 # The MSRVTT dataloader supports comma-separated paths and will merge them at runtime.
 ATTRIBUTES_PATH=/data2/hxj/project/UATVR/deploy_qwen/attributes/msrvtt/final/msrvtt_train9k_attributes.json,/data2/hxj/project/UATVR/deploy_qwen/attributes/msrvtt/final/msrvtt_jsfusion_test_attributes.json
@@ -17,8 +31,8 @@ OUTPUT_DIR=${OUTPUT_DIR:-ckpts/ckpt_msrvtt_${RUN_ID}}
 EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-default}
 BACKBONE_TYPE=${BACKBONE_TYPE:-openai_clip}
 BACKBONE_NAME=${BACKBONE_NAME:-EVA02-CLIP-B-16}
-BACKBONE_PATH=${BACKBONE_PATH:-ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
-EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-ref/EVA/EVA-CLIP/rei}
+BACKBONE_PATH=${BACKBONE_PATH:-${ROOT_DIR}/ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
+EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-${ROOT_DIR}/ref/EVA/EVA-CLIP/rei}
 EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN:-0}
 if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
     echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
@@ -30,7 +44,9 @@ if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
 fi
 EXTRA_PROFILE_ARGS=()
 if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
-    EXTRA_PROFILE_ARGS+=(--w_mil 0 --w_evidential 0 --w_neg_reg 0 --w_orth 0 --uncertainty_mode none)
+    EXTRA_PROFILE_ARGS+=(--final_score_mode wti)
+    EXTRA_PROFILE_ARGS+=(--w_mil 0 --w_evidential 0 --w_neg_reg 0 --w_orth 0)
+    EXTRA_PROFILE_ARGS+=(--uncertainty_mode none)
 fi
 EXTRA_BACKBONE_ARGS=()
 if [[ "${EVA_CLIP_USE_XATTN}" == "1" ]]; then
@@ -48,12 +64,16 @@ echo "[train_msrvtt.sh] BACKBONE_TYPE=${BACKBONE_TYPE} BACKBONE_NAME=${BACKBONE_
 
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     torchrun --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29547 \
-    main_task_retrieval.py \
+    "${ROOT_DIR}/main_task_retrieval.py" \
     --do_train --num_thread_reader=8 --epochs=5 \
     --batch_size=256 --gradient_accumulation_steps=1 --n_display=20 \
-    --train_csv "${DATA_PATH}/csv/MSRVTT_train.9k.csv" \
-    --val_csv "${DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv" \
-    --data_path "${DATA_PATH}/annotation/MSRVTT_v2.json" \
+    --train_csv "${GENERATED_SPLIT_DIR}/train.csv" \
+    --val_csv "${GENERATED_SPLIT_DIR}/val.csv" \
+    --source_train_csv "${SOURCE_TRAIN_CSV}" \
+    --test_csv "${TEST_CSV}" \
+    --split_manifest "${SPLIT_MANIFEST}" \
+    --eval_split val \
+    --data_path "${ANNOTATION_JSON}" \
     --features_path "${DATA_PATH}/videos/compressed_videos/msrvtt_224_12fps/" \
     --output_dir "${OUTPUT_DIR}" \
     --lr 1e-4 --max_words 32 --max_frames 8 --batch_size_val 16 \

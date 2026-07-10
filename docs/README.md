@@ -4,9 +4,11 @@
 
 ## 项目状态与计划
 
-- [`project/STATUS.md`](project/STATUS.md)：当前实验状态、关键结果与下一步路线。
-- [`project/plan.md`](project/plan.md)：待验证方向、消融计划与历史方案。
-- [`project/UACL_HARD_NEG_PLAN.md`](project/UACL_HARD_NEG_PLAN.md)：UACL / Hard Negative 迁移计划与终止结论。
+- [`project/RESEARCH_ISSUES_AND_ROADMAP.md`](project/RESEARCH_ISSUES_AND_ROADMAP.md)：科研决策唯一主文档，包含问题、证据、停止条件与实验顺序。
+- [`project/STATUS.md`](project/STATUS.md)：当前摘要。
+- [`project/plan.md`](project/plan.md)：实验计划入口（不维护独立优先级）。
+- 当前科研决策、实验优先级与停止条件只以 [`project/RESEARCH_ISSUES_AND_ROADMAP.md`](project/RESEARCH_ISSUES_AND_ROADMAP.md) 为准；UACL/Hard Negative 仅作为历史负结果与边界分析归档，不构成当前下一步或优先级。
+- [`project/UACL_HARD_NEG_PLAN.md`](project/UACL_HARD_NEG_PLAN.md)：UACL / Hard Negative 历史负结果与边界分析归档（不构成当前优先级）。
 
 ## 分析与报告
 
@@ -17,3 +19,4 @@
 
 - [`deploy_qwen/README.md`](deploy_qwen/README.md)：Qwen3-VL 视频属性生成服务说明。
 - [`reference/uatvr_backbone_upgrade_strategy.md`](reference/uatvr_backbone_upgrade_strategy.md)：Backbone 升级策略参考。
+- [`superpowers/specs/2026-07-10-trusted-experiment-foundation-design.md`](superpowers/specs/2026-07-10-trusted-experiment-foundation-design.md)：可信实验基座设计规格（已实施）。
