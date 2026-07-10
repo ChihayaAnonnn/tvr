@@ -26,6 +26,7 @@ def dataloader_msrvtt_train(args, tokenizer):
         return_sample_index=getattr(args, "use_explicit_hard_negative_loss", False),
         return_hard_negative=getattr(args, "use_explicit_hard_negative_loss", False),
         hard_negative_path=getattr(args, "hard_negative_path", ""),
+        split_manifest_path=args.split_manifest,
     )
 
     local_batch_size = args.batch_size // args.n_gpu
@@ -60,8 +61,18 @@ def dataloader_msrvtt_train(args, tokenizer):
 
     return dataloader, len(msrvtt_dataset), train_sampler
 
-def dataloader_msrvtt_test(args, tokenizer, subset="test"):
-    msrvtt_testset = MSRVTT_DataLoader(
+def _build_msrvtt_eval_loader(dataset, args):
+    return DataLoader(
+        dataset,
+        batch_size=args.batch_size_val,
+        num_workers=args.num_thread_reader,
+        shuffle=False,
+        drop_last=False,
+    )
+
+
+def dataloader_msrvtt_val(args, tokenizer, subset="val"):
+    msrvtt_valset = MSRVTT_DataLoader(
         csv_path=args.val_csv,
         features_path=args.features_path,
         max_words=args.max_words,
@@ -74,15 +85,29 @@ def dataloader_msrvtt_test(args, tokenizer, subset="test"):
         use_attributes=getattr(args, "use_attributes", False),
         attributes_path=getattr(args, "msrvtt_attributes_path", ""),
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
+        multi_sentence_per_video=True,
+        expected_captions_per_video=20,
     )
-    dataloader_msrvtt = DataLoader(
-        msrvtt_testset,
-        batch_size=args.batch_size_val,
-        num_workers=args.num_thread_reader,
-        shuffle=False,
-        drop_last=False,
+    return _build_msrvtt_eval_loader(msrvtt_valset, args), len(msrvtt_valset)
+
+
+def dataloader_msrvtt_test(args, tokenizer, subset="test"):
+    msrvtt_testset = MSRVTT_DataLoader(
+        csv_path=args.test_csv,
+        features_path=args.features_path,
+        max_words=args.max_words,
+        max_words_attrs=getattr(args, "max_words_attrs", None),
+        feature_framerate=args.feature_framerate,
+        tokenizer=tokenizer,
+        max_frames=args.max_frames,
+        frame_order=args.eval_frame_order,
+        slice_framepos=args.slice_framepos,
+        use_attributes=getattr(args, "use_attributes", False),
+        attributes_path=getattr(args, "msrvtt_attributes_path", ""),
+        attr_num_blocks=getattr(args, "attr_num_blocks", 4),
+        multi_sentence_per_video=False,
     )
-    return dataloader_msrvtt, len(msrvtt_testset)
+    return _build_msrvtt_eval_loader(msrvtt_testset, args), len(msrvtt_testset)
 
 
 def dataloader_msvd_train(args, tokenizer):
@@ -142,5 +167,9 @@ def dataloader_msvd_test(args, tokenizer, subset="test"):
 
 
 DATALOADER_DICT = {}
-DATALOADER_DICT["msrvtt"] = {"train":dataloader_msrvtt_train, "val":dataloader_msrvtt_test, "test":None}
+DATALOADER_DICT["msrvtt"] = {
+    "train": dataloader_msrvtt_train,
+    "val": dataloader_msrvtt_val,
+    "test": dataloader_msrvtt_test,
+}
 DATALOADER_DICT["msvd"] = {"train":dataloader_msvd_train, "val":dataloader_msvd_test, "test":dataloader_msvd_test}

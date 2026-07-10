@@ -4,13 +4,14 @@ import csv
 import json
 import os
 import sys
-from collections import defaultdict
+from collections import Counter
 
 import numpy as np
 from torch.utils.data import Dataset
 
 sys.path.append('..')
 from dataloaders.hard_negative_mapping import load_hard_negative_index
+from dataloaders.msrvtt_protocol import load_trusted_manifest
 from dataloaders.rawframes_util import RawFramesExtractor
 from dataloaders.rawvideo_util import RawVideoExtractor
 
@@ -24,8 +25,6 @@ def _split_attr_into_blocks(text: str, num_blocks: int = 4):
 
     Returns a list of block strings (length==num_blocks). Missing blocks padded with "".
     """
-    import re
-
     num_blocks = int(num_blocks) if num_blocks is not None else 4
     if num_blocks <= 0:
         num_blocks = 1
@@ -232,8 +231,42 @@ class MSRVTT_DataLoader(Dataset):
             use_attributes=False,
             attributes_path="",
             attr_num_blocks=4,
+            multi_sentence_per_video=False,
+            expected_captions_per_video=None,
     ):
         self.video_ids, self.sentences = _read_msrvtt_csv(csv_path, need_sentence=True)
+        self.multi_sentence_per_video = bool(multi_sentence_per_video)
+        self.expected_captions_per_video = expected_captions_per_video
+        if self.multi_sentence_per_video:
+            counts = []
+            seen = set()
+            current = None
+            current_count = 0
+            for video_id in self.video_ids:
+                if video_id != current:
+                    if video_id in seen:
+                        raise ValueError(
+                            f"val rows must be contiguous by video_id: {video_id}"
+                        )
+                    if current is not None:
+                        counts.append(current_count)
+                    seen.add(video_id)
+                    current = video_id
+                    current_count = 1
+                else:
+                    current_count += 1
+            if current is not None:
+                counts.append(current_count)
+            if expected_captions_per_video is not None and any(
+                count != expected_captions_per_video for count in counts
+            ):
+                raise ValueError(
+                    f"each val video must have {expected_captions_per_video} captions; "
+                    f"observed counts={sorted(set(counts))}"
+                )
+            self.cut_off_points = np.cumsum(counts).tolist()
+            self.sentence_num = len(self.video_ids)
+            self.video_num = len(counts)
         self.features_path = features_path
         self.feature_framerate = feature_framerate
         self.max_words = max_words
@@ -487,8 +520,49 @@ class MSRVTT_TrainDataLoader(Dataset):
             return_sample_index=False,
             return_hard_negative=False,
             hard_negative_path="",
+            split_manifest_path=None,
+            expected_captions_per_video=20,
     ):
+        self.unfold_sentences = bool(unfold_sentences)
+        if not self.unfold_sentences:
+            raise ValueError(
+                "trusted-v1 MSRVTT training requires unfold_sentences=True"
+            )
+        if not split_manifest_path:
+            raise ValueError(
+                "trusted-v1 MSRVTT training requires split_manifest_path"
+            )
+        if (
+            isinstance(expected_captions_per_video, bool)
+            or not isinstance(expected_captions_per_video, int)
+            or expected_captions_per_video <= 0
+        ):
+            raise ValueError(
+                "expected_captions_per_video must be a positive integer, "
+                f"got {expected_captions_per_video!r}"
+            )
+
         self.csv_video_ids, _ = _read_msrvtt_csv(csv_path, need_sentence=False)
+        manifest = load_trusted_manifest(split_manifest_path)
+        manifest_train_ids = manifest["train_video_ids"]
+        self.video_group_ids = {
+            video_id: index for index, video_id in enumerate(manifest_train_ids)
+        }
+        csv_counts = Counter(self.csv_video_ids)
+        duplicate_csv_ids = sorted(
+            video_id for video_id, count in csv_counts.items() if count > 1
+        )
+        csv_video_id_set = set(self.csv_video_ids)
+        manifest_video_id_set = set(self.video_group_ids)
+        if duplicate_csv_ids or csv_video_id_set != manifest_video_id_set:
+            missing = sorted(manifest_video_id_set - csv_video_id_set)
+            extra = sorted(csv_video_id_set - manifest_video_id_set)
+            raise ValueError(
+                "train CSV video IDs do not match trusted manifest "
+                f"train_video_ids: missing={missing[:5]} extra={extra[:5]} "
+                f"duplicates={duplicate_csv_ids[:5]}"
+            )
+
         self.data = json.load(open(json_path, 'r'))     # info videos sentences
         self.features_path = features_path
         self.feature_framerate = feature_framerate
@@ -504,34 +578,24 @@ class MSRVTT_TrainDataLoader(Dataset):
         self.slice_framepos = slice_framepos
         assert self.slice_framepos in [0, 1, 2, 3]
 
-        self.unfold_sentences = unfold_sentences
         self.sample_len = 0
-        if self.unfold_sentences:
-            train_video_ids = set(self.csv_video_ids)
-            self.sentences_dict = {}
-            for itm in self.data['sentences']:
-                if itm['video_id'] in train_video_ids:
-                    self.sentences_dict[len(self.sentences_dict)] = (itm['video_id'], itm['caption'])       # 180000 sentences for 9000 videos
-            self.sample_len = len(self.sentences_dict)
-            
-        else:
-            num_sentences = 0
-            self.sentences = defaultdict(list)
-            s_video_id_set = set()
-            for itm in self.data['sentences']:
-                self.sentences[itm['video_id']].append(itm['caption'])
-                num_sentences += 1
-                s_video_id_set.add(itm['video_id'])
-
-            # Use to find the clips in the same video
-            self.parent_ids = {}
-            self.children_video_ids = defaultdict(list)
-            for itm in self.data['videos']:
-                vid = itm["video_id"]
-                url_posfix = itm["url"].split("?v=")[-1]
-                self.parent_ids[vid] = url_posfix
-                self.children_video_ids[url_posfix].append(vid)
-            self.sample_len = len(self.csv_video_ids)
+        train_video_ids = set(self.csv_video_ids)
+        self.sentences_dict = {}
+        caption_counts = Counter()
+        for itm in self.data['sentences']:
+            if itm['video_id'] in train_video_ids:
+                self.sentences_dict[len(self.sentences_dict)] = (
+                    itm['video_id'], itm['caption']
+                )
+                caption_counts[itm['video_id']] += 1
+        for video_id in self.csv_video_ids:
+            count = caption_counts[video_id]
+            if count != expected_captions_per_video:
+                raise ValueError(
+                    f"video_id={video_id} expected "
+                    f"{expected_captions_per_video} captions, got {count}"
+                )
+        self.sample_len = len(self.sentences_dict)
 
         self.rawVideoExtractor = RawVideoExtractor(framerate=feature_framerate, size=image_resolution)
         self.rawFramesExtractor = RawFramesExtractor(
@@ -543,8 +607,11 @@ class MSRVTT_TrainDataLoader(Dataset):
         self.attributes_path = attributes_path
         self.attributes_map = _load_attributes_map(attributes_path) if self.use_attributes else {}
         self.attr_num_blocks = int(attr_num_blocks) if attr_num_blocks is not None else 4
-        self.return_sample_index = bool(return_sample_index or return_hard_negative)
         self.return_hard_negative = bool(return_hard_negative)
+        if return_sample_index and not self.return_hard_negative:
+            raise ValueError(
+                "sample_index is only available with explicit hard negatives"
+            )
         self.hard_index = []
         if self.return_hard_negative:
             if not self.unfold_sentences:
@@ -774,6 +841,7 @@ class MSRVTT_TrainDataLoader(Dataset):
         video, video_mask = self._get_rawvideo(choice_video_ids)
         # video, video_mask = self._get_rawframes(choice_video_ids)
         sample_index = np.int64(idx)
+        video_group_id = np.int64(self.video_group_ids[video_id])
         if self.return_hard_negative:
             hard_video, hard_video_mask, hard_valid = self._get_hard_negative_video(video_id, idx)
             if self.use_attributes:
@@ -790,24 +858,39 @@ class MSRVTT_TrainDataLoader(Dataset):
                     hard_video,
                     hard_video_mask,
                     hard_valid,
+                    video_group_id,
                 )
-            return pairs_text, pairs_mask, pairs_segment, video, video_mask, sample_index, hard_video, hard_video_mask, hard_valid
-        if self.return_sample_index:
-            if self.use_attributes:
-                return (
-                    pairs_text,
-                    pairs_mask,
-                    pairs_segment,
-                    pairs_text_a,
-                    pairs_mask_a,
-                    pairs_segment_a,
-                    video,
-                    video_mask,
-                    sample_index,
-                )
-            return pairs_text, pairs_mask, pairs_segment, video, video_mask, sample_index
+            return (
+                pairs_text,
+                pairs_mask,
+                pairs_segment,
+                video,
+                video_mask,
+                sample_index,
+                hard_video,
+                hard_video_mask,
+                hard_valid,
+                video_group_id,
+            )
         if self.use_attributes:
-            return pairs_text, pairs_mask, pairs_segment, pairs_text_a, pairs_mask_a, pairs_segment_a, video, video_mask
-        return pairs_text, pairs_mask, pairs_segment, video, video_mask
+            return (
+                pairs_text,
+                pairs_mask,
+                pairs_segment,
+                pairs_text_a,
+                pairs_mask_a,
+                pairs_segment_a,
+                video,
+                video_mask,
+                video_group_id,
+            )
+        return (
+            pairs_text,
+            pairs_mask,
+            pairs_segment,
+            video,
+            video_mask,
+            video_group_id,
+        )
 
 
