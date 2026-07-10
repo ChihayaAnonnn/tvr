@@ -129,6 +129,9 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
     backbone = {
         "type": getattr(args, "backbone_type", ""),
         "pretrained_clip_name": getattr(args, "pretrained_clip_name", ""),
+        "clip_layer_norm_precision": getattr(
+            args, "clip_layer_norm_precision", "fp16"
+        ),
         "name": getattr(args, "backbone_name", ""),
         "path": getattr(args, "backbone_path", ""),
     }

@@ -177,7 +177,9 @@ def test_clip_layer_norm_precision_accepts_fp32(monkeypatch):
     assert get_args().clip_layer_norm_precision == "fp32"
 
 
-def _run_with_fake_torchrun(script_name, tmp_path, xattn_value):
+def _run_with_fake_torchrun(
+    script_name, tmp_path, xattn_value, layer_norm_precision="fp16"
+):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     capture_path = tmp_path / f"{script_name}.args"
@@ -193,6 +195,7 @@ def _run_with_fake_torchrun(script_name, tmp_path, xattn_value):
             "PATH": f"{fake_bin}:{env['PATH']}",
             "CAPTURE_PATH": str(capture_path),
             "EVA_CLIP_USE_XATTN": xattn_value,
+            "CLIP_LAYER_NORM_PRECISION": layer_norm_precision,
             "RUN_ID": "xattn-test",
             "OUTPUT_DIR": str(tmp_path / "output"),
             "LOG_DIR": str(tmp_path / "logs"),
@@ -229,6 +232,33 @@ def test_scripts_reject_invalid_eva_clip_xattn_value(script_name, tmp_path):
 
     assert result.returncode == 2
     assert "EVA_CLIP_USE_XATTN=yes" in result.stderr
+    assert not capture_path.exists()
+
+
+@pytest.mark.parametrize("script_name", ["train_msrvtt.sh", "eval.sh"])
+@pytest.mark.parametrize("precision", ["fp16", "fp32"])
+def test_scripts_forward_and_log_clip_layer_norm_precision(
+    script_name, precision, tmp_path
+):
+    result, capture_path = _run_with_fake_torchrun(
+        script_name, tmp_path, "0", layer_norm_precision=precision
+    )
+
+    assert result.returncode == 0, result.stderr
+    captured_args = capture_path.read_text(encoding="utf-8").splitlines()
+    index = captured_args.index("--clip_layer_norm_precision")
+    assert captured_args[index + 1] == precision
+    assert f"CLIP_LAYER_NORM_PRECISION={precision}" in result.stdout
+
+
+@pytest.mark.parametrize("script_name", ["train_msrvtt.sh", "eval.sh"])
+def test_scripts_reject_invalid_clip_layer_norm_precision(script_name, tmp_path):
+    result, capture_path = _run_with_fake_torchrun(
+        script_name, tmp_path, "0", layer_norm_precision="tf32"
+    )
+
+    assert result.returncode == 2
+    assert "CLIP_LAYER_NORM_PRECISION=tf32" in result.stderr
     assert not capture_path.exists()
 
 
