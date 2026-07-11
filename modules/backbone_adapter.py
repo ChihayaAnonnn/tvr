@@ -15,8 +15,8 @@ import torch.nn.functional as F
 from torch import nn
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_EVA_CLIP_ROOT = PROJECT_ROOT / "ref/EVA/EVA-CLIP/rei"
-DEFAULT_EVA_CLIP_B16_PATH = PROJECT_ROOT / "ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt"
+DEFAULT_EVA_CLIP_ROOT = PROJECT_ROOT / "research_refs/EVA/EVA-CLIP/rei"
+DEFAULT_EVA_CLIP_B16_PATH = PROJECT_ROOT / "research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt"
 
 
 @dataclass(frozen=True)

@@ -11,7 +11,7 @@ cache_dir/
 # 论文、参考文献、文档
 paper/
 /papers/
-ref/
+research_refs/
 *.png
 !docs/**/*.png
 *.pdf

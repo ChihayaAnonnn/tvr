@@ -131,9 +131,9 @@ def test_get_args_accepts_eva_clip_backbone_options(monkeypatch):
             "--backbone_name",
             "EVA02-CLIP-B-16",
             "--backbone_path",
-            "ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt",
+            "research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt",
             "--eva_clip_root",
-            "ref/EVA/EVA-CLIP/rei",
+            "research_refs/EVA/EVA-CLIP/rei",
         ],
     )
 
@@ -141,8 +141,26 @@ def test_get_args_accepts_eva_clip_backbone_options(monkeypatch):
 
     assert args.backbone_type == "eva_clip"
     assert args.backbone_name == "EVA02-CLIP-B-16"
-    assert args.backbone_path == "ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt"
-    assert args.eva_clip_root == "ref/EVA/EVA-CLIP/rei"
+    assert args.backbone_path == "research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt"
+    assert args.eva_clip_root == "research_refs/EVA/EVA-CLIP/rei"
+
+
+def test_get_args_defaults_eva_paths_to_research_refs(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog",
+            "--do_train",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
+        ],
+    )
+
+    args = get_args()
+
+    assert args.backbone_path == "research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt"
+    assert args.eva_clip_root == "research_refs/EVA/EVA-CLIP/rei"
 
 
 def test_clip_layer_norm_precision_defaults_to_fp16(monkeypatch):

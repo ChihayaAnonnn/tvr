@@ -40,7 +40,7 @@ UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16 与语义锚点概率嵌入（SAP
 | 测试 | `/home/xujie/miniconda3/envs/ret/bin/pytest -q tests` |
 | 静态检查 | `/home/xujie/miniconda3/envs/ret/bin/ruff check ...` |
 
-不要运行根目录无范围的 `pytest -q`；`ref/` 含第三方可选依赖测试。工作树可能包含用户改动，始终保留无关变化。
+不要运行根目录无范围的 `pytest -q`；`research_refs/` 含第三方可选依赖测试。工作树可能包含用户改动，始终保留无关变化。
 
 ## 文档入口
 
@@ -55,4 +55,4 @@ UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16 与语义锚点概率嵌入（SAP
 - 视频概率分支直接使用 SAP 的 `mu_raw/logsigma`；视频侧 PIENet 已移除，文本侧保留 PIENet 与 padding mask。
 - `uncertainty_mode=none` 真实关闭 evidential/neg_reg；`nig_mil` 仅作 deprecated 兼容。
 - `w_uncertainty_reg`、`w_query_sim`、`fusion_mode` 在当前 WTI 主排序下不是有效 causal knob。
-- Backbone 参考与本地权重位于忽略目录 `ref/`；不要纳入 Git。
+- 科研参考项目与本地权重位于忽略目录 `research_refs/`；不要纳入 Git。

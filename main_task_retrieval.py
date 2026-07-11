@@ -321,13 +321,13 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
     parser.add_argument(
         "--backbone_path",
-        default="ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt",
+        default="research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt",
         type=str,
         help="Local pretrained checkpoint path for adapter-based backbones.",
     )
     parser.add_argument(
         "--eva_clip_root",
-        default="ref/EVA/EVA-CLIP/rei",
+        default="research_refs/EVA/EVA-CLIP/rei",
         type=str,
         help="Python package root containing the local eva_clip reference implementation.",
     )

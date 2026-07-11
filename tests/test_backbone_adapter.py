@@ -69,7 +69,7 @@ class FakeEvaVisualWithoutHidden(nn.Module):
 def test_eva_clip_backbone_spec_matches_b16_interface_dimensions():
     spec = get_eva_clip_backbone_spec(
         "EVA02-CLIP-B-16",
-        PROJECT_ROOT / "ref/EVA/EVA-CLIP/rei",
+        PROJECT_ROOT / "research_refs/EVA/EVA-CLIP/rei",
     )
 
     assert spec.backbone_type == "eva_clip"
@@ -88,7 +88,7 @@ def test_eva_clip_backbone_spec_matches_b16_interface_dimensions():
 def test_eva_backbone_spec_declares_hidden_feature_capabilities():
     spec = get_eva_clip_backbone_spec(
         "EVA02-CLIP-B-16",
-        PROJECT_ROOT / "ref/EVA/EVA-CLIP/rei",
+        PROJECT_ROOT / "research_refs/EVA/EVA-CLIP/rei",
     )
     assert spec.supports_text_hidden is True
     assert spec.supports_visual_hidden is True
@@ -132,7 +132,7 @@ def test_eva_clip_pretrained_loader_requires_existing_checkpoint(tmp_path):
             adapter,
             backbone_name="EVA02-CLIP-B-16",
             backbone_path=tmp_path / "missing.pt",
-            eva_clip_root=PROJECT_ROOT / "ref/EVA/EVA-CLIP/rei",
+            eva_clip_root=PROJECT_ROOT / "research_refs/EVA/EVA-CLIP/rei",
         )
 
 

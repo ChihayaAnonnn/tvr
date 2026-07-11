@@ -45,8 +45,8 @@ UNCERTAINTY_MODE=${UNCERTAINTY_MODE:-evidential}    # evidential | none | nig_mi
 EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-default}   # default | hygiene
 BACKBONE_TYPE=${BACKBONE_TYPE:-openai_clip}          # openai_clip | eva_clip
 BACKBONE_NAME=${BACKBONE_NAME:-EVA02-CLIP-B-16}
-BACKBONE_PATH=${BACKBONE_PATH:-${ROOT_DIR}/ref/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
-EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-${ROOT_DIR}/ref/EVA/EVA-CLIP/rei}
+BACKBONE_PATH=${BACKBONE_PATH:-${ROOT_DIR}/research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
+EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-${ROOT_DIR}/research_refs/EVA/EVA-CLIP/rei}
 EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN:-0}              # 0 | 1
 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION:-fp16} # fp16 | fp32
 if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
