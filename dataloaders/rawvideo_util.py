@@ -9,9 +9,11 @@ from torchvision.transforms import CenterCrop, Compose, Normalize, Resize, ToTen
 
 class RawVideoExtractorCV2():
     def __init__(self, centercrop=False, size=224, framerate=-1, ):
+        if hasattr(cv2, "setNumThreads"):
+            cv2.setNumThreads(1)
         self.centercrop = centercrop
         self.size = size
-        self.framerate = framerate
+        self.framerate = int(framerate) if framerate > 0 else framerate
         self.transform = self._transform(self.size)
 
 
@@ -83,6 +85,22 @@ class RawVideoExtractorCV2():
     def get_video_data(self, video_path, start_time=None, end_time=None):
         image_input = self.video_to_tensor(video_path, self.transform, sample_fp=self.framerate, start_time=start_time, end_time=end_time)
         return image_input
+
+    def get_tqfs_video_data(self, video_path, num_frames, start_time=None, end_time=None):
+        """Decode once, select TQFS frames, then preprocess only selected frames."""
+
+        from dataloaders.tqfs_util import select_tqfs_indices
+
+        raw_frames = self.get_raw_video_data(
+            video_path, start_time=start_time, end_time=end_time
+        )["video"]
+        if not raw_frames:
+            return {"video": th.zeros(1)}
+
+        selected_indices = select_tqfs_indices(raw_frames, int(num_frames))
+        selected_frames = [raw_frames[index] for index in selected_indices]
+        video = self.preprocess_raw_frames(selected_frames).squeeze(1)
+        return {"video": video}
 
     def process_raw_data(self, raw_video_data):
         tensor_size = raw_video_data.size()

@@ -28,6 +28,7 @@
 | global forward batch | 256 |
 | GPU / micro / accumulation | 4 / 64 / 1 |
 | LayerNorm | native FP16，保留 FP32 master affine；`CLIP_LAYER_NORM_PRECISION=fp32` 只作回退 |
+| 激活显存 | OpenAI CLIP 视觉 Transformer 前 4 层启用 activation checkpointing，不改变 forward batch |
 | checkpoint selection | internal-val T2V R@1 |
 
 forward contrastive batch 与 optimizer effective batch 必须分别记录。梯度累积不会合并不同 forward 的 in-batch negatives；任何对照都必须保持 global forward batch、GPU 数、每卡 micro-batch、accumulation 和 optimizer steps 一致。
@@ -38,6 +39,8 @@ forward contrastive batch 与 optimizer effective batch 必须分别记录。梯
 - hygiene profile 的主分数固定为 `weighted_logits = wti_logits`，并在 forward 中真实绕过旧空间增强、概率表示、不确定性头和辅助 loss 路径；仅把 loss 权重设为 0 不满足要求。
 - WTI padding mask、精确 `video_id` 多正例矩阵以及 train/internal-val/test 隔离必须由测试持续保护。
 - OpenAI CLIP 自定义 LayerNorm 默认执行 native FP16，FP32 master affine 参与参数更新；环境变量只提供显式回退，不代表全模型 AMP。
+- OpenAI CLIP 视觉 Transformer 默认只对前 4 层启用 activation checkpointing，在 40GB A100 上平衡显存与重计算；该工程开关及层数必须写入实验 manifest，且不改变 forward contrastive batch。
+- TQFS 对退化视频按实际不同帧特征数聚类，不允许依赖缺失时静默退化；预处理帧按 `video_id` 写入带配置契约的共享原子缓存，缓存命中与在线路径必须保持张量一致。
 - `--batch_size` 表示目标有效 batch。accumulation=1 时，4 卡、`batch_size=256` 对应 global forward batch 256、每卡 micro-batch 64。
 - 历史 checkpoint 与已删除的旧分支参数不属于兼容接口；P0 只接受从当前 WTI-only 配置重新训练的 checkpoint。
 

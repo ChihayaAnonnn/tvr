@@ -61,6 +61,8 @@ def _args(tmp_path):
         backbone_type="openai_clip",
         pretrained_clip_name="ViT-B/16",
         clip_layer_norm_precision="fp16",
+        clip_gradient_checkpointing=True,
+        clip_visual_checkpoint_layers=4,
         backbone_name="",
         backbone_path="",
         output_dir=str(tmp_path),
@@ -70,6 +72,7 @@ def _args(tmp_path):
         source_train_csv="/data/MSRVTT_train.9k.csv",
         data_path="/data/MSRVTT_v2.json",
         split_manifest="dataloaders/splits/msrvtt_trusted_v1_seed42.json",
+        tqfs_cache_dir="cache_dir/tqfs/test",
         use_hard_negative_packing=False,
         use_explicit_hard_negative_loss=False,
         hard_negative_path="cache_dir/hard_negatives/msrvtt_train_hardneg_clean.json",
@@ -89,7 +92,10 @@ def test_manifest_contains_protocol_code_data_and_backbone(tmp_path):
     assert payload["git"]["dirty"] is True
     assert payload["backbone"]["type"] == "openai_clip"
     assert payload["backbone"]["clip_layer_norm_precision"] == "fp16"
+    assert payload["backbone"]["clip_gradient_checkpointing"] is True
+    assert payload["backbone"]["clip_visual_checkpoint_layers"] == 4
     assert payload["data"]["test_csv"] == "/data/MSRVTT_JSFUSION_test.csv"
+    assert payload["data"]["tqfs_cache_dir"] == "cache_dir/tqfs/test"
     assert set(payload) == {
         "protocol_version",
         "git",

@@ -195,8 +195,39 @@ def test_clip_layer_norm_precision_accepts_fp32(monkeypatch):
     assert get_args().clip_layer_norm_precision == "fp32"
 
 
+def test_clip_gradient_checkpointing_is_explicit(monkeypatch):
+    base_argv = [
+        "prog",
+        "--do_train",
+        "--output_dir",
+        "/tmp/uatvr-test-out",
+        "--expand_msrvtt_sentences",
+    ]
+    monkeypatch.setattr("sys.argv", base_argv)
+    assert get_args().clip_gradient_checkpointing is False
+    assert get_args().clip_visual_checkpoint_layers == 4
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            *base_argv,
+            "--clip_gradient_checkpointing",
+            "--clip_visual_checkpoint_layers",
+            "6",
+        ],
+    )
+    args = get_args()
+    assert args.clip_gradient_checkpointing is True
+    assert args.clip_visual_checkpoint_layers == 6
+
+
 def _run_with_fake_torchrun(
-    script_name, tmp_path, xattn_value, layer_norm_precision="fp16"
+    script_name,
+    tmp_path,
+    xattn_value,
+    layer_norm_precision="fp16",
+    gradient_checkpointing="1",
+    visual_checkpoint_layers="4",
 ):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -214,6 +245,8 @@ def _run_with_fake_torchrun(
             "CAPTURE_PATH": str(capture_path),
             "EVA_CLIP_USE_XATTN": xattn_value,
             "CLIP_LAYER_NORM_PRECISION": layer_norm_precision,
+            "CLIP_GRADIENT_CHECKPOINTING": gradient_checkpointing,
+            "CLIP_VISUAL_CHECKPOINT_LAYERS": visual_checkpoint_layers,
             "RUN_ID": "xattn-test",
             "OUTPUT_DIR": str(tmp_path / "output"),
             "LOG_DIR": str(tmp_path / "logs"),
@@ -277,6 +310,52 @@ def test_scripts_reject_invalid_clip_layer_norm_precision(script_name, tmp_path)
 
     assert result.returncode == 2
     assert "CLIP_LAYER_NORM_PRECISION=tf32" in result.stderr
+    assert not capture_path.exists()
+
+
+@pytest.mark.parametrize(("value", "expects_flag"), [("0", False), ("1", True)])
+def test_train_script_controls_clip_gradient_checkpointing(
+    value, expects_flag, tmp_path
+):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh",
+        tmp_path,
+        "0",
+        gradient_checkpointing=value,
+    )
+
+    assert result.returncode == 0, result.stderr
+    captured_args = capture_path.read_text(encoding="utf-8").splitlines()
+    assert ("--clip_gradient_checkpointing" in captured_args) is expects_flag
+    assert f"CLIP_GRADIENT_CHECKPOINTING={value}" in result.stdout
+    if expects_flag:
+        index = captured_args.index("--clip_visual_checkpoint_layers")
+        assert captured_args[index + 1] == "4"
+
+
+def test_train_script_rejects_invalid_clip_gradient_checkpointing(tmp_path):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh",
+        tmp_path,
+        "0",
+        gradient_checkpointing="yes",
+    )
+
+    assert result.returncode == 2
+    assert "CLIP_GRADIENT_CHECKPOINTING=yes" in result.stderr
+    assert not capture_path.exists()
+
+
+def test_train_script_rejects_invalid_clip_visual_checkpoint_layers(tmp_path):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh",
+        tmp_path,
+        "0",
+        visual_checkpoint_layers="four",
+    )
+
+    assert result.returncode == 2
+    assert "CLIP_VISUAL_CHECKPOINT_LAYERS=four" in result.stderr
     assert not capture_path.exists()
 
 

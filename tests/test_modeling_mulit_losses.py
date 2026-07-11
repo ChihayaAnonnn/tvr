@@ -35,6 +35,45 @@ def test_eva_backbone_is_not_modified_by_clip_layer_norm_precision():
     ) == 0
 
 
+def test_openai_clip_gradient_checkpointing_configures_selected_visual_layers():
+    text_transformer = types.SimpleNamespace(
+        grad_checkpointing=False,
+        grad_checkpointing_layers=12,
+    )
+    visual_transformer = types.SimpleNamespace(
+        grad_checkpointing=False,
+        grad_checkpointing_layers=12,
+        layers=12,
+    )
+    backbone = types.SimpleNamespace(
+        transformer=text_transformer,
+        visual=types.SimpleNamespace(transformer=visual_transformer),
+    )
+
+    count = UATVR.configure_clip_gradient_checkpointing(
+        backbone,
+        backbone_type="openai_clip",
+        enabled=True,
+        visual_layers=4,
+    )
+
+    assert count == 1
+    assert text_transformer.grad_checkpointing is False
+    assert text_transformer.grad_checkpointing_layers == 0
+    assert visual_transformer.grad_checkpointing is True
+    assert visual_transformer.grad_checkpointing_layers == 4
+
+
+def test_eva_backbone_is_not_modified_by_clip_gradient_checkpointing():
+    transformer = types.SimpleNamespace(grad_checkpointing=False)
+    backbone = types.SimpleNamespace(transformer=transformer)
+
+    assert UATVR.configure_clip_gradient_checkpointing(
+        backbone, backbone_type="eva_clip", enabled=True
+    ) == 0
+    assert transformer.grad_checkpointing is False
+
+
 class _FakeClip(torch.nn.Module):
     def __init__(self):
         super().__init__()

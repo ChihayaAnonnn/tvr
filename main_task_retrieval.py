@@ -80,6 +80,15 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
     parser.add_argument("--data_path", type=str, default="data/caption.pickle", help="data pickle file path")
     parser.add_argument("--features_path", type=str, default="data/videos_feature.pickle", help="feature path")
+    parser.add_argument(
+        "--tqfs_cache_dir",
+        type=str,
+        default="",
+        help=(
+            "Optional shared cache of preprocessed TQFS frames keyed by video_id. "
+            "Cache misses are populated atomically."
+        ),
+    )
 
     # =========================
     # System-2 (attributes) text
@@ -277,6 +286,23 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         ),
     )
     parser.add_argument(
+        "--clip_gradient_checkpointing",
+        action="store_true",
+        help=(
+            "Checkpoint selected OpenAI CLIP visual Transformer blocks during training "
+            "to reduce activation memory without changing the forward contrastive batch."
+        ),
+    )
+    parser.add_argument(
+        "--clip_visual_checkpoint_layers",
+        type=int,
+        default=4,
+        help=(
+            "Number of leading OpenAI CLIP visual Transformer blocks to checkpoint. "
+            "Used only with --clip_gradient_checkpointing."
+        ),
+    )
+    parser.add_argument(
         "--backbone_name",
         default="EVA02-CLIP-B-16",
         type=str,
@@ -342,6 +368,8 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         )
     if not args.do_train and not args.do_eval:
         raise ValueError("At least one of `do_train` or `do_eval` must be True.")
+    if args.clip_visual_checkpoint_layers < 0:
+        raise ValueError("--clip_visual_checkpoint_layers must be non-negative")
 
     args.requested_effective_batch_size = args.batch_size
     if args.batch_size % args.gradient_accumulation_steps:
@@ -427,6 +455,8 @@ def set_seed_logger(args):
                 "pretrained_clip_name",
                 "backbone_type",
                 "clip_layer_norm_precision",
+                "clip_gradient_checkpointing",
+                "clip_visual_checkpoint_layers",
                 "backbone_name",
                 "backbone_path",
                 "eva_clip_root",
@@ -455,6 +485,7 @@ def set_seed_logger(args):
                 "source_train_csv",
                 "test_csv",
                 "split_manifest",
+                "tqfs_cache_dir",
                 "experiment_profile",
             ],
         }
@@ -775,9 +806,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     total_opt_steps = num_steps // args.gradient_accumulation_steps
 
     for step, batch in enumerate(train_dataloader):
-        if n_gpu == 1:
-            # multi-gpu does scattering it-self, not consider
-            batch = tuple(t.to(device=device, non_blocking=True) for t in batch)
+        batch = tuple(t.to(device=device, non_blocking=True) for t in batch)
 
         batch_inputs = _unpack_train_batch(batch, args)
         loss_dict = model(

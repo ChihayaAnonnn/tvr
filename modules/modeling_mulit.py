@@ -294,6 +294,53 @@ class UATVR(CLIP4ClipPreTrainedModel):
             return 0
         return set_layer_norm_precision(backbone, precision)
 
+    @staticmethod
+    def configure_clip_gradient_checkpointing(
+        backbone, backbone_type, enabled, visual_layers=None
+    ):
+        if backbone_type != "openai_clip":
+            return 0
+
+        text_transformer = getattr(backbone, "transformer", None)
+        if text_transformer is not None and hasattr(
+            text_transformer, "grad_checkpointing"
+        ):
+            text_transformer.grad_checkpointing = False
+            text_transformer.grad_checkpointing_layers = 0
+
+        visual_transformer = getattr(
+            getattr(backbone, "visual", None), "transformer", None
+        )
+        if visual_transformer is None or not hasattr(
+            visual_transformer, "grad_checkpointing"
+        ):
+            if not enabled:
+                return 0
+            raise RuntimeError(
+                "OpenAI CLIP gradient checkpointing requires a visual transformer"
+            )
+
+        available_layers = int(
+            getattr(
+                visual_transformer,
+                "layers",
+                len(getattr(visual_transformer, "resblocks", ())),
+            )
+        )
+        requested_layers = (
+            available_layers if visual_layers is None else int(visual_layers)
+        )
+        if requested_layers < 0 or requested_layers > available_layers:
+            raise ValueError(
+                "clip_visual_checkpoint_layers must be in "
+                f"[0, {available_layers}], got {requested_layers}"
+            )
+
+        active_layers = requested_layers if enabled else 0
+        visual_transformer.grad_checkpointing = active_layers > 0
+        visual_transformer.grad_checkpointing_layers = active_layers
+        return int(active_layers > 0)
+
     def __init__(self, cross_config, clip_state_dict, task_config):
         super(UATVR, self).__init__(cross_config)
         self.task_config = task_config
@@ -309,7 +356,14 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.clip_layer_norm_precision = validate_layer_norm_precision(
             getattr(task_config, "clip_layer_norm_precision", "fp16")
         )
+        self.clip_gradient_checkpointing = bool(
+            getattr(task_config, "clip_gradient_checkpointing", False)
+        )
+        self.clip_visual_checkpoint_layers = int(
+            getattr(task_config, "clip_visual_checkpoint_layers", 4)
+        )
         self.clip_layer_norm_module_count = 0
+        self.clip_gradient_checkpoint_module_count = 0
         if self.backbone_type == "openai_clip":
             # CLIP Encoders: From OpenAI: CLIP [https://github.com/openai/CLIP] ===>
             assert "visual.proj" in clip_state_dict, "Only ViT-based CLIP is supported"
@@ -394,11 +448,28 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 backbone_type=self.backbone_type,
                 precision=self.clip_layer_norm_precision,
             )
+            self.clip_gradient_checkpoint_module_count = (
+                self.configure_clip_gradient_checkpointing(
+                    self.clip,
+                    backbone_type=self.backbone_type,
+                    enabled=self.clip_gradient_checkpointing,
+                    visual_layers=self.clip_visual_checkpoint_layers,
+                )
+            )
             show_log(
                 task_config,
                 "\t OpenAI CLIP LayerNorm precision: {} (modules={})".format(
                     self.clip_layer_norm_precision,
                     self.clip_layer_norm_module_count,
+                ),
+            )
+            show_log(
+                task_config,
+                "\t OpenAI CLIP gradient checkpointing: {} "
+                "(visual_layers={}, transformers={})".format(
+                    self.clip_gradient_checkpointing,
+                    self.clip_visual_checkpoint_layers,
+                    self.clip_gradient_checkpoint_module_count,
                 ),
             )
             # OpenAI CLIP's ViT implementation exposes both pooled and token

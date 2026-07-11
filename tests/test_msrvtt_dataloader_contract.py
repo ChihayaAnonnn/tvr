@@ -14,6 +14,7 @@ from dataloaders.dataloader_msrvtt_retrieval import (
     MSRVTT_DataLoader,
     MSRVTT_TrainDataLoader,
 )
+from dataloaders.rawvideo_util import RawVideoExtractor
 
 
 class Tokenizer:
@@ -338,6 +339,7 @@ def _builder_args(tmp_path, val_csv, test_csv):
         world_size=2,
         rank=0,
         num_thread_reader=0,
+        tqfs_cache_dir="",
     )
 
 
@@ -406,12 +408,55 @@ def test_train_builder_passes_manifest_and_uses_distributed_sampler(
     loader, length, sampler = builders.dataloader_msrvtt_train(args, Tokenizer())
 
     assert captured["split_manifest_path"] == args.split_manifest
+    assert captured["tqfs_cache_dir"] == ""
     assert captured["unfold_sentences"] is True
     assert sampler_calls == [dataset]
     assert sampler is loader.sampler
     assert length == 4
     assert loader.drop_last is True
     assert loader.batch_size == 2
+    assert loader.pin_memory is torch.cuda.is_available()
+    assert loader.persistent_workers is False
+
+
+def test_video_loader_worker_settings_limit_oversubscription():
+    kwargs = builders._video_loader_kwargs(
+        SimpleNamespace(num_thread_reader=8)
+    )
+
+    assert kwargs["num_workers"] == 8
+    assert kwargs["persistent_workers"] is True
+    assert kwargs["prefetch_factor"] == 2
+    assert kwargs["worker_init_fn"] is builders._configure_video_worker
+
+
+def test_tqfs_dependency_fails_fast_instead_of_silent_fallback(monkeypatch):
+    monkeypatch.setattr(msrvtt.importlib.util, "find_spec", lambda _name: None)
+
+    with pytest.raises(RuntimeError, match="requires scikit-learn"):
+        msrvtt._validate_tqfs_dependency(3)
+
+    msrvtt._validate_tqfs_dependency(2)
+
+
+def test_tqfs_video_path_decodes_once_and_preprocesses_selected_frames():
+    extractor = RawVideoExtractor.__new__(RawVideoExtractor)
+    frames = [np.full((4, 4, 3), index, dtype=np.uint8) for index in range(3)]
+    calls = []
+
+    def get_raw_video_data(_path, start_time=None, end_time=None):
+        calls.append((start_time, end_time))
+        return {"video": frames}
+
+    extractor.get_raw_video_data = get_raw_video_data
+    extractor.preprocess_raw_frames = lambda selected: torch.zeros(
+        len(selected), 1, 3, 2, 2
+    )
+
+    result = extractor.get_tqfs_video_data("video.mp4", num_frames=2)
+
+    assert calls == [(None, None)]
+    assert result["video"].shape == (2, 3, 2, 2)
 
 
 def test_msvd_builder_registry_is_unchanged():

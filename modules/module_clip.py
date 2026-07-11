@@ -11,6 +11,7 @@ from typing import Tuple, Union
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch.utils.checkpoint import checkpoint
 from tqdm import tqdm
 
 _MODELS = {
@@ -34,7 +35,8 @@ _PT_NAME = {
 
 
 def download_model(pretrained_clip_name):
-    root = '/data2/hxj/project/UATVR/.cache'
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root = os.environ.get("CLIP_CACHE_DIR", os.path.join(project_root, ".cache"))
 
     model_path = os.path.join(root, _PT_NAME[pretrained_clip_name])
     return model_path
@@ -332,9 +334,25 @@ class Transformer(nn.Module):
         super().__init__()
         self.width = width
         self.layers = layers
+        self.grad_checkpointing = False
+        self.grad_checkpointing_layers = layers
         self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)])
 
     def forward(self, x: torch.Tensor, video_frame=-1):
+        if self.grad_checkpointing and self.training:
+            checkpoint_layers = min(
+                int(self.grad_checkpointing_layers), len(self.resblocks)
+            )
+            for layer_index, block in enumerate(self.resblocks):
+                if layer_index >= checkpoint_layers:
+                    x = block((x, video_frame))[0]
+                    continue
+
+                def run_block(hidden, current_block=block):
+                    return current_block((hidden, video_frame))[0]
+
+                x = checkpoint(run_block, x, use_reentrant=False)
+            return x
         return self.resblocks((x, video_frame))[0]
 
 

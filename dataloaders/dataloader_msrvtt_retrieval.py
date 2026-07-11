@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import csv
+import importlib.util
 import json
 import os
 import sys
@@ -14,6 +15,47 @@ from dataloaders.hard_negative_mapping import load_hard_negative_index
 from dataloaders.msrvtt_protocol import load_trusted_manifest
 from dataloaders.rawframes_util import RawFramesExtractor
 from dataloaders.rawvideo_util import RawVideoExtractor
+from dataloaders.tqfs_cache import TQFSFrameCache
+
+
+def _validate_tqfs_dependency(slice_framepos):
+    if slice_framepos == 3 and importlib.util.find_spec("sklearn") is None:
+        raise RuntimeError(
+            "slice_framepos=3 requires scikit-learn for deterministic TQFS; "
+            "install the pinned project requirements instead of silently falling back"
+        )
+
+
+def _build_tqfs_cache(
+    cache_dir,
+    slice_framepos,
+    features_path,
+    feature_framerate,
+    max_frames,
+    image_resolution,
+):
+    if slice_framepos != 3 or not cache_dir:
+        return None
+    return TQFSFrameCache(
+        cache_dir,
+        features_path=features_path,
+        feature_framerate=feature_framerate,
+        max_frames=max_frames,
+        image_resolution=image_resolution,
+    )
+
+
+def _get_tqfs_video_data(extractor, cache, video_id, video_path, max_frames):
+    if cache is not None:
+        cached = cache.load(video_id)
+        if cached is not None:
+            return {"video": cached}
+
+    result = extractor.get_tqfs_video_data(video_path, max_frames)
+    video = result["video"]
+    if cache is not None and getattr(video, "ndim", 0) == 4:
+        cache.store(video_id, video)
+    return result
 
 
 def _split_attr_into_blocks(text: str, num_blocks: int = 4):
@@ -231,6 +273,7 @@ class MSRVTT_DataLoader(Dataset):
             use_attributes=False,
             attributes_path="",
             attr_num_blocks=4,
+            tqfs_cache_dir="",
             multi_sentence_per_video=False,
             expected_captions_per_video=None,
     ):
@@ -281,10 +324,19 @@ class MSRVTT_DataLoader(Dataset):
         # 0: cut from head frames; 1: cut from tail frames; 2: extract frames uniformly.
         self.slice_framepos = slice_framepos
         assert self.slice_framepos in [0, 1, 2, 3]   # 3: TQFS 帧质量采样
+        _validate_tqfs_dependency(self.slice_framepos)
 
         self.rawVideoExtractor = RawVideoExtractor(framerate=feature_framerate, size=image_resolution)
         self.rawFramesExtractor = RawFramesExtractor(
             num_segments=max_frames, size=image_resolution, random_shift=True, strategy=self.strategy)
+        self.tqfs_cache = _build_tqfs_cache(
+            tqfs_cache_dir,
+            self.slice_framepos,
+            features_path,
+            feature_framerate,
+            max_frames,
+            image_resolution,
+        )
 
         self.SPECIAL_TOKEN = {"CLS_TOKEN": "<|startoftext|>", "SEP_TOKEN": "<|endoftext|>",
                               "MASK_TOKEN": "[MASK]", "UNK_TOKEN": "[UNK]", "PAD_TOKEN": "[PAD]"}
@@ -385,7 +437,16 @@ class MSRVTT_DataLoader(Dataset):
             if os.path.exists(video_path) is False:
                 video_path = video_path.replace(".mp4", ".webm")
 
-            raw_video_data = self.rawVideoExtractor.get_video_data(video_path) # -------
+            if self.slice_framepos == 3:
+                raw_video_data = _get_tqfs_video_data(
+                    self.rawVideoExtractor,
+                    self.tqfs_cache,
+                    video_id,
+                    video_path,
+                    self.max_frames,
+                )
+            else:
+                raw_video_data = self.rawVideoExtractor.get_video_data(video_path)
             raw_video_data = raw_video_data['video']
             if len(raw_video_data.shape) > 3:
                 raw_video_data_clip = raw_video_data
@@ -396,15 +457,6 @@ class MSRVTT_DataLoader(Dataset):
                         video_slice = raw_video_slice[:self.max_frames, ...]
                     elif self.slice_framepos == 1:
                         video_slice = raw_video_slice[-self.max_frames:, ...]
-                    elif self.slice_framepos == 3:
-                        from dataloaders.tqfs_util import select_tqfs_indices
-                        raw_result = self.rawVideoExtractor.get_raw_video_data(video_path)
-                        raw_frames = raw_result['video']
-                        if len(raw_frames) > 1:
-                            tqfs_indx = select_tqfs_indices(raw_frames, self.max_frames)
-                            video_slice = self.rawVideoExtractor.preprocess_raw_frames([raw_frames[i] for i in tqfs_indx])
-                        else:
-                            video_slice = raw_video_slice[:self.max_frames, ...]
                     else:
                         sample_indx = np.linspace(0, raw_video_slice.shape[0] - 1, num=self.max_frames, dtype=int)
                         video_slice = raw_video_slice[sample_indx, ...]
@@ -521,6 +573,7 @@ class MSRVTT_TrainDataLoader(Dataset):
             return_hard_negative=False,
             hard_negative_path="",
             split_manifest_path=None,
+            tqfs_cache_dir="",
             expected_captions_per_video=20,
     ):
         self.unfold_sentences = bool(unfold_sentences)
@@ -577,6 +630,7 @@ class MSRVTT_TrainDataLoader(Dataset):
         # 0: cut from head frames; 1: cut from tail frames; 2: extract frames uniformly; 3: TQFS 帧质量采样
         self.slice_framepos = slice_framepos
         assert self.slice_framepos in [0, 1, 2, 3]
+        _validate_tqfs_dependency(self.slice_framepos)
 
         self.sample_len = 0
         train_video_ids = set(self.csv_video_ids)
@@ -600,6 +654,14 @@ class MSRVTT_TrainDataLoader(Dataset):
         self.rawVideoExtractor = RawVideoExtractor(framerate=feature_framerate, size=image_resolution)
         self.rawFramesExtractor = RawFramesExtractor(
             num_segments=max_frames, size=image_resolution, random_shift=True, strategy=self.strategy)
+        self.tqfs_cache = _build_tqfs_cache(
+            tqfs_cache_dir,
+            self.slice_framepos,
+            features_path,
+            feature_framerate,
+            max_frames,
+            image_resolution,
+        )
         self.SPECIAL_TOKEN = {"CLS_TOKEN": "<|startoftext|>", "SEP_TOKEN": "<|endoftext|>",
                               "MASK_TOKEN": "[MASK]", "UNK_TOKEN": "[UNK]", "PAD_TOKEN": "[PAD]"}
 
@@ -716,7 +778,16 @@ class MSRVTT_TrainDataLoader(Dataset):
             if os.path.exists(video_path) is False:
                 video_path = video_path.replace(".mp4", ".webm")
 
-            raw_video_data = self.rawVideoExtractor.get_video_data(video_path)
+            if self.slice_framepos == 3:
+                raw_video_data = _get_tqfs_video_data(
+                    self.rawVideoExtractor,
+                    self.tqfs_cache,
+                    video_id,
+                    video_path,
+                    self.max_frames,
+                )
+            else:
+                raw_video_data = self.rawVideoExtractor.get_video_data(video_path)
             raw_video_data = raw_video_data['video']    # [max_frames, 3, 224, 224]
             if len(raw_video_data.shape) > 3:
                 raw_video_data_clip = raw_video_data
@@ -727,15 +798,6 @@ class MSRVTT_TrainDataLoader(Dataset):
                         video_slice = raw_video_slice[:self.max_frames, ...]
                     elif self.slice_framepos == 1:  # cut from tail
                         video_slice = raw_video_slice[-self.max_frames:, ...]
-                    elif self.slice_framepos == 3:  # TQFS 帧质量采样
-                        from dataloaders.tqfs_util import select_tqfs_indices
-                        raw_result = self.rawVideoExtractor.get_raw_video_data(video_path)
-                        raw_frames = raw_result['video']
-                        if len(raw_frames) > 1:
-                            tqfs_indx = select_tqfs_indices(raw_frames, self.max_frames)
-                            video_slice = self.rawVideoExtractor.preprocess_raw_frames([raw_frames[i] for i in tqfs_indx])
-                        else:
-                            video_slice = raw_video_slice[:self.max_frames, ...]
                     else:   # extract uniformly
                         sample_indx = np.linspace(0, raw_video_slice.shape[0] - 1, num=self.max_frames, dtype=int)
                         video_slice = raw_video_slice[sample_indx, ...]

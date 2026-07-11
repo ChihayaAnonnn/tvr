@@ -7,6 +7,8 @@ TQFS（Temporal Quality-based Frame Sampler）实现。
 对外接口：select_tqfs_indices(raw_frames, num_frames) -> List[int]
 """
 
+import warnings
+
 import numpy as np
 
 
@@ -76,42 +78,54 @@ def select_tqfs_indices(raw_frames, num_frames: int):
     # 步骤 3：对候选帧做像素级 KMeans，保证语义多样性
     try:
         from sklearn.cluster import KMeans  # noqa: PLC0415
-        cand_arr = np.array(candidates)
-        H, W = raw_frames[0].shape[0], raw_frames[0].shape[1]
-        stride = max(1, H // 16)  # 下采样到约 16×16，降低计算量
+        from sklearn.exceptions import ConvergenceWarning  # noqa: PLC0415
+    except ImportError as exc:
+        raise RuntimeError(
+            "TQFS requires scikit-learn; install the pinned project requirements"
+        ) from exc
 
-        feats = []
-        for idx in candidates:
-            f = np.asarray(raw_frames[idx])  # [H, W, 3] uint8 BGR
-            # BGR -> 灰度
-            gray = (0.114 * f[:, :, 0].astype(np.float32)
-                    + 0.587 * f[:, :, 1].astype(np.float32)
-                    + 0.299 * f[:, :, 2].astype(np.float32))
-            feats.append(gray[::stride, ::stride].flatten())
-        feats = np.stack(feats).astype(np.float32)  # [num_candidates, D]
+    cand_arr = np.array(candidates)
+    H = raw_frames[0].shape[0]
+    stride = max(1, H // 16)  # 下采样到约 16×16，降低计算量
 
-        km = KMeans(n_clusters=num_frames, random_state=42, n_init=5)
-        labels = km.fit_predict(feats)
+    feats = []
+    for idx in candidates:
+        f = np.asarray(raw_frames[idx])  # [H, W, 3] uint8 BGR
+        # BGR -> 灰度
+        gray = (0.114 * f[:, :, 0].astype(np.float32)
+                + 0.587 * f[:, :, 1].astype(np.float32)
+                + 0.299 * f[:, :, 2].astype(np.float32))
+        feats.append(gray[::stride, ::stride].flatten())
+    feats = np.stack(feats).astype(np.float32)  # [num_candidates, D]
 
-        # 每簇取质量最高帧
-        selected = []
-        for c in range(num_frames):
-            mask = labels == c
-            if not mask.any():
-                continue
-            cluster_cands = cand_arr[mask]
-            selected.append(int(cluster_cands[np.argmax(quality[cluster_cands])]))
+    distinct_count = int(np.unique(feats, axis=0).shape[0])
+    cluster_count = min(num_frames, distinct_count)
+    if cluster_count == 1:
+        labels = np.zeros(len(candidates), dtype=np.int64)
+    else:
+        km = KMeans(n_clusters=cluster_count, random_state=42, n_init=5)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", ConvergenceWarning)
+            labels = km.fit_predict(feats)
 
-        selected = sorted(set(selected))
+    # 每簇取质量最高帧
+    selected = []
+    for c in range(cluster_count):
+        mask = labels == c
+        if not mask.any():
+            continue
+        cluster_cands = cand_arr[mask]
+        selected.append(int(cluster_cands[np.argmax(quality[cluster_cands])]))
 
-        # 数量不足时用均匀采样补足
-        if len(selected) < num_frames:
-            uniform = list(np.linspace(0, N - 1, num_frames, dtype=int))
-            extras = [x for x in uniform if x not in set(selected)]
-            selected = sorted(set(selected) | set(extras[: num_frames - len(selected)]))
+    selected = sorted(set(selected))
 
-        return selected[:num_frames]
+    # 数量不足时用均匀采样补足
+    if len(selected) < num_frames:
+        uniform = list(np.linspace(0, N - 1, num_frames, dtype=int))
+        selected_set = set(selected)
+        extras = [x for x in uniform if x not in selected_set]
+        selected = sorted(
+            selected_set | set(extras[: num_frames - len(selected)])
+        )
 
-    except Exception:
-        # fallback：均匀采样，保证鲁棒性
-        return list(np.linspace(0, N - 1, num_frames, dtype=int))
+    return selected[:num_frames]

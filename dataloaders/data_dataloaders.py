@@ -6,6 +6,31 @@ from dataloaders.dataloader_msvd_retrieval import MSVD_DataLoader
 from dataloaders.hard_negative_sampler import HardNegativeDistributedBatchSampler
 
 
+def _configure_video_worker(_worker_id):
+    torch.set_num_threads(1)
+    try:
+        import cv2
+    except ImportError:
+        return
+    if hasattr(cv2, "setNumThreads"):
+        cv2.setNumThreads(1)
+
+
+def _video_loader_kwargs(args):
+    workers = int(args.num_thread_reader)
+    kwargs = {
+        "num_workers": workers,
+        "pin_memory": torch.cuda.is_available(),
+    }
+    if workers > 0:
+        kwargs.update(
+            persistent_workers=True,
+            prefetch_factor=2,
+            worker_init_fn=_configure_video_worker,
+        )
+    return kwargs
+
+
 def dataloader_msrvtt_train(args, tokenizer):
     msrvtt_dataset = MSRVTT_TrainDataLoader(
         csv_path=args.train_csv,
@@ -27,6 +52,7 @@ def dataloader_msrvtt_train(args, tokenizer):
         return_hard_negative=getattr(args, "use_explicit_hard_negative_loss", False),
         hard_negative_path=getattr(args, "hard_negative_path", ""),
         split_manifest_path=args.split_manifest,
+        tqfs_cache_dir=getattr(args, "tqfs_cache_dir", ""),
     )
 
     local_batch_size = args.batch_size // args.n_gpu
@@ -44,19 +70,17 @@ def dataloader_msrvtt_train(args, tokenizer):
         dataloader = DataLoader(
             msrvtt_dataset,
             batch_sampler=train_sampler,
-            num_workers=args.num_thread_reader,
-            pin_memory=False,
+            **_video_loader_kwargs(args),
         )
     else:
         train_sampler = torch.utils.data.distributed.DistributedSampler(msrvtt_dataset)
         dataloader = DataLoader(
             msrvtt_dataset,
             batch_size=local_batch_size,
-            num_workers=args.num_thread_reader,
-            pin_memory=False,
             shuffle=(train_sampler is None),
             sampler=train_sampler,
             drop_last=True,
+            **_video_loader_kwargs(args),
         )
 
     return dataloader, len(msrvtt_dataset), train_sampler
@@ -65,9 +89,9 @@ def _build_msrvtt_eval_loader(dataset, args):
     return DataLoader(
         dataset,
         batch_size=args.batch_size_val,
-        num_workers=args.num_thread_reader,
         shuffle=False,
         drop_last=False,
+        **_video_loader_kwargs(args),
     )
 
 
@@ -85,6 +109,7 @@ def dataloader_msrvtt_val(args, tokenizer, subset="val"):
         use_attributes=getattr(args, "use_attributes", False),
         attributes_path=getattr(args, "msrvtt_attributes_path", ""),
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
+        tqfs_cache_dir=getattr(args, "tqfs_cache_dir", ""),
         multi_sentence_per_video=True,
         expected_captions_per_video=20,
     )
@@ -105,6 +130,7 @@ def dataloader_msrvtt_test(args, tokenizer, subset="test"):
         use_attributes=getattr(args, "use_attributes", False),
         attributes_path=getattr(args, "msrvtt_attributes_path", ""),
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
+        tqfs_cache_dir=getattr(args, "tqfs_cache_dir", ""),
         multi_sentence_per_video=False,
     )
     return _build_msrvtt_eval_loader(msrvtt_testset, args), len(msrvtt_testset)
@@ -131,11 +157,10 @@ def dataloader_msvd_train(args, tokenizer):
     dataloader = DataLoader(
         msvd_dataset,
         batch_size=args.batch_size // args.n_gpu,
-        num_workers=args.num_thread_reader,
-        pin_memory=False,
         shuffle=(train_sampler is None),
         sampler=train_sampler,
         drop_last=True,
+        **_video_loader_kwargs(args),
     )
 
     return dataloader, len(msvd_dataset), train_sampler
@@ -159,9 +184,9 @@ def dataloader_msvd_test(args, tokenizer, subset="test"):
     dataloader_msvd = DataLoader(
         msvd_testset,
         batch_size=args.batch_size_val,
-        num_workers=args.num_thread_reader,
         shuffle=False,
         drop_last=False,
+        **_video_loader_kwargs(args),
     )
     return dataloader_msvd, len(msvd_testset)
 
