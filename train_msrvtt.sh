@@ -15,7 +15,7 @@ TEST_CSV="${DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv"
 ANNOTATION_JSON="${DATA_PATH}/annotation/MSRVTT_v2.json"
 SPLIT_MANIFEST="${ROOT_DIR}/dataloaders/splits/msrvtt_trusted_v1_seed42.json"
 GENERATED_SPLIT_DIR="${ROOT_DIR}/data/generated/msrvtt_trusted_v1"
-TQFS_CACHE_DIR=${TQFS_CACHE_DIR:-${ROOT_DIR}/cache_dir/tqfs/msrvtt_trusted_v1_f1_m8_r224}
+TQFS_CACHE_DIR=${TQFS_CACHE_DIR:-/home/xujie/.cache/uatvr/tqfs/msrvtt_trusted_v1_f1_m8_r224}
 
 python3 "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
     --train-csv "${SOURCE_TRAIN_CSV}" \
@@ -36,6 +36,10 @@ EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN:-0}
 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION:-fp16}
 CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING:-1}
 CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS:-4}
+TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS:-8}
+TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR:-2}
+TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
+TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS:-1}
 if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
     echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
     exit 2
@@ -56,6 +60,14 @@ if ! [[ "${CLIP_VISUAL_CHECKPOINT_LAYERS}" =~ ^[0-9]+$ ]]; then
     echo "Unsupported CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS}; expected a non-negative integer" >&2
     exit 2
 fi
+if ! [[ "${TRAIN_NUM_WORKERS}" =~ ^[0-9]+$ ]]; then
+    echo "Unsupported TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS}; expected a non-negative integer" >&2
+    exit 2
+fi
+if ! [[ "${TRAIN_PREFETCH_FACTOR}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Unsupported TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR}; expected a positive integer" >&2
+    exit 2
+fi
 EXTRA_BACKBONE_ARGS=()
 if [[ "${EVA_CLIP_USE_XATTN}" == "1" ]]; then
     EXTRA_BACKBONE_ARGS+=(--eva_clip_use_xattn)
@@ -67,20 +79,53 @@ if [[ "${CLIP_GRADIENT_CHECKPOINTING}" == "1" ]]; then
     )
 fi
 
-# 显存：batch 256 + accum 1，有效 batch = 256。
-# 2 卡时每卡 micro-batch 128；4 卡时每卡 micro-batch 64。
-# 启动前请确认所选 GPU 无其他大进程（nvidia-smi）。
-CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
+# P0 固定 batch 256 + accum 1，有效 batch = 256；4 卡时每卡 micro-batch 64。
+# 0/1 位于 NUMA 0，2/4 位于 NUMA 1，且 2/4 之间为 NV8。
+CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,4}"
 IFS=',' read -ra _GPUS <<< "${CUDA_VISIBLE_DEVICES}"
 NPROC="${NPROC:-${#_GPUS[@]}}"
 
+if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
+    if [[ "${#_GPUS[@]}" -ne 4 ]]; then
+        echo "hygiene P0 requires exactly 4 GPUs; got CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}" >&2
+        exit 2
+    fi
+    declare -A _SEEN_GPUS=()
+    for _GPU in "${_GPUS[@]}"; do
+        if [[ -n "${_SEEN_GPUS[${_GPU}]:-}" ]]; then
+            echo "hygiene P0 rejects duplicate GPU IDs: CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}" >&2
+            exit 2
+        fi
+        _SEEN_GPUS["${_GPU}"]=1
+    done
+    if [[ "${NPROC}" != "${#_GPUS[@]}" ]]; then
+        echo "NPROC=${NPROC} does not match ${#_GPUS[@]} visible GPUs" >&2
+        exit 2
+    fi
+    if [[ "${TRAIN_BATCH_SIZE}" != "256" ]]; then
+        echo "hygiene P0 requires TRAIN_BATCH_SIZE=256; got ${TRAIN_BATCH_SIZE}" >&2
+        exit 2
+    fi
+    if [[ "${TRAIN_GRADIENT_ACCUMULATION_STEPS}" != "1" ]]; then
+        echo "hygiene P0 requires TRAIN_GRADIENT_ACCUMULATION_STEPS=1; got ${TRAIN_GRADIENT_ACCUMULATION_STEPS}" >&2
+        exit 2
+    fi
+fi
+
+if [[ "${CLIP_GRADIENT_CHECKPOINTING}" == "0" ]]; then
+    echo "[train_msrvtt.sh] A800 throughput comparison: activation checkpointing disabled"
+fi
+echo "[train_msrvtt.sh] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} NPROC=${NPROC} TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS} TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR} TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE} TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS} TQFS_CACHE_DIR=${TQFS_CACHE_DIR}"
 echo "[train_msrvtt.sh] BACKBONE_TYPE=${BACKBONE_TYPE} BACKBONE_NAME=${BACKBONE_NAME} BACKBONE_PATH=${BACKBONE_PATH} EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN} CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION} CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING} CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS}"
 
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     torchrun --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29547 \
     "${ROOT_DIR}/main_task_retrieval.py" \
-    --do_train --num_thread_reader=8 --epochs=5 \
-    --batch_size=256 --gradient_accumulation_steps=1 --n_display=20 \
+    --do_train --num_thread_reader "${TRAIN_NUM_WORKERS}" \
+    --prefetch_factor "${TRAIN_PREFETCH_FACTOR}" --epochs=5 \
+    --batch_size "${TRAIN_BATCH_SIZE}" \
+    --gradient_accumulation_steps "${TRAIN_GRADIENT_ACCUMULATION_STEPS}" \
+    --n_display=20 \
     --train_csv "${GENERATED_SPLIT_DIR}/train.csv" \
     --val_csv "${GENERATED_SPLIT_DIR}/val.csv" \
     --source_train_csv "${SOURCE_TRAIN_CSV}" \

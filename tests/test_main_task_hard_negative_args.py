@@ -256,6 +256,7 @@ def _run_with_fake_torchrun(
     layer_norm_precision="fp16",
     gradient_checkpointing="1",
     visual_checkpoint_layers="4",
+    extra_env=None,
 ):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -267,6 +268,8 @@ def _run_with_fake_torchrun(
     )
     torchrun_path.chmod(0o755)
     env = os.environ.copy()
+    visible_devices = "0,1,2,4" if script_name == "train_msrvtt.sh" else "0"
+    nproc = "4" if script_name == "train_msrvtt.sh" else "1"
     env.update(
         {
             "PATH": f"{fake_bin}:{env['PATH']}",
@@ -280,10 +283,15 @@ def _run_with_fake_torchrun(
             "LOG_DIR": str(tmp_path / "logs"),
             "INIT_MODEL": str(tmp_path / "checkpoint.pt"),
             "EVAL_SPLIT": "val",
-            "CUDA_VISIBLE_DEVICES": "0",
-            "NPROC": "1",
+            "CUDA_VISIBLE_DEVICES": visible_devices,
+            "NPROC": nproc,
         }
     )
+    for name, value in (extra_env or {}).items():
+        if value is None:
+            env.pop(name, None)
+        else:
+            env[name] = value
     return subprocess.run(
         ["bash", str(PROJECT_ROOT / script_name)],
         cwd=PROJECT_ROOT,
@@ -384,6 +392,99 @@ def test_train_script_rejects_invalid_clip_visual_checkpoint_layers(tmp_path):
 
     assert result.returncode == 2
     assert "CLIP_VISUAL_CHECKPOINT_LAYERS=four" in result.stderr
+    assert not capture_path.exists()
+
+
+def test_train_script_forwards_a800_pipeline_settings(tmp_path):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh",
+        tmp_path,
+        "0",
+        extra_env={
+            "TRAIN_NUM_WORKERS": "12",
+            "TRAIN_PREFETCH_FACTOR": "4",
+            "TRAIN_BATCH_SIZE": "256",
+            "TRAIN_GRADIENT_ACCUMULATION_STEPS": "1",
+            "TQFS_CACHE_DIR": "/nvme/tqfs",
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    args = capture_path.read_text(encoding="utf-8").splitlines()
+    assert args[args.index("--num_thread_reader") + 1] == "12"
+    assert args[args.index("--prefetch_factor") + 1] == "4"
+    assert args[args.index("--batch_size") + 1] == "256"
+    assert args[args.index("--gradient_accumulation_steps") + 1] == "1"
+    assert args[args.index("--tqfs_cache_dir") + 1] == "/nvme/tqfs"
+
+
+def test_train_script_uses_a800_defaults(tmp_path):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh",
+        tmp_path,
+        "0",
+        extra_env={
+            "CUDA_VISIBLE_DEVICES": None,
+            "NPROC": None,
+            "TRAIN_NUM_WORKERS": None,
+            "TRAIN_PREFETCH_FACTOR": None,
+            "TQFS_CACHE_DIR": None,
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    args = capture_path.read_text(encoding="utf-8").splitlines()
+    assert "CUDA_VISIBLE_DEVICES=0,1,2,4" in result.stdout
+    assert args[args.index("--nproc_per_node=4")] == "--nproc_per_node=4"
+    assert args[args.index("--num_thread_reader") + 1] == "8"
+    assert args[args.index("--prefetch_factor") + 1] == "2"
+    assert args[args.index("--tqfs_cache_dir") + 1] == (
+        "/home/xujie/.cache/uatvr/tqfs/msrvtt_trusted_v1_f1_m8_r224"
+    )
+
+
+@pytest.mark.parametrize(
+    ("visible", "nproc", "message"),
+    [
+        ("0,1,2", "3", "requires exactly 4 GPUs"),
+        ("0,1,2,2", "4", "duplicate GPU IDs"),
+        ("0,1,2,4", "3", "NPROC=3 does not match"),
+    ],
+)
+def test_hygiene_train_script_rejects_invalid_gpu_world(
+    tmp_path, visible, nproc, message
+):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh",
+        tmp_path,
+        "0",
+        extra_env={"CUDA_VISIBLE_DEVICES": visible, "NPROC": nproc},
+    )
+
+    assert result.returncode == 2
+    assert message in result.stderr
+    assert not capture_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("extra_env", "message"),
+    [
+        ({"TRAIN_BATCH_SIZE": "320"}, "requires TRAIN_BATCH_SIZE=256"),
+        (
+            {"TRAIN_GRADIENT_ACCUMULATION_STEPS": "2"},
+            "requires TRAIN_GRADIENT_ACCUMULATION_STEPS=1",
+        ),
+    ],
+)
+def test_hygiene_train_script_rejects_changed_batch_protocol(
+    tmp_path, extra_env, message
+):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh", tmp_path, "0", extra_env=extra_env
+    )
+
+    assert result.returncode == 2
+    assert message in result.stderr
     assert not capture_path.exists()
 
 
