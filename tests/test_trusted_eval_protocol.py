@@ -156,6 +156,8 @@ def _run_with_fake_torchrun(script_name, tmp_path, xattn_value):
     )
     torchrun_path.chmod(0o755)
     env = os.environ.copy()
+    visible_devices = "0,1,2,4" if script_name == "train_msrvtt.sh" else "0"
+    nproc = "4" if script_name == "train_msrvtt.sh" else "1"
     env.update(
         {
             "PATH": f"{fake_bin}:{env['PATH']}",
@@ -167,8 +169,8 @@ def _run_with_fake_torchrun(script_name, tmp_path, xattn_value):
             "LOG_DIR": str(tmp_path / "logs"),
             "INIT_MODEL": str(tmp_path / "checkpoint.pt"),
             "EVAL_SPLIT": "val",
-            "CUDA_VISIBLE_DEVICES": "0",
-            "NPROC": "1",
+            "CUDA_VISIBLE_DEVICES": visible_devices,
+            "NPROC": nproc,
         }
     )
     return subprocess.run(
