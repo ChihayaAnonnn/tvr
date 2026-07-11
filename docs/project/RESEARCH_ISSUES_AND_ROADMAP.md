@@ -1,330 +1,175 @@
-# 当前研究问题清单与改进路线
-
-> 面向后续 agent 的阅读入口。本文汇总 `report.md`、`report_SAP.md`、`report_uncertainty.md` 的当前结论，并以 2026-07-10 的决策口径为准。具体细节请按索引回到原文。
+# UATVR 科研问题与路线图
 
-> 归档约定：本文是当前工作树唯一科研事实源。历史原始日志、诊断 TSV、已执行计划与过期 checkpoint 已移出工作树，需要复核时从 Git 历史恢复。
+> 更新时间：2026-07-11。本文是科研决策、证据、停止条件和实验顺序的唯一事实源。
+> 外部论文事实与复算见 [多模态检索研究综合分析](../analysis/multimodal_retrieval_research_synthesis.md)。
+> 历史结构、旧报告、日志与 checkpoint 仅从 Git 历史追溯。
 
-## 0. 阅读索引
+## 1. 当前决策摘要
 
-| 索引 | 文档位置 | 主要内容 |
-|------|----------|----------|
-| R-main-1 | `report.md:9` | 最终检索分数仍基本是 `wti_logits` |
-| R-main-2 | `report.md:42` | SAP/不确定性不是 pair-level retrieval uncertainty |
-| R-main-3 | `report.md:79` | `logsigma` / uncertainty 塌缩或饱和风险 |
-| R-main-fix-1 | `report.md:106` | `uncertainty_mode=none` 语义已修正 |
-| R-main-4 | `report.md:120` | 当前 evidential loss 不是真正的 evidential retrieval |
-| R-main-5 | `report.md:142` | `w_uncertainty_reg` 仍是 dead knob |
-| R-main-6 | `report.md:170` | 文本概率分支 attention mask 已接入，不再是当前 bug |
-| R-main-7 | `report.md:225` | 建议先修训练目标和评估分数不一致 |
-| R-main-8 | `report.md:348` | pair-level uncertainty 与历史 soft false-negative 建议；后者已被 trusted-v1 禁用 |
-| R-sap-1 | `report_SAP.md:4` | 当前代码核对：SAP 结构瓶颈仍成立，卫生项已部分修复 |
-| R-sap-2 | `report_SAP.md:106` | SAP 是 query-agnostic，需要 query-conditioned anchors |
-| R-sap-3 | `report_SAP.md:151` | SAP 尚未真正进入 final ranking score |
-| R-sap-4 | `report_SAP.md:201` | `evidential_head(projected.detach())` 阻断 gate 对 SAP decoder 的反馈 |
-| R-sap-5 | `report_SAP.md:231` | 当前 uncertainty 是 anchor 统计量，不是真正检索不确定性 |
-| R-sap-6 | `report_SAP.md:278` | `logsigma` 是 scalar expand，表达力弱 |
-| R-sap-7 | `report_SAP.md:419` | 最小改动版：SAP-ColBERT / AnchorWTI scoring |
-| R-sap-8 | `report_SAP.md:473` | Query-conditioned SAP gate |
-| R-sap-9 | `report_SAP.md:527` | Per-anchor Gaussian mixture |
-| R-sap-10 | `report_SAP.md:569` | 历史 false-negative soft label 建议；已被 trusted-v1 禁用 |
-| R-sap-11 | `report_SAP.md:699` | SAP 最小可行实验路线 |
-| R-unc-1 | `report_uncertainty.md:132` | uncertainty 没有进入 final ranking score |
-| R-unc-2 | `report_uncertainty.md:178` | 当前 uncertainty 是 sample/video-level，不是 pair-level |
-| R-unc-3 | `report_uncertainty.md:204` | 视频侧 `logsigma` 太粗且塌缩 |
-| R-unc-4 | `report_uncertainty.md:237` | MIL sampling 容易鼓励 variance shrinkage |
-| R-unc-5 | `report_uncertainty.md:260` | UACL closest sample 进一步鼓励低方差 |
-| R-unc-6 | `report_uncertainty.md:285` | `uncertainty_mode=none` 语义已修正 |
-| R-unc-7 | `report_uncertainty.md:299` | 文本侧 padding mask 已接入 |
-| R-unc-8 | `report_uncertainty.md:314` | evidential loss 未真正使用 Dirichlet evidence |
-| R-unc-9 | `report_uncertainty.md:390` | Pair-level Retrieval Uncertainty |
-| R-unc-10 | `report_uncertainty.md:459` | Closed-form Gaussian Score，少用 Monte Carlo |
-| R-unc-11 | `report_uncertainty.md:496` | 真正的 Evidential Ranking Head |
-| R-unc-12 | `report_uncertainty.md:542` | 历史 uncertainty-aware soft target 建议；已被 trusted-v1 禁用 |
-| R-unc-13 | `report_uncertainty.md:573` | Calibration-aware uncertainty |
-| R-unc-14 | `report_uncertainty.md:680` | 最小可行改法 E1-E6 |
+1. 当前唯一 P0 是建立可信的 OpenAI CLIP WTI-only 基线；在其完成前，不判断其他 backbone、uncertainty 或 alignment 机制的收益。
+2. MSR-VTT 唯一有效协议是 `trusted-v1`。JSFusion 1K 不参与训练、调参或 checkpoint selection，只在方法和超参数冻结后显式盲测。
+3. 不再把“所有数据集达到 SOTA”作为主要成功标准。研究优先回答新问题是否成立、机制是否形成因果闭环、结论是否可证伪且可复现。
+4. 不进行盲目 backbone sweep。backbone 在核心研究中是匹配控制变量；EVA 只可作为后续外部有效性对照，不包装成方法贡献。
+5. 后续主问题依次是：P1 只读错配/风险诊断 → P2 pair-level uncertainty → 有证据才解锁 P3 candidate-conditioned alignment。P4 时序/效率始终独立。
+6. Hard negative 与 UACL 主线均已终止，不再 sweep 或 repeat。语义相似度只能用于诊断，不能改变正例定义。
 
-## 1. 当前结论
+## 2. P0：可信 WTI-only 基线
 
-当前研究的核心矛盾不是某个 loss 权重没调好，而是 **不确定性/SAP 分支没有成为最终检索决策的一部分**。当前主排序仍是 WTI，SAP、Gaussian sampling、evidential、MIL、UACL 更像辅助分支。辅助分支即使改变了诊断统计，也很难稳定改变 Recall@K。
+### 2.1 固定协议
 
-已经修正或不应再重复处理的基础项：
+| 字段 | 固定值 |
+|---|---|
+| 数据协议 | `trusted-v1` |
+| split seed | 42 |
+| train / internal val | 8500 / 500 |
+| test | JSFusion 1K，仅在方法、超参数和 checkpoint selection 冻结后显式盲测 |
+| 主损失 | 按精确 `video_id` 构造的双向多正例 InfoNCE |
+| backbone | OpenAI CLIP ViT-B/16 |
+| global forward batch | 256 |
+| GPU / micro / accumulation | 4 / 64 / 1 |
+| LayerNorm | native FP16，保留 FP32 master affine；`CLIP_LAYER_NORM_PRECISION=fp32` 只作回退 |
+| checkpoint selection | internal-val T2V R@1 |
 
-- `uncertainty_mode=none/evidential/nig_mil` 语义已修正，`none` 真实关闭 evidential/neg_reg。见 R-main-fix-1、R-unc-6。
-- 文本概率分支已接入 attention/padding mask。见 R-main-6、R-unc-7。
-- `logsigma_v/t_min_ratio/max_ratio` 已进入日志，应作为后续判断方差塌缩的主要依据。见 R-main-3。
-- `EXPERIMENT_PROFILE=hygiene` 当前执行 trusted-v1 的 WTI-only forward；SAP、SpatialEnhancer 和概率辅助前向均应由代码路径绕过，并由测试持续验证。
+forward contrastive batch 与 optimizer effective batch 必须分别记录。梯度累积不会合并不同 forward 的 in-batch negatives；任何对照都必须保持 global forward batch、GPU 数、每卡 micro-batch、accumulation 和 optimizer steps 一致。
 
-### P0：可信实验基座与新基线（2026-07-10）
+### 2.2 稳定实现事实
 
-- 旧结果存在 JSFusion test 逐 epoch 选模、同视频描述被当作负例、WTI padding 最大池化三项混杂，只保留为历史档案。
-- 新协议固定为 trusted-v1：8500 train / 500 internal val / JSFusion 1K blind test。
-- 主损失按精确 video_id 使用双向多正例 InfoNCE。
-- 下一次可解释实验必须先重跑 OpenAI CLIP hygiene WTI-only；未完成该基线前，不判断 EVA adapter、SAP 或不确定性模块收益。
-- OpenAI hygiene 新基线建立后，EVA02-CLIP-B/16 只能在相同 split、global contrastive batch、optimizer steps 和 checkpoint-selection 指标下比较。
+- 主入口固定为 `run_train_msrvtt_bg.sh` → `train_msrvtt.sh` → `main_task_retrieval.py` → `modules/modeling_mulit.py`。
+- hygiene profile 的主分数固定为 `weighted_logits = wti_logits`，并在 forward 中真实绕过旧空间增强、概率表示、不确定性头和辅助 loss 路径；仅把 loss 权重设为 0 不满足要求。
+- WTI padding mask、精确 `video_id` 多正例矩阵以及 train/internal-val/test 隔离必须由测试持续保护。
+- OpenAI CLIP 自定义 LayerNorm 默认执行 native FP16，FP32 master affine 参与参数更新；环境变量只提供显式回退，不代表全模型 AMP。
+- `--batch_size` 表示目标有效 batch。accumulation=1 时，4 卡、`batch_size=256` 对应 global forward batch 256、每卡 micro-batch 64。
+- 历史 checkpoint 与即将清理的旧分支参数不属于兼容接口；P0 只接受从当前 WTI-only 配置重新训练的 checkpoint。
 
-**停止条件**：trusted-v1 的固定拆分、独立 test 隔离、精确 `video_id` 多正例损失、WTI padding 修复和 hygiene WTI-only 前向绕过必须通过代码与测试验证；任一项未通过，不启动 backbone 对照或新的模型主线实验。
+### 2.3 尚未完成的结果
 
-已实施、后续按停止条件运行验证的实验协议：
+- 尚无符合上述全部条件的可信 OpenAI CLIP WTI-only 训练结果。
+- 历史 48.2、49.x 等结果存在旧 split、test-aware selection、正例定义或活动分支混杂，只能从 Git 历史追溯，不能作为 `trusted-v1` baseline。
+- 在 baseline 完成前，不启动长期 uncertainty/alignment 训练，不根据一次验证波动改变路线。
 
-- MSRVTT 后续唯一有效协议为 `trusted-v1`：seed 42 固定拆分 8500 train / 500 internal val，val 每个视频恰好使用 20 条官方描述。
-- JSFusion 1K test 只能在训练结束后通过独立、显式 test eval 使用；训练阶段不得构造或评估 test dataloader。
-- 正例矩阵只能由精确相同 `video_id` 构造；双向多正例 InfoNCE 是唯一主检索损失。语义相似度只允许用于只读诊断，不得生成软正例、伪标签或改变训练 target。
-- trusted-v1 hygiene WTI-only 必须在 forward 路径直接绕过 SpatialEnhancer、SAP、视频概率分支、文本 PIENet、不确定性头，以及概率采样和相关中间张量构造；仅把辅助 loss 权重置零不满足该约束。
-- 上述纯 WTI forward 绕过、dataloader、loss 和训练/test 隔离已在代码中实施；历史 48.2/49.3 等结果只作历史参照，不能冒充 trusted-v1 基线。
+### 2.4 P0 完成门槛
 
-仍然成立的核心问题：
+P0 同时满足以下条件才算完成：
 
-- Final ranking 仍是 `wti_logits`。
-- SAP 仍是 video-only，不是 query-conditioned。
-- 视频侧 uncertainty 仍是 video/sample-level 统计量，不是 query-video pair-level 置信度。
-- `logsigma` 仍然表达力弱，且 sampling/MIL/UACL 容易推动方差收缩。
-- evidential loss 仍没有和 Dirichlet evidence / final logits 形成闭环。
-- `w_uncertainty_reg` 仍没有进入主 loss，继续视为 dead knob。
+1. split manifest 精确为 seed 42、8500 train / 500 internal val，且 JSFusion 1K 不被训练流程加载。
+2. 主损失只使用精确 `video_id` 双向多正例矩阵，T2V/V2T 均有单元测试。
+3. hygiene WTI-only 的禁用分支通过 spy/mock 测试证明没有被调用，final score 与 WTI logit 数值一致。
+4. 运行清单记录 Git SHA、split、seed、backbone、数据路径、global forward batch、micro/accumulation 与 hard-negative 关闭状态。
+5. 用户手动完成训练；以 internal-val T2V R@1 选择 checkpoint，并保存完整 T2V/V2T R@1/R@5/R@10、MdR/MnR。
+6. 在方法、超参数和 checkpoint 固定前不读取 JSFusion 1K；盲测结果只报告一次，不反向调参。
 
-## 2. 问题清单
+## 3. 外部研究证据采纳表
 
-### P0. Final Ranking 与概率/不确定性分支脱节
+| 论文机制 | 证据等级 | 决定 | 对应阶段 | 理由 | 综合分析证据 |
+|---|---|---|---|---|---|
+| EagleNet candidate interaction | 协议不兼容、部分已核验 | 延后 | P3 | 先证明固定 embedding 存在系统性候选错配 | [EagleNet](../analysis/multimodal_retrieval_research_synthesis.md#2-eaglenet) |
+| GARE candidate-conditioned correction | 协议不兼容、部分已核验 | 延后 | P3 | 必须限制为 top-k 并报告候选规模与重排成本 | [GARE](../analysis/multimodal_retrieval_research_synthesis.md#3-gare) |
+| TempMe temporal merging | 已核验边界 | 独立支线 | P4 | 不与 P2/P3 首轮实验混合 | [TempMe](../analysis/multimodal_retrieval_research_synthesis.md#4-tempme) |
+| GraviAlign Gaussian overlap | 弱证据 | 仅采纳研究启发 | P2 | 需要重新有界化、推导并验证校准 | [GraviAlign](../analysis/multimodal_retrieval_research_synthesis.md#5-gravialign) |
 
-**现象**：训练和评估主检索分数仍是 `wti_logits`，概率分支只通过辅助 loss 间接影响共享参数。
+外部论文的传统 9k/1K Recall 不能冒充本项目基线。采纳某个机制只表示它形成可测试假设，不表示接受作者的全部理论解释、协议或工程代价。
 
-**影响**：SAP、Gaussian、evidential 即使学到统计差异，也不一定改变最终排序。继续堆 `w_mil / w_evidential / w_neg_reg / w_orth / UACL` 的收益上限很低。
+## 4. 后续研究问题
 
-**索引**：R-main-1、R-main-7、R-sap-3、R-unc-1。
+### P1：跨模态错配与检索风险诊断
 
-**建议**：第一阶段先验证 `final_logits = wti_logits + lambda * sap_or_prob_logits`。训练和评估必须使用同一 `final_logits`。
+**目标**：先回答固定 WTI “何时错、为何错”，不改模型、不生成伪标签。
 
-### P1. SAP 是 video-only anchor pooling，不是 query-conditioned matching
+固定 backbone、主损失、正例矩阵和 checkpoint 后，分别对 T2V/V2T 统计 correct/incorrect Top-1 的 score、top1-top2 margin、GT rank、row entropy、token/frame alignment 和近邻密度。重点比较：
 
-**现象**：SAP 只看视频生成 anchors、modal_probs、`mu_video/logsigma_video`。同一个视频面对不同 query 时，anchor 权重不会变。
+- high-similarity hard/fuzzy negatives 与按精确 `video_id` 定义的真实多正例；
+- query ambiguity、video ambiguity 与 pair mismatch；
+- 短文本语义不足、视觉近邻、动作/顺序错误和帧质量错误；
+- WTI score/margin 是否已足以解释错误，是否存在额外可预测风险。
 
-**影响**：视频文本检索的相关性本质是 query-dependent。video-only 聚合无法表达“这个视频对 query A 确定、对 query B 不确定”。
+P1 只输出聚合统计、预定义错误切片和可视化，不修改 label、loss 或训练数据。只有错误模式在至少三个 seed/checkpoint 或预定义数据切片上方向一致，才作为 P2/P3 的前置证据。
 
-**索引**：R-sap-2、R-sap-8、R-unc-2。
+### P2：Pair-level uncertainty
 
-**建议**：保留 video anchors，但把聚合改成 pair-level gate：`text_i + anchor_jk -> gate_ijk -> query-conditioned video representation`。
+**研究对象**：`u(text_i, video_j)`，而不是 query-only 或 video-only scalar。
 
-### P2. 当前 uncertainty 不是检索不确定性
+独立规格必须明确：
 
-**现象**：视频侧 uncertainty 主要来自 anchor diversity 和 modal entropy；evidential similarity 用 video-level scalar confidence 对同一视频的所有文本统一折扣。
+1. 预测目标是 pair mismatch、Top-1 correctness 还是 selective retrieval risk；
+2. 正配对、精确多正例和 high-similarity negative 如何构造监督，且不把语义相似度升级为伪标签；
+3. uncertainty 如何进入 final logits、risk gating 或 abstention，训练与推理使用同一个决策定义；
+4. 方差塌缩/爆炸、无界 score、数值奇异和分数尺度如何防护；
+5. 如何证明输出不是 WTI score、margin、row entropy 的单调复制。
 
-**影响**：它更像 video complexity，不是 `u(text_i, video_j)`。无法用于判断 Top-1 是否可信、负样本是否可能是 false negative。
+最小方法从稳定、可有界的 pair 特征或 Gaussian log-overlap 开始。首轮只增加一个 uncertainty 变量；若它不改善 AURC、错误检测或分桶校准，不能靠追加多个辅助 loss 挽救。
 
-**索引**：R-main-2、R-sap-5、R-unc-2、R-unc-9。
+### P3：Candidate-conditioned multimodal alignment
 
-**建议**：定义 pair-level uncertainty head，输入可包含 `wti_ij`、`sap/prob_ij`、`|mu_t - mu_v|`、`mu_t * mu_v`、`var_t/var_v`，输出 `u_ij` 或 evidence/confidence。
+P3 处于锁定状态。只有 P1 提供“固定 embedding/WTI 在 top-k 内存在系统性、可纠正的候选错配”证据后才解锁。
 
-### P3. 视频侧 `logsigma` 表达力弱且容易塌缩
+首个规格应是 bounded residual 或轻量 reranker，并同时报告：
 
-**现象**：当前 `logsigma_video` 由 anchor 间方差压成 `[B,1]` 再 expand 到 `[B,D]`。MIL sampling 和 UACL closest sample 都倾向让采样更接近 mean。
+- 第一阶段候选规模 `k` 与 candidate recall ceiling；
+- 最终 score 与关闭 reranker 后的严格基线回退；
+- k 对 Recall、延迟、吞吐、显存的曲线；
+- residual 范数、gate 触发率和失败样本；
+- 与同参数量非候选条件 MLP 的容量对照。
 
-**影响**：方差不能区分语义维度或 anchor 级不确定性，也容易退化成低噪声确定性分支。
+不允许从 1K 全对全时间直接推断大库扩展性，也不允许在首轮同时加入图网络、随机采样、能量目标和多项正则。
 
-**索引**：R-main-3、R-sap-6、R-unc-3、R-unc-4、R-unc-5、R-unc-10。
+### P4：时序建模与效率支线
 
-**建议**：短期用 closed-form score 代替或弱化 sampling；中期改为 per-anchor Gaussian mixture：每个 anchor 输出 `mu_k/logvar_k/evidence_k`，再按 mixture variance 聚合。
+P4 永远作为独立支线。第一步固定 P0 全部条件，只加入**无 token 压缩**的跨帧 temporal modeling，判断是否修复预定义时序错误；第二步才加入 token reduction，分别报告准确率与效率 Pareto。
 
-### P4. SAP Dirichlet gate 与 anchor decoder 耦合不足
+首轮 P4 不得与 P2/P3 同时改变。评价至少包括 video-backbone GFLOPs、tokens、videos/s、训练/推理显存和检索指标；若压缩带来效率但损失不可接受，应如实保留负结果。
 
-**现象**：`evidential_head(projected.detach())` 仍在，evidence/gate 不能直接反向塑造 decoder anchors。
+## 5. 成功标准与停止条件
 
-**影响**：Dirichlet head 更像旁路加权器，不是端到端语义选择器。
+### 5.1 不再采用的成功标准
 
-**索引**：R-sap-4、R-sap-11。
+- 不以“所有数据集达到 SOTA”作为唯一或主要目标。
+- 不以单 seed 的最高 R@1、传统 test-aware 协议数字或跨论文绝对 Recall 判断成败。
+- 不把更强 backbone、更多参数、更多输入帧或额外后处理本身包装成方法创新。
+- 不以 loss 下降、variance 非零或可视化好看替代最终排序/风险决策证据。
 
-**建议**：做 detach 消融：`detach`、`no detach`、`partial detach`。推荐先试 `projected.detach() + grad_ratio * (projected - projected.detach())`，并控制 evidence loss 权重或 warmup。
+### 5.2 机制筛选标准
 
-### P5. Evidential 分支没有形成 ranking-level 证据学习闭环
+- 单 seed 只作机制筛选；训练与推理必须使用同一个最终 score。
+- 一次直接消融只改变一个 causal variable，并提供严格关闭后的 baseline 回退。
+- 主张必须有对应观测量：alignment 对应错误切片/排序变化，uncertainty 对应风险/校准，效率对应实测资源。
+- 只有 test 提升、没有 internal-val 机制信号的实验视为无效，不得继续调 test。
+- 没有机制信号、收益只随换 backbone 出现，或必须同时换标签/多项 loss 才出现时立即停止。
 
-**现象**：`_evidential_nll_loss(sim_matrix, alpha_dir)` 未真正使用 `alpha_dir`；`evidential_matrix_loss()` 存在但未接入主 loss；当前 evidential similarity 是旁路 `ev_sim`。
+### 5.3 稳定性与泛化标准
 
-**影响**：evidential 分支更像 similarity regularizer，不是 batch-level / ranking-level evidence learning。
+- 进入主线前，基线与新方法使用同一固定 split 和同一组**至少三个训练随机种子**。
+- backbone、split、forward contrastive batch、optimizer steps、checkpoint selection 和数据预处理完全匹配。
+- 常规检索报告 R@1/R@5/R@10、MdR/MnR，分别给 T2V/V2T 的均值与离散度。
+- 声称 uncertainty/risk 时额外报告 AURC、错误检测 AUROC 或相关性、分桶校准与离散度。
+- 至少在一个独立数据集或预定义错误切片上验证方向一致；结果不要求每项最好，但要求假设不被主要证据否定。
 
-**索引**：R-main-4、R-sap-10、R-unc-8、R-unc-11。
+### 5.4 盲测边界
 
-**建议**：等 `final_logits` 建立后，把 evidence 作用到 final logits：`evidence_ij = softplus(final_logits_ij)`，用 Dirichlet MSE/NLL 或 calibration loss 训练。
+JSFusion 1K 是显式盲测，只能在以下内容全部冻结后读取：方法结构、loss、超参数、训练 seed 集、checkpoint-selection 指标、停止条件和报告模板。盲测之后不得根据其结果继续选 checkpoint 或调参；需要新假设时必须回到 internal val，并将下一次 test 视为新的预注册阶段。
 
-### P6. MSR-VTT false negative / 多正例歧义没有被正面处理
+### 5.5 逐阶段停止条件
 
-**现象**：Hard negative 全链路已显示不稳定，很多高相似负样本可能是语义近邻或潜在正例。
+- **P0**：任一协议/隔离/主损失/forward hygiene 契约失败就停止训练请求，先修实现。
+- **P1**：若错误可由现有 WTI score/margin 充分解释，且没有稳定的新错配子集，则停止新增复杂分支。
+- **P2**：若输出是基线分数的单调复制，或至少三 seed 不改善任何风险/校准指标，则停止该机制。
+- **P3**：若 P1 无固定表示错配证据、candidate recall ceiling 太低、收益仅来自参数量，或 k-cost 曲线无实用区间，则不解锁/立即停止。
+- **P4**：若无压缩 temporal modeling 没有机制收益，则不把 token reduction 的速度收益解释为检索创新；若效率不形成 Pareto 改善则停止。
 
-**影响**：继续硬推远难负样本会伤害 Top-1 边界；但不能用语义相似度把跨视频样本改成软正例，否则会破坏 trusted-v1 的可审计正例定义。
+## 6. 固定实验顺序
 
-**索引**：R-sap-10、R-unc-12。
+1. 完成 P0 代码契约和可信 OpenAI CLIP WTI-only baseline。
+2. 冻结 P0 checkpoint，只做 P1 只读诊断。
+3. 根据 P1 预注册一个单变量 P2 假设，先单 seed 筛选，再以同一组至少三 seed 复核。
+4. 只有 P1 明确支持 candidate-conditioned correction 时才进入 P3；否则保持锁定。
+5. P4 可在 P0 后单独开展，但不与 P2/P3 共用首轮实验。
+6. EVA 只作匹配 backbone control：在方法稳定后，以相同 split、batch、steps 和 selection 检查外部有效性，不作为创新点。
+7. 所有方法与超参数冻结后，才执行一次 JSFusion 1K 显式盲测。
 
-**建议**：主训练只按精确 `video_id` 构造多正例矩阵，并使用双向多正例 InfoNCE。SAP/prob score 与 pair uncertainty 最多用于只读错误分析或校准报告，不得修改正例矩阵或主检索 target。
+## 7. 已关闭路线
 
-### P7. 当前 dead knobs 与历史兼容参数会污染实验解释
-
-**现象**：`w_uncertainty_reg`、`w_query_sim`、`fusion_mode` 等在当前主排序路径下不影响 final ranking，或仅作兼容保留。
-
-**影响**：继续 sweep 这些参数会浪费实验预算，并污染因果解释。
-
-**索引**：R-main-5、R-unc-14。
-
-**建议**：实验表中标记为 inactive/compatibility；若保留 `w_uncertainty_reg`，必须明确“当前未接入 loss”。不要把它解释为有效 causal knob。
-
-## 3. 建议改进路线
-
-### Phase 0：实验卫生与归因基线（已完成并止损）
-
-**目标**：确保后续任何提升都能归因到 backbone 或新 scoring 设计，而不是辅助项混杂。
-
-**已完成**：
-
-1. legacy loss-zero hygiene 历史基线已完成，T2V R@1 = 48.2；该运行未验证概率辅助模块在 forward 中被绕过，不是 trusted-v1 的纯 WTI 基线。
-2. UACL 第 4 epoch 四组结果已归档为 49.3、49.2、49.4、49.0；seed 43 的单次 49.4 仅比 49.3 高 0.1，同配置 seed 42 为 49.2，不构成跨配置、跨种子的稳定增益。
-3. UACL 路线已冻结，不再追加 epoch、sweep 或同机制 repeat。
-4. `w_uncertainty_reg` 等 dead knobs 已标记为 inactive/compatibility，不再 sweep。
-
-**结论**：Phase 0 的旧路线排查已关闭；48.2 是 legacy hygiene 历史参考，不是 trusted-v1 基线。真正的 hygiene WTI-only forward 绕过已在当前 trusted-v1 P0 实施，须用 spy/mock 测试验证 SpatialEnhancer、SAP、PIENet、不确定性与采样路径均未调用。
-
-**索引**：R-main-6、R-unc-14。
-
-### Phase 1：验证 SAP/概率均值是否有检索价值（已完成并止损）
-
-**目标**：先回答 `mu_video` / SAP anchors 本身有没有排序价值。
-
-**已完成实验**：
-
-| 实验 | Final score | 目的 |
-|------|-------------|------|
-| E1.0 | `WTI` | legacy hygiene baseline = 48.2 |
-| E1.1 | `WTI + lambda * (mu_t @ mu_v)` | global `prob_mu` 正负分数 gap 接近 0，无稳定收益 |
-| E1.2 | `WTI + lambda * AnchorWTI(text_tokens, anchors)` | AnchorWTI 正负分数 gap 接近 0，无稳定收益 |
-
-**结论**：Phase 1 已满足停止条件并关闭；不再扩展 global score 融合或 AnchorWTI sweep。
-
-**索引**：R-main-7、R-sap-7、R-sap-11、R-unc-14。
-
-### Phase 2：Query-conditioned SAP（已完成并止损）
-
-**目标**：把 SAP 从 video-level pooling 改成 query-conditioned matching。
-
-**推荐设计**：
-
-```text
-(text_i, anchors_jk)
-→ gate_ijk
-→ v_ij = sum_k gate_ijk * anchor_jk
-→ sap_logits_ij = cos(text_i, v_ij)
-→ final_logits = wti_logits + lambda * sap_logits
-```
-
-**验证点**：
-
-- query-anchor gate entropy；
-- 正确 Top-1 与错误 Top-1 的 gate 分布差异；
-- anchor pairwise cosine；
-- 是否需要 allgather anchors。
-
-**停止条件**：如果 query-conditioned SAP 不优于 global SAP，说明 query gate 没学到有效选择，不应继续加复杂 uncertainty head。
-
-**2026-07-09 更新**：已完成 `FINAL_SCORE_MODE=wti_qc_sap, lambda_qc_sap=0.1` 的 hygiene 止损验证。
-ckpt2 eval T2V R@1 = 47.9，低于 hygiene WTI-only 48.2 和 B1-only v2 49.3；训练诊断中
-`qc_sap_gap` 长期接近 0，正负样本 gate entropy/top1 mass 无有效差异。结论：Phase 2 不继续扩展，
-不做 hard top-k anchor selection，也不继续叠 query-conditioned uncertainty；后续先执行 trusted-v1 P0，
-只有在 OpenAI hygiene 基线建立后才进行 backbone 对照。
-
-**索引**：R-sap-8、R-sap-11。
-
-### Phase 3：Closed-form uncertainty penalty
-
-**目标**：不用 Monte Carlo sampling 先验证 variance 是否有排序价值。
-
-**推荐设计**：
-
-```text
-prob_logits = cos(mu_t, mu_v)
-unc_ij = mean(exp(logvar_t_i)) + mean(exp(logvar_v_j))
-final_logits = wti_logits + lambda * prob_logits - beta * unc_ij
-```
-
-**注意**：这一步不是最终方法，只是诊断当前 variance 是否有用。若 penalty 降低指标，说明当前 variance 没有校准，先不要把它写成正向贡献。
-
-**索引**：R-main-3、R-unc-10、R-unc-14。
-
-### Phase 4：Pair-level uncertainty head
-
-**目标**：把不确定性从 `u_video` 升级为 `u(text_i, video_j)`。
-
-**推荐输入**：
-
-```text
-wti_logits_ij
-sap/prob_logits_ij
-|mu_t_i - mu_v_j|
-mu_t_i * mu_v_j
-var_t_i
-var_v_j
-top1-top2 margin or row entropy
-```
-
-**输出用途**：
-
-- 调整 final score：`final_logits = base_logits - beta * u_ij`；
-- 识别 false negative；
-- 做 calibration 分析。
-
-**验证点**：
-
-- wrong top1 的 uncertainty 是否高于 correct top1；
-- uncertainty 与 GT rank / margin 的相关性；
-- high-similarity cross-video 样本是否呈现低置信；该结果只作诊断，不得据此改写正例标签。
-
-**索引**：R-main-8、R-unc-9、R-unc-13。
-
-### Phase 5：Evidential ranking 与 calibration
-
-**目标**：让 evidence 对应 batch/ranking 决策，而不是旁路 `ev_sim`。
-
-**推荐设计**：
-
-```text
-evidence_ij = softplus(final_logits_ij)
-alpha_ij = evidence_ij + 1
-prob_ij = alpha_ij / sum_j alpha_ij
-uncertainty_i = K / sum_j alpha_ij
-```
-
-若后续恢复该方向，evidential/calibration 只能作为不改变正例矩阵的辅助诊断目标；主检索损失仍固定为按精确 `video_id` 构造的双向多正例 InfoNCE。
-
-**前置条件**：必须先有稳定的 `final_logits`，否则 evidence loss 仍是旁路正则。
-
-**索引**：R-main-4、R-unc-11。
-
-### Phase 6：Semantic soft-target 路线（已终止）
-
-**终止原因**：SAP/prob 相似度不能证明跨视频样本是正例；使用 `Y_soft`、soft positive、伪标签或语义 BCE target 会让正例定义不可审计，并与 trusted-v1 冲突。
-
-**固定约束**：正例矩阵仅由相同 `video_id` 构造，主检索目标固定为双向多正例 InfoNCE。语义近邻和疑似 false negative 只进入只读诊断报告，不参与标签生成或 loss target。
-
-**索引**：R-sap-10、R-unc-12。
-
-## 4. 推荐执行顺序
-
-1. **Phase 0 已完成**：legacy hygiene=48.2；UACL epoch-4 已归档并冻结。
-2. **Phase 1 已完成**：global `prob_mu` 与 AnchorWTI 无稳定收益，停止继续 sweep。
-3. **Phase 2 已完成**：query-conditioned SAP 未证明收益，停止 SAP gate/top-k/uncertainty 复杂化。
-4. **当前先运行 trusted-v1 验证**：确认固定 8500/500 split、独立 test eval、多正例 InfoNCE、WTI padding 修复，以及真正绕过 SpatialEnhancer/SAP/概率分支/PIENet/不确定性/采样张量构造的 hygiene 前向；在代码与绕过测试完成前不启动新的可信主线实验。
-5. **随后做匹配 backbone 对照**：用同一 seed、GPU 数、`batch_size`、`gradient_accumulation_steps` 和每次 forward 全局对比 batch，成对运行 OpenAI CLIP 与 EVA02-CLIP-B/16。
-6. **首要判断依据**：EVA 相对同配置 OpenAI CLIP 的提升；legacy 48.2/49.3 只作历史参考。
-7. **Phase 6 已终止**：不得恢复语义 soft target、伪标签或 soft-positive BCE。
-
-## 5. 不建议继续投入的方向
-
-- 不建议继续 hard negative 主线或同机制 repeat。
-- 不建议继续 UACL sweep/repeat；epoch-4 已归档，单次 49.4 属噪声级结果，路线已冻结。
-- 不建议继续 sweep `w_uncertainty_reg`、`w_query_sim`、`fusion_mode` 等当前无效 causal knobs。
-- 不建议在 `final score = wti_logits` 不变的情况下继续堆 MIL/evidential/UACL 辅助项。
-- 不建议在当前 scalar-expanded `logsigma` 上直接写强不确定性贡献，除非先证明其校准性。
-- 禁止使用语义相似度构造 soft positive、伪标签、`Y_soft` 或 BCE/soft-label 主检索目标。
-
-## 6. 给后续 agent 的最小任务包
-
-如果只做一轮最小改进，建议执行：
-
-1. 先按已实施设计验证 `trusted-v1`，包括 dataloader/loss、test 隔离和真正的 hygiene WTI-only 前向绕过。
-2. 以 seed 42 和完全匹配的设备/batch 配置重跑 OpenAI CLIP trusted hygiene WTI-only 基线。
-3. 仅在同一协议、同一设备/batch 配置下运行 EVA02-CLIP-B/16 配对实验。
-4. 以 EVA 相对匹配 OpenAI CLIP 的差值作为首要判断依据，48.2/49.3 只作 legacy 历史参考。
-5. 不恢复已关闭的 UACL、global score、AnchorWTI、QC-SAP 或 semantic soft-target sweep。
+| 已关闭路线 | 当前状态 | 追溯方式 |
+|---|---|---|
+| SAP 及其依赖链 | 科研路线已终止，代码删除待已批准清理计划完成 | 不再恢复；历史细节仅见 Git |
+| Hard negative 主线 | 已终止 | 只保留独立诊断入口，不再 sweep 或 repeat |
+| UACL 主线及活动接口 | 主线已终止；活动接口待 Plan B 删除 | 不恢复；历史细节仅见 Git |
+| Semantic soft target / 伪标签 | 禁止 | 正例只由精确 `video_id` 定义 |
