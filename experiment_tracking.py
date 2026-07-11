@@ -150,6 +150,14 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "pack_seed": getattr(args, "hard_negative_pack_seed", None),
         "loss_weight": getattr(args, "w_hard_negative", 0.0),
     }
+    workers = int(getattr(args, "num_thread_reader", 0))
+    runtime = {
+        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
+        "num_dataloader_workers_per_rank": workers,
+        "prefetch_factor": int(getattr(args, "prefetch_factor", 2)),
+        "pin_memory": bool(getattr(args, "pin_memory", False)),
+        "persistent_workers": workers > 0,
+    }
     return {
         "protocol_version": split.get("protocol_version") if split else None,
         "git": git_state,
@@ -159,6 +167,7 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "backbone": backbone,
         "data": data,
         "batch": batch_semantics,
+        "runtime": runtime,
         "hard_negative": hard_negative,
     }
 

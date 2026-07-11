@@ -73,6 +73,9 @@ def _args(tmp_path):
         data_path="/data/MSRVTT_v2.json",
         split_manifest="dataloaders/splits/msrvtt_trusted_v1_seed42.json",
         tqfs_cache_dir="cache_dir/tqfs/test",
+        num_thread_reader=8,
+        prefetch_factor=4,
+        pin_memory=torch.cuda.is_available(),
         use_hard_negative_packing=False,
         use_explicit_hard_negative_loss=False,
         hard_negative_path="cache_dir/hard_negatives/msrvtt_train_hardneg_clean.json",
@@ -81,7 +84,8 @@ def _args(tmp_path):
     )
 
 
-def test_manifest_contains_protocol_code_data_and_backbone(tmp_path):
+def test_manifest_contains_protocol_code_data_and_backbone(tmp_path, monkeypatch):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1,2,4")
     payload = build_experiment_manifest(
         _args(tmp_path),
         split_summary={"protocol_version": "trusted-v1", "manifest_sha256": "abc"},
@@ -105,7 +109,15 @@ def test_manifest_contains_protocol_code_data_and_backbone(tmp_path):
         "backbone",
         "data",
         "batch",
+        "runtime",
         "hard_negative",
+    }
+    assert payload["runtime"] == {
+        "cuda_visible_devices": "0,1,2,4",
+        "num_dataloader_workers_per_rank": 8,
+        "prefetch_factor": 4,
+        "pin_memory": torch.cuda.is_available(),
+        "persistent_workers": True,
     }
     assert "final_score_mode" not in payload
     assert "losses" not in payload

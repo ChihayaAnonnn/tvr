@@ -1320,6 +1320,7 @@ def main():
 
     args = set_seed_logger(args)
     device, n_gpu = init_device(args, args.local_rank)
+    args.pin_memory = torch.cuda.is_available()
 
     tokenizer = ClipTokenizer()
 
