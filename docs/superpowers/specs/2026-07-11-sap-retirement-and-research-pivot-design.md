@@ -34,8 +34,9 @@ run_train_msrvtt_bg.sh
 1. 形成一份可长期引用的四篇论文综合分析，区分论文事实、代码事实、作者主张和本项目推论。
 2. 更新 `docs/project/RESEARCH_ISSUES_AND_ROADMAP.md`，使其成为新决策下唯一有效的科研事实源。
 3. 从活跃主训练链路中彻底删除 SAP 及依赖其输出的旧概率、不确定性、打分、日志和 CLI 路径。
-4. 保留并强化 trusted-v1、双向多正例 InfoNCE、WTI 与 test 隔离构成的可信实验基座。
-5. 把后续创新目标改为可证伪的研究假设，而不是无条件追逐所有数据集 SOTA。
+4. 删除 SAP 专属文档，以及混合文档中围绕 SAP 架构、实验、消融和未来改进的段落。
+5. 保留并强化 trusted-v1、双向多正例 InfoNCE、WTI 与 test 隔离构成的可信实验基座。
+6. 把后续创新目标改为可证伪的研究假设，而不是无条件追逐所有数据集 SOTA。
 
 ### 2.2 非目标
 
@@ -56,15 +57,19 @@ run_train_msrvtt_bg.sh
 | `docs/project/RESEARCH_ISSUES_AND_ROADMAP.md` | 项目已经接受的结论、当前问题、停止条件和实验顺序 | 是 |
 | `docs/README.md` | 提供入口并解释上述两份文档的关系 | 否 |
 
-`AGENTS.md` 也必须同步当前稳定事实：项目描述不再以 SAP 为核心，删除 SAP 文件入口和“视频概率分支使用 SAP 输出”等过期说明。`AGENTS.md` 只保留执行约束和稳定实现事实，不承载详细论文讨论。
+`AGENTS.md` 也必须同步当前稳定事实：删除项目描述、当前决策、代码入口和稳定事实中的全部 SAP 引用，改为 WTI-only 可信基线与未来 pair-level uncertainty/multimodal alignment 的中性表述。`AGENTS.md` 只保留执行约束和稳定实现事实，不承载详细论文讨论。
 
 文档迁移还必须处理当前已发现的结构问题：
 
-- 删除 roadmap 中把历史 `report.md`、`report_SAP.md`、`report_uncertainty.md` 当作当前口径入口的索引，改为 roadmap 内部的证据登记和综合分析文档锚点；历史报告即使仍在 Git 中，也不再拥有决策权。
+- 删除 `report_SAP.md`。它完全服务于已经终止的 SAP 架构、消融和 v2 设计，不迁移正文。
+- 删除 `report.md` 和 `report_uncertainty.md`。两者描述的是已经废弃的 SAP/旧概率耦合实现；其中仍成立的 SAP-independent 原则只能重新提炼为“pair-level、进入最终排序、需要校准”等中性结论，写入新综合分析或 roadmap，不能复制旧实现段落。
+- Roadmap 删除 SAP 的结构说明、问题清单、实验表、消融建议和未来扩展方案，只在“已关闭路线”表中保留一条墓碑式记录：`SAP 及其依赖链已删除，不再恢复；历史细节见 Git`。这是当前文档允许保留的唯一 SAP 决策记录。
 - 消除 roadmap 中两个“P0”的编号冲突；P0 只表示可信 WTI-only 基线，其余研究问题使用独立编号。
-- 把 legacy hygiene、global probabilistic score、AnchorWTI、QC-SAP 压缩为“已关闭路线登记”，不再与当前阶段并列。
+- legacy hygiene 的协议教训可用中性语言保留；global probabilistic score、AnchorWTI、QC-SAP 等所有 SAP 派生变体统一收进同一条墓碑记录，不再单列名称、结果或未来建议。
 - `docs/analysis/query_branch_analysis.md` 保留为历史结构分析，但必须标明其中旧指标和候选改法不是当前决策。
 - `docs/README.md` 不继续链接当前工作树中已经不存在的文档，也不把临时设计规格列为长期科研入口。
+
+新论文综合分析不复述 SAP 的网络结构、实现细节或消融路线；它只从项目决策角度说明“旧的 sample/video-level 辅助不确定性路线已停止”，并直接讨论新的研究要求。设计规格在实施完成后按既有惯例从当前工作树归档，由 Git 历史保留，因此不会成为长期 SAP 文档入口。
 
 ## 4. 四篇论文综合分析设计
 
@@ -204,7 +209,7 @@ TempMe 式 temporal modeling 或 token merging 作为独立支线。它不能与
 | CLI/脚本 | `final_score_mode` 及三个非 WTI mode、lambda 参数、QC-SAP 温度、旧概率/不确定性/UACL 参数和环境变量 |
 | 日志 | prob/SAP/QC/evidential/UACL chain 字段、TSV 列和控制台摘要 |
 | 测试 | 只验证上述退役行为的测试；替换为“这些接口不存在”和 WTI-only 数据流测试 |
-| 文档 | 把 SAP 未来计划改为历史止损证据；删除把其描述为当前实现入口的说明 |
+| 文档 | 删除 `report_SAP.md`、`report.md`、`report_uncertainty.md`；删除 Roadmap、AGENTS 和其他当前文档中的 SAP 结构/实验/消融/未来方案；Roadmap 只留一条“已删除、不得恢复”的墓碑记录 |
 
 `final_score_mode` 不降级为只有一个 `wti` choice，而是从支持 CLI 中删除。最终分数在代码中固定为 WTI logits，避免一个无实际选择空间的兼容参数继续污染实验记录。
 
@@ -281,18 +286,27 @@ text/video inputs
 /home/xujie/miniconda3/envs/ret/bin/ruff check <本次修改的 Python 文件>
 ```
 
-同时使用限定范围的 `rg` 检查支持代码、脚本和当前文档中不再存在活跃 SAP/QC-SAP/旧概率参数引用。历史止损段落允许出现 SAP 名称，但必须明确标为“已终止/已删除”。不得运行根目录无范围的 `pytest -q`，不得启动长期训练。
+同时使用限定范围的 `rg` 检查支持代码、脚本和当前长期文档。验收时：
+
+- 活跃代码、脚本、测试、`AGENTS.md`、`docs/README.md` 和分析文档不得出现 SAP/QC-SAP/AnchorWTI 及旧概率参数引用；
+- Roadmap 只允许一条 SAP 墓碑记录，不允许保留结构、实验、消融或未来改进段落；
+- 本设计规格在实施期间可出现 SAP，实施完成后按项目既有归档惯例从当前工作树删除，以 Git 历史追溯；
+- `research_refs/` 不纳入扫描和提交。
+
+不得运行根目录无范围的 `pytest -q`，不得启动长期训练。
 
 ## 10. 实施顺序
 
 1. 编写四篇论文综合分析，核对 PDF、补充材料和已有代码。
-2. 更新科研 SSOT、`docs/README.md` 和 `AGENTS.md`，先固定新决策与边界。
-3. 为清理后的模型接口、CLI、checkpoint 和日志语义添加失败测试。
-4. 删除 SAP 及活跃主路径的依赖链，收敛为 WTI 数据流。
-5. 删除或改写旧测试、脚本参数和跟踪字段。
-6. 运行 targeted tests、完整 `tests/`、ruff 和引用扫描。
-7. 只向用户提供 P0 基线的单行训练命令，由用户手动启动；本任务本身不运行训练。
-8. P0 结果写回 SSOT 后，再为新的 pair-level uncertainty 单独进行 brainstorming、设计和实施计划。
+2. 把仍成立的 SAP-independent 科研原则重新表述到新综合分析和 SSOT，不复制旧实现段落。
+3. 删除三个根级历史报告，清理 Roadmap、`AGENTS.md`、`docs/README.md` 和其他当前文档中的 SAP 内容，仅在 Roadmap 留一条墓碑记录。
+4. 为清理后的模型接口、CLI、checkpoint 和日志语义添加失败测试。
+5. 删除 SAP 及活跃主路径的依赖链，收敛为 WTI 数据流。
+6. 删除或改写旧测试、脚本参数和跟踪字段。
+7. 运行 targeted tests、完整 `tests/`、ruff 和引用扫描。
+8. 归档本设计规格，使当前工作树不再保留 SAP 专属设计文档。
+9. 只向用户提供 P0 基线的单行训练命令，由用户手动启动；本任务本身不运行训练。
+10. P0 结果写回 SSOT 后，再为新的 pair-level uncertainty 单独进行 brainstorming、设计和实施计划。
 
 ## 11. 验收条件
 
@@ -300,8 +314,10 @@ text/video inputs
 
 - 四篇论文均覆盖创新、实验设计、结果、局限和可研究点。
 - 论文数字能追溯到具体表格；代码结论能追溯到具体实现。
-- roadmap 明确 SAP 已终止并删除，backbone 只作控制变量，SOTA 不是唯一目标。
-- roadmap 给出新阶段、停止条件和评价指标，不保留互相冲突的旧 SAP 扩展建议。
+- `report_SAP.md`、`report.md`、`report_uncertainty.md` 已从当前工作树删除，Git 历史承担追溯职责。
+- Roadmap 仅用一条墓碑记录声明 SAP 已删除且不得恢复；除此之外不再保留 SAP 结构、实验、消融或扩展段落。
+- `AGENTS.md`、`docs/README.md` 和长期分析文档不再把 SAP 作为当前组件、历史研究入口或候选方向。
+- Roadmap 明确 backbone 只作控制变量、SOTA 不是唯一目标，并给出新阶段、停止条件和评价指标。
 
 ### 代码
 
