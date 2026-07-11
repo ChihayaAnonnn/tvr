@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -13,6 +14,10 @@ from pathlib import Path
 from tqdm import tqdm
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MINIMUM_CACHE_FREE_BYTES = 50 * 1024**3
+DEFAULT_CACHE_DIR = (
+    Path.home() / ".cache/uatvr/tqfs/msrvtt_trusted_v1_f1_m8_r224"
+)
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -39,9 +44,7 @@ def parse_args():
     )
     parser.add_argument(
         "--cache-dir",
-        default=str(
-            PROJECT_ROOT / "cache_dir/tqfs/msrvtt_trusted_v1_f1_m8_r224"
-        ),
+        default=str(DEFAULT_CACHE_DIR),
     )
     parser.add_argument("--feature-framerate", type=int, default=1)
     parser.add_argument("--max-frames", type=int, default=8)
@@ -54,6 +57,17 @@ def parse_args():
         help="Optional smoke-test limit; omit to build the complete train+val cache.",
     )
     return parser.parse_args()
+
+
+def ensure_cache_space(cache_dir, minimum_free_bytes=MINIMUM_CACHE_FREE_BYTES):
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    free_bytes = shutil.disk_usage(cache_dir).free
+    if free_bytes < minimum_free_bytes:
+        raise RuntimeError(
+            "TQFS cache filesystem requires at least 50 GiB free; "
+            f"available={free_bytes / 1024**3:.1f} GiB path={cache_dir}"
+        )
 
 
 def _resolve_video_path(features_path, video_id):
@@ -130,6 +144,7 @@ def main():
         "max_frames": args.max_frames,
         "image_resolution": args.image_resolution,
     }
+    ensure_cache_space(config["cache_dir"])
     TQFSFrameCache(
         config["cache_dir"],
         features_path=config["features_path"],
