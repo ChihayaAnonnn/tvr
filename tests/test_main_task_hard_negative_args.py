@@ -117,6 +117,34 @@ def test_get_args_parses_explicit_hard_negative_flags(monkeypatch):
     assert args.w_hard_negative == 0.07
 
 
+@pytest.mark.parametrize(
+    ("flag", "value", "message"),
+    [
+        ("--num_thread_reader", "-1", "--num_thread_reader must be non-negative"),
+        ("--prefetch_factor", "0", "--prefetch_factor must be positive"),
+    ],
+)
+def test_dataloader_cli_rejects_invalid_worker_settings(
+    monkeypatch, flag, value, message
+):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--do_train",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
+            flag,
+            value,
+        ],
+    )
+
+    with pytest.raises(ValueError, match=message):
+        get_args()
+
+
 def test_get_args_accepts_eva_clip_backbone_options(monkeypatch):
     monkeypatch.setattr(
         "sys.argv",

@@ -125,6 +125,12 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
 
     parser.add_argument("--num_thread_reader", type=int, default=1, help="")
+    parser.add_argument(
+        "--prefetch_factor",
+        type=int,
+        default=2,
+        help="Number of batches prefetched by each DataLoader worker.",
+    )
     parser.add_argument("--lr", type=float, default=0.0001, help="initial learning rate")
     parser.add_argument("--epochs", type=int, default=20, help="upper epoch limit")
     parser.add_argument("--batch_size", type=int, default=256, help="batch size")
@@ -370,6 +376,10 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         raise ValueError("At least one of `do_train` or `do_eval` must be True.")
     if args.clip_visual_checkpoint_layers < 0:
         raise ValueError("--clip_visual_checkpoint_layers must be non-negative")
+    if args.num_thread_reader < 0:
+        raise ValueError("--num_thread_reader must be non-negative")
+    if args.prefetch_factor <= 0:
+        raise ValueError("--prefetch_factor must be positive")
 
     args.requested_effective_batch_size = args.batch_size
     if args.batch_size % args.gradient_accumulation_steps:

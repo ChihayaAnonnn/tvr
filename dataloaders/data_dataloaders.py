@@ -25,7 +25,7 @@ def _video_loader_kwargs(args):
     if workers > 0:
         kwargs.update(
             persistent_workers=True,
-            prefetch_factor=2,
+            prefetch_factor=int(args.prefetch_factor),
             worker_init_fn=_configure_video_worker,
         )
     return kwargs

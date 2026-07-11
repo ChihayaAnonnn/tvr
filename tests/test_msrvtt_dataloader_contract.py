@@ -421,13 +421,24 @@ def test_train_builder_passes_manifest_and_uses_distributed_sampler(
 
 def test_video_loader_worker_settings_limit_oversubscription():
     kwargs = builders._video_loader_kwargs(
-        SimpleNamespace(num_thread_reader=8)
+        SimpleNamespace(num_thread_reader=8, prefetch_factor=4)
     )
 
     assert kwargs["num_workers"] == 8
     assert kwargs["persistent_workers"] is True
-    assert kwargs["prefetch_factor"] == 2
+    assert kwargs["prefetch_factor"] == 4
     assert kwargs["worker_init_fn"] is builders._configure_video_worker
+
+
+def test_video_loader_zero_workers_omits_multiprocessing_options():
+    kwargs = builders._video_loader_kwargs(
+        SimpleNamespace(num_thread_reader=0, prefetch_factor=4)
+    )
+
+    assert kwargs["num_workers"] == 0
+    assert "persistent_workers" not in kwargs
+    assert "prefetch_factor" not in kwargs
+    assert "worker_init_fn" not in kwargs
 
 
 def test_tqfs_dependency_fails_fast_instead_of_silent_fallback(monkeypatch):
