@@ -38,8 +38,10 @@ from scripts.build_msrvtt_hard_negatives import (  # noqa: E402
     STOPWORDS,
     TOKEN_RE,
 )
+from scripts.diagnose_msrvtt_hard_negative_runtime import (  # noqa: E402
+    validate_trusted_diagnostic_inputs,
+)
 
-DEFAULT_CKPT = "ckpts/ckpt_msrvtt_20260617_b1only_v2_repeat1/pytorch_model.bin.4"
 DEFAULT_DATA_ROOT = "/data2/hxj/data/MSRVTT"
 DEFAULT_OUTPUT = "cache_dir/hard_negatives/msrvtt_train_hardneg_model_mined_b1_e4.json"
 
@@ -84,10 +86,31 @@ def parse_args() -> argparse.Namespace:
         description="Build an MSRVTT hard-negative map from a trained retrieval checkpoint.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--checkpoint", default=DEFAULT_CKPT)
+    parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
-    parser.add_argument("--train_csv", default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_train.9k.csv")
-    parser.add_argument("--val_csv", default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_JSFUSION_test.csv")
+    parser.add_argument(
+        "--train_csv",
+        default=str(PROJECT_ROOT / "data/generated/msrvtt_trusted_v1/train.csv"),
+    )
+    parser.add_argument(
+        "--source_train_csv",
+        default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_train.9k.csv",
+    )
+    parser.add_argument(
+        "--test_csv",
+        default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_JSFUSION_test.csv",
+    )
+    parser.add_argument(
+        "--split_manifest",
+        default=str(
+            PROJECT_ROOT
+            / "dataloaders/splits/msrvtt_trusted_v1_seed42.json"
+        ),
+    )
+    parser.add_argument(
+        "--val_csv",
+        default=str(PROJECT_ROOT / "data/generated/msrvtt_trusted_v1/val.csv"),
+    )
     parser.add_argument("--data_path", default=f"{DEFAULT_DATA_ROOT}/annotation/MSRVTT_v2.json")
     parser.add_argument("--features_path", default=f"{DEFAULT_DATA_ROOT}/videos/compressed_videos/msrvtt_224_12fps/")
     parser.add_argument("--top_k", type=int, default=20, help="Inspect top-K model-ranked train videos per caption.")
@@ -403,6 +426,9 @@ def build_meta(args: argparse.Namespace) -> dict:
         "task": "msrvtt_model_mined_hard_negative",
         "checkpoint": os.path.abspath(args.checkpoint),
         "train_csv": os.path.abspath(args.train_csv),
+        "source_train_csv": os.path.abspath(args.source_train_csv),
+        "test_csv": os.path.abspath(args.test_csv),
+        "split_manifest": os.path.abspath(args.split_manifest),
         "val_csv": os.path.abspath(args.val_csv),
         "data_path": os.path.abspath(args.data_path),
         "features_path": os.path.abspath(args.features_path),
@@ -762,6 +788,7 @@ def main() -> int:
     import torch
 
     args = parse_args()
+    validate_trusted_diagnostic_inputs(args)
     if args.top_k < 1:
         raise ValueError("--top_k must be >= 1")
     if args.min_rank < 1:

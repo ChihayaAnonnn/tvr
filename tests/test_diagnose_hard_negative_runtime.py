@@ -1,15 +1,222 @@
+import argparse
+import sys
 from argparse import Namespace
+from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 
 import scripts.diagnose_msrvtt_hard_negative_runtime as runtime_diagnostics
 from scripts.diagnose_msrvtt_hard_negative_runtime import (
     RuntimeSample,
+    build_task_args,
     compute_checkpoint_scores,
     compute_rank,
     summarize_runtime_rows,
 )
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        [],
+        ["--baseline_checkpoint", "baseline.bin"],
+        ["--target_checkpoint", "target.bin"],
+    ],
+)
+def test_parse_args_requires_both_checkpoints(argv, monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["prog", *argv])
+
+    with pytest.raises(SystemExit) as exc_info:
+        runtime_diagnostics.parse_args()
+
+    assert exc_info.value.code == 2
+
+
+def test_parse_args_defaults_to_generated_trusted_split(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--baseline_checkpoint",
+            "baseline.bin",
+            "--target_checkpoint",
+            "target.bin",
+        ],
+    )
+
+    args = runtime_diagnostics.parse_args()
+
+    assert args.train_csv.endswith("data/generated/msrvtt_trusted_v1/train.csv")
+    assert args.val_csv.endswith("data/generated/msrvtt_trusted_v1/val.csv")
+    assert "JSFUSION_test" not in args.val_csv
+    assert args.source_train_csv.endswith("csv/MSRVTT_train.9k.csv")
+    assert args.test_csv.endswith("csv/MSRVTT_JSFUSION_test.csv")
+    assert args.split_manifest.endswith(
+        "dataloaders/splits/msrvtt_trusted_v1_seed42.json"
+    )
+
+
+def test_build_task_args_uses_supported_deterministic_protocol_args(tmp_path):
+    cli_args = argparse.Namespace(
+        output_dir=str(tmp_path / "out"),
+        train_csv=str(tmp_path / "train.csv"),
+        source_train_csv=str(tmp_path / "source.csv"),
+        test_csv=str(tmp_path / "test.csv"),
+        split_manifest=str(tmp_path / "manifest.json"),
+        val_csv=str(tmp_path / "val.csv"),
+        data_path=str(tmp_path / "annotation.json"),
+        features_path=str(tmp_path / "videos"),
+    )
+
+    args = build_task_args(cli_args, "checkpoint.bin")
+
+    assert args.train_csv == cli_args.train_csv
+    assert args.source_train_csv == cli_args.source_train_csv
+    assert args.test_csv == cli_args.test_csv
+    assert args.split_manifest == cli_args.split_manifest
+    assert args.val_csv == cli_args.val_csv
+    assert args.eval_split == "val"
+    assert args.experiment_profile == "hygiene"
+    for retired_name in (
+        "final_score_mode",
+        "uncertainty_mode",
+        "n_video_embeddings",
+        "w_evidential",
+    ):
+        assert not hasattr(args, retired_name)
+
+
+def test_trusted_diagnostic_gate_rejects_non_internal_val_csv(
+    tmp_path, monkeypatch
+):
+    from dataloaders import msrvtt_protocol
+
+    monkeypatch.setattr(
+        msrvtt_protocol,
+        "load_trusted_manifest",
+        lambda _path: {
+            "train_video_ids": ["train1"],
+            "val_video_ids": ["video1"],
+        },
+    )
+    monkeypatch.setattr(
+        msrvtt_protocol,
+        "validate_trusted_manifest",
+        lambda *_args, **_kwargs: None,
+    )
+    args = argparse.Namespace(
+        split_manifest="manifest.json",
+        train_csv=str(tmp_path / "train.csv"),
+        source_train_csv="source.csv",
+        data_path="annotation.json",
+        test_csv="test.csv",
+    )
+    Path(args.train_csv).write_text(
+        "video_id\ntrain1\n", encoding="utf-8"
+    )
+    wrong = tmp_path / "wrong.csv"
+    wrong.write_text(
+        "video_id,sentence\nvideo2,caption\n", encoding="utf-8"
+    )
+    with pytest.raises(
+        ValueError, match="exactly match trusted-v1 internal val"
+    ):
+        runtime_diagnostics.validate_trusted_diagnostic_inputs(
+            args, scored_csv=wrong
+        )
+
+    valid = tmp_path / "valid.csv"
+    valid.write_text(
+        "video_id,sentence\nvideo1,caption\n", encoding="utf-8"
+    )
+    runtime_diagnostics.validate_trusted_diagnostic_inputs(
+        args, scored_csv=valid
+    )
+
+    Path(args.train_csv).write_text(
+        "video_id\ntrain1\nvideo1\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="exactly match trusted-v1 train"):
+        runtime_diagnostics.validate_trusted_diagnostic_inputs(
+            args, scored_csv=valid
+        )
+
+
+def test_main_runs_trusted_gate_before_dataset_or_checkpoint_access(monkeypatch):
+    events = []
+
+    class StopAtCheckpoint(RuntimeError):
+        pass
+
+    args = Namespace(
+        device="cpu",
+        hard_negative_path="mapping.json",
+        max_anchors=1,
+        seed=42,
+        max_rank_videos=1,
+        baseline_name="baseline",
+        target_name="target",
+        baseline_checkpoint="baseline.bin",
+        target_checkpoint="target.bin",
+    )
+    monkeypatch.setattr(
+        runtime_diagnostics,
+        "parse_args",
+        lambda: args,
+    )
+    monkeypatch.setattr(
+        runtime_diagnostics,
+        "validate_trusted_diagnostic_inputs",
+        lambda _args: events.append("gate"),
+        raising=False,
+    )
+
+    class FakeDataset:
+        def __len__(self):
+            return 1
+
+    def build_dataset(_args):
+        events.append("dataset")
+        return FakeDataset()
+
+    monkeypatch.setattr(
+        runtime_diagnostics,
+        "build_msrvtt_train_dataset",
+        build_dataset,
+    )
+    monkeypatch.setattr(
+        runtime_diagnostics,
+        "load_hard_mapping",
+        lambda _path, _length: [0],
+    )
+    monkeypatch.setattr(
+        runtime_diagnostics,
+        "select_runtime_samples",
+        lambda *_args, **_kwargs: [object()],
+    )
+    monkeypatch.setattr(
+        runtime_diagnostics,
+        "build_video_pool",
+        lambda *_args, **_kwargs: ["video1"],
+    )
+
+    def stop_at_checkpoint(*_args, **_kwargs):
+        events.append("checkpoint")
+        raise StopAtCheckpoint
+
+    monkeypatch.setattr(
+        runtime_diagnostics,
+        "compute_checkpoint_scores",
+        stop_at_checkpoint,
+    )
+
+    with pytest.raises(StopAtCheckpoint):
+        runtime_diagnostics.main()
+
+    assert events == ["gate", "dataset", "checkpoint"]
 
 
 def test_compute_rank_uses_one_based_descending_rank():

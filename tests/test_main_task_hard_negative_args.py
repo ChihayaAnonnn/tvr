@@ -26,12 +26,77 @@ from main_task_retrieval import (  # noqa: E402
     train_epoch,
 )
 
+RETIRED_CLI_CASES = (
+    ("--gate_log_interval", "10"),
+    ("--gate_log_dir", "/tmp/gates"),
+    ("--log_moe_weights", None),
+    ("--moe_log_dir", "/tmp/moe"),
+    ("--use_mil", None),
+    ("--sampled_use_mil", None),
+    ("--n_video_embeddings", "7"),
+    ("--n_text_embeddings", "7"),
+    ("--mamba_lr_ratio", "0.1"),
+    ("--uncertainty_text_head", "text"),
+    ("--log_sigma_min", "-1.5"),
+    ("--log_sigma_max", "4"),
+    ("--rope_mode", "2d"),
+    ("--disable_spatial_enhancer", None),
+    ("--num_expansion_tokens", "4"),
+    ("--use_ada_norm", None),
+    ("--eval_branch_mode", "base_only"),
+    ("--disable_query_gate_in_retrieval", None),
+    ("--fusion_mode", "prob_mos"),
+    ("--w_mil", "0"),
+    ("--w_evidential", "0"),
+    ("--w_neg_reg", "0"),
+    ("--final_score_mode", "wti"),
+    ("--lambda_prob", "0"),
+    ("--lambda_anchor", "0"),
+    ("--lambda_qc_sap", "0"),
+    ("--qc_sap_temperature", "0.1"),
+    ("--w_uncertainty_reg", "0"),
+    ("--w_orth", "0"),
+    ("--w_query_sim", "0"),
+    ("--use_uacl_intra_alignment", None),
+    ("--w_uacl_intra", "0"),
+    ("--w_uacl_kl", "0"),
+    ("--uacl_temperature", "0.07"),
+    ("--uacl_sample_strategy", "closest"),
+    ("--anneal_warmup_epochs", "0"),
+    ("--warmup_steps", "500"),
+    ("--uncertainty_mode", "none"),
+    ("--fusion_temperature", "1.5"),
+)
+
 
 def tensor_id(value):
     return torch.tensor([value])
 
 
-def test_get_args_parses_explicit_hard_negative_and_uacl_flags(monkeypatch):
+@pytest.mark.parametrize(("flag", "value"), RETIRED_CLI_CASES)
+def test_get_args_rejects_retired_cli(flag, value, monkeypatch, capsys):
+    argv = [
+        "prog",
+        "--do_train",
+        "--output_dir",
+        "/tmp/uatvr-test-out",
+        "--expand_msrvtt_sentences",
+        flag,
+    ]
+    if value is not None:
+        argv.append(value)
+    monkeypatch.setattr(sys, "argv", argv)
+
+    with pytest.raises(SystemExit) as exc_info:
+        get_args()
+
+    assert exc_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "unrecognized arguments" in stderr
+    assert flag in stderr
+
+
+def test_get_args_parses_explicit_hard_negative_flags(monkeypatch):
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -43,15 +108,6 @@ def test_get_args_parses_explicit_hard_negative_and_uacl_flags(monkeypatch):
             "--use_explicit_hard_negative_loss",
             "--w_hard_negative",
             "0.07",
-            "--use_uacl_intra_alignment",
-            "--w_uacl_intra",
-            "0.02",
-            "--w_uacl_kl",
-            "0.0003",
-            "--uacl_temperature",
-            "0.05",
-            "--uacl_sample_strategy",
-            "random",
         ],
     )
 
@@ -59,62 +115,6 @@ def test_get_args_parses_explicit_hard_negative_and_uacl_flags(monkeypatch):
 
     assert args.use_explicit_hard_negative_loss is True
     assert args.w_hard_negative == 0.07
-    assert args.use_uacl_intra_alignment is True
-    assert args.w_uacl_intra == 0.02
-    assert args.w_uacl_kl == 0.0003
-    assert args.uacl_temperature == 0.05
-    assert args.uacl_sample_strategy == "random"
-
-
-def test_get_args_accepts_evidential_uncertainty_mode(monkeypatch):
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "prog",
-            "--do_train",
-            "--output_dir",
-            "/tmp/uatvr-test-out",
-            "--expand_msrvtt_sentences",
-            "--uncertainty_mode",
-            "evidential",
-        ],
-    )
-
-    args = get_args()
-
-    assert args.uncertainty_mode == "evidential"
-    assert args.experiment_profile == "default"
-
-
-def test_get_args_accepts_final_score_mode_and_weights(monkeypatch):
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "prog",
-            "--do_train",
-            "--output_dir",
-            "/tmp/uatvr-test-out",
-            "--expand_msrvtt_sentences",
-            "--final_score_mode",
-            "wti_qc_sap",
-            "--lambda_prob",
-            "0.25",
-            "--lambda_anchor",
-            "0.5",
-            "--lambda_qc_sap",
-            "0.1",
-            "--qc_sap_temperature",
-            "0.2",
-        ],
-    )
-
-    args = get_args()
-
-    assert args.final_score_mode == "wti_qc_sap"
-    assert args.lambda_prob == 0.25
-    assert args.lambda_anchor == 0.5
-    assert args.lambda_qc_sap == 0.1
-    assert args.qc_sap_temperature == 0.2
 
 
 def test_get_args_accepts_eva_clip_backbone_options(monkeypatch):
@@ -278,74 +278,6 @@ def test_scripts_reject_invalid_clip_layer_norm_precision(script_name, tmp_path)
     assert result.returncode == 2
     assert "CLIP_LAYER_NORM_PRECISION=tf32" in result.stderr
     assert not capture_path.exists()
-
-
-def test_get_args_accepts_explicit_trusted_hygiene_contract(monkeypatch):
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "prog",
-            "--do_train",
-            "--output_dir",
-            "/tmp/uatvr-test-out",
-            "--datatype",
-            "msrvtt",
-            "--experiment_profile",
-            "hygiene",
-            "--expand_msrvtt_sentences",
-            "--final_score_mode",
-            "wti",
-            "--w_mil",
-            "0",
-            "--w_evidential",
-            "0",
-            "--w_neg_reg",
-            "0",
-            "--w_orth",
-            "0",
-            "--uncertainty_mode",
-            "none",
-        ],
-    )
-
-    args = get_args()
-
-    assert args.experiment_profile == "hygiene"
-    assert args.uncertainty_mode == "none"
-    assert args.w_mil == 0
-    assert args.w_evidential == 0
-    assert args.w_neg_reg == 0
-    assert args.w_orth == 0
-    assert args.final_score_mode == "wti"
-    assert args.use_explicit_hard_negative_loss is False
-    assert args.use_uacl_intra_alignment is False
-
-
-def test_get_args_keeps_non_msrvtt_hygiene_normalization(monkeypatch):
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "prog",
-            "--do_train",
-            "--output_dir",
-            "/tmp/uatvr-test-out",
-            "--datatype",
-            "msvd",
-            "--experiment_profile",
-            "hygiene",
-            "--uncertainty_mode",
-            "evidential",
-            "--w_mil",
-            "0.01",
-            "--use_explicit_hard_negative_loss",
-        ],
-    )
-
-    args = get_args()
-
-    assert args.w_mil == 0.0
-    assert args.uncertainty_mode == "none"
-    assert args.use_explicit_hard_negative_loss is False
 
 
 def test_clip_freeze_policy_recognizes_eva_visual_blocks_and_heads():

@@ -21,7 +21,7 @@ echo "[run_train_msrvtt_bg] RUN_DATE=${RUN_DATE} RUN_TIME=${RUN_TIME}"
 echo "[run_train_msrvtt_bg] LOG_FILE=${LOG_FILE}"
 echo "[run_train_msrvtt_bg] Starting: bash train_msrvtt.sh (completely detached)"
 
-# 透传额外参数给 train_msrvtt.sh（如 --w_evidential 0 --w_neg_reg 0）
+# 透传受支持参数给 train_msrvtt.sh；退役参数由 argparse 明确拒绝。
 setsid env RUN_ID="${RUN_ID}" bash train_msrvtt.sh "$@" >"${LOG_FILE}" 2>&1 &
 
 TRAIN_PID=$!

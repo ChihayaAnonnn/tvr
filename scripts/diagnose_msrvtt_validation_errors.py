@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Diagnose whether validation top-1 errors are hard-negative-like.
+"""Diagnose whether trusted-v1 internal-val top-1 errors are hard-negative-like.
 
 方案 C: compare a baseline checkpoint and a hard-negative checkpoint on
-MSRVTT JSFUSION validation/test rows, then classify which top-1 errors were
-fixed, regressed, or unchanged.
+MSRVTT trusted-v1 internal-val rows, then classify which top-1 errors were
+fixed, regressed, or unchanged. JSFusion 1K remains an explicit blind test and
+is never scored by this diagnostic.
 """
 
 from __future__ import annotations
@@ -23,8 +24,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-DEFAULT_BASELINE_CKPT = "ckpts/ckpt_msrvtt_20260617_b1only_v2_repeat1/pytorch_model.bin.4"
-DEFAULT_TARGET_CKPT = "ckpts/ckpt_msrvtt_20260630_explicit_hn_infonce_w005_wmil0_4gpu_b64/pytorch_model.bin.3"
+from scripts.diagnose_msrvtt_hard_negative_runtime import (  # noqa: E402
+    validate_trusted_diagnostic_inputs,
+)
+
 DEFAULT_OUTPUT_DIR = "cache_dir/hard_negatives/diagnostics"
 DEFAULT_DATA_ROOT = "/data2/hxj/data/MSRVTT"
 
@@ -160,39 +163,53 @@ def build_validation_error_rows(
     if len(baseline_sim) != len(items) or len(target_sim) != len(items):
         raise ValueError("sim matrix row count must match validation item count")
 
-    rows = []
+    candidates: list[ValidationItem] = []
+    video_to_column: dict[str, int] = {}
     for item in items:
-        i = item.index
-        baseline_scores = list(baseline_sim[i])
-        target_scores = list(target_sim[i])
-        if len(baseline_scores) != len(items) or len(target_scores) != len(items):
-            raise ValueError("sim matrix must be square and match validation item count")
+        if item.video_id not in video_to_column:
+            video_to_column[item.video_id] = len(candidates)
+            candidates.append(item)
+
+    rows = []
+    for row_index, item in enumerate(items):
+        baseline_scores = list(baseline_sim[row_index])
+        target_scores = list(target_sim[row_index])
+        if (
+            len(baseline_scores) != len(candidates)
+            or len(target_scores) != len(candidates)
+        ):
+            raise ValueError(
+                "sim matrix column count must match unique validation videos"
+            )
 
         baseline_top1 = _top1_index(baseline_scores)
         target_top1 = _top1_index(target_scores)
-        baseline_correct = baseline_top1 == i
-        target_correct = target_top1 == i
-        baseline_pred = items[baseline_top1]
-        target_pred = items[target_top1]
+        baseline_pred = candidates[baseline_top1]
+        target_pred = candidates[target_top1]
+        baseline_correct = baseline_pred.video_id == item.video_id
+        target_correct = target_pred.video_id == item.video_id
         baseline_metrics = text_pair_metrics(item.caption, baseline_pred.caption)
         target_metrics = text_pair_metrics(item.caption, target_pred.caption)
         baseline_hard_like = False if baseline_correct else is_hard_like_pair(item.caption, baseline_pred.caption)
         target_hard_like = False if target_correct else is_hard_like_pair(item.caption, target_pred.caption)
-        baseline_gt_score = float(baseline_scores[i])
-        target_gt_score = float(target_scores[i])
+        gt_column = video_to_column[item.video_id]
+        baseline_gt_score = float(baseline_scores[gt_column])
+        target_gt_score = float(target_scores[gt_column])
         baseline_top1_score = float(baseline_scores[baseline_top1])
         target_top1_score = float(target_scores[target_top1])
 
         rows.append(
             {
-                "query_index": i,
+                "query_index": item.index,
                 "query_video_id": item.video_id,
                 "query_caption": item.caption,
                 "baseline_top1_index": baseline_top1,
                 "baseline_top1_video_id": baseline_pred.video_id,
                 "baseline_top1_caption": baseline_pred.caption,
                 "baseline_correct": baseline_correct,
-                "baseline_gt_rank": rank_of_ground_truth(baseline_scores, i),
+                "baseline_gt_rank": rank_of_ground_truth(
+                    baseline_scores, gt_column
+                ),
                 "baseline_gt_logit": round(baseline_gt_score, 6),
                 "baseline_top1_logit": round(baseline_top1_score, 6),
                 "baseline_top1_margin": round(baseline_top1_score - baseline_gt_score, 6),
@@ -204,7 +221,9 @@ def build_validation_error_rows(
                 "target_top1_video_id": target_pred.video_id,
                 "target_top1_caption": target_pred.caption,
                 "target_correct": target_correct,
-                "target_gt_rank": rank_of_ground_truth(target_scores, i),
+                "target_gt_rank": rank_of_ground_truth(
+                    target_scores, gt_column
+                ),
                 "target_gt_logit": round(target_gt_score, 6),
                 "target_top1_logit": round(target_top1_score, 6),
                 "target_top1_margin": round(target_top1_score - target_gt_score, 6),
@@ -263,13 +282,34 @@ def parse_args() -> argparse.Namespace:
         description="Diagnose MSRVTT validation top-1 errors for hard-negative-like patterns.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--baseline_checkpoint", default=DEFAULT_BASELINE_CKPT)
-    parser.add_argument("--target_checkpoint", default=DEFAULT_TARGET_CKPT)
+    parser.add_argument("--baseline_checkpoint", required=True)
+    parser.add_argument("--target_checkpoint", required=True)
     parser.add_argument("--baseline_name", default="b1only_v2")
     parser.add_argument("--target_name", default="explicit_hn_infonce_w005")
     parser.add_argument("--output_dir", default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--train_csv", default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_train.9k.csv")
-    parser.add_argument("--val_csv", default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_JSFUSION_test.csv")
+    parser.add_argument(
+        "--train_csv",
+        default=str(PROJECT_ROOT / "data/generated/msrvtt_trusted_v1/train.csv"),
+    )
+    parser.add_argument(
+        "--source_train_csv",
+        default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_train.9k.csv",
+    )
+    parser.add_argument(
+        "--test_csv",
+        default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_JSFUSION_test.csv",
+    )
+    parser.add_argument(
+        "--split_manifest",
+        default=str(
+            PROJECT_ROOT
+            / "dataloaders/splits/msrvtt_trusted_v1_seed42.json"
+        ),
+    )
+    parser.add_argument(
+        "--val_csv",
+        default=str(PROJECT_ROOT / "data/generated/msrvtt_trusted_v1/val.csv"),
+    )
     parser.add_argument("--data_path", default=f"{DEFAULT_DATA_ROOT}/annotation/MSRVTT_v2.json")
     parser.add_argument("--features_path", default=f"{DEFAULT_DATA_ROOT}/videos/compressed_videos/msrvtt_224_12fps/")
     parser.add_argument("--batch_size", type=int, default=16)
@@ -315,6 +355,8 @@ def build_validation_dataloader(args: argparse.Namespace):
         frame_order=task_args.eval_frame_order,
         slice_framepos=task_args.slice_framepos,
         use_attributes=False,
+        multi_sentence_per_video=True,
+        expected_captions_per_video=20,
     )
     if args.max_queries > 0:
         dataset.video_ids = dataset.video_ids[: args.max_queries]
@@ -332,23 +374,61 @@ def compute_validation_sim_matrix(args: argparse.Namespace, checkpoint: str, dev
     model, _task_args = load_model_for_checkpoint(args, checkpoint, device)
     model.eval()
 
+    dataset_video_ids = list(dataloader.dataset.video_ids)
     text_batches = []
     video_batches = []
+    seen_video_ids: set[str] = set()
+    row_offset = 0
     with torch.no_grad():
         for batch in dataloader:
             batch = tuple(t.to(device) for t in batch)
             if len(batch) != 5:
                 raise ValueError(f"Unexpected validation batch len={len(batch)}")
             input_ids, input_mask, segment_ids, video, video_mask = batch
-            sequence_output, text_token, visual_output = model.get_sequence_visual_output(
+            batch_size = input_ids.size(0)
+            batch_video_ids = dataset_video_ids[
+                row_offset : row_offset + batch_size
+            ]
+            if len(batch_video_ids) != batch_size:
+                raise ValueError(
+                    "validation dataloader rows exceed dataset.video_ids"
+                )
+
+            sequence_output, text_token = model.get_sequence_output(
                 input_ids,
                 segment_ids,
                 input_mask,
-                video,
-                video_mask,
             )
             text_batches.append((sequence_output.cpu(), text_token.cpu(), input_mask.cpu()))
-            video_batches.append((visual_output.cpu(), video_mask.cpu()))
+
+            first_local_rows = []
+            for local_row, video_id in enumerate(batch_video_ids):
+                if video_id not in seen_video_ids:
+                    seen_video_ids.add(video_id)
+                    first_local_rows.append(local_row)
+            if first_local_rows:
+                local_indices = torch.tensor(
+                    first_local_rows,
+                    device=video.device,
+                    dtype=torch.long,
+                )
+                unique_video = video.index_select(0, local_indices)
+                unique_video_mask = video_mask.index_select(0, local_indices)
+                visual_output = model.get_visual_output(
+                    unique_video,
+                    unique_video_mask,
+                )
+                video_batches.append(
+                    (visual_output.cpu(), unique_video_mask.cpu())
+                )
+            row_offset += batch_size
+
+        if row_offset != len(dataset_video_ids):
+            raise ValueError(
+                "validation dataloader row count does not match dataset.video_ids"
+            )
+        if not text_batches or not video_batches:
+            raise ValueError("validation dataloader must contain text and video rows")
 
         visual_output_all = torch.cat([batch[0] for batch in video_batches], dim=0)
         video_mask_all = torch.cat([batch[1] for batch in video_batches], dim=0)
@@ -435,6 +515,7 @@ def main() -> int:
     import torch
 
     args = parse_args()
+    validate_trusted_diagnostic_inputs(args, scored_csv=args.val_csv)
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     start_time = time.time()
     items = read_validation_items(args.val_csv, max_queries=args.max_queries)

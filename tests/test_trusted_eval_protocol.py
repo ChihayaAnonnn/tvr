@@ -1,9 +1,56 @@
 import importlib.machinery
+import os
+import subprocess
 import sys
 import types
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+RETIRED_CLI_CASES = (
+    ("--gate_log_interval", "10"),
+    ("--gate_log_dir", "/tmp/gates"),
+    ("--log_moe_weights", None),
+    ("--moe_log_dir", "/tmp/moe"),
+    ("--use_mil", None),
+    ("--sampled_use_mil", None),
+    ("--n_video_embeddings", "7"),
+    ("--n_text_embeddings", "7"),
+    ("--mamba_lr_ratio", "0.1"),
+    ("--uncertainty_text_head", "text"),
+    ("--log_sigma_min", "-1.5"),
+    ("--log_sigma_max", "4"),
+    ("--rope_mode", "2d"),
+    ("--disable_spatial_enhancer", None),
+    ("--num_expansion_tokens", "4"),
+    ("--use_ada_norm", None),
+    ("--eval_branch_mode", "base_only"),
+    ("--disable_query_gate_in_retrieval", None),
+    ("--fusion_mode", "prob_mos"),
+    ("--w_mil", "0"),
+    ("--w_evidential", "0"),
+    ("--w_neg_reg", "0"),
+    ("--final_score_mode", "wti"),
+    ("--lambda_prob", "0"),
+    ("--lambda_anchor", "0"),
+    ("--lambda_qc_sap", "0"),
+    ("--qc_sap_temperature", "0.1"),
+    ("--w_uncertainty_reg", "0"),
+    ("--w_orth", "0"),
+    ("--w_query_sim", "0"),
+    ("--use_uacl_intra_alignment", None),
+    ("--w_uacl_intra", "0"),
+    ("--w_uacl_kl", "0"),
+    ("--uacl_temperature", "0.07"),
+    ("--uacl_sample_strategy", "closest"),
+    ("--anneal_warmup_epochs", "0"),
+    ("--warmup_steps", "500"),
+    ("--uncertainty_mode", "none"),
+    ("--fusion_temperature", "1.5"),
+)
 
 cv2_stub = types.ModuleType("cv2")
 cv2_stub.__spec__ = importlib.machinery.ModuleSpec("cv2", loader=None)
@@ -24,15 +71,8 @@ def _args(**overrides):
         "init_model": None,
         "expand_msrvtt_sentences": True,
         "experiment_profile": "hygiene",
-        "final_score_mode": "wti",
-        "w_mil": 0.0,
-        "w_evidential": 0.0,
-        "w_neg_reg": 0.0,
-        "w_orth": 0.0,
-        "uncertainty_mode": "none",
         "use_hard_negative_packing": False,
         "use_explicit_hard_negative_loss": False,
-        "use_uacl_intra_alignment": False,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -55,55 +95,22 @@ def test_eval_only_requires_initial_checkpoint():
         )
 
 
-@pytest.mark.parametrize("name", ["w_mil", "w_evidential", "w_neg_reg", "w_orth"])
-def test_hygiene_rejects_active_auxiliary_loss(name):
-    with pytest.raises(ValueError, match=rf"hygiene requires {name}=0"):
-        retrieval.validate_trusted_cli(_args(**{name: 0.01}))
-
-
-def test_hygiene_rejects_uncertainty_mode():
-    with pytest.raises(ValueError, match="hygiene requires uncertainty_mode=none"):
-        retrieval.validate_trusted_cli(_args(uncertainty_mode="evidential"))
-
-
 @pytest.mark.parametrize(
     "flag",
-    [
-        "use_hard_negative_packing",
-        "use_explicit_hard_negative_loss",
-        "use_uacl_intra_alignment",
-    ],
+    ["use_hard_negative_packing", "use_explicit_hard_negative_loss"],
 )
-def test_hygiene_rejects_hn_and_uacl_paths(flag):
-    with pytest.raises(ValueError, match="hygiene forbids HN and UACL paths"):
+def test_hygiene_rejects_hard_negative_diagnostics(flag):
+    with pytest.raises(ValueError, match="hard-negative diagnostic"):
         retrieval.validate_trusted_cli(_args(**{flag: True}))
 
 
-def test_hygiene_rejects_non_wti_final_score():
-    with pytest.raises(ValueError, match="requires final_score_mode=wti"):
-        retrieval.validate_trusted_cli(_args(final_score_mode="wti_anchor_wti"))
-
-
-def test_get_args_does_not_silently_normalize_msrvtt_hygiene(monkeypatch):
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "prog",
-            "--do_train",
-            "--output_dir",
-            "/tmp/uatvr-test-out",
-            "--datatype",
-            "msrvtt",
-            "--expand_msrvtt_sentences",
-            "--experiment_profile",
-            "hygiene",
-            "--w_mil",
-            "0.01",
-        ],
+def test_default_profile_allows_explicit_hard_negative_diagnostic():
+    retrieval.validate_trusted_cli(
+        _args(
+            experiment_profile="default",
+            use_explicit_hard_negative_loss=True,
+        )
     )
-
-    with pytest.raises(ValueError, match="hygiene requires w_mil=0"):
-        retrieval.get_args()
 
 
 def test_get_args_exposes_trusted_data_paths_and_eval_split(monkeypatch):
@@ -133,6 +140,71 @@ def test_get_args_exposes_trusted_data_paths_and_eval_split(monkeypatch):
     assert args.source_train_csv == "source-train.csv"
     assert args.test_csv == "blind-test.csv"
     assert args.split_manifest == "trusted.json"
+
+
+def _run_with_fake_torchrun(script_name, tmp_path, xattn_value):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir(parents=True, exist_ok=True)
+    python3_path = fake_bin / "python3"
+    python3_path.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    python3_path.chmod(0o755)
+    capture_path = tmp_path / f"{script_name}.args"
+    torchrun_path = fake_bin / "torchrun"
+    torchrun_path.write_text(
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > \"${CAPTURE_PATH}\"\n",
+        encoding="utf-8",
+    )
+    torchrun_path.chmod(0o755)
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": f"{fake_bin}:{env['PATH']}",
+            "CAPTURE_PATH": str(capture_path),
+            "EVA_CLIP_USE_XATTN": xattn_value,
+            "CLIP_LAYER_NORM_PRECISION": "fp16",
+            "RUN_ID": "supported-args-test",
+            "OUTPUT_DIR": str(tmp_path / "output"),
+            "LOG_DIR": str(tmp_path / "logs"),
+            "INIT_MODEL": str(tmp_path / "checkpoint.pt"),
+            "EVAL_SPLIT": "val",
+            "CUDA_VISIBLE_DEVICES": "0",
+            "NPROC": "1",
+        }
+    )
+    return subprocess.run(
+        ["bash", str(PROJECT_ROOT / script_name)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    ), capture_path
+
+
+@pytest.mark.parametrize(
+    "script_name", ["train_msrvtt.sh", "eval.sh", "train_msvd.sh"]
+)
+def test_supported_scripts_emit_only_supported_retrieval_args(script_name, tmp_path):
+    retired_flags = {flag for flag, _ in RETIRED_CLI_CASES}
+    result, capture_path = _run_with_fake_torchrun(script_name, tmp_path, "0")
+    assert result.returncode == 0, result.stderr
+    captured = capture_path.read_text(encoding="utf-8").splitlines()
+    assert "--experiment_profile" in captured
+    profile_index = captured.index("--experiment_profile")
+    assert captured[profile_index + 1] == "hygiene"
+    if script_name == "eval.sh":
+        split_index = captured.index("--eval_split")
+        assert captured[split_index + 1] == "val"
+    emitted_flags = {
+        token.split("=", 1)[0]
+        for token in captured
+        if token.startswith("--")
+    }
+    assert retired_flags.isdisjoint(emitted_flags)
+    if script_name == "eval.sh":
+        assert "--log_mus_scores" in emitted_flags
+    else:
+        assert "--log_mus_scores" not in emitted_flags
 
 
 def test_training_constructs_val_but_not_test(monkeypatch):

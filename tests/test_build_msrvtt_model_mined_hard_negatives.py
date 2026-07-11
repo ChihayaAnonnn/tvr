@@ -1,17 +1,150 @@
+import sys
 from argparse import Namespace
 
 import numpy as np
+import pytest
 import torch
 
+import scripts.build_msrvtt_model_mined_hard_negatives as model_miner
 from scripts.build_msrvtt_model_mined_hard_negatives import (
     CaptionSample,
     ModelHardNegativeConfig,
     build_model_mined_mapping,
+    build_task_args_for_checkpoint,
     mine_mapping_with_model,
     select_hard_negative_candidate,
     select_query_samples,
     text_pair_metrics,
 )
+
+
+def test_parse_args_requires_checkpoint(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["prog"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        model_miner.parse_args()
+
+    assert exc_info.value.code == 2
+
+
+def test_parse_args_defaults_to_generated_trusted_split(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["prog", "--checkpoint", "checkpoint.bin"],
+    )
+
+    args = model_miner.parse_args()
+
+    assert args.train_csv.endswith("data/generated/msrvtt_trusted_v1/train.csv")
+    assert args.val_csv.endswith("data/generated/msrvtt_trusted_v1/val.csv")
+    assert "JSFUSION_test" not in args.val_csv
+    assert args.source_train_csv.endswith("csv/MSRVTT_train.9k.csv")
+    assert args.test_csv.endswith("csv/MSRVTT_JSFUSION_test.csv")
+    assert args.split_manifest.endswith(
+        "dataloaders/splits/msrvtt_trusted_v1_seed42.json"
+    )
+
+
+def test_builder_task_args_use_supported_trusted_protocol_fields(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--checkpoint",
+            "checkpoint.bin",
+            "--output",
+            str(tmp_path / "mapping.json"),
+            "--train_csv",
+            str(tmp_path / "train.csv"),
+            "--source_train_csv",
+            str(tmp_path / "source.csv"),
+            "--test_csv",
+            str(tmp_path / "test.csv"),
+            "--split_manifest",
+            str(tmp_path / "manifest.json"),
+            "--val_csv",
+            str(tmp_path / "val.csv"),
+        ],
+    )
+    args = model_miner.parse_args()
+
+    task_args = build_task_args_for_checkpoint(args)
+
+    assert task_args.train_csv == args.train_csv
+    assert task_args.source_train_csv == args.source_train_csv
+    assert task_args.test_csv == args.test_csv
+    assert task_args.split_manifest == args.split_manifest
+    assert task_args.val_csv == args.val_csv
+    assert task_args.eval_split == "val"
+    for retired_name in (
+        "final_score_mode",
+        "uncertainty_mode",
+        "n_video_embeddings",
+        "w_evidential",
+    ):
+        assert not hasattr(task_args, retired_name)
+
+
+def test_main_runs_trusted_gate_before_dataset_or_checkpoint_access(monkeypatch):
+    events = []
+
+    class StopAtModel(RuntimeError):
+        pass
+
+    args = Namespace(
+        top_k=1,
+        min_rank=1,
+        seed=42,
+        device="cpu",
+        query_start=0,
+        query_end=0,
+        limit_queries=0,
+    )
+    monkeypatch.setattr(model_miner, "parse_args", lambda: args)
+    monkeypatch.setattr(
+        model_miner,
+        "validate_trusted_diagnostic_inputs",
+        lambda _args: events.append("gate"),
+        raising=False,
+    )
+
+    def build_dataset(_args):
+        events.append("dataset")
+        return Namespace(csv_video_ids=["video1"])
+
+    monkeypatch.setattr(model_miner, "build_train_dataset", build_dataset)
+    sample = CaptionSample(0, "video1", "caption")
+    monkeypatch.setattr(
+        model_miner,
+        "samples_from_dataset",
+        lambda _dataset: [sample],
+    )
+    monkeypatch.setattr(
+        model_miner,
+        "select_query_samples",
+        lambda *_args, **_kwargs: ([sample], 0, 1),
+    )
+    monkeypatch.setattr(model_miner, "build_meta", lambda _args: {})
+    monkeypatch.setattr(
+        model_miner,
+        "load_resume_state",
+        lambda _args, _meta: ({}, set()),
+    )
+
+    def stop_at_model(_args, _device):
+        events.append("model")
+        raise StopAtModel
+
+    monkeypatch.setattr(model_miner, "load_model", stop_at_model)
+
+    with pytest.raises(StopAtModel):
+        model_miner.main()
+
+    assert events == ["gate", "dataset", "model"]
 
 
 def test_select_hard_negative_candidate_skips_same_video_and_near_duplicates():

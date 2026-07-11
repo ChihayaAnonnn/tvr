@@ -23,8 +23,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
-DEFAULT_BASELINE_CKPT = "ckpts/ckpt_msrvtt_20260617_b1only_v2_repeat1/pytorch_model.bin.4"
-DEFAULT_TARGET_CKPT = "ckpts/ckpt_msrvtt_20260630_explicit_hn_infonce_w005_wmil0_4gpu_b64/pytorch_model.bin.3"
 DEFAULT_HARD_NEGATIVE_PATH = "cache_dir/hard_negatives/msrvtt_train_hardneg_clean.json"
 DEFAULT_OUTPUT_DIR = "cache_dir/hard_negatives/diagnostics"
 DEFAULT_DATA_ROOT = "/data2/hxj/data/MSRVTT"
@@ -100,14 +98,35 @@ def parse_args() -> argparse.Namespace:
         description="Compare baseline vs target checkpoint scores for mapped MSRVTT hard negatives.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--baseline_checkpoint", default=DEFAULT_BASELINE_CKPT)
-    parser.add_argument("--target_checkpoint", default=DEFAULT_TARGET_CKPT)
+    parser.add_argument("--baseline_checkpoint", required=True)
+    parser.add_argument("--target_checkpoint", required=True)
     parser.add_argument("--baseline_name", default="b1only_v2")
     parser.add_argument("--target_name", default="explicit_hn_infonce_w005")
     parser.add_argument("--hard_negative_path", default=DEFAULT_HARD_NEGATIVE_PATH)
     parser.add_argument("--output_dir", default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--train_csv", default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_train.9k.csv")
-    parser.add_argument("--val_csv", default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_JSFUSION_test.csv")
+    parser.add_argument(
+        "--train_csv",
+        default=str(PROJECT_ROOT / "data/generated/msrvtt_trusted_v1/train.csv"),
+    )
+    parser.add_argument(
+        "--source_train_csv",
+        default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_train.9k.csv",
+    )
+    parser.add_argument(
+        "--test_csv",
+        default=f"{DEFAULT_DATA_ROOT}/csv/MSRVTT_JSFUSION_test.csv",
+    )
+    parser.add_argument(
+        "--split_manifest",
+        default=str(
+            PROJECT_ROOT
+            / "dataloaders/splits/msrvtt_trusted_v1_seed42.json"
+        ),
+    )
+    parser.add_argument(
+        "--val_csv",
+        default=str(PROJECT_ROOT / "data/generated/msrvtt_trusted_v1/val.csv"),
+    )
     parser.add_argument("--data_path", default=f"{DEFAULT_DATA_ROOT}/annotation/MSRVTT_v2.json")
     parser.add_argument("--features_path", default=f"{DEFAULT_DATA_ROOT}/videos/compressed_videos/msrvtt_224_12fps/")
     parser.add_argument("--max_anchors", type=int, default=256, help="Number of valid anchor samples to diagnose.")
@@ -124,6 +143,49 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default=None, help="cuda, cuda:0, or cpu. Defaults to cuda if available.")
     return parser.parse_args()
+
+
+def validate_trusted_diagnostic_inputs(args, scored_csv=None):
+    """Reject source, generated-train, or scored-val protocol drift."""
+
+    from dataloaders.msrvtt_protocol import (
+        load_trusted_manifest,
+        validate_trusted_manifest,
+    )
+
+    manifest = load_trusted_manifest(args.split_manifest)
+    validate_trusted_manifest(
+        manifest,
+        args.source_train_csv,
+        args.data_path,
+        args.test_csv,
+    )
+    with open(args.train_csv, "r", encoding="utf-8", newline="") as handle:
+        train_ids = {
+            str(row.get("video_id", "")).strip()
+            for row in csv.DictReader(handle)
+            if str(row.get("video_id", "")).strip()
+        }
+    expected_train_ids = set(manifest["train_video_ids"])
+    if train_ids != expected_train_ids:
+        raise ValueError(
+            "diagnostic train CSV must exactly match trusted-v1 train video IDs; "
+            f"expected={len(expected_train_ids)}, got={len(train_ids)}"
+        )
+    if scored_csv is not None:
+        with open(scored_csv, "r", encoding="utf-8", newline="") as handle:
+            scored_ids = {
+                str(row.get("video_id", "")).strip()
+                for row in csv.DictReader(handle)
+                if str(row.get("video_id", "")).strip()
+            }
+        expected_ids = set(manifest["val_video_ids"])
+        if scored_ids != expected_ids:
+            raise ValueError(
+                "diagnostic CSV must exactly match trusted-v1 internal val "
+                f"video IDs; expected={len(expected_ids)}, got={len(scored_ids)}"
+            )
+    return manifest
 
 
 @contextlib.contextmanager
@@ -149,13 +211,21 @@ def build_task_args(cli_args: argparse.Namespace, checkpoint: str):
         "--init_model",
         checkpoint,
         "--train_csv",
-        cli_args.train_csv,
+        str(cli_args.train_csv),
+        "--source_train_csv",
+        str(cli_args.source_train_csv),
+        "--test_csv",
+        str(cli_args.test_csv),
+        "--split_manifest",
+        str(cli_args.split_manifest),
+        "--eval_split",
+        "val",
         "--val_csv",
-        cli_args.val_csv,
+        str(cli_args.val_csv),
         "--data_path",
-        cli_args.data_path,
+        str(cli_args.data_path),
         "--features_path",
-        cli_args.features_path,
+        str(cli_args.features_path),
         "--num_thread_reader",
         "1",
         "--batch_size",
@@ -188,43 +258,16 @@ def build_task_args(cli_args: argparse.Namespace, checkpoint: str):
         "2",
         "--pretrained_clip_name",
         "ViT-B/16",
+        "--backbone_type",
+        "openai_clip",
+        "--clip_layer_norm_precision",
+        "fp16",
         "--extra_video_cls_num",
         "2",
         "--extra_text_cls_num",
         "2",
-        "--n_video_embeddings",
-        "7",
-        "--n_text_embeddings",
-        "7",
-        "--mamba_lr_ratio",
-        "0.1",
-        "--uncertainty_text_head",
-        "text",
-        "--log_sigma_min",
-        "-1.5",
-        "--log_sigma_max",
-        "4",
-        "--w_evidential",
-        "1e-2",
-        "--w_neg_reg",
-        "5e-2",
-        "--w_orth",
-        "0.1",
-        "--w_uncertainty_reg",
-        "1e-3",
-        "--fusion_mode",
-        "prob_mos",
-        "--w_query_sim",
-        "0.5",
-        "--fusion_temperature",
-        "1.5",
-        "--rope_mode",
-        "2d",
-        "--use_ada_norm",
-        "--anneal_warmup_epochs",
-        "0",
-        "--uncertainty_mode",
-        "none",
+        "--experiment_profile",
+        "hygiene",
     ]
     with _temporary_argv(argv):
         args = get_args("MSRVTT hard-negative runtime diagnostic")
@@ -512,6 +555,7 @@ def main() -> int:
     import torch
 
     args = parse_args()
+    validate_trusted_diagnostic_inputs(args)
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     start_time = time.time()
 

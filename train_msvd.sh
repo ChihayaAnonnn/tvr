@@ -10,11 +10,6 @@ DATA_PATH=/data2/hxj/data/MSVD
 RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
 COEF_LR=${COEF_LR:-1e-3}
 OUTPUT_DIR=${OUTPUT_DIR:-ckpts/ckpt_msvd_${RUN_ID}}
-# Query-branch training knobs
-# Query head is fixed to token_wti in codebase.
-W_QUERY_SIM="0.1"            # increase to make query branch stand-alone
-
-# Baseline replication: same three weights zero as MSRVTT baseline (frame-only WTI for retrieval logits).
 
 CUDA_VISIBLE_DEVICES=1,2,3,4 \
     torchrun --nproc_per_node=4 --master_addr=127.0.0.9 --master_port=29509 \
@@ -28,17 +23,8 @@ CUDA_VISIBLE_DEVICES=1,2,3,4 \
     --feature_framerate 1 --coef_lr "${COEF_LR}" \
     --freeze_layer_num 0 --slice_framepos 3 \
     --loose_type --linear_patch 2d --sim_header seqTransf \
-    --strategy 2 \
     --pretrained_clip_name ViT-B/16 \
     --extra_video_cls_num 2 \
     --extra_text_cls_num 2 \
-    --n_video_embeddings 7 \
-    --n_text_embeddings 7 \
-    --mamba_lr_ratio 0.1 \
-    --uncertainty_text_head text \
-    --log_sigma_min -6 \
-    --log_sigma_max 6 \
-    --w_uncertainty_reg 1e-3 \
-    --gate_log_interval 100 \
-    --w_query_sim "${W_QUERY_SIM}" \
+    --experiment_profile hygiene \
     --experiment_desc "${EXPERIMENT_DESC:-}"

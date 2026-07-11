@@ -47,22 +47,11 @@ def validate_trusted_cli(args):
     if args.do_eval and not args.do_train and not args.init_model:
         raise ValueError("--do_eval requires --init_model")
 
-    if args.experiment_profile == "hygiene":
-        for name in ("w_mil", "w_evidential", "w_neg_reg", "w_orth"):
-            if float(getattr(args, name)) != 0.0:
-                raise ValueError(f"hygiene requires {name}=0")
-        if args.uncertainty_mode != "none":
-            raise ValueError("hygiene requires uncertainty_mode=none")
-        if (
-            args.use_hard_negative_packing
-            or args.use_explicit_hard_negative_loss
-            or args.use_uacl_intra_alignment
-        ):
-            raise ValueError("hygiene forbids HN and UACL paths")
-        if args.final_score_mode != "wti":
-            raise ValueError(
-                "hygiene trusted baseline requires final_score_mode=wti"
-            )
+    if args.experiment_profile == "hygiene" and (
+        args.use_hard_negative_packing
+        or args.use_explicit_hard_negative_loss
+    ):
+        raise ValueError("hygiene forbids hard-negative diagnostic paths")
 
 
 def get_args(description="CLIP4Clip on Retrieval Task"):
@@ -133,39 +122,10 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--batch_size_val", type=int, default=3500, help="batch size eval")
     parser.add_argument("--lr_decay", type=float, default=0.9, help="Learning rate exp epoch decay")
     parser.add_argument("--n_display", type=int, default=100, help="Information display frequence")
-    # =========================
-    # Debug/Logging: Query gate_scores
-    # =========================
-    parser.add_argument(
-        "--gate_log_interval",
-        type=int,
-        default=None,
-        help="Log interval (in optimizer steps) for MoE weights. If None, defaults to --n_display.",
-    )
-    parser.add_argument(
-        "--gate_log_dir",
-        type=str,
-        default="logs/gate_scores",
-        help="Root directory to save gate_scores logs (will create date subfolders).",
-    )
     parser.add_argument(
         "--log_mus_scores",
         action="store_true",
         help="若设置，在每次评估时将每条查询的 MUS（映射不确定性）写入 logs/mus_scores/ 下的 TSV 文件。",
-    )
-    # =========================
-    # Debug/Logging: Uncertainty-driven MoE fusion weights (base/query)
-    # =========================
-    parser.add_argument(
-        "--log_moe_weights",
-        action="store_true",
-        help="If set, periodically log uncertainty-driven MoE fusion weights (base/query) to a TSV file under logs/.",
-    )
-    parser.add_argument(
-        "--moe_log_dir",
-        type=str,
-        default="logs/moe_weights",
-        help="Root directory to save MoE fusion weight logs (will create date subfolders).",
     )
     parser.add_argument("--video_dim", type=int, default=1024, help="video feature dimension")
     parser.add_argument("--seed", type=int, default=42, help="random seed")
@@ -225,9 +185,6 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     # parser.add_argument("--local_rank", default=0, type=int, help="distribted training")
     parser.add_argument("--rank", default=0, type=int, help="distribted training")
     parser.add_argument("--coef_lr", type=float, default=1.0, help="coefficient for bert branch.")
-    parser.add_argument("--use_mil", action="store_true", help="Whether use MIL as Miech et. al. (2020).")
-    parser.add_argument("--sampled_use_mil", action="store_true", help="Whether MIL, has a high priority than use_mil.")
-
     parser.add_argument("--text_num_hidden_layers", type=int, default=12, help="Layer NO. of text.")
     parser.add_argument("--visual_num_hidden_layers", type=int, default=12, help="Layer NO. of visual.")
     parser.add_argument("--cross_num_hidden_layers", type=int, default=4, help="Layer NO. of cross.")
@@ -260,6 +217,12 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         default=42,
         type=int,
         help="Seed for hard-negative batch packing shuffle.",
+    )
+    parser.add_argument(
+        "--w_hard_negative",
+        default=5e-2,
+        type=float,
+        help="Weight for explicit hard-negative loss.",
     )
 
     parser.add_argument(
@@ -339,12 +302,6 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--strategy", default=1, type=int, help="Sampling strategies.")
     parser.add_argument("--extra_video_cls_num", default=2, type=int, help="extra video class aggregation token")
     parser.add_argument("--extra_text_cls_num", default=2, type=int, help="extra sentence class aggregation token")
-    parser.add_argument(
-        "--n_video_embeddings", default=7, type=int, help="number of sampling video probabilistic embeddings"
-    )
-    parser.add_argument(
-        "--n_text_embeddings", default=7, type=int, help="number of sampling text probabilistic embeddings"
-    )
     parser.add_argument("--DSL", default=False, type=bool, help="whether using dual softmax in post testing")
     parser.add_argument(
         "--eval_vid_chunk_size",
@@ -354,200 +311,6 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
              "Smaller value reduces memory at the cost of slightly slower eval.",
     )
 
-    # Mamba-specific learning rate control
-    parser.add_argument(
-        "--mamba_lr_ratio",
-        default=0.1,
-        type=float,
-        help="Learning rate ratio for Mamba modules relative to base lr (default: 0.1, i.e., 10x smaller)",
-    )
-
-    # =========================
-    # Query / Uncertainty knobs
-    # =========================
-    parser.add_argument(
-        "--uncertainty_text_head",
-        default="image",
-        type=str,
-        choices=["image", "text", "mamba"],
-        help="Text-side uncertainty head type. 'image' keeps current lightweight head; "
-        "'text' enables GRU-based head; 'mamba' enables Mamba-based head (requires mamba_ssm).",
-    )
-    parser.add_argument(
-        "--log_sigma_min",
-        default=None,
-        type=float,
-        help="Optional clamp min for log-variance (logsigma/logvar). If None, no clamp is applied.",
-    )
-    parser.add_argument(
-        "--log_sigma_max",
-        default=None,
-        type=float,
-        help="Optional clamp max for log-variance (logsigma/logvar). If None, no clamp is applied.",
-    )
-
-    # Ablations & Diagnostics
-    parser.add_argument(
-        "--rope_mode", default="none", choices=["none", "2d", "3d"],
-        help="SpatialEnhancer RoPE mode: none=disabled, 2d=per-frame, 3d=cross-frame.",
-    )
-    parser.add_argument(
-        "--disable_spatial_enhancer", action="store_true", help="(deprecated) use --rope_mode none instead."
-    )
-    parser.add_argument(
-        "--num_expansion_tokens", default=0, type=int,
-        help="Number of learnable expansion tokens to concatenate with SAP anchors (Video-ColBERT style). 0=disabled.",
-    )
-    parser.add_argument(
-        "--use_ada_norm", action="store_true",
-        help="Enable uncertainty-aware adaptive LayerNorm before L2 normalize in probabilistic heads.",
-    )
-
-    parser.add_argument(
-        "--eval_branch_mode",
-        default="default",
-        type=str,
-        choices=["default", "base_only", "query_only", "fixed_avg"],
-        help="Inference-time ablation: override fusion weights. "
-        "default=dynamic(original); base_only=[1,0]; query_only=[0,1]; fixed_avg=[0.5,0.5].",
-    )
-
-    parser.add_argument(
-        "--disable_query_gate_in_retrieval",
-        action="store_true",
-        help="If set, disable QueryRefinementModule gating during retrieval scoring (evaluation only).",
-    )
-
-    # -------------------------
-    # Stage-1/2: Fusion & Gate
-    # -------------------------
-    parser.add_argument(
-        "--fusion_mode",
-        default="prob_mos",
-        type=str,
-        choices=["prob_mos", "logits_linear"],
-        help="Fusion mode for base/query experts. "
-        "prob_mos=calibrated mixture-of-softmax (scale-robust, recommended); "
-        "logits_linear=legacy linear mixing in logit space (scale-sensitive).",
-    )
-    # Loss weights
-    parser.add_argument("--w_mil", default=1e-2, type=float, help="Weight for MIL (probabilistic) loss.")
-    parser.add_argument("--w_evidential", default=1e-2, type=float, help="Weight for Evidential NLL loss.")
-    parser.add_argument("--w_neg_reg", default=1e-2, type=float, help="Weight for negative evidence regularization.")
-    parser.add_argument("--w_hard_negative", default=5e-2, type=float, help="Weight for explicit hard-negative loss.")
-    parser.add_argument(
-        "--final_score_mode",
-        default="wti",
-        type=str,
-        choices=["wti", "wti_prob_mu", "wti_anchor_wti", "wti_qc_sap"],
-        help="Final retrieval score used by both training and evaluation. "
-        "wti: use WTI logits only. "
-        "wti_prob_mu: add lambda_prob * cosine(probabilistic text mean, SAP video mean). "
-        "wti_anchor_wti: add lambda_anchor * WTI(text tokens, SAP anchors). "
-        "wti_qc_sap: add lambda_qc_sap * query-conditioned SAP logits.",
-    )
-    parser.add_argument(
-        "--lambda_prob",
-        default=0.0,
-        type=float,
-        help="Weight for the probabilistic mean score when --final_score_mode=wti_prob_mu.",
-    )
-    parser.add_argument(
-        "--lambda_anchor",
-        default=0.0,
-        type=float,
-        help="Weight for the SAP AnchorWTI score when --final_score_mode=wti_anchor_wti.",
-    )
-    parser.add_argument(
-        "--lambda_qc_sap",
-        default=0.0,
-        type=float,
-        help="Weight for query-conditioned SAP score when --final_score_mode=wti_qc_sap.",
-    )
-    parser.add_argument(
-        "--qc_sap_temperature",
-        default=0.1,
-        type=float,
-        help="Softmax temperature for query-conditioned SAP anchor gate.",
-    )
-    parser.add_argument(
-        "--w_uncertainty_reg",
-        default=1e-3,
-        type=float,
-        help="Weight for DUQ-style evidential uncertainty regularization on retrieval logits.",
-    )
-    parser.add_argument("--w_orth", default=0.1, type=float, help="Weight for anchor orthogonality loss.")
-    parser.add_argument(
-        "--w_query_sim",
-        default=1e-2,
-        type=float,
-        help="Weight for query-branch independent contrastive loss.",
-    )
-    parser.add_argument(
-        "--use_uacl_intra_alignment",
-        action="store_true",
-        help="Enable UACL-style intra-modal contrastive alignment using Gaussian sampled views.",
-    )
-    parser.add_argument(
-        "--w_uacl_intra",
-        default=1e-2,
-        type=float,
-        help="Weight for UACL-style intra-modal alignment loss.",
-    )
-    parser.add_argument(
-        "--w_uacl_kl",
-        default=1e-4,
-        type=float,
-        help="Weight for lightweight Gaussian log-variance KL regularization in UACL alignment.",
-    )
-    parser.add_argument(
-        "--uacl_temperature",
-        default=0.07,
-        type=float,
-        help="Temperature for UACL-style intra-modal contrastive losses.",
-    )
-    parser.add_argument(
-        "--uacl_sample_strategy",
-        default="closest",
-        choices=["closest", "random"],
-        help="Gaussian sample selection strategy for UACL intra-modal positives.",
-    )
-    # 退火系数：默认关闭；需要时可对 evidential / neg_reg loss 做线性 warmup
-    parser.add_argument(
-        "--anneal_warmup_epochs",
-        default=0,
-        type=int,
-        help="Number of warmup epochs for annealing evidential/neg_reg losses. "
-             "Set <= 0 to disable annealing. During warmup, loss weight = epoch / warmup_epochs. "
-             "After warmup, weight = 1.0.",
-    )
-    # 不确定性置信度 warmup 步数（方案 A）
-    parser.add_argument(
-        "--warmup_steps",
-        default=500,
-        type=int,
-        help="Number of warmup steps for uncertainty-weighted retrieval (Plan A). "
-             "Set <= 0 to disable warmup and immediately use full uncertainty weighting. "
-             "During warmup: confidence = 1 - α + α / (1 + epistemic), α = step / warmup_steps.",
-    )
-    # 不确定性训练模式：evidential / nig_mil(deprecated) / none
-    parser.add_argument(
-        "--uncertainty_mode",
-        default="none",
-        type=str,
-        choices=["evidential", "nig_mil", "none"],
-        help="How to train uncertainty parameters. "
-             "evidential: enable current Dirichlet/evidential regularizers. "
-             "nig_mil: deprecated compatibility mode for old NIG-MIL experiments. "
-             "none: disable evidential/neg_reg losses, keep SAP architecture (baseline).",
-    )
-    # MoE fusion weight control
-    parser.add_argument(
-        "--fusion_temperature",
-        default=1.5,
-        type=float,
-        help="Temperature for MoE fusion weight softmax. Higher = smoother weight distribution.",
-    )
     parser.add_argument(
         "--experiment_desc",
         default="",
@@ -559,23 +322,13 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         default="default",
         type=str,
         choices=["default", "hygiene"],
-        help="Experiment profile. default preserves the historical mainline; "
-             "hygiene disables auxiliary losses for clean WTI-only attribution.",
+        help=(
+            "Experiment profile. hygiene selects the clean WTI baseline and "
+            "forbids hard-negative diagnostic paths; default permits those "
+            "independent diagnostics."
+        ),
     )
     args = parser.parse_args()
-
-    if args.datatype != "msrvtt" and args.experiment_profile == "hygiene":
-        args.w_mil = 0.0
-        args.w_evidential = 0.0
-        args.w_neg_reg = 0.0
-        args.w_orth = 0.0
-        args.w_hard_negative = 0.0
-        args.w_uacl_intra = 0.0
-        args.w_uacl_kl = 0.0
-        args.uncertainty_mode = "none"
-        args.use_hard_negative_packing = False
-        args.use_explicit_hard_negative_loss = False
-        args.use_uacl_intra_alignment = False
 
     validate_trusted_cli(args)
 
@@ -659,28 +412,50 @@ def set_seed_logger(args):
             logger.info("    [Experiment] %s", args.experiment_desc)
         # 按类别分组打印关键参数，其余用紧凑格式
         key_params = {
-            "Training": ["epochs", "batch_size", "lr", "coef_lr", "gradient_accumulation_steps", "fp16",
-                         "max_frames", "max_words", "seed"],
-            "Model": ["pretrained_clip_name", "backbone_type", "clip_layer_norm_precision", "backbone_name",
-                      "backbone_path", "eva_clip_root",
-                       "eva_clip_use_xattn", "sim_header", "linear_patch", "fusion_mode",
-                       "extra_video_cls_num", "extra_text_cls_num", "n_video_embeddings", "n_text_embeddings",
-                       "uncertainty_text_head", "log_sigma_min", "log_sigma_max"],
+            "Training": [
+                "epochs",
+                "batch_size",
+                "lr",
+                "coef_lr",
+                "gradient_accumulation_steps",
+                "fp16",
+                "max_frames",
+                "max_words",
+                "seed",
+            ],
+            "Model": [
+                "pretrained_clip_name",
+                "backbone_type",
+                "clip_layer_norm_precision",
+                "backbone_name",
+                "backbone_path",
+                "eva_clip_root",
+                "eva_clip_use_xattn",
+                "sim_header",
+                "linear_patch",
+                "extra_video_cls_num",
+                "extra_text_cls_num",
+                "use_attributes",
+                "max_words_attrs",
+                "attr_num_blocks",
+            ],
             "HardNeg": [
-                "use_hard_negative_packing", "use_explicit_hard_negative_loss",
-                "hard_negative_path", "hard_negative_pack_seed", "w_hard_negative",
+                "use_hard_negative_packing",
+                "use_explicit_hard_negative_loss",
+                "hard_negative_path",
+                "hard_negative_pack_seed",
+                "w_hard_negative",
             ],
-            "Query": ["w_query_sim", "w_uncertainty_reg", "w_evidential", "w_neg_reg",
-                      "fusion_temperature", "num_queries", "num_expansion_tokens"],
-            "UACL": [
-                "use_uacl_intra_alignment", "w_uacl_intra", "w_uacl_kl",
-                "uacl_temperature", "uacl_sample_strategy",
-            ],
-            "Annealing": ["anneal_warmup_epochs", "warmup_steps"],
-            "Uncertainty": ["uncertainty_mode", "experiment_profile"],
-            "Scoring": [
-                "final_score_mode", "lambda_prob", "lambda_anchor",
-                "lambda_qc_sap", "qc_sap_temperature",
+            "Protocol": [
+                "datatype",
+                "do_train",
+                "do_eval",
+                "eval_split",
+                "expand_msrvtt_sentences",
+                "source_train_csv",
+                "test_csv",
+                "split_manifest",
+                "experiment_profile",
             ],
         }
         printed_keys = set()

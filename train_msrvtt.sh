@@ -19,16 +19,10 @@ python3 "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
     --manifest "${SPLIT_MANIFEST}" \
     --output-dir "${GENERATED_SPLIT_DIR}"
 
-# Use a merged attributes map (train9k + jsfusion test1k) to ensure eval split coverage.
-# The MSRVTT dataloader supports comma-separated paths and will merge them at runtime.
-ATTRIBUTES_PATH=/data2/hxj/project/UATVR/deploy_qwen/attributes/msrvtt/final/msrvtt_train9k_attributes.json,/data2/hxj/project/UATVR/deploy_qwen/attributes/msrvtt/final/msrvtt_jsfusion_test_attributes.json
-MAX_WORDS_ATTRS=77
-ATTR_NUM_BLOCKS=4
-
 # Auto-run id to avoid overwriting checkpoints/logs across runs
 RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
 OUTPUT_DIR=${OUTPUT_DIR:-ckpts/ckpt_msrvtt_${RUN_ID}}
-EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-default}
+EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-hygiene}
 BACKBONE_TYPE=${BACKBONE_TYPE:-openai_clip}
 BACKBONE_NAME=${BACKBONE_NAME:-EVA02-CLIP-B-16}
 BACKBONE_PATH=${BACKBONE_PATH:-${ROOT_DIR}/research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
@@ -46,12 +40,6 @@ fi
 if [[ "${CLIP_LAYER_NORM_PRECISION}" != "fp16" && "${CLIP_LAYER_NORM_PRECISION}" != "fp32" ]]; then
     echo "Unsupported CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION}; expected fp16 or fp32" >&2
     exit 2
-fi
-EXTRA_PROFILE_ARGS=()
-if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
-    EXTRA_PROFILE_ARGS+=(--final_score_mode wti)
-    EXTRA_PROFILE_ARGS+=(--w_mil 0 --w_evidential 0 --w_neg_reg 0 --w_orth 0)
-    EXTRA_PROFILE_ARGS+=(--uncertainty_mode none)
 fi
 EXTRA_BACKBONE_ARGS=()
 if [[ "${EVA_CLIP_USE_XATTN}" == "1" ]]; then
@@ -86,7 +74,6 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     --feature_framerate 1 --coef_lr 1e-3 \
     --freeze_layer_num 0 --slice_framepos 3 \
     --loose_type --linear_patch 2d --sim_header seqTransf \
-    --strategy 2 \
     --pretrained_clip_name ViT-B/16 \
     --backbone_type "${BACKBONE_TYPE}" \
     --clip_layer_norm_precision "${CLIP_LAYER_NORM_PRECISION}" \
@@ -96,36 +83,6 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     "${EXTRA_BACKBONE_ARGS[@]}" \
     --extra_video_cls_num 2 \
     --extra_text_cls_num 2 \
-    --n_video_embeddings 7 \
-    --n_text_embeddings 7 \
-    --mamba_lr_ratio 0.1 \
-    --uncertainty_text_head text \
-    --log_sigma_min -1.5 \
-    --log_sigma_max 4 \
-    --w_evidential 1e-2 \
-    --w_neg_reg 5e-2 \
-    --w_orth 0.1 \
-    --w_uncertainty_reg 1e-3 \
-    --final_score_mode "${FINAL_SCORE_MODE:-wti}" \
-    --lambda_prob "${LAMBDA_PROB:-0.0}" \
-    --lambda_anchor "${LAMBDA_ANCHOR:-0.0}" \
-    --lambda_qc_sap "${LAMBDA_QC_SAP:-0.0}" \
-    --qc_sap_temperature "${QC_SAP_TEMPERATURE:-0.1}" \
-    --gate_log_interval 100 \
-    --log_moe_weights \
-    --fusion_mode prob_mos \
-    --w_query_sim 0.5 \
-    --fusion_temperature 1.5 \
-    \
-    --rope_mode 2d \
-    --use_ada_norm \
-    --anneal_warmup_epochs 0 \
-    --uncertainty_mode "${UNCERTAINTY_MODE:-evidential}" \
     --experiment_profile "${EXPERIMENT_PROFILE}" \
     --experiment_desc "${EXPERIMENT_DESC:-}" \
-    "$@" \
-    "${EXTRA_PROFILE_ARGS[@]}" # --enhanced_fusion_input \
-# --use_attributes \
-# --msrvtt_attributes_path "${ATTRIBUTES_PATH}" \
-# --max_words_attrs "${MAX_WORDS_ATTRS}" \
-# --attr_num_blocks "${ATTR_NUM_BLOCKS}"
+    "$@"
