@@ -290,11 +290,59 @@ def test_checkpoint_backbone_contract_accepts_matching_resume(backbone_type, che
 def test_checkpoint_backbone_contract_allows_upper_layers_without_backbone_identity():
     state_dict = {
         "transformerClip.resblocks.0.attn.in_proj_weight": torch.ones(1),
-        "sap.anchor_queries": torch.ones(1),
+        "text_weight_fc.0.weight": torch.ones(1),
     }
 
     UATVR._validate_checkpoint_backbone(state_dict, "openai_clip")
     UATVR._validate_checkpoint_backbone(state_dict, "eva_clip")
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "sap.anchor_tokens",
+        "module.sap.anchor_tokens",
+        "qc_sap_text_proj.weight",
+        "qc_sap_anchor_proj.weight",
+        "pie_net_text.query_proj.weight",
+        "uncertain_net_text.fc_logsigma.weight",
+        "ada_norm_text.scale_net.weight",
+        "expansion_tokens",
+        "module.expansion_tokens",
+        "spatial_enhancer.attention.qkvo.weight",
+    ],
+)
+def test_retired_auxiliary_checkpoint_keys_are_rejected(key):
+    with pytest.raises(ValueError, match=r"retired auxiliary checkpoint"):
+        UATVR._validate_retired_checkpoint_keys({key: torch.ones(1)})
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "text_weight_fc.0.weight",
+        "video_weight_fc.0.weight",
+        "transformerClip.resblocks.0.attn.in_proj_weight",
+        "clip.visual.conv1.weight",
+        "clip.visual.patch_embed.proj.weight",
+    ],
+)
+def test_active_wti_checkpoint_keys_are_not_rejected(key):
+    UATVR._validate_retired_checkpoint_keys({key: torch.ones(1)})
+
+
+def test_from_pretrained_rejects_retired_keys_before_backbone_loading(monkeypatch):
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("backbone validation must not run first")
+
+    monkeypatch.setattr(UATVR, "_validate_checkpoint_backbone", fail_if_called)
+    task_config = types.SimpleNamespace(backbone_type="openai_clip", local_rank=0)
+    with pytest.raises(ValueError, match=r"retired auxiliary checkpoint"):
+        UATVR.from_pretrained(
+            "cross-base",
+            state_dict={"sap.anchor_tokens": torch.ones(1)},
+            task_config=task_config,
+        )
 
 
 def test_checkpoint_backbone_contract_rejects_mixed_backbone_keys():

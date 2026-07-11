@@ -50,11 +50,39 @@ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
     a simple interface for dowloading and loading pretrained models.
     """
 
+    RETIRED_CHECKPOINT_PREFIXES = (
+        "sap.",
+        "qc_sap_text_proj.",
+        "qc_sap_anchor_proj.",
+        "pie_net_text.",
+        "uncertain_net_text.",
+        "ada_norm_text.",
+        "spatial_enhancer.",
+    )
+    RETIRED_CHECKPOINT_ROOT_KEYS = frozenset({"expansion_tokens"})
+
     def __init__(self, cross_config, *inputs, **kwargs):
         super(CLIP4ClipPreTrainedModel, self).__init__(cross_config)
         self.cross_config = cross_config
         self.clip = None
         self.cross = None
+
+    @classmethod
+    def _validate_retired_checkpoint_keys(cls, state_dict):
+        matched = []
+        for raw_key in state_dict:
+            key = raw_key[7:] if raw_key.startswith("module.") else raw_key
+            if key in cls.RETIRED_CHECKPOINT_ROOT_KEYS or key.startswith(
+                cls.RETIRED_CHECKPOINT_PREFIXES
+            ):
+                matched.append(raw_key)
+        if matched:
+            preview = sorted(matched)[:8]
+            raise ValueError(
+                "retired auxiliary checkpoint is unsupported; "
+                f"matched_keys={preview}, total={len(matched)}. "
+                "No automatic migration is provided; use the matching Git revision."
+            )
 
     @staticmethod
     def _validate_checkpoint_backbone(state_dict, backbone_type):
@@ -103,6 +131,7 @@ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
 
         if state_dict is None:
             state_dict = {}
+        cls._validate_retired_checkpoint_keys(state_dict)
         backbone_type = getattr(task_config, "backbone_type", "openai_clip")
         cls._validate_checkpoint_backbone(state_dict, backbone_type)
         clip_state_dict = None

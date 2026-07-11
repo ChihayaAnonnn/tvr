@@ -872,8 +872,6 @@ def load_model(epoch, args, n_gpu, device, model_file=None):  # for evaluation a
         model_file = os.path.join(args.output_dir, "pytorch_model.bin.{}".format(epoch))
     if os.path.exists(model_file):
         model_state_dict = torch.load(model_file, map_location="cpu", weights_only=True)
-        if args.local_rank == 0:
-            logger.info("Model loaded from %s", model_file)
         # Prepare model
         cache_dir = (
             args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), "distributed")
@@ -882,6 +880,8 @@ def load_model(epoch, args, n_gpu, device, model_file=None):  # for evaluation a
             args.cross_model, cache_dir=cache_dir, state_dict=model_state_dict, task_config=args
         )
         model.to(device)
+        if args.local_rank == 0:
+            logger.info("Model loaded from %s", model_file)
     else:
         model = None
     return model
