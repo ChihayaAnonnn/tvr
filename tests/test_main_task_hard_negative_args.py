@@ -179,6 +179,30 @@ def test_hygiene_cli_rejects_changed_batch_protocol(
         get_args()
 
 
+def test_cli_rejects_abbreviated_long_options(monkeypatch, capsys):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--do_train",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
+            "--experiment_p",
+            "default",
+            "--gradient_accumulation_step",
+            "2",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        get_args()
+
+    assert exc_info.value.code == 2
+    assert "unrecognized arguments" in capsys.readouterr().err
+
+
 def test_get_args_accepts_eva_clip_backbone_options(monkeypatch):
     monkeypatch.setattr(
         "sys.argv",
@@ -613,7 +637,9 @@ def test_train_script_rejects_invalid_pipeline_worker_settings(
         ["--batch_size", "320"],
         ["--batch_size=320"],
         ["--gradient_accumulation_steps", "2"],
+        ["--gradient_accumulation_step", "2"],
         ["--experiment_profile", "default"],
+        ["--experiment_p", "default"],
         ["--backbone_type", "eva_clip"],
     ],
 )

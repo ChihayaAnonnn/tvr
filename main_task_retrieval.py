@@ -62,7 +62,7 @@ def validate_trusted_cli(args):
 
 
 def get_args(description="CLIP4Clip on Retrieval Task"):
-    parser = argparse.ArgumentParser(description=description)
+    parser = argparse.ArgumentParser(description=description, allow_abbrev=False)
     parser.add_argument("--do_pretrain", action="store_true", help="Whether to run training.")
     parser.add_argument("--do_train", action="store_true", help="Whether to run training.")
     parser.add_argument("--do_eval", action="store_true", help="Whether to run eval on the dev set.")

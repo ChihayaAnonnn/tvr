@@ -46,21 +46,35 @@ if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygien
     exit 2
 fi
 if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
+    _PROTECTED_P0_OPTIONS=(
+        --batch_size
+        --gradient_accumulation_steps
+        --experiment_profile
+        --eval_split
+        --datatype
+        --expand_msrvtt_sentences
+        --backbone_type
+        --pretrained_clip_name
+        --clip_layer_norm_precision
+        --clip_gradient_checkpointing
+        --clip_visual_checkpoint_layers
+        --tqfs_cache_dir
+        --train_csv
+        --val_csv
+        --source_train_csv
+        --test_csv
+        --split_manifest
+        --data_path
+        --features_path
+    )
     for _ARG in "$@"; do
         _FLAG="${_ARG%%=*}"
-        case "${_FLAG}" in
-            --batch_size | --gradient_accumulation_steps | \
-            --experiment_profile | --eval_split | --datatype | \
-            --expand_msrvtt_sentences | --backbone_type | \
-            --pretrained_clip_name | --clip_layer_norm_precision | \
-            --clip_gradient_checkpointing | \
-            --clip_visual_checkpoint_layers | --tqfs_cache_dir | \
-            --train_csv | --val_csv | --source_train_csv | --test_csv | \
-            --split_manifest | --data_path | --features_path)
+        for _PROTECTED in "${_PROTECTED_P0_OPTIONS[@]}"; do
+            if [[ "${_FLAG}" == "${_PROTECTED}" || "${_PROTECTED}" == "${_FLAG}"* ]]; then
                 echo "hygiene P0 cannot override protected P0 option ${_FLAG} via trailing arguments" >&2
                 exit 2
-                ;;
-        esac
+            fi
+        done
     done
 fi
 if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
