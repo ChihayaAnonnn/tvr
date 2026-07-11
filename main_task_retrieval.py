@@ -52,6 +52,13 @@ def validate_trusted_cli(args):
         or args.use_explicit_hard_negative_loss
     ):
         raise ValueError("hygiene forbids hard-negative diagnostic paths")
+    if args.do_train and args.experiment_profile == "hygiene":
+        if args.batch_size != 256:
+            raise ValueError("hygiene requires --batch_size=256")
+        if args.gradient_accumulation_steps != 1:
+            raise ValueError(
+                "hygiene requires --gradient_accumulation_steps=1"
+            )
 
 
 def get_args(description="CLIP4Clip on Retrieval Task"):

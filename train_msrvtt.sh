@@ -36,6 +36,7 @@ EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN:-0}
 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION:-fp16}
 CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING:-1}
 CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS:-4}
+A800_THROUGHPUT_COMPARISON=${A800_THROUGHPUT_COMPARISON:-0}
 TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS:-8}
 TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR:-2}
 TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
@@ -43,6 +44,24 @@ TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS:-1}
 if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
     echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
     exit 2
+fi
+if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
+    for _ARG in "$@"; do
+        _FLAG="${_ARG%%=*}"
+        case "${_FLAG}" in
+            --batch_size | --gradient_accumulation_steps | \
+            --experiment_profile | --eval_split | --datatype | \
+            --expand_msrvtt_sentences | --backbone_type | \
+            --pretrained_clip_name | --clip_layer_norm_precision | \
+            --clip_gradient_checkpointing | \
+            --clip_visual_checkpoint_layers | --tqfs_cache_dir | \
+            --train_csv | --val_csv | --source_train_csv | --test_csv | \
+            --split_manifest | --data_path | --features_path)
+                echo "hygiene P0 cannot override protected P0 option ${_FLAG} via trailing arguments" >&2
+                exit 2
+                ;;
+        esac
+    done
 fi
 if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
     echo "Unsupported EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}; expected 0 or 1" >&2
@@ -54,6 +73,10 @@ if [[ "${CLIP_LAYER_NORM_PRECISION}" != "fp16" && "${CLIP_LAYER_NORM_PRECISION}"
 fi
 if [[ "${CLIP_GRADIENT_CHECKPOINTING}" != "0" && "${CLIP_GRADIENT_CHECKPOINTING}" != "1" ]]; then
     echo "Unsupported CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING}; expected 0 or 1" >&2
+    exit 2
+fi
+if [[ "${A800_THROUGHPUT_COMPARISON}" != "0" && "${A800_THROUGHPUT_COMPARISON}" != "1" ]]; then
+    echo "Unsupported A800_THROUGHPUT_COMPARISON=${A800_THROUGHPUT_COMPARISON}; expected 0 or 1" >&2
     exit 2
 fi
 if ! [[ "${CLIP_VISUAL_CHECKPOINT_LAYERS}" =~ ^[0-9]+$ ]]; then
@@ -82,6 +105,10 @@ fi
 # P0 固定 batch 256 + accum 1，有效 batch = 256；4 卡时每卡 micro-batch 64。
 # 0/1 位于 NUMA 0，2/4 位于 NUMA 1，且 2/4 之间为 NV8。
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,4}"
+if ! [[ "${CUDA_VISIBLE_DEVICES}" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
+    echo "malformed CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}; expected comma-separated integer GPU IDs" >&2
+    exit 2
+fi
 IFS=',' read -ra _GPUS <<< "${CUDA_VISIBLE_DEVICES}"
 NPROC="${NPROC:-${#_GPUS[@]}}"
 
@@ -113,6 +140,18 @@ if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
 fi
 
 if [[ "${CLIP_GRADIENT_CHECKPOINTING}" == "0" ]]; then
+    if [[ "${A800_THROUGHPUT_COMPARISON}" != "1" ]]; then
+        echo "checkpoint-off requires A800_THROUGHPUT_COMPARISON=1" >&2
+        exit 2
+    fi
+    if [[ "${RUN_ID}" != a800_no_ckpt_* ]]; then
+        echo "checkpoint-off RUN_ID must start with a800_no_ckpt_; got ${RUN_ID}" >&2
+        exit 2
+    fi
+    if [[ "${OUTPUT_DIR}" != *"${RUN_ID}"* ]]; then
+        echo "checkpoint-off OUTPUT_DIR must contain RUN_ID=${RUN_ID}; got ${OUTPUT_DIR}" >&2
+        exit 2
+    fi
     echo "[train_msrvtt.sh] A800 throughput comparison: activation checkpointing disabled"
 fi
 echo "[train_msrvtt.sh] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} NPROC=${NPROC} TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS} TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR} TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE} TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS} TQFS_CACHE_DIR=${TQFS_CACHE_DIR}"

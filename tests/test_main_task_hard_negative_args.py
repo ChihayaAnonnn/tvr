@@ -145,6 +145,40 @@ def test_dataloader_cli_rejects_invalid_worker_settings(
         get_args()
 
 
+@pytest.mark.parametrize(
+    ("flag", "value", "message"),
+    [
+        ("--batch_size", "320", "hygiene requires --batch_size=256"),
+        (
+            "--gradient_accumulation_steps",
+            "2",
+            "hygiene requires --gradient_accumulation_steps=1",
+        ),
+    ],
+)
+def test_hygiene_cli_rejects_changed_batch_protocol(
+    monkeypatch, flag, value, message
+):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--do_train",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
+            "--experiment_profile",
+            "hygiene",
+            flag,
+            value,
+        ],
+    )
+
+    with pytest.raises(ValueError, match=message):
+        get_args()
+
+
 def test_get_args_accepts_eva_clip_backbone_options(monkeypatch):
     monkeypatch.setattr(
         "sys.argv",
@@ -257,6 +291,7 @@ def _run_with_fake_torchrun(
     gradient_checkpointing="1",
     visual_checkpoint_layers="4",
     extra_env=None,
+    script_args=None,
 ):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -293,7 +328,7 @@ def _run_with_fake_torchrun(
         else:
             env[name] = value
     return subprocess.run(
-        ["bash", str(PROJECT_ROOT / script_name)],
+        ["bash", str(PROJECT_ROOT / script_name), *(script_args or [])],
         cwd=PROJECT_ROOT,
         env=env,
         capture_output=True,
@@ -353,11 +388,19 @@ def test_scripts_reject_invalid_clip_layer_norm_precision(script_name, tmp_path)
 def test_train_script_controls_clip_gradient_checkpointing(
     value, expects_flag, tmp_path
 ):
+    comparison_env = None
+    if value == "0":
+        comparison_env = {
+            "A800_THROUGHPUT_COMPARISON": "1",
+            "RUN_ID": "a800_no_ckpt_test",
+            "OUTPUT_DIR": str(tmp_path / "a800_no_ckpt_test"),
+        }
     result, capture_path = _run_with_fake_torchrun(
         "train_msrvtt.sh",
         tmp_path,
         "0",
         gradient_checkpointing=value,
+        extra_env=comparison_env,
     )
 
     assert result.returncode == 0, result.stderr
@@ -392,6 +435,46 @@ def test_train_script_rejects_invalid_clip_visual_checkpoint_layers(tmp_path):
 
     assert result.returncode == 2
     assert "CLIP_VISUAL_CHECKPOINT_LAYERS=four" in result.stderr
+    assert not capture_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("extra_env", "message"),
+    [
+        (
+            {"A800_THROUGHPUT_COMPARISON": "0"},
+            "requires A800_THROUGHPUT_COMPARISON=1",
+        ),
+        (
+            {
+                "A800_THROUGHPUT_COMPARISON": "1",
+                "RUN_ID": "ordinary-run",
+            },
+            "RUN_ID must start with a800_no_ckpt_",
+        ),
+        (
+            {
+                "A800_THROUGHPUT_COMPARISON": "1",
+                "RUN_ID": "a800_no_ckpt_test",
+                "OUTPUT_DIR": "/tmp/shared-output",
+            },
+            "OUTPUT_DIR must contain RUN_ID",
+        ),
+    ],
+)
+def test_checkpoint_off_requires_comparison_identity(
+    tmp_path, extra_env, message
+):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh",
+        tmp_path,
+        "0",
+        gradient_checkpointing="0",
+        extra_env=extra_env,
+    )
+
+    assert result.returncode == 2
+    assert message in result.stderr
     assert not capture_path.exists()
 
 
@@ -466,6 +549,20 @@ def test_hygiene_train_script_rejects_invalid_gpu_world(
     assert not capture_path.exists()
 
 
+@pytest.mark.parametrize("visible", ["0,1,2, 4", "0,1,,4", "0,1,2,x"])
+def test_hygiene_train_script_rejects_malformed_gpu_list(tmp_path, visible):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh",
+        tmp_path,
+        "0",
+        extra_env={"CUDA_VISIBLE_DEVICES": visible, "NPROC": "4"},
+    )
+
+    assert result.returncode == 2
+    assert "malformed CUDA_VISIBLE_DEVICES" in result.stderr
+    assert not capture_path.exists()
+
+
 @pytest.mark.parametrize(
     ("extra_env", "message"),
     [
@@ -485,6 +582,50 @@ def test_hygiene_train_script_rejects_changed_batch_protocol(
 
     assert result.returncode == 2
     assert message in result.stderr
+    assert not capture_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("extra_env", "message"),
+    [
+        ({"TRAIN_NUM_WORKERS": "-1"}, "Unsupported TRAIN_NUM_WORKERS=-1"),
+        (
+            {"TRAIN_PREFETCH_FACTOR": "0"},
+            "Unsupported TRAIN_PREFETCH_FACTOR=0",
+        ),
+    ],
+)
+def test_train_script_rejects_invalid_pipeline_worker_settings(
+    tmp_path, extra_env, message
+):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh", tmp_path, "0", extra_env=extra_env
+    )
+
+    assert result.returncode == 2
+    assert message in result.stderr
+    assert not capture_path.exists()
+
+
+@pytest.mark.parametrize(
+    "script_args",
+    [
+        ["--batch_size", "320"],
+        ["--batch_size=320"],
+        ["--gradient_accumulation_steps", "2"],
+        ["--experiment_profile", "default"],
+        ["--backbone_type", "eva_clip"],
+    ],
+)
+def test_hygiene_train_script_rejects_protected_cli_override(
+    tmp_path, script_args
+):
+    result, capture_path = _run_with_fake_torchrun(
+        "train_msrvtt.sh", tmp_path, "0", script_args=script_args
+    )
+
+    assert result.returncode == 2
+    assert "cannot override protected P0 option" in result.stderr
     assert not capture_path.exists()
 
 
