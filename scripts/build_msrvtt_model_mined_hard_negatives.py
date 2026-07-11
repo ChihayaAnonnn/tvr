@@ -25,7 +25,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -39,7 +38,6 @@ from scripts.build_msrvtt_hard_negatives import (  # noqa: E402
     STOPWORDS,
     TOKEN_RE,
 )
-
 
 DEFAULT_CKPT = "ckpts/ckpt_msrvtt_20260617_b1only_v2_repeat1/pytorch_model.bin.4"
 DEFAULT_DATA_ROOT = "/data2/hxj/data/MSRVTT"
@@ -593,7 +591,6 @@ def encode_all_videos(args: argparse.Namespace, model, dataset, video_ids: Seque
     import torch
 
     visual_outputs = []
-    visual_hiddens = []
     video_masks = []
     total = len(video_ids)
     with torch.no_grad():
@@ -602,14 +599,12 @@ def encode_all_videos(args: argparse.Namespace, model, dataset, video_ids: Seque
             video, video_mask = load_video_batch(dataset, video_ids, start, end)
             video = video.to(device)
             video_mask = video_mask.to(device)
-            visual_output, visual_hidden = model.get_visual_output(video, video_mask, shaped=False)
+            visual_output = model.get_visual_output(video, video_mask, shaped=False)
             visual_outputs.append(visual_output.detach().cpu())
-            visual_hiddens.append(visual_hidden.detach().cpu())
             video_masks.append(video_mask.detach().cpu())
             print(f"[model-mined] encoded videos {end}/{total}", flush=True)
     return (
         torch.cat(visual_outputs, dim=0),
-        torch.cat(visual_hiddens, dim=0),
         torch.cat(video_masks, dim=0),
     )
 
@@ -653,7 +648,7 @@ def mine_mapping_with_model(
 
     video_to_sample_indices = build_video_to_sample_indices(all_samples)
     video_to_index = {video_id: idx for idx, video_id in enumerate(video_ids)}
-    visual_output_all, visual_hidden_all, video_mask_all = encode_all_videos(args, model, dataset, video_ids, device)
+    visual_output_all, video_mask_all = encode_all_videos(args, model, dataset, video_ids, device)
     total = len(pending_samples)
     start_time = time.time()
     last_checkpoint = 0
@@ -677,7 +672,6 @@ def mine_mapping_with_model(
                     sequence_output,
                     text_token,
                     visual_output_all[video_start:video_end].to(device),
-                    visual_hidden_all[video_start:video_end].to(device),
                     mask,
                     video_mask_all[video_start:video_end].to(device),
                     loose_type=model.loose_type,

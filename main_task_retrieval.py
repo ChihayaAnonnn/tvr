@@ -1539,18 +1539,6 @@ def _log_eval_stats_tsv(args, model, step):
         f.write(line)
 
 
-def _to_cpu_optional(tensor):
-    return None if tensor is None else tensor.cpu()
-
-
-def _cat_optional_tensors(tensors):
-    if all(tensor is None for tensor in tensors):
-        return None
-    if any(tensor is None for tensor in tensors):
-        raise ValueError("mixed optional tensor values in eval cache")
-    return torch.cat(tensors, dim=0)
-
-
 def _run_on_single_gpu(
     args,
     model,
@@ -1560,15 +1548,12 @@ def _run_on_single_gpu(
     batch_visual_output_list,
 ):
     # Cat on CPU — features were already moved to CPU in eval_epoch to reduce GPU pressure
-    visual_output_cls_all = torch.cat([v[0] for v in batch_visual_output_list], dim=0)
-    visual_output_all_full = _cat_optional_tensors(
-        [v[1] for v in batch_visual_output_list]
-    )
+    visual_output_all = torch.cat(batch_visual_output_list, dim=0)
     video_mask_all = torch.cat([v[0] for v in batch_list_v], dim=0)
 
     device = next(model.parameters()).device
     chunk_size = getattr(args, "eval_vid_chunk_size", 128)
-    n_vid = visual_output_cls_all.size(0)
+    n_vid = visual_output_all.size(0)
 
     sim_matrix = []
     for idx1, b1 in enumerate(batch_list_t):
@@ -1582,19 +1567,13 @@ def _run_on_single_gpu(
         row_logits = []
         for v_start in range(0, n_vid, chunk_size):
             v_end       = min(v_start + chunk_size, n_vid)
-            cls_chunk   = visual_output_cls_all[v_start:v_end].to(device)
-            full_chunk  = (
-                None
-                if visual_output_all_full is None
-                else visual_output_all_full[v_start:v_end].to(device)
-            )
+            visual_chunk = visual_output_all[v_start:v_end].to(device)
             vmask_chunk = video_mask_all[v_start:v_end].to(device)
 
-            chunk_logits, *_tmp2 = model.get_similarity_logits(
+            chunk_logits, _ = model.get_similarity_logits(
                 seq_dev,
                 tok_dev,
-                cls_chunk,
-                full_chunk,
+                visual_chunk,
                 mask_dev,
                 vmask_chunk,
                 loose_type=model.loose_type,
@@ -1721,22 +1700,18 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
                 if len(filter_inds) > 0:
                     video, video_mask = video[filter_inds, ...], video_mask[filter_inds, ...]
                     visual_output = model.get_visual_output(video, video_mask)
-                    batch_visual_output_list.append(
-                        (_to_cpu_optional(visual_output[0]), _to_cpu_optional(visual_output[1]))
-                    )
+                    batch_visual_output_list.append(visual_output.cpu())
                     batch_list_v.append((video_mask.cpu(),))
                 total_video_num += b
             else:
-                sequence_output, text_token, visual_output, visual_output_all = model.get_sequence_visual_output(
+                sequence_output, text_token, visual_output = model.get_sequence_visual_output(
                     input_ids, segment_ids, input_mask, video, video_mask
                 )
 
                 # Move to CPU immediately to reduce peak GPU memory during similarity computation
                 batch_sequence_output_list.append((sequence_output.cpu(), text_token.cpu()))
                 batch_list_t.append((input_mask.cpu(), segment_ids.cpu()))
-                batch_visual_output_list.append(
-                    (visual_output.cpu(), _to_cpu_optional(visual_output_all))
-                )
+                batch_visual_output_list.append(visual_output.cpu())
                 batch_list_v.append((video_mask.cpu(),))
 
         # ----------------------------------
@@ -1768,10 +1743,7 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
 
                     devc_batch_list = [tuple(t.to(devc) for t in b) for b in batch_sequence_output_list[s_:e_]]
                     batch_t_output_splits.append(devc_batch_list)
-                    devc_batch_list = [
-                        tuple(None if t is None else t.to(devc) for t in b)
-                        for b in batch_visual_output_list
-                    ]
+                    devc_batch_list = [tensor.to(devc) for tensor in batch_visual_output_list]
                     batch_v_output_splits.append(devc_batch_list)
 
             parameters_tuple_list = [

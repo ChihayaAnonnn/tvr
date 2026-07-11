@@ -13,22 +13,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-spatial_enhancer_stub = types.ModuleType("modules.spatial_enhancer")
-spatial_enhancer_stub.SpatialEnhancer = object
-sys.modules["modules.spatial_enhancer"] = spatial_enhancer_stub
 UATVR = importlib.import_module("modules.modeling_mulit").UATVR
 MultiPositiveCrossEn = importlib.import_module(
     "modules.until_module"
 ).MultiPositiveCrossEn
-PIENet = importlib.import_module("prob_models.pie_model").PIENet
-UncertaintyModuleText = importlib.import_module("prob_models.uncertainty_module").UncertaintyModuleText
 LayerNorm = importlib.import_module("modules.module_clip").LayerNorm
-
-
-class _ExplodingModule(torch.nn.Module):
-    def forward(self, *args, **kwargs):
-        raise AssertionError("inactive hygiene module was called")
-
 
 def test_openai_clip_layer_norm_precision_is_propagated():
     clip = torch.nn.Sequential(LayerNorm(4), LayerNorm(4))
@@ -60,45 +49,69 @@ class _FakeClip(torch.nn.Module):
         return pooled
 
 
-def test_hygiene_visual_encoder_does_not_request_patch_hidden():
+def test_visual_encoder_does_not_request_patch_hidden():
     model = UATVR.__new__(UATVR)
     torch.nn.Module.__init__(model)
     model.clip = _FakeClip()
-    model.hygiene_wti_only = True
-    model.spatial_enhancer = _ExplodingModule()
     video = torch.zeros(2, 3, 2, 2)
-    cls, hidden = model.get_visual_output(
+    cls = model.get_visual_output(
         video,
         torch.tensor([[1, 1]]),
         shaped=True,
         video_frame=2,
     )
     assert cls.shape == (1, 2, 2)
-    assert hidden is None
     assert model.clip.return_hidden_values == [False]
 
 
-def test_hygiene_similarity_skips_sap_and_probability_modules():
-    model = UATVR.__new__(UATVR)
-    torch.nn.Module.__init__(model)
-    model.train()
-    model.hygiene_wti_only = True
-    model.task_config = Namespace(world_size=1, rank=0)
-    model.clip = _FakeClip()
-    model.sap = _ExplodingModule()
-    model.pie_net_text = _ExplodingModule()
-    model.uncertain_net_text = _ExplodingModule()
-    model.text_weight_fc = torch.nn.Linear(2, 1)
-    model.video_weight_fc = torch.nn.Linear(2, 1)
-    result = model._wti_only_similarity(
-        text_token=torch.tensor([[[1.0, 0.0]]]),
-        visual_output=torch.tensor([[[1.0, 0.0]]]),
-        attention_mask=torch.tensor([[1]]),
-        video_mask=torch.tensor([[1]]),
-        video_group_id=torch.tensor([5]),
+def test_eval_scoring_accepts_direct_visual_tensor_cache():
+    from main_task_retrieval import _run_on_single_gpu, eval_epoch
+
+    class _EvalModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.anchor = torch.nn.Parameter(torch.zeros(()))
+            self.loose_type = True
+            self.seen_visual = None
+
+        def get_similarity_logits(
+            self,
+            sequence_output,
+            text_token,
+            visual_output,
+            attention_mask,
+            video_mask,
+            loose_type,
+        ):
+            self.seen_visual = visual_output
+            logits = torch.einsum(
+                "atd,bvd->ab",
+                text_token,
+                visual_output,
+            )
+            return logits, {}
+
+    model = _EvalModel()
+    visual_cache = [
+        torch.tensor([[[1.0, 0.0]]]),
+        torch.tensor([[[0.0, 1.0]]]),
+    ]
+    result = _run_on_single_gpu(
+        Namespace(eval_vid_chunk_size=8, output_dir=""),
+        model,
+        [(torch.ones(1, 1), torch.zeros(1, 1))],
+        [(torch.ones(1, 1),), (torch.ones(1, 1),)],
+        [(torch.zeros(1, 1, 2), torch.tensor([[[1.0, 0.0]]]))],
+        visual_cache,
     )
-    assert result["retrieve_logits"].shape == (1, 1)
-    assert result["video_group_id"].tolist() == [5]
+
+    assert model.seen_visual.shape == (2, 1, 2)
+    assert result[0].shape == (1, 2)
+    source = inspect.getsource(eval_epoch)
+    assert (
+        "[tensor.to(devc) for tensor in batch_visual_output_list]"
+        in source
+    )
 
 
 def test_forward_accepts_explicit_hard_negative_kwargs():
@@ -170,7 +183,8 @@ def _make_forward_only_model(retrieval_logits, group_ids, hard_negative_loss=0.0
     model = UATVR.__new__(UATVR)
     torch.nn.Module.__init__(model)
     model.loss_fct = MultiPositiveCrossEn()
-    model.loss_activations = {"hard_negative": False}
+    model.use_explicit_hard_negative_loss = False
+    model.hard_negative_enabled = False
     model.task_config = Namespace(datatype="msrvtt", world_size=1, rank=0)
     model.loose_type = True
 
@@ -183,21 +197,14 @@ def _make_forward_only_model(retrieval_logits, group_ids, hard_negative_loss=0.0
 
     def get_visual_output(_self, video, video_mask, shaped, video_frame):
         batch = video_mask.size(0)
-        return torch.zeros(batch, 1, 2), torch.zeros(batch, 1, 1, 2)
+        return torch.zeros(batch, 1, 2)
 
     def get_similarity_logits(_self, *args, video_group_id=None, **kwargs):
         assert torch.equal(video_group_id, group_ids)
-        zero = retrieval_logits.new_zeros(())
         return {
             "retrieve_logits": retrieval_logits,
             "video_group_id": group_ids,
-            "MIL_loss": zero,
-            "evidential_loss": zero,
-            "neg_reg_loss": zero,
-            "orth_loss": zero,
             "hard_negative_loss": retrieval_logits.new_tensor(hard_negative_loss),
-            "uacl_intra_loss": zero,
-            "uacl_kl_loss": zero,
         }
 
     model._flatten_video_input = MethodType(flatten_video_input, model)
@@ -230,6 +237,14 @@ def test_forward_uses_bidirectional_multi_positive_loss_and_reports_telemetry():
     ) / 2
 
     torch.testing.assert_close(loss_dict["sim_loss"], expected)
+    assert set(loss_dict) == {
+        "total",
+        "sim_loss",
+        "hard_negative_loss",
+        "unique_video_count",
+        "duplicate_sample_count",
+        "mean_positive_count",
+    }
     assert loss_dict["unique_video_count"].item() == 2
     assert loss_dict["duplicate_sample_count"].item() == 1
     assert loss_dict["mean_positive_count"].item() == pytest.approx(5 / 3)
@@ -379,241 +394,151 @@ def test_uatvr_backbone_contract_rejects_missing_required_hidden_capability(capa
         UATVR._validate_backbone_contract(adapter, embed_dim=512, d_model=512)
 
 
-def test_hygiene_eva_capability_requires_text_hidden_even_without_visual_hidden():
+def test_wti_eva_capability_still_requires_text_hidden():
     spec = types.SimpleNamespace(
         supports_text_hidden=False,
-        supports_visual_hidden=False,
+        supports_visual_hidden=True,
     )
 
     with pytest.raises(ValueError, match="text hidden"):
-        UATVR._validate_eva_spec_capabilities(
-            spec,
-            Namespace(experiment_profile="hygiene", final_score_mode="wti"),
-        )
+        UATVR._validate_eva_spec_capabilities(spec)
 
 
-def test_hygiene_eva_capability_allows_missing_visual_hidden_for_wti():
+def test_wti_eva_capability_never_requires_visual_patch_hidden():
     spec = types.SimpleNamespace(
         supports_text_hidden=True,
         supports_visual_hidden=False,
     )
 
-    assert UATVR._validate_eva_spec_capabilities(
-        spec,
-        Namespace(experiment_profile="hygiene", final_score_mode="wti"),
-    ) == (True, False)
+    assert UATVR._validate_eva_spec_capabilities(spec) == (True, False)
 
 
-def test_default_eva_capability_requires_visual_hidden_for_sap():
-    spec = types.SimpleNamespace(
-        supports_text_hidden=True,
-        supports_visual_hidden=False,
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "probabilistic_text",
+        "compose_final_retrieval_logits",
+        "compute_query_conditioned_sap_logits",
+        "resolve_loss_activations",
+        "evidential_matrix_loss",
+        "_select_uacl_gaussian_sample",
+        "_uacl_intra_contrastive_loss",
+        "_logvar_kl",
+        "_evidential_similarity",
+        "_evidential_nll_loss",
+        "_evidential_neg_reg_loss",
+    ],
+)
+def test_retired_auxiliary_model_api_is_absent(name):
+    assert not hasattr(UATVR, name)
+
+
+def test_visual_hidden_is_absent_from_active_similarity_api():
+    assert "visual_output_hidden" not in inspect.signature(
+        UATVR.get_similarity_logits
+    ).parameters
+    assert "visual_output_hidden" not in inspect.signature(
+        UATVR._loose_similarity
+    ).parameters
+
+
+def test_constructor_source_has_no_retired_auxiliary_fields():
+    source = inspect.getsource(UATVR.__init__)
+    for retired in (
+        "self.sap",
+        "self.qc_sap_",
+        "self.pie_net_text",
+        "self.uncertain_net_text",
+        "self.ada_norm_text",
+        "self.expansion_tokens",
+        "self.spatial_enhancer",
+    ):
+        assert retired not in source
+
+
+def test_hard_negative_activation_requires_positive_weight():
+    assert UATVR._resolve_hard_negative_enabled(True, 0.0) is False
+    assert UATVR._resolve_hard_negative_enabled(False, 0.1) is False
+    assert UATVR._resolve_hard_negative_enabled(True, 0.1) is True
+    with pytest.raises(ValueError, match="non-negative"):
+        UATVR._resolve_hard_negative_enabled(True, -0.1)
+
+
+def _make_wti_unit_model():
+    model = UATVR.__new__(UATVR)
+    torch.nn.Module.__init__(model)
+    model.task_config = Namespace(world_size=1, rank=0)
+    model.clip = _FakeClip()
+    model.text_weight_fc = torch.nn.Linear(2, 1, bias=False)
+    model.video_weight_fc = torch.nn.Linear(2, 1, bias=False)
+    torch.nn.init.zeros_(model.text_weight_fc.weight)
+    torch.nn.init.zeros_(model.video_weight_fc.weight)
+    model.use_explicit_hard_negative_loss = False
+    model.hard_negative_enabled = False
+    model.w_hard_negative = 0.25
+    model._diag_step = 0
+    model._diag_interval = 1000
+    model._diag_chain = {}
+    model._hard_negative_chain = {}
+    return model
+
+
+def _wti_inputs():
+    text = torch.tensor([[[1.0, 0.0]], [[0.0, 1.0]]])
+    video = torch.tensor([[[1.0, 0.0]], [[0.0, 1.0]]])
+    mask = torch.ones(2, 1, dtype=torch.long)
+    groups = torch.tensor([10, 20])
+    return text, video, mask, groups
+
+
+def test_train_and_eval_use_identical_wti_score_source():
+    model = _make_wti_unit_model()
+    text, video, mask, groups = _wti_inputs()
+    model.eval()
+    eval_logits = model._wti_similarity(text, video, mask, mask)
+    model.train()
+    train_result = model._wti_similarity(
+        text, video, mask, mask, video_group_id=groups
     )
-
-    with pytest.raises(ValueError, match="visual hidden"):
-        UATVR._validate_eva_spec_capabilities(
-            spec,
-            Namespace(experiment_profile="default", final_score_mode="wti"),
-        )
+    torch.testing.assert_close(train_result["retrieve_logits"], eval_logits)
+    assert train_result["video_group_id"].tolist() == [10, 20]
 
 
-def test_evidential_matrix_loss_prefers_confident_diagonal():
-    confident = torch.tensor(
-        [
-            [8.0, -1.0, -1.0],
-            [-1.0, 8.0, -1.0],
-            [-1.0, -1.0, 8.0],
-        ]
+def test_hard_negative_is_separate_and_weighted_once():
+    model = _make_wti_unit_model()
+    text, video, mask, groups = _wti_inputs()
+    hard_video = video.flip(0)
+    hard_valid = torch.tensor([True, True])
+    model.eval()
+    expected_retrieve = model._wti_similarity(text, video, mask, mask)
+    model.train()
+    model.use_explicit_hard_negative_loss = True
+    model.hard_negative_enabled = True
+    result = model._wti_similarity(
+        text,
+        video,
+        mask,
+        mask,
+        video_group_id=groups,
+        hard_visual_output=hard_video,
+        hard_video_mask=mask,
+        hard_valid=hard_valid,
     )
-    flat = torch.zeros_like(confident)
-
-    confident_loss, _ = UATVR.evidential_matrix_loss(confident)
-    flat_loss, _ = UATVR.evidential_matrix_loss(flat)
-
-    assert confident_loss < flat_loss
-
-
-def test_model_weight_defaults_match_uncertainty_only_setting():
-    task_config = Namespace()
-
-    assert getattr(task_config, "w_uncertainty_reg", 1e-3) == 1e-3
-
-
-def test_loss_activation_resolver_disables_aux_losses_for_hygiene_profile():
-    task_config = Namespace(
-        experiment_profile="hygiene",
-        uncertainty_mode="evidential",
-        w_mil=0.01,
-        w_evidential=0.01,
-        w_neg_reg=0.05,
-        w_orth=0.1,
-        w_hard_negative=0.05,
-        use_explicit_hard_negative_loss=True,
-        use_uacl_intra_alignment=True,
-        w_uacl_intra=0.01,
-        w_uacl_kl=1e-4,
+    expected_hard_logits = model.weighted_token_wise_intersection(
+        torch.nn.functional.normalize(text, dim=-1),
+        torch.nn.functional.normalize(hard_video, dim=-1),
+        mask,
+        mask,
+    ) * model.clip.logit_scale.exp()
+    expected_raw = model._hard_negative_infonce_loss(
+        result["retrieve_logits"], expected_hard_logits, hard_valid
     )
-
-    active = UATVR.resolve_loss_activations(task_config)
-
-    assert active["mil"] is False
-    assert active["evidential"] is False
-    assert active["neg_reg"] is False
-    assert active["orth"] is False
-    assert active["hard_negative"] is False
-    assert active["uacl_intra"] is False
-    assert active["uacl_kl"] is False
-
-
-def test_hygiene_profile_marks_auxiliary_parameter_names_as_frozen():
-    task_config = Namespace(experiment_profile="hygiene")
-
-    frozen_names = [
-        "sap.anchor_queries",
-        "pie_net_text.fc.weight",
-        "uncertain_net_text.fc_logsigma.weight",
-        "ada_norm_text.scale.weight",
-        "spatial_enhancer.proj.weight",
-    ]
-    trainable_names = [
-        "clip.visual.proj",
-        "transformerClip.resblocks.0.attn.in_proj_weight",
-        "text_weight_fc.0.weight",
-        "video_weight_fc.0.weight",
-        "frame_position_embeddings.weight",
-        "word_position_embeddings.weight",
-    ]
-
-    for name in frozen_names:
-        assert UATVR.should_freeze_parameter_for_profile(name, task_config)
-    for name in trainable_names:
-        assert not UATVR.should_freeze_parameter_for_profile(name, task_config)
-
-
-def test_hygiene_prob_mu_final_score_keeps_required_paths_trainable():
-    task_config = Namespace(
-        experiment_profile="hygiene",
-        final_score_mode="wti_prob_mu",
-        use_ada_norm=True,
+    torch.testing.assert_close(result["retrieve_logits"], expected_retrieve)
+    torch.testing.assert_close(
+        result["hard_negative_loss"], model.w_hard_negative * expected_raw
     )
-
-    trainable_names = [
-        "sap.anchor_queries",
-        "pie_net_text.fc.weight",
-        "uncertain_net_text.fc_logsigma.weight",
-        "ada_norm_text.scale.weight",
-    ]
-    frozen_names = [
-        "spatial_enhancer.proj.weight",
-    ]
-
-    for name in trainable_names:
-        assert not UATVR.should_freeze_parameter_for_profile(name, task_config)
-    for name in frozen_names:
-        assert UATVR.should_freeze_parameter_for_profile(name, task_config)
-
-
-def test_hygiene_anchor_wti_final_score_keeps_only_sap_trainable():
-    task_config = Namespace(
-        experiment_profile="hygiene",
-        final_score_mode="wti_anchor_wti",
-        use_ada_norm=True,
-    )
-
-    assert not UATVR.should_freeze_parameter_for_profile("sap.anchor_queries", task_config)
-    assert not UATVR.should_freeze_parameter_for_profile("sap.decoder.layers.0.self_attn.in_proj_weight", task_config)
-    assert UATVR.should_freeze_parameter_for_profile("sap.anchor_proj.weight", task_config)
-    assert UATVR.should_freeze_parameter_for_profile("sap.evidential_head.dirichlet_layer.weight", task_config)
-    assert UATVR.should_freeze_parameter_for_profile("pie_net_text.fc.weight", task_config)
-    assert UATVR.should_freeze_parameter_for_profile("uncertain_net_text.fc_logsigma.weight", task_config)
-    assert UATVR.should_freeze_parameter_for_profile("ada_norm_text.scale.weight", task_config)
-
-
-def test_hygiene_qc_sap_final_score_keeps_sap_and_gate_trainable():
-    task_config = Namespace(
-        experiment_profile="hygiene",
-        final_score_mode="wti_qc_sap",
-        use_ada_norm=True,
-    )
-
-    assert not UATVR.should_freeze_parameter_for_profile("sap.anchor_queries", task_config)
-    assert not UATVR.should_freeze_parameter_for_profile("sap.decoder.layers.0.self_attn.in_proj_weight", task_config)
-    assert not UATVR.should_freeze_parameter_for_profile("qc_sap_text_proj.weight", task_config)
-    assert not UATVR.should_freeze_parameter_for_profile("qc_sap_anchor_proj.weight", task_config)
-    assert UATVR.should_freeze_parameter_for_profile("sap.anchor_proj.weight", task_config)
-    assert UATVR.should_freeze_parameter_for_profile("sap.evidential_head.dirichlet_layer.weight", task_config)
-    assert UATVR.should_freeze_parameter_for_profile("pie_net_text.fc.weight", task_config)
-    assert UATVR.should_freeze_parameter_for_profile("uncertain_net_text.fc_logsigma.weight", task_config)
-
-
-def test_qc_sap_projection_layers_freeze_when_score_mode_is_inactive():
-    task_config = Namespace(
-        experiment_profile="default",
-        final_score_mode="wti",
-    )
-
-    assert UATVR.should_freeze_parameter_for_profile("qc_sap_text_proj.weight", task_config)
-    assert UATVR.should_freeze_parameter_for_profile("qc_sap_anchor_proj.weight", task_config)
-
-
-def test_compose_final_retrieval_logits_adds_prob_mu_component():
-    wti_logits = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
-    prob_mu_logits = torch.tensor([[0.5, -0.5], [1.0, -1.0]])
-
-    final_logits, score_source = UATVR.compose_final_retrieval_logits(
-        wti_logits,
-        final_score_mode="wti_prob_mu",
-        lambda_prob=0.25,
-        lambda_anchor=0.0,
-        prob_mu_logits=prob_mu_logits,
-        anchor_wti_logits=None,
-    )
-
-    assert score_source == "wti_prob_mu"
-    assert torch.allclose(final_logits, wti_logits + 0.25 * prob_mu_logits)
-
-
-def test_compose_final_retrieval_logits_adds_qc_sap_component():
-    wti_logits = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
-    qc_sap_logits = torch.tensor([[0.25, -0.25], [0.5, -0.5]])
-
-    final_logits, score_source = UATVR.compose_final_retrieval_logits(
-        wti_logits,
-        final_score_mode="wti_qc_sap",
-        lambda_prob=0.0,
-        lambda_anchor=0.0,
-        lambda_qc_sap=0.2,
-        prob_mu_logits=None,
-        anchor_wti_logits=None,
-        qc_sap_logits=qc_sap_logits,
-    )
-
-    assert score_source == "wti_qc_sap"
-    assert torch.allclose(final_logits, wti_logits + 0.2 * qc_sap_logits)
-
-
-def test_query_conditioned_sap_logits_return_pairwise_gate_diagnostics():
-    text_pooled = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
-    anchors = torch.tensor(
-        [
-            [[1.0, 0.0], [-1.0, 0.0]],
-            [[0.0, 1.0], [0.0, -1.0]],
-        ]
-    )
-
-    logits, stats = UATVR.compute_query_conditioned_sap_logits(
-        text_pooled,
-        anchors,
-        logit_scale=torch.tensor(1.0),
-        temperature=0.1,
-    )
-
-    assert logits.shape == (2, 2)
-    assert stats["gate_entropy_pos"] < stats["gate_entropy_neg"]
-    assert stats["gate_top1_mass_pos"] > stats["gate_top1_mass_neg"]
-    assert stats["diag"] > stats["off"]
-    assert stats["gap"] > 0
-    assert stats["std"] > 0
+    assert result["video_group_id"].tolist() == [10, 20]
 
 
 def test_matrix_gap_stats_supports_rectangular_eval_chunks():
@@ -657,137 +582,6 @@ def test_matrix_gap_stats_remain_finite_when_batch_has_no_negatives():
     assert all(torch.isfinite(torch.tensor(value)) for value in stats.values())
 
 
-def test_query_conditioned_sap_diagnostics_use_supplied_positive_mask():
-    text_pooled = torch.tensor([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
-    anchors = torch.tensor(
-        [
-            [[1.0, 0.0], [-1.0, 0.0]],
-            [[1.0, 0.0], [-1.0, 0.0]],
-            [[0.0, 1.0], [0.0, -1.0]],
-        ]
-    )
-    groups = torch.tensor([7, 7, 9])
-    positive_mask = groups[:, None].eq(groups[None, :])
-
-    logits, stats = UATVR.compute_query_conditioned_sap_logits(
-        text_pooled,
-        anchors,
-        logit_scale=torch.tensor(1.0),
-        temperature=0.1,
-        positive_mask=positive_mask,
-    )
-    expected = UATVR._matrix_gap_stats(logits, positive_mask=positive_mask)
-
-    assert stats["diag"] == pytest.approx(expected["diag"])
-    assert stats["off"] == pytest.approx(expected["off"])
-    assert stats["gate_entropy_pos"] < stats["gate_entropy_neg"]
-    assert stats["gate_top1_mass_pos"] > stats["gate_top1_mass_neg"]
-
-
-def test_loss_activation_resolver_matches_uncertainty_mode_semantics():
-    active = UATVR.resolve_loss_activations(
-        Namespace(
-            experiment_profile="default",
-            uncertainty_mode="evidential",
-            w_mil=0.01,
-            w_evidential=0.01,
-            w_neg_reg=0.05,
-            w_orth=0.1,
-            use_explicit_hard_negative_loss=False,
-            use_uacl_intra_alignment=False,
-            w_uacl_intra=0.0,
-            w_uacl_kl=0.0,
-        )
-    )
-    inactive = UATVR.resolve_loss_activations(
-        Namespace(
-            experiment_profile="default",
-            uncertainty_mode="none",
-            w_mil=0.01,
-            w_evidential=0.01,
-            w_neg_reg=0.05,
-            w_orth=0.1,
-            use_explicit_hard_negative_loss=False,
-            use_uacl_intra_alignment=False,
-            w_uacl_intra=0.0,
-            w_uacl_kl=0.0,
-        )
-    )
-
-    assert active["evidential"] is True
-    assert active["neg_reg"] is True
-    assert inactive["evidential"] is False
-    assert inactive["neg_reg"] is False
-
-
-def test_pienet_padding_mask_removes_padding_from_attention():
-    torch.manual_seed(0)
-    pie = PIENet(1, 4, 4, 2)
-    out = torch.zeros(1, 4)
-    x = torch.randn(1, 4, 4)
-    pad_mask = torch.tensor([[False, False, True, True]])
-
-    _out, attn, _residual = pie(out, x, pad_mask=pad_mask)
-
-    assert torch.allclose(attn[0, 2:, 0], torch.zeros(2), atol=1e-6)
-    assert torch.isclose(attn[0, :2, 0].sum(), torch.tensor(1.0), atol=1e-6)
-
-
-def test_uncertainty_module_text_uses_true_padding_mask_for_lengths():
-    torch.manual_seed(0)
-    module = UncertaintyModuleText(4, 4, 2)
-    out = torch.randn(2, 4)
-    x = torch.randn(2, 5, 4)
-    pad_mask = torch.tensor(
-        [
-            [False, False, False, True, True],
-            [False, True, True, True, True],
-        ]
-    )
-
-    result = module(out, x, pad_mask=pad_mask)
-
-    assert result["logsigma"].shape == (2, 4)
-    assert torch.allclose(result["attention"][0, 3:, 0], torch.zeros(2), atol=1e-6)
-    assert torch.allclose(result["attention"][1, 1:, 0], torch.zeros(4), atol=1e-6)
-
-
-def test_evidential_similarity_penalizes_high_uncertainty():
-    """认知不确定性越高，evidential 相似度越低。"""
-    mu_video = torch.tensor([[1.0, 0.0], [0.0, 1.0]])  # [2, 2], 已 L2 norm
-    text_pooled = torch.tensor([[1.0, 0.0], [0.0, 1.0]])  # [2, 2]
-    # 低不确定性
-    epistemic_low = torch.full((2, 4, 2), 0.01)
-    sim_low = UATVR._evidential_similarity(mu_video, text_pooled, epistemic_low)
-    # 高不确定性
-    epistemic_high = torch.full((2, 4, 2), 5.0)
-    sim_high = UATVR._evidential_similarity(mu_video, text_pooled, epistemic_high)
-    # 低不确定性的对角值应大于高不确定性的
-    assert sim_low.diagonal().mean() > sim_high.diagonal().mean()
-
-
-def test_evidential_nll_loss_penalizes_weak_positives():
-    """正对分数越低，NLL loss 越高。"""
-    alpha_dir = torch.tensor([[10.0, 10.0], [10.0, 10.0]])
-    # 强正对
-    sim_strong = torch.tensor([[2.0, -0.5], [-0.5, 2.0]])
-    loss_strong = UATVR._evidential_nll_loss(sim_strong, alpha_dir)
-    # 弱正对
-    sim_weak = torch.tensor([[0.1, -0.5], [-0.5, 0.1]])
-    loss_weak = UATVR._evidential_nll_loss(sim_weak, alpha_dir)
-    assert loss_weak > loss_strong
-
-
-def test_evidential_neg_reg_loss_penalizes_high_negative_evidence():
-    """负对证据量越高，neg_reg loss 越高。"""
-    # 高负对分数
-    sim_high_neg = torch.tensor([[1.0, 3.0, 3.0], [3.0, 1.0, 3.0], [3.0, 3.0, 1.0]])
-    loss_high = UATVR._evidential_neg_reg_loss(sim_high_neg)
-    # 低负对分数
-    sim_low_neg = torch.tensor([[1.0, -1.0, -1.0], [-1.0, 1.0, -1.0], [-1.0, -1.0, 1.0]])
-    loss_low = UATVR._evidential_neg_reg_loss(sim_low_neg)
-    assert loss_high > loss_low
-
 
 def test_explicit_hard_negative_infonce_matches_concatenated_denominator():
     retrieval_logits = torch.tensor(
@@ -825,77 +619,6 @@ def test_explicit_hard_negative_infonce_ignores_all_invalid_hard_negatives():
 
     assert torch.isclose(loss, torch.tensor(0.0))
 
-
-def test_select_closest_gaussian_sample_picks_highest_cosine_sample():
-    mean = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
-    samples = torch.tensor(
-        [
-            [[0.0, 1.0], [0.8, 0.2], [1.0, 0.0]],
-            [[1.0, 0.0], [0.1, 0.9], [0.0, 1.0]],
-        ]
-    )
-
-    selected = UATVR._select_closest_gaussian_sample(mean, samples)
-
-    assert torch.allclose(selected, torch.tensor([[1.0, 0.0], [0.0, 1.0]]))
-
-
-def test_select_uacl_gaussian_sample_keeps_closest_strategy_behavior():
-    mean = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
-    samples = torch.tensor(
-        [
-            [[0.0, 1.0], [0.8, 0.2], [1.0, 0.0]],
-            [[1.0, 0.0], [0.1, 0.9], [0.0, 1.0]],
-        ]
-    )
-
-    selected = UATVR._select_uacl_gaussian_sample(mean, samples, strategy="closest")
-
-    assert torch.allclose(selected, UATVR._select_closest_gaussian_sample(mean, samples))
-
-
-def test_select_uacl_gaussian_sample_random_returns_one_sample_per_row():
-    torch.manual_seed(0)
-    mean = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
-    samples = torch.tensor(
-        [
-            [[0.0, 1.0], [0.8, 0.2], [1.0, 0.0]],
-            [[1.0, 0.0], [0.1, 0.9], [0.0, 1.0]],
-        ]
-    )
-
-    selected = UATVR._select_uacl_gaussian_sample(mean, samples, strategy="random")
-
-    assert selected.shape == mean.shape
-    for row_idx in range(samples.size(0)):
-        assert any(torch.allclose(selected[row_idx], sample) for sample in samples[row_idx])
-
-
-def test_select_uacl_gaussian_sample_rejects_unknown_strategy():
-    mean = torch.tensor([[1.0, 0.0]])
-    samples = torch.tensor([[[1.0, 0.0]]])
-
-    with pytest.raises(ValueError, match="Unknown UACL sample strategy"):
-        UATVR._select_uacl_gaussian_sample(mean, samples, strategy="bad")
-
-
-def test_uacl_intra_contrastive_loss_prefers_aligned_pairs():
-    anchor = torch.eye(3)
-    aligned = anchor.clone()
-    shuffled = anchor[[1, 2, 0]]
-
-    aligned_loss = UATVR._uacl_intra_contrastive_loss(anchor, aligned, temperature=0.1)
-    shuffled_loss = UATVR._uacl_intra_contrastive_loss(anchor, shuffled, temperature=0.1)
-
-    assert aligned_loss < shuffled_loss
-
-
-def test_logvar_kl_is_zero_at_unit_variance_and_positive_otherwise():
-    unit_logvar = torch.zeros(2, 3)
-    shifted_logvar = torch.full((2, 3), 0.5)
-
-    assert torch.isclose(UATVR._logvar_kl(unit_logvar), torch.tensor(0.0))
-    assert UATVR._logvar_kl(shifted_logvar) > 0
 
 
 def _tiny_wti_model(dtype=torch.float32):

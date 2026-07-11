@@ -11,8 +11,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
-import os
 import re
 import statistics
 import sys
@@ -20,7 +18,6 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -300,10 +297,11 @@ def read_validation_items(csv_path: str, max_queries: int = 0) -> list[Validatio
 
 
 def build_validation_dataloader(args: argparse.Namespace):
+    from torch.utils.data import DataLoader
+
     from dataloaders.dataloader_msrvtt_retrieval import MSRVTT_DataLoader
     from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
     from scripts.diagnose_msrvtt_hard_negative_runtime import build_task_args
-    from torch.utils.data import DataLoader
 
     task_args = build_task_args(args, args.baseline_checkpoint)
     tokenizer = ClipTokenizer()
@@ -327,6 +325,7 @@ def build_validation_dataloader(args: argparse.Namespace):
 def compute_validation_sim_matrix(args: argparse.Namespace, checkpoint: str, device):
     import numpy as np
     import torch
+
     from scripts.diagnose_msrvtt_hard_negative_runtime import load_model_for_checkpoint
 
     dataloader = build_validation_dataloader(args)
@@ -341,7 +340,7 @@ def compute_validation_sim_matrix(args: argparse.Namespace, checkpoint: str, dev
             if len(batch) != 5:
                 raise ValueError(f"Unexpected validation batch len={len(batch)}")
             input_ids, input_mask, segment_ids, video, video_mask = batch
-            sequence_output, text_token, visual_output, visual_hidden = model.get_sequence_visual_output(
+            sequence_output, text_token, visual_output = model.get_sequence_visual_output(
                 input_ids,
                 segment_ids,
                 input_mask,
@@ -349,11 +348,10 @@ def compute_validation_sim_matrix(args: argparse.Namespace, checkpoint: str, dev
                 video_mask,
             )
             text_batches.append((sequence_output.cpu(), text_token.cpu(), input_mask.cpu()))
-            video_batches.append((visual_output.cpu(), visual_hidden.cpu(), video_mask.cpu()))
+            video_batches.append((visual_output.cpu(), video_mask.cpu()))
 
         visual_output_all = torch.cat([batch[0] for batch in video_batches], dim=0)
-        visual_hidden_all = torch.cat([batch[1] for batch in video_batches], dim=0)
-        video_mask_all = torch.cat([batch[2] for batch in video_batches], dim=0)
+        video_mask_all = torch.cat([batch[1] for batch in video_batches], dim=0)
         n_video = visual_output_all.size(0)
         sim_rows = []
         for sequence_output, text_token, input_mask in text_batches:
@@ -364,7 +362,6 @@ def compute_validation_sim_matrix(args: argparse.Namespace, checkpoint: str, dev
                     sequence_output.to(device),
                     text_token.to(device),
                     visual_output_all[start:end].to(device),
-                    visual_hidden_all[start:end].to(device),
                     input_mask.to(device),
                     video_mask_all[start:end].to(device),
                     loose_type=model.loose_type,

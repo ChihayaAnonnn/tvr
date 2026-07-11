@@ -1,6 +1,13 @@
+from argparse import Namespace
+
+import torch
+
+import scripts.diagnose_msrvtt_hard_negative_runtime as runtime_diagnostics
+import scripts.diagnose_msrvtt_validation_errors as validation_diagnostics
 from scripts.diagnose_msrvtt_validation_errors import (
     ValidationItem,
     build_validation_error_rows,
+    compute_validation_sim_matrix,
     is_hard_like_pair,
     rank_of_ground_truth,
     summarize_error_rows,
@@ -70,3 +77,63 @@ def test_build_validation_error_rows_classifies_fixed_and_regressed_queries():
     assert summary["fixed_by_hn_count"] == 1
     assert summary["regressed_by_hn_count"] == 1
     assert summary["baseline_error_hard_like_rate"] == 0.5
+
+
+def test_compute_validation_sim_matrix_accepts_three_model_outputs(monkeypatch):
+    class FakeModel:
+        loose_type = True
+
+        def __init__(self):
+            self.similarity_calls = 0
+
+        def eval(self):
+            return self
+
+        def get_sequence_visual_output(
+            self,
+            input_ids,
+            _segment_ids,
+            _input_mask,
+            video,
+            _video_mask,
+        ):
+            sequence_output = input_ids.float().unsqueeze(-1)
+            return sequence_output, sequence_output, video[:, 0]
+
+        def get_similarity_logits(
+            self,
+            sequence_output,
+            _text_token,
+            visual_output,
+            _input_mask,
+            _video_mask,
+            loose_type,
+        ):
+            assert loose_type is self.loose_type
+            self.similarity_calls += 1
+            logits = sequence_output[:, 0, 0].unsqueeze(1) + visual_output[:, 0, 0].unsqueeze(0)
+            return logits, None
+
+    input_ids = torch.tensor([[0], [10]], dtype=torch.long)
+    input_mask = torch.ones_like(input_ids)
+    segment_ids = torch.zeros_like(input_ids)
+    video = torch.tensor([1.0, 2.0]).reshape(2, 1, 1, 1)
+    video_mask = torch.ones((2, 1), dtype=torch.long)
+    dataloader = [(input_ids, input_mask, segment_ids, video, video_mask)]
+    model = FakeModel()
+
+    monkeypatch.setattr(validation_diagnostics, "build_validation_dataloader", lambda _args: dataloader)
+    monkeypatch.setattr(
+        runtime_diagnostics,
+        "load_model_for_checkpoint",
+        lambda _args, _checkpoint, _device: (model, None),
+    )
+
+    scores = compute_validation_sim_matrix(
+        Namespace(video_chunk_size=2),
+        "checkpoint.bin",
+        torch.device("cpu"),
+    )
+
+    assert scores == [[1.0, 2.0], [11.0, 12.0]]
+    assert model.similarity_calls == 1

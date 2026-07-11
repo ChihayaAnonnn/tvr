@@ -14,16 +14,14 @@ import csv
 import importlib.machinery
 import importlib.util
 import json
-import os
 import random
 import statistics
 import sys
-import types
 import time
+import types
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
-
 
 DEFAULT_BASELINE_CKPT = "ckpts/ckpt_msrvtt_20260617_b1only_v2_repeat1/pytorch_model.bin.4"
 DEFAULT_TARGET_CKPT = "ckpts/ckpt_msrvtt_20260630_explicit_hn_infonce_w005_wmil0_4gpu_b64/pytorch_model.bin.3"
@@ -344,7 +342,6 @@ def load_video_batch(dataset, video_ids: list[str], start: int, end: int):
 
 
 def load_model_for_checkpoint(cli_args: argparse.Namespace, checkpoint: str, device):
-    import torch
     from main_task_retrieval import init_model
 
     task_args = build_task_args(cli_args, checkpoint)
@@ -367,7 +364,7 @@ def compute_checkpoint_scores(
     import numpy as np
     import torch
 
-    model, task_args = load_model_for_checkpoint(cli_args, checkpoint, device)
+    model, _task_args = load_model_for_checkpoint(cli_args, checkpoint, device)
     sample_count = len(samples)
     pool_count = len(video_pool)
     score_matrix = np.empty((sample_count, pool_count), dtype=np.float32)
@@ -389,7 +386,7 @@ def compute_checkpoint_scores(
             video, video_mask = load_video_batch(dataset, video_pool, video_start, video_end)
             video = video.to(device)
             video_mask = video_mask.to(device)
-            visual_output, visual_hidden = model.get_visual_output(video, video_mask, shaped=False)
+            visual_output = model.get_visual_output(video, video_mask, shaped=False)
 
             for text_batch_idx, (sequence_output, text_token, text_mask) in enumerate(text_features):
                 row_start = text_batch_idx * cli_args.text_batch_size
@@ -398,7 +395,6 @@ def compute_checkpoint_scores(
                     sequence_output.to(device),
                     text_token.to(device),
                     visual_output,
-                    visual_hidden,
                     text_mask.to(device),
                     video_mask,
                     loose_type=model.loose_type,
