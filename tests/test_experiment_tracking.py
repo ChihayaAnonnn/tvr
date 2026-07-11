@@ -58,7 +58,6 @@ def _args(tmp_path):
     return SimpleNamespace(
         seed=42,
         experiment_profile="hygiene",
-        final_score_mode="wti",
         backbone_type="openai_clip",
         pretrained_clip_name="ViT-B/16",
         clip_layer_norm_precision="fp16",
@@ -71,13 +70,11 @@ def _args(tmp_path):
         source_train_csv="/data/MSRVTT_train.9k.csv",
         data_path="/data/MSRVTT_v2.json",
         split_manifest="dataloaders/splits/msrvtt_trusted_v1_seed42.json",
-        w_mil=0.0,
-        w_evidential=0.0,
-        w_neg_reg=0.0,
-        w_orth=0.0,
+        use_hard_negative_packing=False,
+        use_explicit_hard_negative_loss=False,
+        hard_negative_path="cache_dir/hard_negatives/msrvtt_train_hardneg_clean.json",
+        hard_negative_pack_seed=42,
         w_hard_negative=0.0,
-        w_uacl_intra=0.0,
-        w_uacl_kl=0.0,
     )
 
 
@@ -93,7 +90,40 @@ def test_manifest_contains_protocol_code_data_and_backbone(tmp_path):
     assert payload["backbone"]["type"] == "openai_clip"
     assert payload["backbone"]["clip_layer_norm_precision"] == "fp16"
     assert payload["data"]["test_csv"] == "/data/MSRVTT_JSFUSION_test.csv"
-    assert "argv" not in json.dumps(payload)
+    assert set(payload) == {
+        "protocol_version",
+        "git",
+        "split",
+        "seed",
+        "profile",
+        "backbone",
+        "data",
+        "batch",
+        "hard_negative",
+    }
+    assert "final_score_mode" not in payload
+    assert "losses" not in payload
+    assert payload["hard_negative"] == {
+        "packing_enabled": False,
+        "explicit_loss_enabled": False,
+        "mapping_path": "cache_dir/hard_negatives/msrvtt_train_hardneg_clean.json",
+        "pack_seed": 42,
+        "loss_weight": 0.0,
+    }
+    encoded = json.dumps(payload)
+    assert "argv" not in encoded
+    for retired in (
+        "w_mil",
+        "w_evidential",
+        "w_neg_reg",
+        "w_orth",
+        "w_uacl_intra",
+        "w_uacl_kl",
+        "w_query_sim",
+        "w_uncertainty_reg",
+        "final_score_mode",
+    ):
+        assert retired not in encoded
     path = tmp_path / "experiment_manifest.json"
     atomic_write_json(path, payload)
     assert json.loads(path.read_text())["split"]["manifest_sha256"] == "abc"
@@ -224,10 +254,8 @@ def _run_train_epoch_for_sidecar(tmp_path, telemetry, rank=0, local_rank=1):
     )
     args = SimpleNamespace(
         n_display=1,
-        gate_log_interval=None,
         gradient_accumulation_steps=1,
         epochs=1,
-        log_moe_weights=False,
         output_dir=str(tmp_path),
         rank=rank,
     )
@@ -252,9 +280,9 @@ def _run_train_epoch_for_sidecar(tmp_path, telemetry, rank=0, local_rank=1):
         {"unique_video_count": torch.tensor(2.0)},
     ],
 )
-def test_train_epoch_skips_sidecar_for_legacy_loss_dicts(tmp_path, telemetry):
-    _run_train_epoch_for_sidecar(tmp_path, telemetry)
-    assert not (tmp_path / "batch_protocol_stats.tsv").exists()
+def test_train_epoch_rejects_missing_batch_protocol_telemetry(tmp_path, telemetry):
+    with pytest.raises(ValueError, match="missing required keys"):
+        _run_train_epoch_for_sidecar(tmp_path, telemetry)
 
 
 def test_train_epoch_writes_all_telemetry_fields_to_sidecar(tmp_path):

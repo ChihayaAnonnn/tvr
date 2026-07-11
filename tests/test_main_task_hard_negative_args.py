@@ -370,6 +370,43 @@ def test_trainable_named_parameters_excludes_frozen_parameters():
     assert names == ["0.weight", "0.bias"]
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "_log_moe_weights_tsv",
+        "_log_causal_summary_tsv",
+        "_log_eval_stats_tsv",
+    ],
+)
+def test_retired_auxiliary_loggers_are_absent(name):
+    import main_task_retrieval
+
+    assert not hasattr(main_task_retrieval, name)
+
+
+def test_mus_logger_remains_available_for_wti_risk_diagnostics():
+    import inspect
+
+    import main_task_retrieval
+
+    assert hasattr(main_task_retrieval, "_log_mus_scores_tsv")
+    source = inspect.getsource(main_task_retrieval.eval_epoch)
+    assert source.rindex("_log_mus_scores_tsv") > source.rindex(
+        "sim_matrix = np.concatenate"
+    )
+
+
+def test_optimizer_source_has_no_uncertainty_mamba_group():
+    import inspect
+
+    import main_task_retrieval as retrieval
+
+    source = inspect.getsource(retrieval.prep_optimizer)
+
+    assert "mamba_keywords" not in source
+    assert "mamba_lr_ratio" not in source
+
+
 def test_unpack_train_batch_supports_explicit_hard_negative_without_attributes():
     args = SimpleNamespace(use_attributes=False, use_explicit_hard_negative_loss=True)
     batch = tuple(tensor_id(i) for i in range(10))
@@ -428,7 +465,7 @@ def test_unpack_train_batch_supports_trusted_attributes_group_id():
     assert unpacked["video_group_id"] is batch[8]
 
 
-def test_train_epoch_passes_video_group_id_to_model():
+def test_train_epoch_passes_video_group_id_to_model(tmp_path):
     class CapturingModel(torch.nn.Module):
         def __init__(self):
             super().__init__()
@@ -449,7 +486,13 @@ def test_train_epoch_passes_video_group_id_to_model():
         ):
             self.received_group_ids = video_group_id
             loss = self.weight.square()
-            return {"total": loss, "sim_loss": loss}
+            return {
+                "total": loss,
+                "sim_loss": loss,
+                "unique_video_count": loss.new_tensor(2.0),
+                "duplicate_sample_count": loss.new_tensor(0.0),
+                "mean_positive_count": loss.new_tensor(1.0),
+            }
 
     model = CapturingModel()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
@@ -464,10 +507,9 @@ def test_train_epoch_passes_video_group_id_to_model():
     )
     args = SimpleNamespace(
         n_display=1,
-        gate_log_interval=None,
         gradient_accumulation_steps=1,
         epochs=1,
-        log_moe_weights=False,
+        output_dir=str(tmp_path),
     )
 
     train_epoch(

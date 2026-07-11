@@ -21,17 +21,6 @@ _BATCH_STATS = (
     "duplicate_sample_count",
     "mean_positive_count",
 )
-_LOSS_FIELDS = (
-    "w_mil",
-    "w_evidential",
-    "w_neg_reg",
-    "w_orth",
-    "w_hard_negative",
-    "w_uacl_intra",
-    "w_uacl_kl",
-    "w_query_sim",
-    "w_uncertainty_reg",
-)
 _BATCH_PROTOCOL_FIELDS = ("epoch", "forward_step", "global_step", *_BATCH_STATS)
 
 
@@ -143,10 +132,16 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "annotation_json": getattr(args, "data_path", ""),
         "split_manifest": getattr(args, "split_manifest", ""),
     }
-    losses = {
-        name: getattr(args, name)
-        for name in _LOSS_FIELDS
-        if hasattr(args, name)
+    hard_negative = {
+        "packing_enabled": bool(
+            getattr(args, "use_hard_negative_packing", False)
+        ),
+        "explicit_loss_enabled": bool(
+            getattr(args, "use_explicit_hard_negative_loss", False)
+        ),
+        "mapping_path": getattr(args, "hard_negative_path", ""),
+        "pack_seed": getattr(args, "hard_negative_pack_seed", None),
+        "loss_weight": getattr(args, "w_hard_negative", 0.0),
     }
     return {
         "protocol_version": split.get("protocol_version") if split else None,
@@ -154,11 +149,10 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "split": split,
         "seed": getattr(args, "seed", None),
         "profile": getattr(args, "experiment_profile", "default"),
-        "final_score_mode": getattr(args, "final_score_mode", "wti"),
         "backbone": backbone,
         "data": data,
         "batch": batch_semantics,
-        "losses": losses,
+        "hard_negative": hard_negative,
     }
 
 

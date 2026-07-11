@@ -775,52 +775,46 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
 
     no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
 
-    # 识别Mamba相关的参数（包括Mamba编码器、cross_scale_mamba、position_embeddings等）
-    mamba_keywords = ["mamba", "ms_scale_position_embeddings", "ms_mamba_encoders", "cross_scale_mamba"]
-
     decay_param_tp = [(n, p) for n, p in param_optimizer if not any(nd in n for nd in no_decay)]
     no_decay_param_tp = [(n, p) for n, p in param_optimizer if any(nd in n for nd in no_decay)]
 
-    # 进一步细分：CLIP、Mamba、其他
     decay_clip_param_tp = [(n, p) for n, p in decay_param_tp if "clip." in n]
-    decay_mamba_param_tp = [
-        (n, p) for n, p in decay_param_tp if any(mk in n for mk in mamba_keywords) and "clip." not in n
-    ]
-    decay_other_param_tp = [
-        (n, p) for n, p in decay_param_tp if "clip." not in n and not any(mk in n for mk in mamba_keywords)
-    ]
-
+    decay_other_param_tp = [(n, p) for n, p in decay_param_tp if "clip." not in n]
     no_decay_clip_param_tp = [(n, p) for n, p in no_decay_param_tp if "clip." in n]
-    no_decay_mamba_param_tp = [
-        (n, p) for n, p in no_decay_param_tp if any(mk in n for mk in mamba_keywords) and "clip." not in n
-    ]
-    no_decay_other_param_tp = [
-        (n, p) for n, p in no_decay_param_tp if "clip." not in n and not any(mk in n for mk in mamba_keywords)
-    ]
+    no_decay_other_param_tp = [(n, p) for n, p in no_decay_param_tp if "clip." not in n]
 
     weight_decay = 0.2
-    mamba_lr = args.lr * args.mamba_lr_ratio  # Mamba使用独立的较小学习率
 
     optimizer_grouped_parameters = [
-        # CLIP parameters with coef_lr
-        {"params": [p for n, p in decay_clip_param_tp], "weight_decay": weight_decay, "lr": args.lr * coef_lr},
-        {"params": [p for n, p in no_decay_clip_param_tp], "weight_decay": 0.0, "lr": args.lr * coef_lr},
-        # Mamba parameters with smaller lr
-        {"params": [p for n, p in decay_mamba_param_tp], "weight_decay": weight_decay, "lr": mamba_lr},
-        {"params": [p for n, p in no_decay_mamba_param_tp], "weight_decay": 0.0, "lr": mamba_lr},
-        # Other parameters (default lr)
-        {"params": [p for n, p in decay_other_param_tp], "weight_decay": weight_decay},
-        {"params": [p for n, p in no_decay_other_param_tp], "weight_decay": 0.0},
+        {
+            "params": [p for _, p in decay_clip_param_tp],
+            "weight_decay": weight_decay,
+            "lr": args.lr * coef_lr,
+        },
+        {
+            "params": [p for _, p in no_decay_clip_param_tp],
+            "weight_decay": 0.0,
+            "lr": args.lr * coef_lr,
+        },
+        {
+            "params": [p for _, p in decay_other_param_tp],
+            "weight_decay": weight_decay,
+        },
+        {
+            "params": [p for _, p in no_decay_other_param_tp],
+            "weight_decay": 0.0,
+        },
     ]
 
-    # 打印参数分组信息
     if local_rank == 0:
         n_clip = len(decay_clip_param_tp) + len(no_decay_clip_param_tp)
-        n_mamba = len(decay_mamba_param_tp) + len(no_decay_mamba_param_tp)
         n_other = len(decay_other_param_tp) + len(no_decay_other_param_tp)
         logger.info(
-            "[Optimizer] CLIP: %d params (lr=%.2e) | Mamba: %d params (lr=%.2e, ratio=%.2f) | Other: %d params (lr=%.2e)",
-            n_clip, args.lr * coef_lr, n_mamba, mamba_lr, args.mamba_lr_ratio, n_other, args.lr,
+            "[Optimizer] CLIP: %d params (lr=%.2e) | Other: %d params (lr=%.2e)",
+            n_clip,
+            args.lr * coef_lr,
+            n_other,
+            args.lr,
         )
 
     scheduler = None
@@ -998,17 +992,10 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     torch.cuda.empty_cache()
     model.train()
     log_step = args.n_display
-    gate_log_step = args.gate_log_interval if args.gate_log_interval is not None else args.n_display
-
-    # 更新模型的当前 epoch，用于退火系数计算
-    core = model.module if hasattr(model, "module") else model
-    core._current_epoch = epoch
     start_time = time.time()
     epoch_start_time = time.time()
     total_loss = 0
     num_steps = len(train_dataloader)
-    # 因果链累积器（epoch 级别平均）
-    _causal_acc = {"diag": {}, "sap": {}, "prob": {}, "aux": {}, "n": 0}
     # 每个 optimizer step 对应 gradient_accumulation_steps 个 dataloader step
     total_opt_steps = num_steps // args.gradient_accumulation_steps
 
@@ -1035,19 +1022,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
         if n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu.
             loss_dict = {k: v.mean() if isinstance(v, torch.Tensor) else v for k, v in loss_dict.items()}
-        # Older test doubles (and checkpoints predating trusted-v1) may not
-        # expose the protocol telemetry fields.  Keep the training path
-        # backwards-compatible by skipping the optional sidecar row when any
-        # field is absent; once all fields are present, extraction remains
-        # strict so malformed/non-finite values still fail loudly.
-        if is_global_rank_zero(args) and all(
-            key in loss_dict
-            for key in (
-                "unique_video_count",
-                "duplicate_sample_count",
-                "mean_positive_count",
-            )
-        ):
+        if is_global_rank_zero(args):
             batch_stats = extract_batch_protocol_stats(loss_dict)
         else:
             batch_stats = None
@@ -1083,7 +1058,6 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             except Exception:
                 continue
         if (step + 1) % args.gradient_accumulation_steps == 0:
-            # 梯度裁剪从 1.0 降到 0.5，防止 NIG 层训练中期梯度崩塌
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
             if scheduler is not None:
@@ -1099,19 +1073,6 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 torch.clamp_(model.clip.logit_scale.data, max=np.log(100))
 
             global_step += 1
-            # ── 采集因果链诊断（每 opt_step 收集，rank 不限） ─────────────
-            core = model.module if hasattr(model, "module") else model
-            for _attr, _key in [
-                ("_diag_chain", "diag"),
-                ("_prob_chain", "prob"), ("_aux_chain", "aux"),
-            ]:
-                _d = getattr(core, _attr, None)
-                if _d is not None:
-                    acc = _causal_acc[_key]
-                    for k, v in _d.items():
-                        if isinstance(v, (int, float)):
-                            acc[k] = acc.get(k, 0.0) + v
-            _causal_acc["n"] += 1
 
             if global_step % log_step == 0 and local_rank == 0:
                 # --- 计算进度 & ETA ---
@@ -1122,10 +1083,12 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 eta = time_per_step * remaining_steps
                 start_time = time.time()
 
-                # --- 学习率 (param_groups: [0]CLIP-decay [1]CLIP-nodecay [2]Mamba-decay
-                #                           [3]Mamba-nodecay [4]Other-decay [5]Other-nodecay) ---
                 lr_clip = optimizer.param_groups[0]["lr"]
-                lr_new  = optimizer.param_groups[4]["lr"] if len(optimizer.param_groups) > 4 else lr_clip
+                lr_new = (
+                    optimizer.param_groups[2]["lr"]
+                    if len(optimizer.param_groups) > 2
+                    else lr_clip
+                )
 
                 # --- 损失字符串：过滤零值，精度 4 位 ---
                 loss_parts = [f"{k}={v:.4f}" for k, v in loss_details.items() if abs(v) > 1e-8]
@@ -1153,87 +1116,25 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                         batch_stats["mean_positive_count"],
                     )
 
-                # --- 因果链简报（每 log_step 打印一次当前值） ---
-                _dc = getattr(core, "_diag_chain", None)
-                _pc = getattr(core, "_prob_chain", None)
-                _ac = getattr(core, "_aux_chain", None)
-                if _dc:
+                core = model.module if hasattr(model, "module") else model
+                retrieval_stats = getattr(core, "_diag_chain", None)
+                hard_negative_stats = getattr(core, "_hard_negative_chain", None)
+                if retrieval_stats:
                     logger.info(
-                        "  [Chain-Ret]  pos=%.3f  neg=%.3f  gap=%.3f  pos_std=%.3f",
-                        _dc["pos_mean"], _dc["neg_mean"], _dc["gap"], _dc["pos_std"],
+                        "  [WTI] pos=%.3f neg=%.3f gap=%.3f pos_std=%.3f",
+                        retrieval_stats["pos_mean"],
+                        retrieval_stats["neg_mean"],
+                        retrieval_stats["gap"],
+                        retrieval_stats["pos_std"],
                     )
-                if _pc:
+                if hard_negative_stats:
                     logger.info(
-                        "  [Chain-Prob] u_mode=%.4f±%.4f  epi_v=%.4f  var_t=%.4f  kl_t=%.4f",
-                        _pc.get("u_mode_mean", 0), _pc.get("u_mode_std", 0),
-                        _pc.get("epistemic_v_mean", 0),
-                        _pc.get("var_text_mean", 0),
-                        _pc.get("kl_text_mean", 0),
+                        "  [HardNeg] active=%d loss=%.4f hard_diag=%.3f pos_gap=%.3f",
+                        hard_negative_stats["active"],
+                        hard_negative_stats["loss"],
+                        hard_negative_stats["hard_diag_mean"],
+                        hard_negative_stats["hard_pos_gap"],
                     )
-                if _ac:
-                    logger.info(
-                        "  [Chain-Aux]  evid_loss=%.4f  neg_reg=%.4f  evid_unc=%.4f  "
-                        "logsig_v=%.4f  clamp_v=%.2f/%.2f  clamp_t=%.2f/%.2f  anneal=%.3f",
-                        _ac.get("evidential_loss_val", 0),
-                        _ac.get("neg_reg_loss_val", 0),
-                        _ac.get("evidential_uncertainty", 0),
-                        _ac["logsigma_v_mean"],
-                        _ac.get("logsigma_v_min_ratio", 0),
-                        _ac.get("logsigma_v_max_ratio", 0),
-                        _ac.get("logsigma_t_min_ratio", 0),
-                        _ac.get("logsigma_t_max_ratio", 0),
-                        _ac.get("anneal_factor", 1.0),
-                    )
-                    logger.info(
-                        "  [Chain-Hygiene] score=%s profile=%s lambda_prob=%.3f lambda_anchor=%.3f "
-                        "lambda_qc_sap=%.3f qc_temp=%.3f "
-                        "mil=%d evid=%d neg=%d orth=%d hn=%d uacl=%d",
-                        _ac.get("score_source", "wti_logits"),
-                        _ac.get("experiment_profile", "default"),
-                        _ac.get("lambda_prob", 0),
-                        _ac.get("lambda_anchor", 0),
-                        _ac.get("lambda_qc_sap", 0),
-                        _ac.get("qc_sap_temperature", 0),
-                        int(_ac.get("active_mil", 0)),
-                        int(_ac.get("active_evidential", 0)),
-                        int(_ac.get("active_neg_reg", 0)),
-                        int(_ac.get("active_orth", 0)),
-                        int(_ac.get("active_hard_negative", 0)),
-                        int(_ac.get("active_uacl", 0)),
-                    )
-                    logger.info(
-                        "  [Chain-Score] prob_mu=%.3f/%.3f/%.3f  anchor_wti=%.3f/%.3f/%.3f  "
-                        "qc_sap=%.3f/%.3f/%.3f std=%.3f gate_ent=%.3f/%.3f gate_top1=%.3f/%.3f",
-                        _ac.get("prob_mu_diag", 0),
-                        _ac.get("prob_mu_off", 0),
-                        _ac.get("prob_mu_gap", 0),
-                        _ac.get("anchor_wti_diag", 0),
-                        _ac.get("anchor_wti_off", 0),
-                        _ac.get("anchor_wti_gap", 0),
-                        _ac.get("qc_sap_diag", 0),
-                        _ac.get("qc_sap_off", 0),
-                        _ac.get("qc_sap_gap", 0),
-                        _ac.get("qc_sap_std", 0),
-                        _ac.get("qc_gate_entropy_pos", 0),
-                        _ac.get("qc_gate_entropy_neg", 0),
-                        _ac.get("qc_gate_top1_mass_pos", 0),
-                        _ac.get("qc_gate_top1_mass_neg", 0),
-                    )
-                    if args.use_uacl_intra_alignment:
-                        logger.info(
-                            "  [Chain-UACL] intra=%.4f  text=%.4f  video=%.4f  kl=%.4f",
-                            _ac.get("uacl_intra_loss_val", 0),
-                            _ac.get("uacl_text_loss_val", 0),
-                            _ac.get("uacl_video_loss_val", 0),
-                            _ac.get("uacl_kl_loss_val", 0),
-                        )
-
-            if (
-                args.log_moe_weights
-                and (global_step % gate_log_step == 0)
-                and local_rank == 0
-            ):
-                _log_moe_weights_tsv(args, model, epoch=epoch, step=step, global_step=global_step)
 
     total_loss = total_loss / len(train_dataloader)
     epoch_time = time.time() - epoch_start_time
@@ -1245,221 +1146,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             total_loss,
             _fmt_time(epoch_time),
         )
-        # ── epoch 级因果链汇总行 ──────────────────────────────────────────
-        _n = max(_causal_acc["n"], 1)
-        def _avg(d):
-            return {k: v / _n for k, v in d.items()}
-
-        dc = _avg(_causal_acc["diag"])
-        pc = _avg(_causal_acc["prob"])
-        ac = _avg(_causal_acc.get("aux", {}))
-        if dc and pc:
-            logger.info(
-                "[Epoch %d Causal Summary]\n"
-                "  Ret  : pos=%.3f  neg=%.3f  gap=%.3f  pos_std=%.3f\n"
-                "  Evid : u_mode=%.4f±%.4f  epistemic_v=%.4f\n"
-                "  Text : var_t=%.4f  kl_t=%.4f\n"
-                "  Aux  : evid_loss=%.4f  neg_reg=%.4f  evid_unc=%.4f  logsig_v=%.4f  "
-                "clamp_v=%.2f/%.2f  clamp_t=%.2f/%.2f\n"
-                "  Hygiene : score=%s  profile=%s  lambda_prob=%.3f  lambda_anchor=%.3f  "
-                "lambda_qc_sap=%.3f  qc_temp=%.3f  "
-                "mil=%d  evid=%d  neg=%d  orth=%d  hn=%d  uacl=%d\n"
-                "  Score : prob_mu=%.3f/%.3f/%.3f  anchor_wti=%.3f/%.3f/%.3f  "
-                "qc_sap=%.3f/%.3f/%.3f std=%.3f gate_ent=%.3f/%.3f gate_top1=%.3f/%.3f\n"
-                "  UACL : intra=%.4f  text=%.4f  video=%.4f  kl=%.4f",
-                epoch + 1,
-                dc.get("pos_mean", 0), dc.get("neg_mean", 0),
-                dc.get("gap", 0), dc.get("pos_std", 0),
-                pc.get("u_mode_mean", 0), pc.get("u_mode_std", 0),
-                pc.get("epistemic_v_mean", 0),
-                pc.get("var_text_mean", 0),
-                pc.get("kl_text_mean", 0),
-                ac.get("evidential_loss_val", 0), ac.get("neg_reg_loss_val", 0),
-                ac.get("evidential_uncertainty", 0), ac.get("logsigma_v_mean", 0),
-                ac.get("logsigma_v_min_ratio", 0), ac.get("logsigma_v_max_ratio", 0),
-                ac.get("logsigma_t_min_ratio", 0), ac.get("logsigma_t_max_ratio", 0),
-                getattr(args, "final_score_mode", "wti"),
-                getattr(args, "experiment_profile", "default"),
-                getattr(args, "lambda_prob", 0),
-                getattr(args, "lambda_anchor", 0),
-                getattr(args, "lambda_qc_sap", 0),
-                getattr(args, "qc_sap_temperature", 0),
-                int(round(ac.get("active_mil", 0))),
-                int(round(ac.get("active_evidential", 0))),
-                int(round(ac.get("active_neg_reg", 0))),
-                int(round(ac.get("active_orth", 0))),
-                int(round(ac.get("active_hard_negative", 0))),
-                int(round(ac.get("active_uacl", 0))),
-                ac.get("prob_mu_diag", 0), ac.get("prob_mu_off", 0), ac.get("prob_mu_gap", 0),
-                ac.get("anchor_wti_diag", 0), ac.get("anchor_wti_off", 0), ac.get("anchor_wti_gap", 0),
-                ac.get("qc_sap_diag", 0), ac.get("qc_sap_off", 0), ac.get("qc_sap_gap", 0),
-                ac.get("qc_sap_std", 0),
-                ac.get("qc_gate_entropy_pos", 0), ac.get("qc_gate_entropy_neg", 0),
-                ac.get("qc_gate_top1_mass_pos", 0), ac.get("qc_gate_top1_mass_neg", 0),
-                ac.get("uacl_intra_loss_val", 0), ac.get("uacl_text_loss_val", 0),
-                ac.get("uacl_video_loss_val", 0), ac.get("uacl_kl_loss_val", 0),
-            )
-            _log_causal_summary_tsv(args, epoch, dc, pc, ac)
     return total_loss, global_step
-
-
-def _log_moe_weights_tsv(args, model, epoch: int, step: int, global_step: int):
-    """
-    Write a single TSV line with uncertainty-driven MoE fusion weights summary statistics.
-    This is rank0-only and is designed to be lightweight.
-
-    We log both:
-      - video-side fusion weights v_fusion_w: [B, 2] (base/query)
-      - text-side fusion weights  t_fusion_w: [B, 2] (base/query)
-    """
-    import datetime as _dt
-
-    # unwrap DDP
-    core = model.module if hasattr(model, "module") else model
-    v_w = getattr(core, "_last_moe_v_fusion_w", None)
-    t_w = getattr(core, "_last_moe_t_fusion_w", None)
-    if v_w is None and t_w is None:
-        return
-
-    def _stats_2(w):
-        # w: [B, 2], each row sums to 1
-        w = w.detach()
-        # base/query components
-        w0 = w[:, 0]
-        w1 = w[:, 1]
-        # entropy and effective number of experts
-        entropy = -(w * (w + 1e-9).log()).sum(dim=-1)  # [B]
-        eff_n = torch.exp(entropy)  # [B], in [1, 2]
-        top1 = w.max(dim=-1).values  # [B], in [0.5, 1]
-        # how often query dominates / collapses
-        frac_q_lt_005 = float((w1 < 0.05).float().mean().item())
-        frac_q_gt_095 = float((w1 > 0.95).float().mean().item())
-        return {
-            "w0_mean": float(w0.mean().item()),
-            "w0_std": float(w0.std(unbiased=False).item()),
-            "w1_mean": float(w1.mean().item()),
-            "w1_std": float(w1.std(unbiased=False).item()),
-            "ent_mean": float(entropy.mean().item()),
-            "ent_std": float(entropy.std(unbiased=False).item()),
-            "effn_mean": float(eff_n.mean().item()),
-            "effn_std": float(eff_n.std(unbiased=False).item()),
-            "top1_mean": float(top1.mean().item()),
-            "top1_std": float(top1.std(unbiased=False).item()),
-            "frac_q_lt_005": frac_q_lt_005,
-            "frac_q_gt_095": frac_q_gt_095,
-        }
-
-    with torch.no_grad():
-        v = _stats_2(v_w) if v_w is not None else None
-        t = _stats_2(t_w) if t_w is not None else None
-
-    date_str = _dt.datetime.now().strftime("%Y%m%d")
-    run_id = os.path.basename(os.path.normpath(args.output_dir))
-    out_dir = os.path.join(args.moe_log_dir, date_str)
-    os.makedirs(out_dir, exist_ok=True)
-    out_file = os.path.join(out_dir, f"{run_id}.tsv")
-
-    header = (
-        "time\toutput_dir\trun_id\tepoch\tstep\tglobal_step\t"
-        "v_w_base_mean\tv_w_base_std\tv_w_query_mean\tv_w_query_std\t"
-        "v_entropy_mean\tv_entropy_std\tv_effn_mean\tv_effn_std\tv_top1_mean\tv_top1_std\t"
-        "v_frac_q_lt_0.05\tv_frac_q_gt_0.95\t"
-        "t_w_base_mean\tt_w_base_std\tt_w_query_mean\tt_w_query_std\t"
-        "t_entropy_mean\tt_entropy_std\tt_effn_mean\tt_effn_std\tt_top1_mean\tt_top1_std\t"
-        "t_frac_q_lt_0.05\tt_frac_q_gt_0.95\n"
-    )
-
-    def _fmt(x):
-        return f"{x:.6f}" if isinstance(x, float) else "nan"
-
-    line = (
-        f"{_dt.datetime.now().isoformat(timespec='seconds')}\t{args.output_dir}\t{run_id}\t"
-        f"{epoch + 1}\t{step + 1}\t{global_step}\t"
-        f"{_fmt(v['w0_mean']) if v else 'nan'}\t{_fmt(v['w0_std']) if v else 'nan'}\t"
-        f"{_fmt(v['w1_mean']) if v else 'nan'}\t{_fmt(v['w1_std']) if v else 'nan'}\t"
-        f"{_fmt(v['ent_mean']) if v else 'nan'}\t{_fmt(v['ent_std']) if v else 'nan'}\t"
-        f"{_fmt(v['effn_mean']) if v else 'nan'}\t{_fmt(v['effn_std']) if v else 'nan'}\t"
-        f"{_fmt(v['top1_mean']) if v else 'nan'}\t{_fmt(v['top1_std']) if v else 'nan'}\t"
-        f"{_fmt(v['frac_q_lt_005']) if v else 'nan'}\t{_fmt(v['frac_q_gt_095']) if v else 'nan'}\t"
-        f"{_fmt(t['w0_mean']) if t else 'nan'}\t{_fmt(t['w0_std']) if t else 'nan'}\t"
-        f"{_fmt(t['w1_mean']) if t else 'nan'}\t{_fmt(t['w1_std']) if t else 'nan'}\t"
-        f"{_fmt(t['ent_mean']) if t else 'nan'}\t{_fmt(t['ent_std']) if t else 'nan'}\t"
-        f"{_fmt(t['effn_mean']) if t else 'nan'}\t{_fmt(t['effn_std']) if t else 'nan'}\t"
-        f"{_fmt(t['top1_mean']) if t else 'nan'}\t{_fmt(t['top1_std']) if t else 'nan'}\t"
-        f"{_fmt(t['frac_q_lt_005']) if t else 'nan'}\t{_fmt(t['frac_q_gt_095']) if t else 'nan'}\n"
-    )
-
-    need_header = not os.path.exists(out_file) or os.path.getsize(out_file) == 0
-    with open(out_file, "a", encoding="utf-8") as f:
-        if need_header:
-            f.write(header)
-        f.write(line)
-
-
-def _log_causal_summary_tsv(args, epoch: int, dc: dict, pc: dict, ac: dict = None):
-    """Write epoch-level causal-chain summary to TSV. rank0 only."""
-    import datetime as _dt
-
-    if ac is None:
-        ac = {}
-    date_str = _dt.datetime.now().strftime("%Y%m%d")
-    run_id = os.path.basename(os.path.normpath(args.output_dir))
-    out_dir = os.path.join("logs", "causal_chain", date_str)
-    os.makedirs(out_dir, exist_ok=True)
-    out_file = os.path.join(out_dir, f"{run_id}.tsv")
-
-    header = (
-        "time\trun_id\tepoch\t"
-        "ret_pos_mean\tret_neg_mean\tret_gap\tret_pos_std\t"
-        "u_mode_mean\tu_mode_std\tepistemic_v_mean\t"
-        "var_text_mean\tkl_text_mean\t"
-        "evidential_loss\tneg_reg_loss\tevidential_unc\tlogsigma_v\t"
-        "logsigma_v_min_ratio\tlogsigma_v_max_ratio\tlogsigma_t_min_ratio\tlogsigma_t_max_ratio\t"
-        "score_source\texperiment_profile\tfinal_score_mode\tlambda_prob\tlambda_anchor\t"
-        "lambda_qc_sap\tqc_sap_temperature\t"
-        "prob_mu_diag\tprob_mu_off\tprob_mu_gap\tanchor_wti_diag\tanchor_wti_off\tanchor_wti_gap\t"
-        "qc_sap_diag\tqc_sap_off\tqc_sap_gap\tqc_sap_std\t"
-        "qc_gate_entropy_pos\tqc_gate_entropy_neg\tqc_gate_top1_mass_pos\tqc_gate_top1_mass_neg\t"
-        "active_mil\tactive_evidential\tactive_neg_reg\tactive_orth\tactive_hard_negative\tactive_uacl\t"
-        "uacl_intra_loss\tuacl_text_loss\tuacl_video_loss\tuacl_kl_loss\n"
-    )
-    def _f(x): return f"{x:.6f}" if isinstance(x, float) else "nan"
-    final_score_mode = getattr(args, "final_score_mode", "wti")
-    score_source = "wti_logits" if final_score_mode == "wti" else final_score_mode
-    line = (
-        f"{_dt.datetime.now().isoformat(timespec='seconds')}\t{run_id}\t{epoch + 1}\t"
-        f"{_f(dc.get('pos_mean',0))}\t{_f(dc.get('neg_mean',0))}\t"
-        f"{_f(dc.get('gap',0))}\t{_f(dc.get('pos_std',0))}\t"
-        f"{_f(pc.get('u_mode_mean',0))}\t{_f(pc.get('u_mode_std',0))}\t"
-        f"{_f(pc.get('epistemic_v_mean',0))}\t"
-        f"{_f(pc.get('var_text_mean',0))}\t{_f(pc.get('kl_text_mean',0))}\t"
-        f"{_f(ac.get('evidential_loss_val',0))}\t{_f(ac.get('neg_reg_loss_val',0))}\t"
-        f"{_f(ac.get('evidential_uncertainty',0))}\t{_f(ac.get('logsigma_v_mean',0))}\t"
-        f"{_f(ac.get('logsigma_v_min_ratio',0))}\t{_f(ac.get('logsigma_v_max_ratio',0))}\t"
-        f"{_f(ac.get('logsigma_t_min_ratio',0))}\t{_f(ac.get('logsigma_t_max_ratio',0))}\t"
-        f"{score_source}\t{getattr(args, 'experiment_profile', 'default')}\t"
-        f"{final_score_mode}\t{_f(getattr(args, 'lambda_prob', 0.0))}\t"
-        f"{_f(getattr(args, 'lambda_anchor', 0.0))}\t"
-        f"{_f(getattr(args, 'lambda_qc_sap', 0.0))}\t"
-        f"{_f(getattr(args, 'qc_sap_temperature', 0.0))}\t"
-        f"{_f(ac.get('prob_mu_diag',0))}\t{_f(ac.get('prob_mu_off',0))}\t{_f(ac.get('prob_mu_gap',0))}\t"
-        f"{_f(ac.get('anchor_wti_diag',0))}\t{_f(ac.get('anchor_wti_off',0))}\t"
-        f"{_f(ac.get('anchor_wti_gap',0))}\t"
-        f"{_f(ac.get('qc_sap_diag',0))}\t{_f(ac.get('qc_sap_off',0))}\t"
-        f"{_f(ac.get('qc_sap_gap',0))}\t{_f(ac.get('qc_sap_std',0))}\t"
-        f"{_f(ac.get('qc_gate_entropy_pos',0))}\t{_f(ac.get('qc_gate_entropy_neg',0))}\t"
-        f"{_f(ac.get('qc_gate_top1_mass_pos',0))}\t{_f(ac.get('qc_gate_top1_mass_neg',0))}\t"
-        f"{int(round(ac.get('active_mil',0)))}\t{int(round(ac.get('active_evidential',0)))}\t"
-        f"{int(round(ac.get('active_neg_reg',0)))}\t{int(round(ac.get('active_orth',0)))}\t"
-        f"{int(round(ac.get('active_hard_negative',0)))}\t{int(round(ac.get('active_uacl',0)))}\t"
-        f"{_f(ac.get('uacl_intra_loss_val',0))}\t{_f(ac.get('uacl_text_loss_val',0))}\t"
-        f"{_f(ac.get('uacl_video_loss_val',0))}\t{_f(ac.get('uacl_kl_loss_val',0))}\n"
-    )
-    need_header = not os.path.exists(out_file) or os.path.getsize(out_file) == 0
-    with open(out_file, "a", encoding="utf-8") as f:
-        if need_header:
-            f.write(header)
-        f.write(line)
 
 
 def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
@@ -1494,49 +1181,6 @@ def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
         "MUS stats | mean=%.4f  high_ratio(>0.5)=%.3f  n_queries=%d  log=%s",
         mean_mus, high_ratio, len(mus_scores), out_file,
     )
-
-
-def _log_eval_stats_tsv(args, model, step):
-    """
-    Write logits stats to TSV during evaluation. rank0 only.
-    """
-    import datetime as _dt
-
-    # unwrap DDP
-    core = model.module if hasattr(model, "module") else model
-    stats = getattr(core, "_last_eval_stats", None)
-    if stats is None:
-        return
-
-    # log path: logs/logits_stats/YYYYMMDD/<run_id>.tsv
-    date_str = _dt.datetime.now().strftime("%Y%m%d")
-    run_id = os.path.basename(os.path.normpath(args.output_dir))
-    # If output_dir is not set or default, use 'eval' as fallback
-    if not run_id:
-        run_id = "eval_debug"
-
-    out_dir = os.path.join("logs", "logits_stats", date_str)
-    os.makedirs(out_dir, exist_ok=True)
-    out_file = os.path.join(out_dir, f"{run_id}.tsv")
-
-    header = "time\tstep\tbase_mean\tbase_std\tquery_mean\tquery_std\tv_w_base\tv_w_query\tt_w_base\tt_w_query\n"
-
-    def _fmt(x):
-        return f"{x:.4f}" if isinstance(x, (float, int)) else "nan"
-
-    line = (
-        f"{_dt.datetime.now().isoformat(timespec='seconds')}\t{step}\t"
-        f"{_fmt(stats.get('base_mean'))}\t{_fmt(stats.get('base_std'))}\t"
-        f"{_fmt(stats.get('query_mean'))}\t{_fmt(stats.get('query_std'))}\t"
-        f"{_fmt(stats.get('v_w_base'))}\t{_fmt(stats.get('v_w_query'))}\t"
-        f"{_fmt(stats.get('t_w_base'))}\t{_fmt(stats.get('t_w_query'))}\n"
-    )
-
-    need_header = not os.path.exists(out_file) or os.path.getsize(out_file) == 0
-    with open(out_file, "a", encoding="utf-8") as f:
-        if need_header:
-            f.write(header)
-        f.write(line)
 
 
 def _run_on_single_gpu(
@@ -1581,7 +1225,6 @@ def _run_on_single_gpu(
             row_logits.append(chunk_logits.cpu())
 
         b1_all_v_logits = torch.cat(row_logits, dim=1)  # [B_t, N_v]
-        _log_eval_stats_tsv(args, model, idx1)
         sim_matrix.append(b1_all_v_logits.detach().numpy())
 
     return sim_matrix
