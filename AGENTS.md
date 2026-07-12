@@ -9,11 +9,13 @@ UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16、WTI 与 trusted-v1 协议的文
 - [`docs/analysis/query_branch_analysis.md`](docs/analysis/query_branch_analysis.md) 是历史结构快照，不代表当前实现或路线。
 - 历史日志、诊断 TSV、旧计划和过期 checkpoint 只从 Git 历史追溯；`logs/` 与 `ckpts/` 仅保存当前运行产物。
 
-## 当前决策（2026-07-11）
+## 当前决策（2026-07-12）
 
 - MSRVTT 唯一有效协议为 `trusted-v1`：seed 42，8500 train / 500 internal val；JSFusion 1K 仅在方法与超参数冻结后作一次显式盲测。
-- 主损失按精确 `video_id` 使用双向多正例 InfoNCE，训练与评估的最终 logits 固定为 WTI。
+- 当前 P0 主损失按精确 `video_id` 使用双向多正例 InfoNCE，训练与评估的最终 logits 固定为 WTI；未来 P2/P3 若修改匹配 score，必须在 P0 完成后通过独立规格和严格回退实现。
 - 当前 P0 是 OpenAI CLIP hygiene WTI-only 新基线；完成前不判断 EVA adapter、pair-level uncertainty 或 candidate-conditioned alignment 的增益。
+- 科研核心是设计新的文本—视频匹配或训练机制，并相对同协议 P0 稳定改善检索；不要求所有数据集 SOTA，但校准、错误预测、abstention 或人工审核不能替代检索收益。
+- P1 只做跨模态错配机制诊断；P2 研究 pair-level aleatoric–epistemic uncertainty-aware matching/training；P3 研究独立的 candidate-conditioned alignment。P2/P3 分别成立后才研究融合。
 - P0 固定 global forward batch 256、4 卡时每卡 micro-batch 64、accum=1。换 backbone 只可作为后续匹配控制变量，不作为创新点。
 - OpenAI CLIP 自定义 LayerNorm 默认使用 native FP16，并保留 FP32 master affine 参数；通过 `CLIP_LAYER_NORM_PRECISION=fp32` 显式回退。该设置不是全模型 AMP，也不影响 EVA LayerNorm。
 - Hard negative 主线已停止，不再 sweep 或 repeat；独立、默认关闭的诊断入口保留。UACL 活动接口已删除，不恢复。
@@ -52,5 +54,5 @@ UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16、WTI 与 trusted-v1 协议的文
 - 当前主模型文件名仍为历史拼写 `modeling_mulit.py`。
 - 活动模型图只保留 deterministic WTI 与可选独立 hard-negative；hygiene profile 明确拒绝 hard-negative 诊断路径。
 - 旧模型 checkpoint 中的已删除参数会在模型构造前明确拒绝；旧 optimizer 参数组不迁移，不兼容时由原生错误终止。
-- 纯 WTI 的 MUS TSV 可用于只读风险诊断，但不改变标签、loss 或最终排序。
+- 纯 WTI 的 MUS TSV 可用于只读错配机制诊断，但不改变标签、loss 或最终排序。
 - 科研参考项目与本地权重位于忽略目录 `research_refs/`，不得纳入 Git。
