@@ -13,11 +13,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-UATVR = importlib.import_module("modules.modeling_mulit").UATVR
+UATVR = importlib.import_module("modules.modeling_retrieval").UATVR
 MultiPositiveCrossEn = importlib.import_module(
     "modules.until_module"
 ).MultiPositiveCrossEn
 LayerNorm = importlib.import_module("modules.module_clip").LayerNorm
+
+
+def test_active_model_module_uses_retrieval_name():
+    assert importlib.util.find_spec("modules.modeling_retrieval") is not None
+    assert importlib.util.find_spec("modules.modeling_mulit") is None
+
 
 def test_openai_clip_layer_norm_precision_is_propagated():
     clip = torch.nn.Sequential(LayerNorm(4), LayerNorm(4))

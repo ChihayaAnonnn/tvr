@@ -25,7 +25,7 @@ from experiment_tracking import (
 )
 from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_to_text_sim
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from modules.modeling_mulit import UATVR
+from modules.modeling_retrieval import UATVR
 from modules.optimization import BertAdam
 from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
 from util import get_logger, parallel_apply
