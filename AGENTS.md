@@ -22,7 +22,7 @@ UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16、WTI 与 trusted-v1 协议的文
 
 ## 关键训练与评估语义
 
-- 主入口：`run_train_msrvtt_bg.sh` → `train_msrvtt.sh` → `main_task_retrieval.py` → `modules/modeling_mulit.py`。
+- 主入口：`run_train_msrvtt_bg.sh` → `train_msrvtt.sh` → `main_task_retrieval.py` → `modules/modeling_retrieval.py`。
 - Shell `--batch_size` 表示目标有效 batch；解析后 global forward batch = `batch_size / gradient_accumulation_steps`，每卡 micro = global forward batch / GPU 数。
 - 梯度累积不会合并不同 forward 的 in-batch negatives；比较实验必须同时核对 forward contrastive batch 和 optimizer effective batch。
 - 4 卡、`batch_size=256`、accum=1 时每卡 micro-batch 64，这是当前可信基线口径。
@@ -36,7 +36,7 @@ UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16、WTI 与 trusted-v1 协议的文
 |---|---|
 | 训练 | `train_msrvtt.sh` / `run_train_msrvtt_bg.sh` |
 | 评估 | `eval.sh`，必须显式设置 `EVAL_SPLIT=val|test` |
-| 主模型 | `modules/modeling_mulit.py` |
+| 主模型 | `modules/modeling_retrieval.py` |
 | 数据协议 | `dataloaders/splits/msrvtt_trusted_v1_seed42.json` |
 | 测试 | `/home/xujie/miniconda3/envs/ret/bin/pytest -q tests`；静态检查使用 `/home/xujie/miniconda3/envs/ret/bin/ruff check ...` |
 
@@ -51,7 +51,7 @@ UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16、WTI 与 trusted-v1 协议的文
 
 ## 稳定实现事实
 
-- 当前主模型文件名仍为历史拼写 `modeling_mulit.py`。
+- 当前主模型文件为 `modeling_retrieval.py`，不保留历史兼容入口。
 - 活动模型图只保留 deterministic WTI 与可选独立 hard-negative；hygiene profile 明确拒绝 hard-negative 诊断路径。
 - 旧模型 checkpoint 中的已删除参数会在模型构造前明确拒绝；旧 optimizer 参数组不迁移，不兼容时由原生错误终止。
 - 纯 WTI 的 MUS TSV 可用于只读错配机制诊断，但不改变标签、loss 或最终排序。

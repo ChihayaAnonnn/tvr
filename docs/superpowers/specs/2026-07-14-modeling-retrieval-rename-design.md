@@ -2,9 +2,9 @@
 
 ## 背景
 
-当前活动主模型位于 `modules/modeling_mulit.py`。文件名中的 `mulit` 是历史拼写错误，无法准确表达该模块承担的文本—视频检索模型职责，也容易与未被主入口使用的历史文件 `modules/modeling.py` 混淆。
+迁移前的活动主模型位于 `modules/modeling_mulit.py`。文件名中的 `mulit` 是历史拼写错误，无法准确表达该模块承担的文本—视频检索模型职责，也容易与未被主入口使用的历史文件 `modules/modeling.py` 混淆。
 
-主训练与评测入口 `main_task_retrieval.py` 只使用 `modules.modeling_mulit.UATVR`。后续 P0/P2/P3 工作会继续修改这一活动模型，因此应在继续开发前完成一次纯命名迁移。
+迁移后，活动主模型位于 `modules/modeling_retrieval.py`，主训练与评测入口 `main_task_retrieval.py` 只使用 `modules.modeling_retrieval.UATVR`；`modules.modeling_mulit` 仅作为迁移前历史名称出现。后续 P0/P2/P3 工作继续修改这一活动模型。
 
 ## 决策
 
@@ -26,7 +26,7 @@ modules/modeling_retrieval.py
 2. 将 `main_task_retrieval.py` 的模型导入改为 `modules.modeling_retrieval`。
 3. 将 `tests/test_modeling_mulit_losses.py` 重命名为 `tests/test_modeling_retrieval.py`，并更新其导入路径。
 4. 更新 `AGENTS.md` 与 `docs/project/RESEARCH_ISSUES_AND_ROADMAP.md` 中的活动模型路径和历史拼写说明。
-5. 检查受版本控制文件中不再残留 `modeling_mulit` 引用。
+5. 检查活动源码、入口、测试导入和当前项目文档中不再把 `modeling_mulit` 作为可用模块；设计历史和“旧路径不可导入”负向测试允许保留名称。
 
 以下内容不在本次范围内：
 
@@ -52,7 +52,7 @@ modules/modeling_retrieval.py
 1. RED：先将测试期望改为导入 `modules.modeling_retrieval`，确认在源文件尚未移动时因模块不存在而失败。
 2. GREEN：移动活动模型文件并更新生产导入，使定向导入测试通过。
 3. 验证 `importlib.util.find_spec("modules.modeling_mulit")` 返回 `None`，证明没有兼容残留。
-4. 使用 `rg` 检查受版本控制的源码、脚本、测试和项目文档中不存在 `modeling_mulit`。
+4. 使用 `rg` 检查 `modeling_mulit` 只出现在本设计历史和“旧路径不可导入”负向测试中，不得存在活动导入或当前项目入口引用。
 5. 运行：
 
    ```bash
@@ -66,6 +66,6 @@ modules/modeling_retrieval.py
 - 活动模型只存在于 `modules/modeling_retrieval.py`。
 - 主训练/评测入口和测试只导入新路径。
 - `AGENTS.md` 与科研路线图记录新路径。
-- 旧模块路径无法导入且无受版本控制引用残留。
+- 旧模块路径无法导入，且不存在活动导入或当前项目入口引用。
 - 定向测试、完整项目测试与静态检查通过。
 - 除上述迁移文件外，用户已有工作树改动保持不变。

@@ -35,7 +35,7 @@ forward contrastive batch 与 optimizer effective batch 必须分别记录。梯
 
 ### 2.2 稳定实现事实
 
-- 主入口固定为 `run_train_msrvtt_bg.sh` → `train_msrvtt.sh` → `main_task_retrieval.py` → `modules/modeling_mulit.py`。
+- 主入口固定为 `run_train_msrvtt_bg.sh` → `train_msrvtt.sh` → `main_task_retrieval.py` → `modules/modeling_retrieval.py`。
 - hygiene profile 的主分数固定为 `weighted_logits = wti_logits`，并在 forward 中真实绕过旧空间增强、概率表示、不确定性头和辅助 loss 路径；仅把 loss 权重设为 0 不满足要求。
 - WTI padding mask、精确 `video_id` 多正例矩阵以及 train/internal-val/test 隔离必须由测试持续保护。
 - OpenAI CLIP 自定义 LayerNorm 默认执行 native FP16，FP32 master affine 参与参数更新；环境变量只提供显式回退，不代表全模型 AMP。
