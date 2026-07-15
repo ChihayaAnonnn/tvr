@@ -41,8 +41,8 @@ TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS:-8}
 TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR:-2}
 TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
 TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS:-1}
-if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
-    echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
+if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" && "${EXPERIMENT_PROFILE}" != "pair_evidence_refiner" ]]; then
+    echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default, hygiene, or pair_evidence_refiner" >&2
     exit 2
 fi
 if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
@@ -76,6 +76,16 @@ if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
             fi
         done
     done
+fi
+if [[ "${EXPERIMENT_PROFILE}" == "pair_evidence_refiner" ]]; then
+    if [[ "${TRAIN_BATCH_SIZE}" != "256" ]]; then
+        echo "pair_evidence_refiner requires TRAIN_BATCH_SIZE=256; got ${TRAIN_BATCH_SIZE}" >&2
+        exit 2
+    fi
+    if [[ "${TRAIN_GRADIENT_ACCUMULATION_STEPS}" != "1" ]]; then
+        echo "pair_evidence_refiner requires TRAIN_GRADIENT_ACCUMULATION_STEPS=1; got ${TRAIN_GRADIENT_ACCUMULATION_STEPS}" >&2
+        exit 2
+    fi
 fi
 if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
     echo "Unsupported EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}; expected 0 or 1" >&2
@@ -204,5 +214,10 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
     --extra_video_cls_num 2 \
     --extra_text_cls_num 2 \
     --experiment_profile "${EXPERIMENT_PROFILE}" \
+    --pair_refiner_num_views 4 \
+    --pair_refiner_lambda_max 0.1 \
+    --pair_refiner_query_block_size 16 \
+    --pair_refiner_candidate_block_size 32 \
+    --pair_refiner_alignment_temperature 0.07 \
     --experiment_desc "${EXPERIMENT_DESC:-}" \
     "$@"

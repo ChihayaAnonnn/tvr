@@ -150,6 +150,23 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "pack_seed": getattr(args, "hard_negative_pack_seed", None),
         "loss_weight": getattr(args, "w_hard_negative", 0.0),
     }
+    pair_evidence_refiner = {
+        "enabled": getattr(args, "experiment_profile", "default")
+        == "pair_evidence_refiner",
+        "num_views": int(getattr(args, "pair_refiner_num_views", 4)),
+        "lambda_max": float(
+            getattr(args, "pair_refiner_lambda_max", 0.1)
+        ),
+        "query_block_size": int(
+            getattr(args, "pair_refiner_query_block_size", 16)
+        ),
+        "candidate_block_size": int(
+            getattr(args, "pair_refiner_candidate_block_size", 32)
+        ),
+        "alignment_temperature": float(
+            getattr(args, "pair_refiner_alignment_temperature", 0.07)
+        ),
+    }
     workers = int(getattr(args, "num_thread_reader", 0))
     runtime = {
         "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
@@ -169,6 +186,7 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "batch": batch_semantics,
         "runtime": runtime,
         "hard_negative": hard_negative,
+        "pair_evidence_refiner": pair_evidence_refiner,
     }
 
 

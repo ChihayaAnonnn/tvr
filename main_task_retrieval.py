@@ -35,6 +35,42 @@ global logger
 
 def validate_trusted_cli(args):
     """Validate the strict MSRVTT trusted-v1 command-line contract."""
+    fixed_refiner_config = {
+        "pair_refiner_num_views": 4,
+        "pair_refiner_lambda_max": 0.1,
+        "pair_refiner_query_block_size": 16,
+        "pair_refiner_candidate_block_size": 32,
+        "pair_refiner_alignment_temperature": 0.07,
+    }
+    for name, expected in fixed_refiner_config.items():
+        actual = getattr(args, name, expected)
+        if actual != expected:
+            raise ValueError(
+                f"--{name} is frozen at {expected}, got {actual}"
+            )
+
+    if args.experiment_profile == "pair_evidence_refiner":
+        if bool(getattr(args, "use_attributes", False)):
+            raise ValueError(
+                "pair_evidence_refiner forbids the attributes branch"
+            )
+        if bool(getattr(args, "use_hard_negative_packing", False)) or bool(
+            getattr(args, "use_explicit_hard_negative_loss", False)
+        ):
+            raise ValueError(
+                "pair_evidence_refiner forbids hard-negative diagnostic paths"
+            )
+        if args.do_train:
+            if args.batch_size != 256:
+                raise ValueError(
+                    "pair_evidence_refiner requires --batch_size=256"
+                )
+            if args.gradient_accumulation_steps != 1:
+                raise ValueError(
+                    "pair_evidence_refiner requires "
+                    "--gradient_accumulation_steps=1"
+                )
+
     if args.datatype != "msrvtt":
         return
 
@@ -360,12 +396,43 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         "--experiment_profile",
         default="default",
         type=str,
-        choices=["default", "hygiene"],
+        choices=["default", "hygiene", "pair_evidence_refiner"],
         help=(
             "Experiment profile. hygiene selects the clean WTI baseline and "
-            "forbids hard-negative diagnostic paths; default permits those "
-            "independent diagnostics."
+            "forbids hard-negative diagnostic paths; pair_evidence_refiner "
+            "enables the frozen pair-level representation refiner; default "
+            "permits independent diagnostics."
         ),
+    )
+    parser.add_argument(
+        "--pair_refiner_num_views",
+        default=4,
+        type=int,
+        help="Frozen number of deterministic feature-subspace views.",
+    )
+    parser.add_argument(
+        "--pair_refiner_lambda_max",
+        default=0.1,
+        type=float,
+        help="Frozen maximum pair-representation residual scale.",
+    )
+    parser.add_argument(
+        "--pair_refiner_query_block_size",
+        default=16,
+        type=int,
+        help="Frozen query block size for pair-evidence refinement.",
+    )
+    parser.add_argument(
+        "--pair_refiner_candidate_block_size",
+        default=32,
+        type=int,
+        help="Frozen candidate block size for pair-evidence refinement.",
+    )
+    parser.add_argument(
+        "--pair_refiner_alignment_temperature",
+        default=0.07,
+        type=float,
+        help="Frozen temperature for deterministic alignment views.",
     )
     args = parser.parse_args()
 
@@ -485,6 +552,11 @@ def set_seed_logger(args):
                 "use_attributes",
                 "max_words_attrs",
                 "attr_num_blocks",
+                "pair_refiner_num_views",
+                "pair_refiner_lambda_max",
+                "pair_refiner_query_block_size",
+                "pair_refiner_candidate_block_size",
+                "pair_refiner_alignment_temperature",
             ],
             "HardNeg": [
                 "use_hard_negative_packing",

@@ -27,13 +27,21 @@ MAX_WORDS_ATTRS=${MAX_WORDS_ATTRS:-77}
 : "${INIT_MODEL:?请设置 INIT_MODEL=<checkpoint_path>}"
 
 # 模型结构参数（需与训练配置一致）
-EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-hygiene}   # default | hygiene
+EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-hygiene}   # default | hygiene | pair_evidence_refiner
 BACKBONE_TYPE=${BACKBONE_TYPE:-openai_clip}          # openai_clip | eva_clip
 BACKBONE_NAME=${BACKBONE_NAME:-EVA02-CLIP-B-16}
 BACKBONE_PATH=${BACKBONE_PATH:-${ROOT_DIR}/research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
 EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-${ROOT_DIR}/research_refs/EVA/EVA-CLIP/rei}
 EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN:-0}              # 0 | 1
 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION:-fp16} # fp16 | fp32
+if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" && "${EXPERIMENT_PROFILE}" != "pair_evidence_refiner" ]]; then
+  echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default, hygiene, or pair_evidence_refiner" >&2
+  exit 2
+fi
+if [[ "${EXPERIMENT_PROFILE}" == "pair_evidence_refiner" && "${USE_ATTRIBUTES}" == "1" ]]; then
+  echo "pair_evidence_refiner forbids USE_ATTRIBUTES=1" >&2
+  exit 2
+fi
 if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
   echo "Unsupported EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}; expected 0 or 1" >&2
   exit 2
@@ -83,6 +91,11 @@ fi
 
 EXTRA_ARGS=()
 EXTRA_ARGS+=(--experiment_profile "${EXPERIMENT_PROFILE}")
+EXTRA_ARGS+=(--pair_refiner_num_views 4)
+EXTRA_ARGS+=(--pair_refiner_lambda_max 0.1)
+EXTRA_ARGS+=(--pair_refiner_query_block_size 16)
+EXTRA_ARGS+=(--pair_refiner_candidate_block_size 32)
+EXTRA_ARGS+=(--pair_refiner_alignment_temperature 0.07)
 EXTRA_ARGS+=(--eval_split "${EVAL_SPLIT}")
 EXTRA_ARGS+=(--backbone_type "${BACKBONE_TYPE}")
 EXTRA_ARGS+=(--clip_layer_norm_precision "${CLIP_LAYER_NORM_PRECISION}")

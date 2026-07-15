@@ -111,6 +111,7 @@ def test_manifest_contains_protocol_code_data_and_backbone(tmp_path, monkeypatch
         "batch",
         "runtime",
         "hard_negative",
+        "pair_evidence_refiner",
     }
     assert payload["runtime"] == {
         "cuda_visible_devices": "0,1,2,4",
@@ -127,6 +128,14 @@ def test_manifest_contains_protocol_code_data_and_backbone(tmp_path, monkeypatch
         "mapping_path": "cache_dir/hard_negatives/msrvtt_train_hardneg_clean.json",
         "pack_seed": 42,
         "loss_weight": 0.0,
+    }
+    assert payload["pair_evidence_refiner"] == {
+        "enabled": False,
+        "num_views": 4,
+        "lambda_max": 0.1,
+        "query_block_size": 16,
+        "candidate_block_size": 32,
+        "alignment_temperature": 0.07,
     }
     encoded = json.dumps(payload)
     assert "argv" not in encoded
@@ -145,6 +154,26 @@ def test_manifest_contains_protocol_code_data_and_backbone(tmp_path, monkeypatch
     path = tmp_path / "experiment_manifest.json"
     atomic_write_json(path, payload)
     assert json.loads(path.read_text())["split"]["manifest_sha256"] == "abc"
+
+
+def test_manifest_records_frozen_pair_refiner_configuration(tmp_path):
+    args = _args(tmp_path)
+    args.experiment_profile = "pair_evidence_refiner"
+    payload = build_experiment_manifest(
+        args,
+        split_summary={"protocol_version": "trusted-v1"},
+        batch_semantics={"world_size": 4},
+        git_state={"commit": "deadbeef", "dirty": False, "modified_paths": []},
+    )
+
+    assert payload["pair_evidence_refiner"] == {
+        "enabled": True,
+        "num_views": 4,
+        "lambda_max": 0.1,
+        "query_block_size": 16,
+        "candidate_block_size": 32,
+        "alignment_temperature": 0.07,
+    }
 
 
 def test_manifest_allows_non_msrvtt_without_trusted_split(tmp_path):

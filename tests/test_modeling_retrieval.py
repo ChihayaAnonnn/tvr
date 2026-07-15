@@ -224,12 +224,18 @@ def test_provided_video_group_ids_are_long_and_match_local_batch():
         )
 
 
-def _make_forward_only_model(retrieval_logits, group_ids, hard_negative_loss=0.0):
+def _make_forward_only_model(
+    retrieval_logits,
+    group_ids,
+    hard_negative_loss=0.0,
+    pair_refiner_diagnostics=None,
+):
     model = UATVR.__new__(UATVR)
     torch.nn.Module.__init__(model)
     model.loss_fct = MultiPositiveCrossEn()
     model.use_explicit_hard_negative_loss = False
     model.hard_negative_enabled = False
+    model.pair_evidence_refiner_enabled = pair_refiner_diagnostics is not None
     model.task_config = Namespace(datatype="msrvtt", world_size=1, rank=0)
     model.loose_type = True
 
@@ -246,11 +252,14 @@ def _make_forward_only_model(retrieval_logits, group_ids, hard_negative_loss=0.0
 
     def get_similarity_logits(_self, *args, video_group_id=None, **kwargs):
         assert torch.equal(video_group_id, group_ids)
-        return {
+        result = {
             "retrieve_logits": retrieval_logits,
             "video_group_id": group_ids,
             "hard_negative_loss": retrieval_logits.new_tensor(hard_negative_loss),
         }
+        if pair_refiner_diagnostics is not None:
+            result["pair_refiner_diagnostics"] = pair_refiner_diagnostics
+        return result
 
     model._flatten_video_input = MethodType(flatten_video_input, model)
     model.get_sequence_output = MethodType(get_sequence_output, model)
@@ -318,6 +327,34 @@ def test_hard_negative_loss_is_separate_from_multi_positive_candidates():
     torch.testing.assert_close(
         loss_dict["total"], expected_main + retrieval_logits.new_tensor(7.0)
     )
+
+
+def test_forward_exposes_pair_refiner_diagnostics_without_adding_a_loss():
+    retrieval_logits = torch.tensor([[3.0, 0.0], [0.0, 2.0]])
+    group_ids = torch.tensor([1, 2])
+    diagnostics = {
+        "data_ambiguity_mean": torch.tensor(0.2),
+        "view_disagreement_mean": torch.tensor(0.3),
+        "representation_update_norm": torch.tensor(0.04),
+        "representation_update_rate": torch.tensor(0.5),
+    }
+    model = _make_forward_only_model(
+        retrieval_logits,
+        group_ids,
+        pair_refiner_diagnostics=diagnostics,
+    )
+
+    loss_dict = model(
+        torch.zeros(2, 1, 2, dtype=torch.long),
+        torch.zeros(2, 1, 2, dtype=torch.long),
+        torch.ones(2, 1, 2, dtype=torch.long),
+        torch.zeros(2, 1, 1, 1, 1, 1, 1),
+        torch.ones(2, 1, 1, dtype=torch.long),
+        video_group_id=group_ids,
+    )
+
+    assert all(loss_dict[name] is value for name, value in diagnostics.items())
+    torch.testing.assert_close(loss_dict["total"], loss_dict["sim_loss"])
 
 
 @pytest.mark.parametrize(
@@ -510,6 +547,20 @@ def test_hard_negative_activation_requires_positive_weight():
         UATVR._resolve_hard_negative_enabled(True, -0.1)
 
 
+def test_pair_refiner_model_config_is_frozen_outside_the_cli_too():
+    assert UATVR._resolve_pair_refiner_config(Namespace()) == {
+        "num_views": 4,
+        "lambda_max": 0.1,
+        "query_block_size": 16,
+        "candidate_block_size": 32,
+        "alignment_temperature": 0.07,
+    }
+    with pytest.raises(ValueError, match="frozen configuration"):
+        UATVR._resolve_pair_refiner_config(
+            Namespace(pair_refiner_lambda_max=0.2)
+        )
+
+
 def _make_wti_unit_model():
     model = UATVR.__new__(UATVR)
     torch.nn.Module.__init__(model)
@@ -548,6 +599,139 @@ def test_train_and_eval_use_identical_wti_score_source():
     )
     torch.testing.assert_close(train_result["retrieve_logits"], eval_logits)
     assert train_result["video_group_id"].tolist() == [10, 20]
+
+
+def test_hygiene_off_has_no_refiner_state_and_preserves_wti_input_gradients():
+    model = _make_wti_unit_model()
+    model.experiment_profile = "hygiene"
+    assert not hasattr(model, "pair_evidence_refiner")
+    assert not any(
+        key.startswith("pair_evidence_refiner.")
+        for key in model.state_dict()
+    )
+
+    text, video, mask, _groups = _wti_inputs()
+    actual_text = text.clone().requires_grad_(True)
+    actual_video = video.clone().requires_grad_(True)
+    model.eval()
+    actual_logits = model._wti_similarity(
+        actual_text, actual_video, mask, mask
+    )
+    actual_gradients = torch.autograd.grad(
+        actual_logits.sum(), (actual_text, actual_video)
+    )
+
+    legacy_text = text.clone().requires_grad_(True)
+    legacy_video = video.clone().requires_grad_(True)
+    legacy_logits = model.weighted_token_wise_intersection(
+        torch.nn.functional.normalize(legacy_text, dim=-1),
+        torch.nn.functional.normalize(legacy_video, dim=-1),
+        mask,
+        mask,
+    ) * model.clip.logit_scale.exp()
+    legacy_gradients = torch.autograd.grad(
+        legacy_logits.sum(), (legacy_text, legacy_video)
+    )
+
+    torch.testing.assert_close(actual_logits, legacy_logits)
+    for actual_gradient, legacy_gradient in zip(
+        actual_gradients, legacy_gradients, strict=True
+    ):
+        torch.testing.assert_close(actual_gradient, legacy_gradient)
+
+
+class _StubPairEvidenceRefiner(torch.nn.Module):
+    def forward(
+        self,
+        text_token,
+        frame_token,
+        attention_mask,
+        video_mask,
+        text_weight,
+        video_weight,
+    ):
+        assert torch.isfinite(text_token).all()
+        assert torch.isfinite(frame_token).all()
+        assert text_weight.shape == attention_mask.shape
+        assert video_weight.shape == video_mask.shape
+        torch.testing.assert_close(
+            text_weight.sum(dim=-1),
+            torch.ones_like(text_weight.sum(dim=-1)),
+        )
+        torch.testing.assert_close(
+            video_weight.sum(dim=-1),
+            torch.ones_like(video_weight.sum(dim=-1)),
+        )
+        scores = torch.einsum(
+            "ad,bd->ab", text_token[:, 0], frame_token[:, 0]
+        )
+        return Namespace(
+            scores=scores,
+            diagnostics={
+                "data_ambiguity_mean": scores.new_tensor(0.2),
+                "view_disagreement_mean": scores.new_tensor(0.3),
+                "representation_update_norm": scores.new_tensor(0.04),
+                "representation_update_rate": scores.new_tensor(0.5),
+            },
+        )
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="CUDA is required for FP16 coverage"
+)
+def test_pair_refiner_active_normalization_keeps_zero_padding_finite():
+    device = torch.device("cuda")
+    model = _make_wti_unit_model().to(device=device, dtype=torch.float16)
+    model.pair_evidence_refiner_enabled = True
+    model.pair_evidence_refiner = _StubPairEvidenceRefiner()
+    text = torch.tensor(
+        [[[1.0, 0.0], [0.0, 0.0]], [[0.0, 1.0], [0.0, 0.0]]],
+        device=device,
+        dtype=torch.float16,
+        requires_grad=True,
+    )
+    video = text.detach().clone().requires_grad_(True)
+    mask = torch.tensor([[1, 0], [1, 0]], device=device)
+
+    model.eval()
+    logits = model._wti_similarity(text, video, mask, mask)
+    logits.sum().backward()
+
+    assert torch.isfinite(logits).all()
+    assert text.grad is not None and torch.isfinite(text.grad).all()
+    assert video.grad is not None and torch.isfinite(video.grad).all()
+
+
+def test_pair_refiner_is_the_train_and_eval_score_source_and_diagnostics_detach():
+    model = _make_wti_unit_model()
+    model.pair_evidence_refiner_enabled = True
+    model.pair_evidence_refiner = _StubPairEvidenceRefiner()
+    text, video, mask, groups = _wti_inputs()
+    expected = torch.einsum(
+        "ad,bd->ab",
+        torch.nn.functional.normalize(text, dim=-1)[:, 0],
+        torch.nn.functional.normalize(video, dim=-1)[:, 0],
+    ) * model.clip.logit_scale.exp()
+
+    model.eval()
+    eval_logits = model._wti_similarity(text, video, mask, mask)
+    torch.testing.assert_close(eval_logits, expected)
+
+    model.train()
+    result = model._wti_similarity(
+        text, video, mask, mask, video_group_id=groups
+    )
+    torch.testing.assert_close(result["retrieve_logits"], expected)
+    assert set(result["pair_refiner_diagnostics"]) == {
+        "data_ambiguity_mean",
+        "view_disagreement_mean",
+        "representation_update_norm",
+        "representation_update_rate",
+    }
+    assert all(
+        value.ndim == 0 and not value.requires_grad
+        for value in result["pair_refiner_diagnostics"].values()
+    )
 
 
 def test_hard_negative_is_separate_and_weighted_once():

@@ -19,6 +19,7 @@ from modules.module_clip import (
 )
 from modules.module_cross import CrossConfig
 from modules.module_cross import Transformer as TransformerClip
+from modules.pair_evidence_refiner import DualSourcePairEvidenceRefiner
 from modules.until_module import (
     MultiPositiveCrossEn,
     PreTrainedModel,
@@ -288,6 +289,50 @@ class UATVR(CLIP4ClipPreTrainedModel):
         return bool(use_explicit) and weight > 0
 
     @staticmethod
+    def _resolve_pair_refiner_config(task_config):
+        expected = {
+            "num_views": 4,
+            "lambda_max": 0.1,
+            "query_block_size": 16,
+            "candidate_block_size": 32,
+            "alignment_temperature": 0.07,
+        }
+        resolved = {
+            "num_views": int(
+                getattr(task_config, "pair_refiner_num_views", 4)
+            ),
+            "lambda_max": float(
+                getattr(task_config, "pair_refiner_lambda_max", 0.1)
+            ),
+            "query_block_size": int(
+                getattr(task_config, "pair_refiner_query_block_size", 16)
+            ),
+            "candidate_block_size": int(
+                getattr(
+                    task_config, "pair_refiner_candidate_block_size", 32
+                )
+            ),
+            "alignment_temperature": float(
+                getattr(
+                    task_config,
+                    "pair_refiner_alignment_temperature",
+                    0.07,
+                )
+            ),
+        }
+        drift = {
+            name: value
+            for name, value in resolved.items()
+            if value != expected[name]
+        }
+        if drift:
+            raise ValueError(
+                "pair_evidence_refiner uses frozen configuration; "
+                f"got overrides={drift}"
+            )
+        return resolved
+
+    @staticmethod
     def configure_clip_layer_norm_precision(backbone, backbone_type, precision):
         precision = validate_layer_norm_precision(precision)
         if backbone_type != "openai_clip":
@@ -546,6 +591,30 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.experiment_profile = getattr(
             self.task_config, "experiment_profile", "default"
         )
+        self.pair_evidence_refiner_enabled = (
+            self.experiment_profile == "pair_evidence_refiner"
+        )
+        if self.pair_evidence_refiner_enabled:
+            incompatible = []
+            if bool(getattr(self.task_config, "use_attributes", False)):
+                incompatible.append("use_attributes")
+            if bool(
+                getattr(self.task_config, "use_hard_negative_packing", False)
+            ):
+                incompatible.append("use_hard_negative_packing")
+            if self.use_explicit_hard_negative_loss:
+                incompatible.append("use_explicit_hard_negative_loss")
+            if incompatible:
+                raise ValueError(
+                    "pair_evidence_refiner profile forbids: "
+                    + ", ".join(incompatible)
+                )
+            pair_refiner_config = self._resolve_pair_refiner_config(
+                self.task_config
+            )
+            self.pair_evidence_refiner = DualSourcePairEvidenceRefiner(
+                **pair_refiner_config
+            )
 
         # extra class token num
         self.extra_cls_frame_num = self.task_config.extra_video_cls_num
@@ -727,7 +796,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
             )
             positive_counts = positive_mask.sum(dim=1).float()
             unique_count = torch.unique(global_group_ids).numel()
-            return {
+            loss_dict = {
                 "total": total_loss,
                 "sim_loss": sim_loss,
                 "hard_negative_loss": hard_negative_loss,
@@ -737,6 +806,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 ),
                 "mean_positive_count": positive_counts.mean(),
             }
+            if getattr(self, "pair_evidence_refiner_enabled", False):
+                loss_dict.update(res["pair_refiner_diagnostics"])
+            return loss_dict
         else:  # for inference
             return None
 
@@ -840,12 +912,50 @@ class UATVR(CLIP4ClipPreTrainedModel):
                         hard_valid.contiguous().view(-1), self.task_config
                     )
 
-        text_token = F.normalize(text_token, dim=-1)
-        visual_output = F.normalize(visual_output, dim=-1)
+        if getattr(self, "pair_evidence_refiner_enabled", False):
+            normalize_eps = max(
+                1e-6, float(torch.finfo(text_token.dtype).eps)
+            )
+            text_token = F.normalize(
+                text_token, dim=-1, eps=normalize_eps
+            )
+            visual_output = F.normalize(
+                visual_output, dim=-1, eps=normalize_eps
+            )
+        else:
+            # Keep the frozen P0 normalization path byte-for-byte unchanged.
+            text_token = F.normalize(text_token, dim=-1)
+            visual_output = F.normalize(visual_output, dim=-1)
         logit_scale = self.clip.logit_scale.exp()
-        retrieve_logits = self.weighted_token_wise_intersection(
-            text_token, visual_output, attention_mask, video_mask
-        ) * logit_scale
+        pair_refiner_diagnostics = {}
+        if getattr(self, "pair_evidence_refiner_enabled", False):
+            text_valid = attention_mask.to(dtype=torch.bool)
+            video_valid = video_mask.to(dtype=torch.bool)
+            text_weight = self.text_weight_fc(text_token).squeeze(-1)
+            text_weight = torch.softmax(
+                text_weight.masked_fill(~text_valid, float("-inf")), dim=-1
+            )
+            video_weight = self.video_weight_fc(visual_output).squeeze(-1)
+            video_weight = torch.softmax(
+                video_weight.masked_fill(~video_valid, float("-inf")), dim=-1
+            )
+            refined = self.pair_evidence_refiner(
+                text_token,
+                visual_output,
+                attention_mask,
+                video_mask,
+                text_weight,
+                video_weight,
+            )
+            retrieve_logits = refined.scores * logit_scale
+            pair_refiner_diagnostics = {
+                name: value.detach()
+                for name, value in refined.diagnostics.items()
+            }
+        else:
+            retrieve_logits = self.weighted_token_wise_intersection(
+                text_token, visual_output, attention_mask, video_mask
+            ) * logit_scale
 
         if not self.training:
             return retrieve_logits
@@ -909,6 +1019,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
             "retrieve_logits": retrieve_logits,
             "video_group_id": video_group_id,
             "hard_negative_loss": self.w_hard_negative * hard_negative_loss,
+            "pair_refiner_diagnostics": pair_refiner_diagnostics,
         }
 
     def _loose_similarity(

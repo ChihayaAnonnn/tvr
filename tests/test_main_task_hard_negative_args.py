@@ -179,6 +179,91 @@ def test_hygiene_cli_rejects_changed_batch_protocol(
         get_args()
 
 
+@pytest.mark.parametrize(
+    "forbidden_flag",
+    [
+        "--use_attributes",
+        "--use_hard_negative_packing",
+        "--use_explicit_hard_negative_loss",
+    ],
+)
+def test_pair_refiner_profile_rejects_incompatible_branches(
+    monkeypatch, forbidden_flag
+):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--do_train",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
+            "--experiment_profile",
+            "pair_evidence_refiner",
+            forbidden_flag,
+        ],
+    )
+
+    with pytest.raises(ValueError, match="pair_evidence_refiner forbids"):
+        get_args()
+
+
+@pytest.mark.parametrize(
+    ("flag", "value"),
+    [
+        ("--pair_refiner_num_views", "3"),
+        ("--pair_refiner_lambda_max", "0.2"),
+        ("--pair_refiner_query_block_size", "8"),
+        ("--pair_refiner_candidate_block_size", "16"),
+        ("--pair_refiner_alignment_temperature", "0.1"),
+    ],
+)
+def test_pair_refiner_cli_rejects_frozen_config_drift(
+    monkeypatch, flag, value
+):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--do_train",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--expand_msrvtt_sentences",
+            "--experiment_profile",
+            "pair_evidence_refiner",
+            flag,
+            value,
+        ],
+    )
+
+    with pytest.raises(ValueError, match="is frozen at"):
+        get_args()
+
+
+@pytest.mark.parametrize("profile", ["hygiene", "default"])
+def test_off_profiles_reject_misleading_refiner_config_drift(
+    monkeypatch, profile
+):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--output_dir",
+            "/tmp/uatvr-test-out",
+            "--experiment_profile",
+            profile,
+            "--pair_refiner_lambda_max",
+            "0.2",
+        ],
+    )
+
+    with pytest.raises(ValueError, match="is frozen at 0.1"):
+        get_args()
+
+
 def test_cli_rejects_abbreviated_long_options(monkeypatch, capsys):
     monkeypatch.setattr(
         sys,
@@ -523,6 +608,30 @@ def test_train_script_forwards_a800_pipeline_settings(tmp_path):
     assert args[args.index("--batch_size") + 1] == "256"
     assert args[args.index("--gradient_accumulation_steps") + 1] == "1"
     assert args[args.index("--tqfs_cache_dir") + 1] == "/nvme/tqfs"
+
+
+@pytest.mark.parametrize("script_name", ["train_msrvtt.sh", "eval.sh"])
+def test_pair_refiner_scripts_forward_frozen_configuration(
+    tmp_path, script_name
+):
+    result, capture_path = _run_with_fake_torchrun(
+        script_name,
+        tmp_path,
+        "0",
+        extra_env={"EXPERIMENT_PROFILE": "pair_evidence_refiner"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    args = capture_path.read_text(encoding="utf-8").splitlines()
+    expected = {
+        "--pair_refiner_num_views": "4",
+        "--pair_refiner_lambda_max": "0.1",
+        "--pair_refiner_query_block_size": "16",
+        "--pair_refiner_candidate_block_size": "32",
+        "--pair_refiner_alignment_temperature": "0.07",
+    }
+    for flag, value in expected.items():
+        assert args[args.index(flag) + 1] == value
 
 
 def test_train_script_uses_a800_defaults(tmp_path):

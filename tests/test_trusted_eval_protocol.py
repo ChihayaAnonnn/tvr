@@ -73,6 +73,9 @@ def _args(**overrides):
         "experiment_profile": "hygiene",
         "use_hard_negative_packing": False,
         "use_explicit_hard_negative_loss": False,
+        "use_attributes": False,
+        "batch_size": 256,
+        "gradient_accumulation_steps": 1,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -111,6 +114,20 @@ def test_default_profile_allows_explicit_hard_negative_diagnostic():
             use_explicit_hard_negative_loss=True,
         )
     )
+
+
+def test_pair_refiner_profile_accepts_only_the_frozen_protocol():
+    retrieval.validate_trusted_cli(
+        _args(experiment_profile="pair_evidence_refiner")
+    )
+
+    with pytest.raises(ValueError, match="requires --batch_size=256"):
+        retrieval.validate_trusted_cli(
+            _args(
+                experiment_profile="pair_evidence_refiner",
+                batch_size=128,
+            )
+        )
 
 
 def test_get_args_exposes_trusted_data_paths_and_eval_split(monkeypatch):
