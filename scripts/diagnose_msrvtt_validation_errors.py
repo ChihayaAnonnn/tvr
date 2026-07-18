@@ -394,12 +394,14 @@ def compute_validation_sim_matrix(args: argparse.Namespace, checkpoint: str, dev
                     "validation dataloader rows exceed dataset.video_ids"
                 )
 
-            sequence_output, text_token = model.get_sequence_output(
-                input_ids,
-                segment_ids,
-                input_mask,
+            text_token = model.encode_text_tokens(input_ids)
+            prepared_text_mask = input_mask.view(-1, input_mask.shape[-1])
+            text_token, prepared_text_mask = model.prepare_text_for_similarity(
+                text_token, prepared_text_mask
             )
-            text_batches.append((sequence_output.cpu(), text_token.cpu(), input_mask.cpu()))
+            text_batches.append(
+                (text_token.cpu(), prepared_text_mask.cpu())
+            )
 
             first_local_rows = []
             for local_row, video_id in enumerate(batch_video_ids):
@@ -414,9 +416,17 @@ def compute_validation_sim_matrix(args: argparse.Namespace, checkpoint: str, dev
                 )
                 unique_video = video.index_select(0, local_indices)
                 unique_video_mask = video_mask.index_select(0, local_indices)
-                visual_output = model.get_visual_output(
+                visual_output = model.encode_video_frames(
                     unique_video,
                     unique_video_mask,
+                )
+                unique_video_mask = unique_video_mask.view(
+                    -1, unique_video_mask.shape[-1]
+                )
+                visual_output, unique_video_mask = (
+                    model.prepare_video_for_similarity(
+                        visual_output, unique_video_mask
+                    )
                 )
                 video_batches.append(
                     (visual_output.cpu(), unique_video_mask.cpu())
@@ -434,17 +444,16 @@ def compute_validation_sim_matrix(args: argparse.Namespace, checkpoint: str, dev
         video_mask_all = torch.cat([batch[1] for batch in video_batches], dim=0)
         n_video = visual_output_all.size(0)
         sim_rows = []
-        for sequence_output, text_token, input_mask in text_batches:
+        for text_token, input_mask in text_batches:
             row_chunks = []
             for start in range(0, n_video, args.video_chunk_size):
                 end = min(start + args.video_chunk_size, n_video)
                 logits, _ = model.get_similarity_logits(
-                    sequence_output.to(device),
                     text_token.to(device),
                     visual_output_all[start:end].to(device),
                     input_mask.to(device),
                     video_mask_all[start:end].to(device),
-                    loose_type=model.loose_type,
+                    prepared=True,
                 )
                 row_chunks.append(logits.detach().cpu())
             sim_rows.append(torch.cat(row_chunks, dim=1).numpy())

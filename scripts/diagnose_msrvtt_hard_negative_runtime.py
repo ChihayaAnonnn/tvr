@@ -249,7 +249,6 @@ def build_task_args(cli_args: argparse.Namespace, checkpoint: str):
         "0",
         "--slice_framepos",
         "3",
-        "--loose_type",
         "--linear_patch",
         "2d",
         "--sim_header",
@@ -258,8 +257,6 @@ def build_task_args(cli_args: argparse.Namespace, checkpoint: str):
         "2",
         "--pretrained_clip_name",
         "ViT-B/16",
-        "--backbone_type",
-        "openai_clip",
         "--clip_layer_norm_precision",
         "fp16",
         "--extra_video_cls_num",
@@ -416,12 +413,15 @@ def compute_checkpoint_scores(
         text_features = []
         for start in range(0, sample_count, cli_args.text_batch_size):
             end = min(start + cli_args.text_batch_size, sample_count)
-            ids, mask, seg = tensorize_text_batch(dataset, samples, start, end)
+            ids, mask, _seg = tensorize_text_batch(dataset, samples, start, end)
             ids = ids.to(device)
             mask = mask.to(device)
-            seg = seg.to(device)
-            sequence_output, text_token = model.get_sequence_output(ids, seg, mask)
-            text_features.append((sequence_output.cpu(), text_token.cpu(), mask.cpu()))
+            text_token = model.encode_text_tokens(ids)
+            mask = mask.view(-1, mask.shape[-1])
+            text_token, mask = model.prepare_text_for_similarity(
+                text_token, mask
+            )
+            text_features.append((text_token.cpu(), mask.cpu()))
 
         col_start = 0
         for video_start in range(0, pool_count, cli_args.video_batch_size):
@@ -429,18 +429,23 @@ def compute_checkpoint_scores(
             video, video_mask = load_video_batch(dataset, video_pool, video_start, video_end)
             video = video.to(device)
             video_mask = video_mask.to(device)
-            visual_output = model.get_visual_output(video, video_mask, shaped=False)
+            visual_output = model.encode_video_frames(
+                video, video_mask, shaped=False
+            )
+            video_mask = video_mask.view(-1, video_mask.shape[-1])
+            visual_output, video_mask = model.prepare_video_for_similarity(
+                visual_output, video_mask
+            )
 
-            for text_batch_idx, (sequence_output, text_token, text_mask) in enumerate(text_features):
+            for text_batch_idx, (text_token, text_mask) in enumerate(text_features):
                 row_start = text_batch_idx * cli_args.text_batch_size
-                row_end = min(row_start + sequence_output.size(0), sample_count)
+                row_end = min(row_start + text_token.size(0), sample_count)
                 logits, _ = model.get_similarity_logits(
-                    sequence_output.to(device),
                     text_token.to(device),
                     visual_output,
                     text_mask.to(device),
                     video_mask,
-                    loose_type=model.loose_type,
+                    prepared=True,
                 )
                 score_matrix[row_start:row_end, col_start:video_end] = logits.detach().cpu().numpy()
 

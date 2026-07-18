@@ -22,7 +22,7 @@ CUDA_VISIBLE_DEVICES=1,2,3,4 \
     --datatype msvd \
     --feature_framerate 1 --coef_lr "${COEF_LR}" \
     --freeze_layer_num 0 --slice_framepos 3 \
-    --loose_type --linear_patch 2d --sim_header seqTransf \
+    --linear_patch 2d --sim_header seqTransf \
     --pretrained_clip_name ViT-B/16 \
     --extra_video_cls_num 2 \
     --extra_text_cls_num 2 \

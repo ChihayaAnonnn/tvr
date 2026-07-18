@@ -29,7 +29,6 @@
 | 图像/视频 | `Pillow==10.0.1`、`opencv-python==4.8.1.78` | 视频解码与帧预处理 |
 | TQFS | `scikit-learn==1.3.2` | KMeans 帧多样性选择 |
 | CLIP/工具 | `ftfy==6.1.1`、`regex==2022.7.9`、`tqdm==4.65.0`、`requests==2.31.0`、`boto3==1.28.85`、`einops==0.7.0` | tokenizer、下载和模型工具 |
-| 可选 backbone 支撑 | `timm==0.9.16` | 显式启用本地 EVA-CLIP 时使用 |
 | 验证 | `pytest==7.1.2`、`ruff==0.6.9` | 单元测试和静态检查 |
 
 PyTorch 与 torchvision 改为 CUDA 12.1 的 CPython 3.11 可用组合，解决旧配置 `torch==1.13.0+cu116` / `torchvision==0.14.0+cu116` 在 Python 3.11 下找不到匹配 wheel 的问题。`xformers` 和 `mamba-ssm` 不属于当前 P0 必需依赖，因此没有默认安装。

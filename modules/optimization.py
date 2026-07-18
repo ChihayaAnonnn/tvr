@@ -71,6 +71,12 @@ class BertAdam(Optimizer):
             raise ValueError("Invalid learning rate: {} - should be >= 0.0".format(lr))
         if schedule not in SCHEDULES:
             raise ValueError("Invalid schedule parameter: {}".format(schedule))
+        if t_total != -1 and t_total <= 0:
+            raise ValueError(
+                "Invalid t_total: {} - should be -1 or > 0".format(
+                    t_total
+                )
+            )
         if not 0.0 <= warmup < 1.0 and not warmup == -1:
             raise ValueError("Invalid warmup: {} - should be in [0.0, 1.0[ or -1".format(warmup))
         if not 0.0 <= b1 < 1.0:
@@ -100,6 +106,39 @@ class BertAdam(Optimizer):
                     lr_scheduled = group['lr']
                 lr.append(lr_scheduled)
         return lr
+
+    def get_group_lrs(self):
+        """Return the LR that the next ``step`` will apply per param group.
+
+        Call this after backward and before ``step``.  Active parameters in a
+        group must share an optimizer step; otherwise one scalar cannot
+        faithfully describe that group's applied learning rates.
+        """
+
+        scheduled = []
+        for group_index, group in enumerate(self.param_groups):
+            active_steps = {
+                self.state.get(parameter, {}).get("step", 0)
+                for parameter in group["params"]
+                if parameter.grad is not None
+            }
+            if len(active_steps) > 1:
+                raise RuntimeError(
+                    "cannot summarize BertAdam group LR with divergent "
+                    f"active parameter steps in group {group_index}: "
+                    f"{sorted(active_steps)}"
+                )
+            step = next(iter(active_steps), 0)
+            if group["t_total"] != -1:
+                schedule_fct = SCHEDULES[group["schedule"]]
+                progress = step / group["t_total"]
+                group_lr = group["lr"] * schedule_fct(
+                    progress, group["warmup"]
+                )
+            else:
+                group_lr = group["lr"]
+            scheduled.append(group_lr)
+        return scheduled
 
     def step(self, closure=None):
         """Performs a single optimization step.

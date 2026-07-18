@@ -115,9 +115,9 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
     """Build a JSON-serializable provenance payload from explicit safe fields."""
 
     split = split_summary if split_summary is not None else None
+    pretrained_clip_name = getattr(args, "pretrained_clip_name", "")
     backbone = {
-        "type": getattr(args, "backbone_type", ""),
-        "pretrained_clip_name": getattr(args, "pretrained_clip_name", ""),
+        "pretrained_clip_name": pretrained_clip_name,
         "clip_layer_norm_precision": getattr(
             args, "clip_layer_norm_precision", "fp16"
         ),
@@ -127,8 +127,8 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "clip_visual_checkpoint_layers": int(
             getattr(args, "clip_visual_checkpoint_layers", 4)
         ),
-        "name": getattr(args, "backbone_name", ""),
-        "path": getattr(args, "backbone_path", ""),
+        "name": pretrained_clip_name,
+        "path": "",
     }
     data = {
         "source_train_csv": getattr(args, "source_train_csv", ""),
@@ -138,34 +138,6 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "annotation_json": getattr(args, "data_path", ""),
         "split_manifest": getattr(args, "split_manifest", ""),
         "tqfs_cache_dir": getattr(args, "tqfs_cache_dir", ""),
-    }
-    hard_negative = {
-        "packing_enabled": bool(
-            getattr(args, "use_hard_negative_packing", False)
-        ),
-        "explicit_loss_enabled": bool(
-            getattr(args, "use_explicit_hard_negative_loss", False)
-        ),
-        "mapping_path": getattr(args, "hard_negative_path", ""),
-        "pack_seed": getattr(args, "hard_negative_pack_seed", None),
-        "loss_weight": getattr(args, "w_hard_negative", 0.0),
-    }
-    pair_evidence_refiner = {
-        "enabled": getattr(args, "experiment_profile", "default")
-        == "pair_evidence_refiner",
-        "num_views": int(getattr(args, "pair_refiner_num_views", 4)),
-        "lambda_max": float(
-            getattr(args, "pair_refiner_lambda_max", 0.1)
-        ),
-        "query_block_size": int(
-            getattr(args, "pair_refiner_query_block_size", 16)
-        ),
-        "candidate_block_size": int(
-            getattr(args, "pair_refiner_candidate_block_size", 32)
-        ),
-        "alignment_temperature": float(
-            getattr(args, "pair_refiner_alignment_temperature", 0.07)
-        ),
     }
     workers = int(getattr(args, "num_thread_reader", 0))
     runtime = {
@@ -185,8 +157,6 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "data": data,
         "batch": batch_semantics,
         "runtime": runtime,
-        "hard_negative": hard_negative,
-        "pair_evidence_refiner": pair_evidence_refiner,
     }
 
 

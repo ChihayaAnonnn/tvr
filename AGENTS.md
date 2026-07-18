@@ -1,34 +1,33 @@
 # UATVR Agent 入口
 
-UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16、WTI 与 trusted-v1 协议的文本—视频检索研究项目。交流和项目文档统一使用简体中文。
+UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16、WTI 与 `trusted-v1` 协议的文本—视频检索研究项目。交流和项目文档统一使用简体中文。
 
-## 单一事实源
+## 阅读与维护边界
 
-- 科研问题、证据、停止条件和实验顺序只以 [`docs/project/RESEARCH_ISSUES_AND_ROADMAP.md`](docs/project/RESEARCH_ISSUES_AND_ROADMAP.md) 为准。
-- [`docs/analysis/multimodal_retrieval_research_synthesis.md`](docs/analysis/multimodal_retrieval_research_synthesis.md) 只提供外部论文证据分析，不是项目决策 SSOT。
-- [`docs/analysis/query_branch_analysis.md`](docs/analysis/query_branch_analysis.md) 是历史结构快照，不代表当前实现或路线。
-- 历史日志、诊断 TSV、旧计划和过期 checkpoint 只从 Git 历史追溯；`logs/` 与 `ckpts/` 仅保存当前运行产物。
+本文件是当前项目约束的唯一入口。`docs/project/RESEARCH_ISSUES_AND_ROADMAP.md` 与整个 `experiments/` 已删除，不再维护独立 SSOT、活动规格或实验归档，也不要自动重建这些文件。
 
-## 当前决策（2026-07-12）
+除非用户明确要求，默认不读取 `docs/deep-research-report.md`、`docs/analysis/`、`docs/superpowers/` 或 `research_refs/`。历史日志、旧计划和过期 checkpoint 只从 Git 历史定向追溯，不作为当前设计依据。
 
-- MSRVTT 唯一有效协议为 `trusted-v1`：seed 42，8500 train / 500 internal val；JSFusion 1K 仅在方法与超参数冻结后作一次显式盲测。
-- 当前 P0 主损失按精确 `video_id` 使用双向多正例 InfoNCE，训练与评估的最终 logits 固定为 WTI；未来 P2/P3 若修改匹配 score，必须在 P0 完成后通过独立规格和严格回退实现。
-- 当前 P0 是 OpenAI CLIP hygiene WTI-only 新基线；完成前不判断 EVA adapter、pair-level uncertainty 或 candidate-conditioned alignment 的增益。
-- 科研核心是设计新的文本—视频匹配或训练机制，并相对同协议 P0 稳定改善检索；不要求所有数据集 SOTA，但校准、错误预测、abstention 或人工审核不能替代检索收益。
-- P1 只做跨模态错配机制诊断；P2 研究 pair-level aleatoric–epistemic uncertainty-aware matching/training；P3 研究独立的 candidate-conditioned alignment。P2/P3 分别成立后才研究融合。
-- P0 固定 global forward batch 256、4 卡时每卡 micro-batch 64、accum=1。换 backbone 只可作为后续匹配控制变量，不作为创新点。
-- OpenAI CLIP 自定义 LayerNorm 默认使用 native FP16，并保留 FP32 master affine 参数；通过 `CLIP_LAYER_NORM_PRECISION=fp32` 显式回退。该设置不是全模型 AMP，也不影响 EVA LayerNorm。
-- Hard negative 主线已停止，不再 sweep 或 repeat；独立、默认关闭的诊断入口保留。UACL 活动接口已删除，不恢复。
+## 当前决策（2026-07-18）
+
+- 当前可信参照是 OpenAI CLIP ViT-B/16、deterministic WTI-only、单 seed 42。
+- MSR-VTT 唯一有效协议为 `trusted-v1`：8500 train / 500 internal val。JSFusion 1K 只允许在方法、超参数、seed 集、选择规则和报告模板冻结后作一次显式确认评估。
+- 科研核心是设计新的文本—视频匹配或训练机制，并相对同协议基线稳定改善检索；校准、错误预测、abstention 或人工审核不能替代检索收益。
+- 当前没有独立活动实验规格；新机制的实现、训练和评估范围以用户当次明确指令为准。
+- 旧 pair evidence refiner、Hard negative 与 UACL 路线均已停止。活动代码不保留这些分支、参数、诊断统计或 checkpoint 兼容逻辑。
+- 不为已删除模块迁移旧 checkpoint，也不在主模型中扫描、拒绝或解释旧模块参数；需要复现旧模型时使用对应 Git 版本。
+- 换 backbone 只可作为后续匹配控制变量，不作为创新点。
 
 ## 关键训练与评估语义
 
 - 主入口：`run_train_msrvtt_bg.sh` → `train_msrvtt.sh` → `main_task_retrieval.py` → `modules/modeling_retrieval.py`。
-- Shell `--batch_size` 表示目标有效 batch；解析后 global forward batch = `batch_size / gradient_accumulation_steps`，每卡 micro = global forward batch / GPU 数。
-- 梯度累积不会合并不同 forward 的 in-batch negatives；比较实验必须同时核对 forward contrastive batch 和 optimizer effective batch。
-- 4 卡、`batch_size=256`、accum=1 时每卡 micro-batch 64，这是当前可信基线口径。
-- `--fp16` 不是完整 AMP 数据流，不得与 `clip_layer_norm_precision` 混淆。
+- 正例只按精确 `video_id` 定义；主损失为双向多正例 InfoNCE，可信基线的最终 logits 为 WTI。
+- Shell `--batch_size` 表示目标有效 batch；global forward batch = `batch_size / gradient_accumulation_steps`。梯度累积不会合并不同 forward 的 in-batch negatives。
+- 基线口径固定为 global forward batch 256；4 卡时每卡 micro-batch 64、accumulation 1。比较实验必须同时匹配 forward contrastive batch、optimizer effective batch 和 optimizer steps。
+- `--fp16` 不是完整 AMP 数据流，也不等于 `clip_layer_norm_precision`。OpenAI CLIP LayerNorm 默认 native FP16，并保留 FP32 master affine；`CLIP_LAYER_NORM_PRECISION=fp32` 仅作显式回退。
 - `eval.sh` 必须显式设置 `EVAL_SPLIT=val|test`；训练期只构造 internal-val dataloader，禁止构造或读取 test dataloader。
-- 不启动或代跑长期训练进程。训练请求只向用户提供单行命令，由用户手动运行；默认不加 `NO_TAIL=1`。
+- 真实数据缓存、统计拟合、head fitting 和 internal-val/test 访问都属于实验执行，必须由用户明确授权。
+- agent 不启动或代跑长期训练。
 
 ## 代码与验证入口
 
@@ -36,23 +35,21 @@ UATVR 是基于 PyTorch、OpenAI CLIP ViT-B/16、WTI 与 trusted-v1 协议的文
 |---|---|
 | 训练 | `train_msrvtt.sh` / `run_train_msrvtt_bg.sh` |
 | 评估 | `eval.sh`，必须显式设置 `EVAL_SPLIT=val|test` |
+| 只读诊断 | `scripts/diagnose_msrvtt_p1_baseline.py` / `scripts/audit_msrvtt_p1_errors.py` |
 | 主模型 | `modules/modeling_retrieval.py` |
 | 数据协议 | `dataloaders/splits/msrvtt_trusted_v1_seed42.json` |
-| 测试 | `/home/xujie/miniconda3/envs/ret/bin/pytest -q tests`；静态检查使用 `/home/xujie/miniconda3/envs/ret/bin/ruff check ...` |
+| 测试 | `/home/xujie/.conda/envs/tvr/bin/python -m pytest -q tests` |
+| 静态检查 | `/home/xujie/.conda/envs/tvr/bin/ruff check ...` |
 
 不要运行根目录无范围的 `pytest -q`；`research_refs/` 含第三方可选依赖测试。工作树可能包含用户改动，始终保留无关变化。
 
-## 文档入口
-
-- [`docs/project/RESEARCH_ISSUES_AND_ROADMAP.md`](docs/project/RESEARCH_ISSUES_AND_ROADMAP.md)：科研决策唯一 SSOT。
-- [`docs/analysis/multimodal_retrieval_research_synthesis.md`](docs/analysis/multimodal_retrieval_research_synthesis.md)：四篇外部论文的证据综合，非 SSOT。
-- [`docs/analysis/query_branch_analysis.md`](docs/analysis/query_branch_analysis.md)：Query 分支历史快照。
-- [`docs/deploy_qwen/README.md`](docs/deploy_qwen/README.md)：属性生成说明。
+`tests/` 只保留数据读取、数据协议、缓存与 manifest 等跨模块基础测试。设计或实现深度学习模块后，不得为单个模块单独创建 `tests/test_<module>.py`；必要的公式、前向、梯度与合成张量核对使用最小合成验证或已有统一验收入口，除非用户明确要求新增专项测试文件。
 
 ## 稳定实现事实
 
-- 当前主模型文件为 `modeling_retrieval.py`，不保留历史兼容入口。
-- 活动模型图只保留 deterministic WTI 与可选独立 hard-negative；hygiene profile 明确拒绝 hard-negative 诊断路径。
-- 旧模型 checkpoint 中的已删除参数会在模型构造前明确拒绝；旧 optimizer 参数组不迁移，不兼容时由原生错误终止。
-- 纯 WTI 的 MUS TSV 可用于只读错配机制诊断，但不改变标签、loss 或最终排序。
+- 当前主模型文件为 `modules/modeling_retrieval.py`，只保留 backbone、文本/视频编码、WTI、精确 `video_id` 多正例损失与必要的分布式 gather。
+- 主模型不承担旧 checkpoint 兼容、参数迁移、停用实验分支、输入类型穷举校验或训练诊断统计；数据 shape、mask 和 batch 契约由数据层与调用入口保证。
+- prepared-WTI state 是核心计算复用接口，不限制为 eval/no-grad，也不重复检查内部生成的 tensor 类型、shape、dtype 和 device。
+- 不在模型热路径使用 `.item()`、`.tolist()` 或全量 finite/binary 检查，避免 GPU 同步。
+- 纯 WTI 的 MUS TSV 只用于只读错配诊断，不改变标签、loss 或最终排序。
 - 科研参考项目与本地权重位于忽略目录 `research_refs/`，不得纳入 Git。

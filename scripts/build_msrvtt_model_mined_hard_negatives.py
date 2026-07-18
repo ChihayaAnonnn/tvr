@@ -625,7 +625,13 @@ def encode_all_videos(args: argparse.Namespace, model, dataset, video_ids: Seque
             video, video_mask = load_video_batch(dataset, video_ids, start, end)
             video = video.to(device)
             video_mask = video_mask.to(device)
-            visual_output = model.get_visual_output(video, video_mask, shaped=False)
+            visual_output = model.encode_video_frames(
+                video, video_mask, shaped=False
+            )
+            video_mask = video_mask.view(-1, video_mask.shape[-1])
+            visual_output, video_mask = model.prepare_video_for_similarity(
+                visual_output, video_mask
+            )
             visual_outputs.append(visual_output.detach().cpu())
             video_masks.append(video_mask.detach().cpu())
             print(f"[model-mined] encoded videos {end}/{total}", flush=True)
@@ -683,11 +689,14 @@ def mine_mapping_with_model(
         for start in range(0, total, args.text_batch_size):
             end = min(start + args.text_batch_size, total)
             batch_samples = pending_samples[start:end]
-            ids, mask, seg = tensorize_text_batch(dataset, pending_samples, start, end)
+            ids, mask, _seg = tensorize_text_batch(dataset, pending_samples, start, end)
             ids = ids.to(device)
             mask = mask.to(device)
-            seg = seg.to(device)
-            sequence_output, text_token = model.get_sequence_output(ids, seg, mask)
+            text_token = model.encode_text_tokens(ids)
+            mask = mask.view(-1, mask.shape[-1])
+            text_token, mask = model.prepare_text_for_similarity(
+                text_token, mask
+            )
             top_scores = None
             top_indices = None
             positive_scores = [None] * len(batch_samples)
@@ -695,12 +704,11 @@ def mine_mapping_with_model(
             for video_start in range(0, len(video_ids), args.video_chunk_size):
                 video_end = min(video_start + args.video_chunk_size, len(video_ids))
                 logits, _ = model.get_similarity_logits(
-                    sequence_output,
                     text_token,
                     visual_output_all[video_start:video_end].to(device),
                     mask,
                     video_mask_all[video_start:video_end].to(device),
-                    loose_type=model.loose_type,
+                    prepared=True,
                 )
                 top_scores, top_indices = _update_topk(top_scores, top_indices, logits, video_start, config.top_k)
                 for row_idx, sample in enumerate(batch_samples):

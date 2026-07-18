@@ -15,12 +15,10 @@ from tqdm import tqdm
 from dataloaders.data_dataloaders import DATALOADER_DICT
 from dataloaders.msrvtt_protocol import load_trusted_manifest, validate_trusted_manifest
 from experiment_tracking import (
-    append_batch_protocol_stats,
     atomic_write_json,
     build_experiment_manifest,
     collect_git_state,
     compute_batch_semantics,
-    extract_batch_protocol_stats,
     is_global_rank_zero,
 )
 from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_to_text_sim
@@ -35,41 +33,10 @@ global logger
 
 def validate_trusted_cli(args):
     """Validate the strict MSRVTT trusted-v1 command-line contract."""
-    fixed_refiner_config = {
-        "pair_refiner_num_views": 4,
-        "pair_refiner_lambda_max": 0.1,
-        "pair_refiner_query_block_size": 16,
-        "pair_refiner_candidate_block_size": 32,
-        "pair_refiner_alignment_temperature": 0.07,
-    }
-    for name, expected in fixed_refiner_config.items():
-        actual = getattr(args, name, expected)
-        if actual != expected:
-            raise ValueError(
-                f"--{name} is frozen at {expected}, got {actual}"
-            )
-
-    if args.experiment_profile == "pair_evidence_refiner":
-        if bool(getattr(args, "use_attributes", False)):
-            raise ValueError(
-                "pair_evidence_refiner forbids the attributes branch"
-            )
-        if bool(getattr(args, "use_hard_negative_packing", False)) or bool(
-            getattr(args, "use_explicit_hard_negative_loss", False)
-        ):
-            raise ValueError(
-                "pair_evidence_refiner forbids hard-negative diagnostic paths"
-            )
-        if args.do_train:
-            if args.batch_size != 256:
-                raise ValueError(
-                    "pair_evidence_refiner requires --batch_size=256"
-                )
-            if args.gradient_accumulation_steps != 1:
-                raise ValueError(
-                    "pair_evidence_refiner requires "
-                    "--gradient_accumulation_steps=1"
-                )
+    if args.experiment_profile not in {"default", "hygiene"}:
+        raise ValueError(
+            "unsupported experiment_profile; expected default or hygiene"
+        )
 
     if args.datatype != "msrvtt":
         return
@@ -83,11 +50,6 @@ def validate_trusted_cli(args):
     if args.do_eval and not args.do_train and not args.init_model:
         raise ValueError("--do_eval requires --init_model")
 
-    if args.experiment_profile == "hygiene" and (
-        args.use_hard_negative_packing
-        or args.use_explicit_hard_negative_loss
-    ):
-        raise ValueError("hygiene forbids hard-negative diagnostic paths")
     if args.do_train and args.experiment_profile == "hygiene":
         if args.batch_size != 256:
             raise ValueError("hygiene requires --batch_size=256")
@@ -191,8 +153,6 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--max_frames", type=int, default=100, help="")
     parser.add_argument("--feature_framerate", type=int, default=1, help="")
     parser.add_argument("--margin", type=float, default=0.1, help="margin for loss")
-    parser.add_argument("--hard_negative_rate", type=float, default=0.5, help="rate of intra negative sample")
-    parser.add_argument("--negative_weighting", type=int, default=1, help="Weight the loss for intra negative")
     parser.add_argument("--n_pair", type=int, default=1, help="Num of pair to output from data loader")
     parser.add_argument(
         "--output_dir",
@@ -246,43 +206,14 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--text_num_hidden_layers", type=int, default=12, help="Layer NO. of text.")
     parser.add_argument("--visual_num_hidden_layers", type=int, default=12, help="Layer NO. of visual.")
     parser.add_argument("--cross_num_hidden_layers", type=int, default=4, help="Layer NO. of cross.")
+    parser.add_argument(
+        "--loose_type",
+        action="store_true",
+        default=True,
+        help="Use the loose token-wise retrieval path required by UATVR.",
+    )
 
-    parser.add_argument("--loose_type", action="store_true", help="Default using tight type for retrieval.")
     parser.add_argument("--expand_msrvtt_sentences", action="store_true", help="")
-    parser.add_argument(
-        "--use_hard_negative_packing",
-        action="store_true",
-        help="Pack query-mined hard negative samples into the same global training batch.",
-    )
-    parser.add_argument(
-        "--use_explicit_hard_negative_loss",
-        action="store_true",
-        help="Encode mapped hard-negative videos and add an explicit query-video hard-negative loss.",
-    )
-    parser.add_argument(
-        "--hard_negative_path",
-        # Raw pre-audit map kept for traceability:
-        # cache_dir/hard_negatives/msrvtt_train_hardneg.json
-        default="cache_dir/hard_negatives/msrvtt_train_hardneg_clean.json",
-        type=str,
-        help=(
-            "Path to MSRVTT hard negative mapping JSON. Defaults to the audited clean map; "
-            "the raw pre-audit map is cache_dir/hard_negatives/msrvtt_train_hardneg.json."
-        ),
-    )
-    parser.add_argument(
-        "--hard_negative_pack_seed",
-        default=42,
-        type=int,
-        help="Seed for hard-negative batch packing shuffle.",
-    )
-    parser.add_argument(
-        "--w_hard_negative",
-        default=5e-2,
-        type=float,
-        help="Weight for explicit hard-negative loss.",
-    )
-
     parser.add_argument(
         "--train_frame_order",
         type=int,
@@ -313,18 +244,11 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         "--sim_header",
         type=str,
         default="meanP",
-        choices=["meanP", "seqLSTM", "seqTransf", "tightTransf"],
+        choices=["meanP", "seqTransf"],
         help="choice a similarity header.",
     )
 
-    parser.add_argument("--pretrained_clip_name", default="ViT-B/32", type=str, help="Choose a CLIP version")
-    parser.add_argument(
-        "--backbone_type",
-        default="openai_clip",
-        type=str,
-        choices=["openai_clip", "eva_clip"],
-        help="Backbone implementation. openai_clip keeps the legacy CLIP path; eva_clip uses the EVA-CLIP adapter.",
-    )
+    parser.add_argument("--pretrained_clip_name", default="ViT-B/16", type=str, help="Choose an OpenAI CLIP version")
     parser.add_argument(
         "--clip_layer_norm_precision",
         default="fp16",
@@ -351,32 +275,21 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
             "Used only with --clip_gradient_checkpointing."
         ),
     )
-    parser.add_argument(
-        "--backbone_name",
-        default="EVA02-CLIP-B-16",
-        type=str,
-        help="Backbone architecture name for adapter-based backbones.",
-    )
-    parser.add_argument(
-        "--backbone_path",
-        default="research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt",
-        type=str,
-        help="Local pretrained checkpoint path for adapter-based backbones.",
-    )
-    parser.add_argument(
-        "--eva_clip_root",
-        default="research_refs/EVA/EVA-CLIP/rei",
-        type=str,
-        help="Python package root containing the local eva_clip reference implementation.",
-    )
-    parser.add_argument(
-        "--eva_clip_use_xattn",
-        action="store_true",
-        help="Use EVA-CLIP xformers attention. Default is disabled for low-dependency local training.",
-    )
     parser.add_argument("--strategy", default=1, type=int, help="Sampling strategies.")
     parser.add_argument("--extra_video_cls_num", default=2, type=int, help="extra video class aggregation token")
     parser.add_argument("--extra_text_cls_num", default=2, type=int, help="extra sentence class aggregation token")
+    parser.add_argument(
+        "--n_video_embeddings",
+        default=7,
+        type=int,
+        help="Number of probabilistic video embeddings sampled by UATVR.",
+    )
+    parser.add_argument(
+        "--n_text_embeddings",
+        default=7,
+        type=int,
+        help="Number of probabilistic text embeddings sampled by UATVR.",
+    )
     parser.add_argument("--DSL", default=False, type=bool, help="whether using dual softmax in post testing")
     parser.add_argument(
         "--eval_vid_chunk_size",
@@ -396,50 +309,16 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         "--experiment_profile",
         default="default",
         type=str,
-        choices=["default", "hygiene", "pair_evidence_refiner"],
+        choices=["default", "hygiene"],
         help=(
             "Experiment profile. hygiene selects the clean WTI baseline and "
-            "forbids hard-negative diagnostic paths; pair_evidence_refiner "
-            "enables the frozen pair-level representation refiner; default "
-            "permits independent diagnostics."
+            "forbids hard-negative diagnostic paths; default permits "
+            "independent diagnostics."
         ),
-    )
-    parser.add_argument(
-        "--pair_refiner_num_views",
-        default=4,
-        type=int,
-        help="Frozen number of deterministic feature-subspace views.",
-    )
-    parser.add_argument(
-        "--pair_refiner_lambda_max",
-        default=0.1,
-        type=float,
-        help="Frozen maximum pair-representation residual scale.",
-    )
-    parser.add_argument(
-        "--pair_refiner_query_block_size",
-        default=16,
-        type=int,
-        help="Frozen query block size for pair-evidence refinement.",
-    )
-    parser.add_argument(
-        "--pair_refiner_candidate_block_size",
-        default=32,
-        type=int,
-        help="Frozen candidate block size for pair-evidence refinement.",
-    )
-    parser.add_argument(
-        "--pair_refiner_alignment_temperature",
-        default=0.07,
-        type=float,
-        help="Frozen temperature for deterministic alignment views.",
     )
     args = parser.parse_args()
 
     validate_trusted_cli(args)
-
-    if args.sim_header == "tightTransf":
-        args.loose_type = False
 
     # Check paramenters
     if args.gradient_accumulation_steps < 1:
@@ -537,33 +416,19 @@ def set_seed_logger(args):
             ],
             "Model": [
                 "pretrained_clip_name",
-                "backbone_type",
                 "clip_layer_norm_precision",
                 "clip_gradient_checkpointing",
                 "clip_visual_checkpoint_layers",
-                "backbone_name",
-                "backbone_path",
-                "eva_clip_root",
-                "eva_clip_use_xattn",
                 "sim_header",
+                "loose_type",
                 "linear_patch",
                 "extra_video_cls_num",
                 "extra_text_cls_num",
+                "n_video_embeddings",
+                "n_text_embeddings",
                 "use_attributes",
                 "max_words_attrs",
                 "attr_num_blocks",
-                "pair_refiner_num_views",
-                "pair_refiner_lambda_max",
-                "pair_refiner_query_block_size",
-                "pair_refiner_candidate_block_size",
-                "pair_refiner_alignment_temperature",
-            ],
-            "HardNeg": [
-                "use_hard_negative_packing",
-                "use_explicit_hard_negative_loss",
-                "hard_negative_path",
-                "hard_negative_pack_seed",
-                "w_hard_negative",
             ],
             "Protocol": [
                 "datatype",
@@ -787,99 +652,37 @@ def _fmt_time(seconds):
     return f"{h}h{m:02d}m{s:02d}s"
 
 
-def _unpack_train_batch(batch, args):
-    use_attributes = bool(getattr(args, "use_attributes", False))
-    use_explicit_hn = bool(getattr(args, "use_explicit_hard_negative_loss", False))
-
-    unpacked = {
-        "input_ids": None,
-        "input_mask": None,
-        "segment_ids": None,
-        "video": None,
-        "video_mask": None,
-        "video_group_id": None,
-        "sample_index": None,
-        "hard_video": None,
-        "hard_video_mask": None,
-        "hard_valid": None,
-    }
-
+def _unpack_train_batch(batch):
     if len(batch) == 5:
-        unpacked["input_ids"], unpacked["input_mask"], unpacked["segment_ids"], unpacked["video"], unpacked["video_mask"] = batch
-        return unpacked
-
-    if len(batch) == 8:
+        input_ids, input_mask, segment_ids, video, video_mask = batch
+    elif len(batch) == 6:
+        input_ids, input_mask, segment_ids, video, video_mask, _group_id = batch
+    elif len(batch) == 8:
         (
-            unpacked["input_ids"],
-            unpacked["input_mask"],
-            unpacked["segment_ids"],
+            input_ids,
+            input_mask,
+            segment_ids,
             _input_ids_a,
             _input_mask_a,
             _segment_ids_a,
-            unpacked["video"],
-            unpacked["video_mask"],
+            video,
+            video_mask,
         ) = batch
-        return unpacked
-
-    if len(batch) == 6 and not use_attributes and not use_explicit_hn:
+    elif len(batch) == 9:
         (
-            unpacked["input_ids"],
-            unpacked["input_mask"],
-            unpacked["segment_ids"],
-            unpacked["video"],
-            unpacked["video_mask"],
-            unpacked["video_group_id"],
-        ) = batch
-        return unpacked
-
-    if len(batch) == 10 and use_explicit_hn and not use_attributes:
-        (
-            unpacked["input_ids"],
-            unpacked["input_mask"],
-            unpacked["segment_ids"],
-            unpacked["video"],
-            unpacked["video_mask"],
-            unpacked["sample_index"],
-            unpacked["hard_video"],
-            unpacked["hard_video_mask"],
-            unpacked["hard_valid"],
-            unpacked["video_group_id"],
-        ) = batch
-        return unpacked
-
-    if len(batch) == 9 and use_attributes and not use_explicit_hn:
-        (
-            unpacked["input_ids"],
-            unpacked["input_mask"],
-            unpacked["segment_ids"],
+            input_ids,
+            input_mask,
+            segment_ids,
             _input_ids_a,
             _input_mask_a,
             _segment_ids_a,
-            unpacked["video"],
-            unpacked["video_mask"],
-            unpacked["video_group_id"],
+            video,
+            video_mask,
+            _group_id,
         ) = batch
-        return unpacked
-
-    if len(batch) == 13 and use_attributes and use_explicit_hn:
-        (
-            unpacked["input_ids"],
-            unpacked["input_mask"],
-            unpacked["segment_ids"],
-            _input_ids_a,
-            _input_mask_a,
-            _segment_ids_a,
-            unpacked["video"],
-            unpacked["video_mask"],
-            unpacked["sample_index"],
-            unpacked["hard_video"],
-            unpacked["hard_video_mask"],
-            unpacked["hard_valid"],
-            unpacked["video_group_id"],
-        ) = batch
-        return unpacked
-
-    raise ValueError(f"Unexpected batch size={len(batch)} from dataloader.")
+    else:
+        raise ValueError(f"Unexpected training batch size={len(batch)}")
+    return input_ids, input_mask, segment_ids, video, video_mask
 
 
 def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, scheduler, global_step, local_rank=0):
@@ -897,36 +700,19 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     for step, batch in enumerate(train_dataloader):
         batch = tuple(t.to(device=device, non_blocking=True) for t in batch)
 
-        batch_inputs = _unpack_train_batch(batch, args)
-        loss_dict = model(
-            batch_inputs["input_ids"],
-            batch_inputs["segment_ids"],
-            batch_inputs["input_mask"],
-            batch_inputs["video"],
-            batch_inputs["video_mask"],
-            video_group_id=batch_inputs["video_group_id"],
-            sample_index=batch_inputs["sample_index"],
-            hard_video=batch_inputs["hard_video"],
-            hard_video_mask=batch_inputs["hard_video_mask"],
-            hard_valid=batch_inputs["hard_valid"],
+        input_ids, input_mask, segment_ids, video, video_mask = (
+            _unpack_train_batch(batch)
         )
-        loss = loss_dict["total"]
+        loss = model(
+            input_ids,
+            segment_ids,
+            input_mask,
+            video,
+            video_mask,
+        )
 
         if n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu.
-            loss_dict = {k: v.mean() if isinstance(v, torch.Tensor) else v for k, v in loss_dict.items()}
-        if is_global_rank_zero(args):
-            batch_stats = extract_batch_protocol_stats(loss_dict)
-        else:
-            batch_stats = None
-        if batch_stats is not None:
-            append_batch_protocol_stats(
-                Path(args.output_dir) / "batch_protocol_stats.tsv",
-                epoch=epoch,
-                forward_step=step,
-                global_step=global_step,
-                stats=batch_stats,
-            )
         if args.gradient_accumulation_steps > 1:
             loss = loss / args.gradient_accumulation_steps
 
@@ -934,28 +720,18 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
 
         total_loss += float(loss)
 
-        # 提取各个子损失的值（用于打印）
-        # 仅保留标量/可转 float 的项，避免把大矩阵（例如 retrieve_logits）塞进日志
-        loss_details = {}
-        for k, v in loss_dict.items():
-            if k == "total" or k in {
-                "unique_video_count",
-                "duplicate_sample_count",
-                "mean_positive_count",
-            }:
-                continue
-            if isinstance(v, torch.Tensor) and v.numel() != 1:
-                continue
-            try:
-                loss_details[k] = float(v)
-            except Exception:
-                continue
         if (step + 1) % args.gradient_accumulation_steps == 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
             if scheduler is not None:
                 scheduler.step()  # Update learning rate schedule
 
+            if hasattr(optimizer, "get_group_lrs"):
+                scheduled_group_lrs = optimizer.get_group_lrs()
+            else:
+                scheduled_group_lrs = [
+                    group["lr"] for group in optimizer.param_groups
+                ]
             optimizer.step()
             optimizer.zero_grad()
 
@@ -976,58 +752,26 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 eta = time_per_step * remaining_steps
                 start_time = time.time()
 
-                lr_clip = optimizer.param_groups[0]["lr"]
+                lr_clip = scheduled_group_lrs[0]
                 lr_new = (
-                    optimizer.param_groups[2]["lr"]
-                    if len(optimizer.param_groups) > 2
+                    scheduled_group_lrs[2]
+                    if len(scheduled_group_lrs) > 2
                     else lr_clip
                 )
 
-                # --- 损失字符串：过滤零值，精度 4 位 ---
-                loss_parts = [f"{k}={v:.4f}" for k, v in loss_details.items() if abs(v) > 1e-8]
-                loss_str = " | ".join(loss_parts) if loss_parts else "-"
-
                 logger.info(
-                    "[Epoch %d/%d] Step %d/%d (%.0f%%) | Loss: %.4f [%s] | LR clip=%.2e new=%.2e | %.2fs/step | ETA: %s",
+                    "[Epoch %d/%d] Step %d/%d (%.0f%%) | Loss: %.4f | LR clip=%.2e new=%.2e | %.2fs/step | ETA: %s",
                     epoch + 1,
                     args.epochs,
                     step + 1,
                     num_steps,
                     progress,
                     float(loss),
-                    loss_str,
                     lr_clip,
                     lr_new,
                     time_per_step,
                     _fmt_time(eta),
                 )
-                if batch_stats is not None:
-                    logger.info(
-                        "  [Batch Protocol] unique=%g duplicate=%g mean_positive=%g",
-                        batch_stats["unique_video_count"],
-                        batch_stats["duplicate_sample_count"],
-                        batch_stats["mean_positive_count"],
-                    )
-
-                core = model.module if hasattr(model, "module") else model
-                retrieval_stats = getattr(core, "_diag_chain", None)
-                hard_negative_stats = getattr(core, "_hard_negative_chain", None)
-                if retrieval_stats:
-                    logger.info(
-                        "  [WTI] pos=%.3f neg=%.3f gap=%.3f pos_std=%.3f",
-                        retrieval_stats["pos_mean"],
-                        retrieval_stats["neg_mean"],
-                        retrieval_stats["gap"],
-                        retrieval_stats["pos_std"],
-                    )
-                if hard_negative_stats:
-                    logger.info(
-                        "  [HardNeg] active=%d loss=%.4f hard_diag=%.3f pos_gap=%.3f",
-                        hard_negative_stats["active"],
-                        hard_negative_stats["loss"],
-                        hard_negative_stats["hard_diag_mean"],
-                        hard_negative_stats["hard_pos_gap"],
-                    )
 
     total_loss = total_loss / len(train_dataloader)
     epoch_time = time.time() - epoch_start_time
@@ -1077,47 +821,53 @@ def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
 
 
 def _run_on_single_gpu(
-    args,
     model,
+    args,
     batch_list_t,
     batch_list_v,
     batch_sequence_output_list,
     batch_visual_output_list,
 ):
-    # Cat on CPU — features were already moved to CPU in eval_epoch to reduce GPU pressure
+    # Feature batches are cached on CPU by eval_epoch and moved to the worker
+    # device in bounded video chunks for UATVR similarity computation.
     visual_output_all = torch.cat(batch_visual_output_list, dim=0)
     video_mask_all = torch.cat([v[0] for v in batch_list_v], dim=0)
 
     device = next(model.parameters()).device
     chunk_size = getattr(args, "eval_vid_chunk_size", 128)
     n_vid = visual_output_all.size(0)
+    video_chunks = []
+    for v_start in range(0, n_vid, chunk_size):
+        v_end = min(v_start + chunk_size, n_vid)
+        video_chunks.append(
+            (
+                visual_output_all[v_start:v_end].to(device),
+                video_mask_all[v_start:v_end].to(device),
+            )
+        )
+    del visual_output_all, video_mask_all
 
     sim_matrix = []
     for idx1, b1 in enumerate(batch_list_t):
-        input_mask, segment_ids, *_tmp = b1
+        input_mask, _segment_ids, *_tmp = b1
         sequence_output, text_token = batch_sequence_output_list[idx1]
-
-        seq_dev  = sequence_output.to(device)
-        tok_dev  = text_token.to(device)
-        mask_dev = input_mask.to(device)
+        sequence_output = sequence_output.to(device)
+        text_token = text_token.to(device)
+        input_mask = input_mask.to(device)
 
         row_logits = []
-        for v_start in range(0, n_vid, chunk_size):
-            v_end       = min(v_start + chunk_size, n_vid)
-            visual_chunk = visual_output_all[v_start:v_end].to(device)
-            vmask_chunk = video_mask_all[v_start:v_end].to(device)
-
-            chunk_logits, _ = model.get_similarity_logits(
-                seq_dev,
-                tok_dev,
-                visual_chunk,
-                mask_dev,
-                vmask_chunk,
+        for visual_output, video_mask in video_chunks:
+            logits, *_tmp = model.get_similarity_logits(
+                sequence_output,
+                text_token,
+                visual_output,
+                input_mask,
+                video_mask,
                 loose_type=model.loose_type,
             )
-            row_logits.append(chunk_logits.cpu())
+            row_logits.append(logits)
 
-        b1_all_v_logits = torch.cat(row_logits, dim=1)  # [B_t, N_v]
+        b1_all_v_logits = torch.cat(row_logits, dim=1).cpu()
         sim_matrix.append(b1_all_v_logits.detach().numpy())
 
     return sim_matrix
@@ -1212,19 +962,15 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
             if multi_sentence_:
                 # multi-sentences retrieval means: one clip has two or more descriptions.
                 b, *_t = video.shape
-                sequence_output, text_token = model.get_sequence_output(input_ids, segment_ids, input_mask)
+                sequence_output, text_token = model.get_sequence_output(
+                    input_ids,
+                    segment_ids,
+                    input_mask,
+                )
                 batch_sequence_output_list.append(
-                    (
-                        sequence_output,
-                        text_token,
-                    )
+                    (sequence_output.cpu(), text_token.cpu())
                 )
-                batch_list_t.append(
-                    (
-                        input_mask,
-                        segment_ids,
-                    )
-                )
+                batch_list_t.append((input_mask.cpu(), segment_ids.cpu()))
 
                 s_, e_ = total_video_num, total_video_num + b
                 filter_inds = select_multi_sentence_video_rows(
@@ -1240,12 +986,20 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
                     batch_list_v.append((video_mask.cpu(),))
                 total_video_num += b
             else:
-                sequence_output, text_token, visual_output = model.get_sequence_visual_output(
-                    input_ids, segment_ids, input_mask, video, video_mask
+                sequence_output, text_token, visual_output = (
+                    model.get_sequence_visual_output(
+                        input_ids,
+                        segment_ids,
+                        input_mask,
+                        video,
+                        video_mask,
+                    )
                 )
 
                 # Move to CPU immediately to reduce peak GPU memory during similarity computation
-                batch_sequence_output_list.append((sequence_output.cpu(), text_token.cpu()))
+                batch_sequence_output_list.append(
+                    (sequence_output.cpu(), text_token.cpu())
+                )
                 batch_list_t.append((input_mask.cpu(), segment_ids.cpu()))
                 batch_visual_output_list.append(visual_output.cpu())
                 batch_list_v.append((video_mask.cpu(),))
@@ -1277,7 +1031,10 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
                     devc_batch_list = [tuple(t.to(devc) for t in b) for b in batch_list_v]
                     batch_list_v_splits.append(devc_batch_list)
 
-                    devc_batch_list = [tuple(t.to(devc) for t in b) for b in batch_sequence_output_list[s_:e_]]
+                    devc_batch_list = [
+                        tuple(tensor.to(devc) for tensor in output)
+                        for output in batch_sequence_output_list[s_:e_]
+                    ]
                     batch_t_output_splits.append(devc_batch_list)
                     devc_batch_list = [tensor.to(devc) for tensor in batch_visual_output_list]
                     batch_v_output_splits.append(devc_batch_list)
@@ -1299,8 +1056,8 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
             sim_matrix = np.concatenate(tuple(sim_matrix), axis=0)
         else:
             sim_matrix = _run_on_single_gpu(
-                args,
                 model,
+                args,
                 batch_list_t,
                 batch_list_v,
                 batch_sequence_output_list,

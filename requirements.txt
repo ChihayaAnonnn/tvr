@@ -26,13 +26,6 @@ scikit-learn==1.3.2
 pytest==7.1.2
 ruff==0.6.9
 
-# EVA-CLIP is loaded from the local, ignored checkout specified by
-# --eva_clip_root (research_refs/EVA/EVA-CLIP/rei), rather than PyPI.
-# Its basic timm interfaces have a project fallback, but this package makes
-# the upstream EVA-CLIP path more robust when it is explicitly enabled.
-timm==0.9.16
-
 # Intentionally not installed by default:
-# - xformers: required only with --eva_clip_use_xattn.
 # - mamba-ssm: required only by inactive legacy Mamba modules; it needs a
 #   CUDA/compiler build matching the installed PyTorch version.

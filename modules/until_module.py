@@ -98,6 +98,13 @@ class PreTrainedModel(nn.Module):
 
     @classmethod
     def init_preweight(cls, model, state_dict, prefix=None, task_config=None):
+        # Key normalization below is intentionally local: callers may reuse
+        # the checkpoint mapping for validation or another model instance.
+        metadata = getattr(state_dict, "_metadata", None)
+        state_dict = state_dict.copy()
+        if metadata is not None:
+            state_dict._metadata = metadata
+
         old_keys = []
         new_keys = []
         for key in state_dict.keys():
@@ -124,11 +131,6 @@ class PreTrainedModel(nn.Module):
         missing_keys = []
         unexpected_keys = []
         error_msgs = []
-        # copy state_dict so _load_from_state_dict can modify it
-        metadata = getattr(state_dict, "_metadata", None)
-        state_dict = state_dict.copy()
-        if metadata is not None:
-            state_dict._metadata = metadata
 
         def load(module, prefix=""):
             local_metadata = {} if metadata is None else metadata.get(prefix[:-1], {})
@@ -170,6 +172,13 @@ class PreTrainedModel(nn.Module):
                         model.__class__.__name__, "\n   " + "\n   ".join(error_msgs)
                     )
                 )
+
+        if len(error_msgs) > 0:
+            raise RuntimeError(
+                "Error(s) in loading state_dict for {}:\n\t{}".format(
+                    model.__class__.__name__, "\n\t".join(error_msgs)
+                )
+            )
 
         return model
 
@@ -278,6 +287,45 @@ class MultiPositiveCrossEn(nn.Module):
             )
 
         positive_logits = logits.masked_fill(~positive_mask, float("-inf"))
+        return -(
+            torch.logsumexp(positive_logits, dim=1)
+            - torch.logsumexp(logits, dim=1)
+        ).mean()
+
+    def bidirectional(self, logits, group_ids):
+        """Compute square T2V/V2T loss while reusing one positive mask."""
+
+        if logits.dim() != 2 or logits.size(0) != logits.size(1):
+            raise ValueError(
+                "bidirectional multi-positive logits must be square, got "
+                f"shape={tuple(logits.shape)}"
+            )
+        group_ids = self._prepare_group_ids(
+            group_ids, "group_ids", logits.device
+        )
+        if group_ids.numel() != logits.size(0):
+            raise ValueError(
+                f"logit/group shape mismatch: logits={tuple(logits.shape)} "
+                f"groups={group_ids.numel()}"
+            )
+
+        positive_mask = group_ids[:, None].eq(group_ids[None, :])
+        text_to_video = self._loss_from_positive_mask(
+            logits, positive_mask
+        )
+        # Keep the frozen P0 transpose-and-row-reduction path.  Reducing the
+        # original tensor over dim=0 is mathematically equivalent but changes
+        # floating-point gradient accumulation at the 1e-6 level in FP16.
+        video_to_text = self._loss_from_positive_mask(
+            logits.T, positive_mask.T
+        )
+        return (text_to_video + video_to_text) / 2, positive_mask
+
+    @staticmethod
+    def _loss_from_positive_mask(logits, positive_mask):
+        positive_logits = logits.masked_fill(
+            ~positive_mask, float("-inf")
+        )
         return -(
             torch.logsumexp(positive_logits, dim=1)
             - torch.logsumexp(logits, dim=1)
@@ -398,19 +446,51 @@ class MaxMarginRankingLoss(nn.Module):
         return max_margin.mean()
 
 
+def _use_contiguous_distributed_collectives():
+    """Use allocation-friendly collectives only on a supported backend.
+
+    ``all_gather_into_tensor``/``reduce_scatter_tensor`` avoid Python lists and
+    an extra concatenation on the production NCCL path.  The Gloo version
+    bundled with the project's PyTorch build does not implement the underlying
+    base collectives, so CPU tests and diagnostics must retain the portable
+    list/all-reduce implementation.
+    """
+
+    if not (
+        hasattr(torch.distributed, "all_gather_into_tensor")
+        and hasattr(torch.distributed, "reduce_scatter_tensor")
+    ):
+        return False
+    try:
+        backend = str(torch.distributed.get_backend()).lower()
+    except (RuntimeError, ValueError):
+        return False
+    return backend == "nccl" or backend.endswith(".nccl")
+
+
 class AllGather(torch.autograd.Function):
     """An autograd function that performs allgather on a tensor."""
 
     @staticmethod
     def forward(ctx, tensor, args):
         world_size, rank = _distributed_context(args)
-        output = [torch.empty_like(tensor) for _ in range(world_size)]
-        torch.distributed.all_gather(output, tensor)
+        tensor = tensor.contiguous()
+        use_contiguous_collectives = _use_contiguous_distributed_collectives()
+        if use_contiguous_collectives:
+            output = tensor.new_empty(
+                (world_size * tensor.shape[0], *tensor.shape[1:])
+            )
+            torch.distributed.all_gather_into_tensor(output, tensor)
+        else:
+            output_list = [torch.empty_like(tensor) for _ in range(world_size)]
+            torch.distributed.all_gather(output_list, tensor)
+            output = torch.cat(output_list, dim=0)
         ctx.args = args
         ctx.world_size = world_size
         ctx.rank = rank
         ctx.batch_size = tensor.shape[0]
-        return torch.cat(output, dim=0)
+        ctx.use_contiguous_collectives = use_contiguous_collectives
+        return output
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -422,11 +502,25 @@ class AllGather(torch.autograd.Function):
                 f"backward world_size={world_size}, rank={rank}"
             )
         grad_output = grad_output.contiguous()
-        torch.distributed.all_reduce(
-            grad_output, op=torch.distributed.ReduceOp.SUM
-        )
+        if ctx.use_contiguous_collectives:
+            local_gradient = grad_output.new_empty(
+                (ctx.batch_size, *grad_output.shape[1:])
+            )
+            torch.distributed.reduce_scatter_tensor(
+                local_gradient,
+                grad_output,
+                op=torch.distributed.ReduceOp.SUM,
+            )
+        else:
+            torch.distributed.all_reduce(
+                grad_output, op=torch.distributed.ReduceOp.SUM
+            )
+            offset = rank * ctx.batch_size
+            local_gradient = grad_output.narrow(
+                0, offset, ctx.batch_size
+            ).contiguous()
         return (
-            grad_output[ctx.batch_size * ctx.rank : ctx.batch_size * (ctx.rank + 1)],
+            local_gradient,
             None,
         )
 
@@ -478,9 +572,16 @@ def allgather_no_grad(tensor, args):
     if world_size == 1:
         return tensor.detach()
     with torch.no_grad():
-        output = [torch.empty_like(tensor) for _ in range(world_size)]
-        torch.distributed.all_gather(output, tensor)
-        return torch.cat(output, dim=0)
+        tensor = tensor.contiguous()
+        if _use_contiguous_distributed_collectives():
+            output = tensor.new_empty(
+                (world_size * tensor.shape[0], *tensor.shape[1:])
+            )
+            torch.distributed.all_gather_into_tensor(output, tensor)
+            return output
+        output_list = [torch.empty_like(tensor) for _ in range(world_size)]
+        torch.distributed.all_gather(output_list, tensor)
+        return torch.cat(output_list, dim=0)
 
 
 def allgather_with_grad(tensor, args):

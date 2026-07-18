@@ -27,23 +27,10 @@ MAX_WORDS_ATTRS=${MAX_WORDS_ATTRS:-77}
 : "${INIT_MODEL:?请设置 INIT_MODEL=<checkpoint_path>}"
 
 # 模型结构参数（需与训练配置一致）
-EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-hygiene}   # default | hygiene | pair_evidence_refiner
-BACKBONE_TYPE=${BACKBONE_TYPE:-openai_clip}          # openai_clip | eva_clip
-BACKBONE_NAME=${BACKBONE_NAME:-EVA02-CLIP-B-16}
-BACKBONE_PATH=${BACKBONE_PATH:-${ROOT_DIR}/research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt}
-EVA_CLIP_ROOT=${EVA_CLIP_ROOT:-${ROOT_DIR}/research_refs/EVA/EVA-CLIP/rei}
-EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN:-0}              # 0 | 1
+EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-hygiene}   # default | hygiene
 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION:-fp16} # fp16 | fp32
-if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" && "${EXPERIMENT_PROFILE}" != "pair_evidence_refiner" ]]; then
-  echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default, hygiene, or pair_evidence_refiner" >&2
-  exit 2
-fi
-if [[ "${EXPERIMENT_PROFILE}" == "pair_evidence_refiner" && "${USE_ATTRIBUTES}" == "1" ]]; then
-  echo "pair_evidence_refiner forbids USE_ATTRIBUTES=1" >&2
-  exit 2
-fi
-if [[ "${EVA_CLIP_USE_XATTN}" != "0" && "${EVA_CLIP_USE_XATTN}" != "1" ]]; then
-  echo "Unsupported EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN}; expected 0 or 1" >&2
+if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
+  echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
   exit 2
 fi
 if [[ "${CLIP_LAYER_NORM_PRECISION}" != "fp16" && "${CLIP_LAYER_NORM_PRECISION}" != "fp32" ]]; then
@@ -91,20 +78,8 @@ fi
 
 EXTRA_ARGS=()
 EXTRA_ARGS+=(--experiment_profile "${EXPERIMENT_PROFILE}")
-EXTRA_ARGS+=(--pair_refiner_num_views 4)
-EXTRA_ARGS+=(--pair_refiner_lambda_max 0.1)
-EXTRA_ARGS+=(--pair_refiner_query_block_size 16)
-EXTRA_ARGS+=(--pair_refiner_candidate_block_size 32)
-EXTRA_ARGS+=(--pair_refiner_alignment_temperature 0.07)
 EXTRA_ARGS+=(--eval_split "${EVAL_SPLIT}")
-EXTRA_ARGS+=(--backbone_type "${BACKBONE_TYPE}")
 EXTRA_ARGS+=(--clip_layer_norm_precision "${CLIP_LAYER_NORM_PRECISION}")
-EXTRA_ARGS+=(--backbone_name "${BACKBONE_NAME}")
-EXTRA_ARGS+=(--backbone_path "${BACKBONE_PATH}")
-EXTRA_ARGS+=(--eva_clip_root "${EVA_CLIP_ROOT}")
-if [[ "${EVA_CLIP_USE_XATTN}" == "1" ]]; then
-  EXTRA_ARGS+=(--eva_clip_use_xattn)
-fi
 if [[ "${DATATYPE}" == "msrvtt" ]]; then
   EXTRA_ARGS+=(--source_train_csv "${SOURCE_TRAIN_CSV}")
   EXTRA_ARGS+=(--test_csv "${TEST_CSV}")
@@ -142,7 +117,7 @@ fi
 # 单卡评测（用 torchrun 注入分布式环境变量）。注意：此脚本不传 --DSL，确保 DSL 关闭。
 echo "[eval.sh] RUN_ID=${RUN_ID}"
 echo "[eval.sh] DATATYPE=${DATATYPE} EVAL_SPLIT=${EVAL_SPLIT} USE_ATTRIBUTES=${USE_ATTRIBUTES} EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}"
-echo "[eval.sh] BACKBONE_TYPE=${BACKBONE_TYPE} BACKBONE_NAME=${BACKBONE_NAME} BACKBONE_PATH=${BACKBONE_PATH} EVA_CLIP_USE_XATTN=${EVA_CLIP_USE_XATTN} CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION}"
+echo "[eval.sh] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION}"
 echo "[eval.sh] INIT_MODEL=${INIT_MODEL}"
 echo "[eval.sh] OUTPUT_DIR=${OUTPUT_DIR}"
 if [[ "${USE_ATTRIBUTES}" == "1" ]]; then
@@ -171,7 +146,6 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4}" \
   --max_frames 8 \
   --feature_framerate 1 \
   --batch_size_val 8 \
-  --loose_type \
   --slice_framepos 3 \
   "${EXTRA_ARGS[@]}" \
   2>&1 | tee "${LOG_FILE}"

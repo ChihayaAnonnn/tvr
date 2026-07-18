@@ -95,16 +95,9 @@ def _build_train_dataset(
     monkeypatch,
     *,
     use_attributes=False,
-    return_sample_index=False,
-    return_hard_negative=False,
 ):
     train_csv, annotation, manifest = _write_train_fixture(tmp_path)
     monkeypatch.setattr(MSRVTT_TrainDataLoader, "_get_rawvideo", _fake_rawvideo)
-    monkeypatch.setattr(
-        msrvtt,
-        "load_hard_negative_index",
-        lambda _path, sample_len: [-1] * sample_len,
-    )
     return MSRVTT_TrainDataLoader(
         csv_path=train_csv,
         json_path=annotation,
@@ -113,8 +106,6 @@ def _build_train_dataset(
         max_frames=1,
         unfold_sentences=True,
         use_attributes=use_attributes,
-        return_sample_index=return_sample_index,
-        return_hard_negative=return_hard_negative,
         split_manifest_path=manifest,
     )
 
@@ -129,35 +120,22 @@ def test_train_sample_returns_stable_manifest_group_id(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    (
-        "use_attributes",
-        "return_sample_index",
-        "return_hard_negative",
-        "expected_length",
-        "sample_index_position",
-    ),
+    ("use_attributes", "expected_length"),
     [
-        (False, False, False, 6, None),
-        (True, False, False, 9, None),
-        (False, False, True, 10, 5),
-        (True, False, True, 13, 8),
+        (False, 6),
+        (True, 9),
     ],
 )
 def test_train_return_contract_always_appends_group_id(
     tmp_path,
     monkeypatch,
     use_attributes,
-    return_sample_index,
-    return_hard_negative,
     expected_length,
-    sample_index_position,
 ):
     dataset = _build_train_dataset(
         tmp_path,
         monkeypatch,
         use_attributes=use_attributes,
-        return_sample_index=return_sample_index,
-        return_hard_negative=return_hard_negative,
     )
 
     sample = dataset[20]
@@ -165,31 +143,6 @@ def test_train_return_contract_always_appends_group_id(
     assert len(sample) == expected_length
     assert isinstance(sample[-1], np.int64)
     assert int(sample[-1]) == 0
-    if sample_index_position is not None:
-        assert isinstance(sample[sample_index_position], np.int64)
-        assert int(sample[sample_index_position]) == 20
-        assert sample[sample_index_position] != sample[-1]
-
-
-def test_train_rejects_sample_index_without_explicit_hard_negative(
-    tmp_path, monkeypatch
-):
-    train_csv, annotation, manifest = _write_train_fixture(tmp_path)
-    monkeypatch.setattr(MSRVTT_TrainDataLoader, "_get_rawvideo", _fake_rawvideo)
-
-    with pytest.raises(
-        ValueError, match="sample_index is only available with explicit hard negatives"
-    ):
-        MSRVTT_TrainDataLoader(
-            csv_path=train_csv,
-            json_path=annotation,
-            features_path=tmp_path,
-            tokenizer=Tokenizer(),
-            unfold_sentences=True,
-            return_sample_index=True,
-            return_hard_negative=False,
-            split_manifest_path=manifest,
-        )
 
 
 def test_train_requires_unfolded_sentences(tmp_path):

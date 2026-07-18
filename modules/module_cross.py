@@ -1,22 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
-import copy
 import json
 import logging
-import math
-import os
-import shutil
-import tarfile
-import tempfile
 from collections import OrderedDict
 
 import torch
-import torch.nn.functional as F
 from torch import nn
 
-from .file_utils import cached_path
 from .until_config import PretrainedConfig
-from .until_module import ACT2FN, LayerNorm, PreTrainedModel
+from .until_module import LayerNorm, PreTrainedModel
 
 logger = logging.getLogger(__name__)
 
@@ -107,8 +99,7 @@ class ResidualAttentionBlock(nn.Module):
         self.n_head = n_head
 
     def attention(self, x: torch.Tensor, attn_mask: torch.Tensor):
-        attn_mask_ = attn_mask.repeat_interleave(self.n_head, dim=0)
-        return self.attn(x, x, x, need_weights=False, attn_mask=attn_mask_)[0]
+        return self.attn(x, x, x, need_weights=False, attn_mask=attn_mask)[0]
 
     def forward(self, para_tuple: tuple):
         # x: torch.Tensor, attn_mask: torch.Tensor
@@ -123,10 +114,12 @@ class Transformer(nn.Module):
         super().__init__()
         self.width = width
         self.layers = layers
+        self.heads = heads
         self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads) for _ in range(layers)])
 
     def forward(self, x: torch.Tensor, attn_mask: torch.Tensor):
-        return self.resblocks((x, attn_mask))[0]
+        expanded_attn_mask = attn_mask.repeat_interleave(self.heads, dim=0)
+        return self.resblocks((x, expanded_attn_mask))[0]
 
 class CrossEmbeddings(nn.Module):
     """Construct the embeddings from word, position and token_type embeddings.
@@ -141,7 +134,7 @@ class CrossEmbeddings(nn.Module):
 
     def forward(self, concat_embeddings, concat_type=None):
 
-        batch_size, seq_length = concat_embeddings.size(0), concat_embeddings.size(1)
+        seq_length = concat_embeddings.size(1)
         # if concat_type is None:
         #     concat_type = torch.zeros(batch_size, concat_type).to(concat_embeddings.device)
 

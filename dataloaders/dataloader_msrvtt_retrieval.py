@@ -11,7 +11,6 @@ import numpy as np
 from torch.utils.data import Dataset
 
 sys.path.append('..')
-from dataloaders.hard_negative_mapping import load_hard_negative_index
 from dataloaders.msrvtt_protocol import load_trusted_manifest
 from dataloaders.rawframes_util import RawFramesExtractor
 from dataloaders.rawvideo_util import RawVideoExtractor
@@ -569,9 +568,6 @@ class MSRVTT_TrainDataLoader(Dataset):
             use_attributes=False,
             attributes_path="",
             attr_num_blocks=4,
-            return_sample_index=False,
-            return_hard_negative=False,
-            hard_negative_path="",
             split_manifest_path=None,
             tqfs_cache_dir="",
             expected_captions_per_video=20,
@@ -669,16 +665,6 @@ class MSRVTT_TrainDataLoader(Dataset):
         self.attributes_path = attributes_path
         self.attributes_map = _load_attributes_map(attributes_path) if self.use_attributes else {}
         self.attr_num_blocks = int(attr_num_blocks) if attr_num_blocks is not None else 4
-        self.return_hard_negative = bool(return_hard_negative)
-        if return_sample_index and not self.return_hard_negative:
-            raise ValueError(
-                "sample_index is only available with explicit hard negatives"
-            )
-        self.hard_index = []
-        if self.return_hard_negative:
-            if not self.unfold_sentences:
-                raise ValueError("Explicit hard-negative training requires unfold_sentences=True")
-            self.hard_index = load_hard_negative_index(hard_negative_path, self.sample_len)
 
     def __len__(self):
         return self.sample_len      # copy training dataset
@@ -866,21 +852,6 @@ class MSRVTT_TrainDataLoader(Dataset):
 
         return video, video_mask
 
-    def _get_hard_negative_video(self, anchor_video_id, idx):
-        hard_idx = -1
-        if 0 <= int(idx) < len(getattr(self, "hard_index", [])):
-            hard_idx = int(self.hard_index[int(idx)])
-
-        valid = np.int64(0)
-        hard_video_id = anchor_video_id
-        if hard_idx >= 0 and hasattr(self, "sentences_dict") and hard_idx in self.sentences_dict:
-            hard_video_id = self.sentences_dict[hard_idx][0]
-            valid = np.int64(1)
-
-        hard_video, hard_video_mask = self._get_rawvideo([hard_video_id])
-        return hard_video, hard_video_mask, valid
-
-
     def __getitem__(self, idx):
         if self.unfold_sentences:
             video_id, caption = self.sentences_dict[idx]
@@ -902,38 +873,7 @@ class MSRVTT_TrainDataLoader(Dataset):
 
         video, video_mask = self._get_rawvideo(choice_video_ids)
         # video, video_mask = self._get_rawframes(choice_video_ids)
-        sample_index = np.int64(idx)
         video_group_id = np.int64(self.video_group_ids[video_id])
-        if self.return_hard_negative:
-            hard_video, hard_video_mask, hard_valid = self._get_hard_negative_video(video_id, idx)
-            if self.use_attributes:
-                return (
-                    pairs_text,
-                    pairs_mask,
-                    pairs_segment,
-                    pairs_text_a,
-                    pairs_mask_a,
-                    pairs_segment_a,
-                    video,
-                    video_mask,
-                    sample_index,
-                    hard_video,
-                    hard_video_mask,
-                    hard_valid,
-                    video_group_id,
-                )
-            return (
-                pairs_text,
-                pairs_mask,
-                pairs_segment,
-                video,
-                video_mask,
-                sample_index,
-                hard_video,
-                hard_video_mask,
-                hard_valid,
-                video_group_id,
-            )
         if self.use_attributes:
             return (
                 pairs_text,

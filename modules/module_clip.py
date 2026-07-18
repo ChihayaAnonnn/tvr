@@ -558,15 +558,13 @@ class CLIP(nn.Module):
         return self.visual.conv1.weight.dtype
 
     def encode_image(self, image, return_hidden=False, video_frame=-1):
-
- 
         hidden = self.visual(image.type(self.dtype), video_frame=video_frame) # vit
-        hidden = self.visual.ln_post(hidden) @ self.visual.proj
-        x = hidden[:, 0, :]
-
         if return_hidden:
+            hidden = self.visual.ln_post(hidden) @ self.visual.proj
+            x = hidden[:, 0, :]
             return x, hidden
 
+        x = self.visual.ln_post(hidden[:, 0, :]) @ self.visual.proj
         return x
 
     def encode_text(self, text, return_hidden=False):

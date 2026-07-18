@@ -11,13 +11,19 @@ mkdir -p logs
 
 RUN_DATE="${RUN_DATE:-$(date +%Y%m%d)}"
 RUN_TIME="${RUN_TIME:-$(date +%H%M%S)}"
-RUN_ID="${RUN_ID:-${RUN_DATE}_${RUN_TIME}}"
+RUN_TAG="${RUN_TAG:-}"
+if [[ -n "${RUN_TAG}" && ! "${RUN_TAG}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "Unsupported RUN_TAG=${RUN_TAG}; use letters, digits, dot, underscore, or hyphen" >&2
+  exit 2
+fi
+RUN_SUFFIX="${RUN_TIME}${RUN_TAG:+_${RUN_TAG}}"
+RUN_ID="${RUN_ID:-${RUN_DATE}_${RUN_SUFFIX}}"
 LOG_DIR="logs/${RUN_DATE}"
 mkdir -p "${LOG_DIR}"
-LOG_FILE="${LOG_DIR}/${RUN_TIME}_train_msrvtt.log"
+LOG_FILE="${LOG_DIR}/${RUN_SUFFIX}_train_msrvtt.log"
 TRAIN_PID_FILE="${TRAIN_PID_FILE:-}"
 
-echo "[run_train_msrvtt_bg] RUN_DATE=${RUN_DATE} RUN_TIME=${RUN_TIME}"
+echo "[run_train_msrvtt_bg] RUN_DATE=${RUN_DATE} RUN_TIME=${RUN_TIME} RUN_TAG=${RUN_TAG}"
 echo "[run_train_msrvtt_bg] LOG_FILE=${LOG_FILE}"
 echo "[run_train_msrvtt_bg] Starting: bash train_msrvtt.sh (completely detached)"
 
@@ -32,10 +38,6 @@ echo "[run_train_msrvtt_bg] PID=${TRAIN_PID}"
 echo "[run_train_msrvtt_bg] MSRVTT 训练已在后台启动。你可以安全关闭 Cursor。"
 echo "[run_train_msrvtt_bg] 随时可以运行以下命令查看日志："
 echo "tail -f ${LOG_FILE}"
-
-if [[ "${NO_TAIL:-0}" == "1" ]]; then
-  exit 0
-fi
 
 # 启动后立即查看前 50 行日志确认启动成功
 tail -n 50 -F "${LOG_FILE}"
