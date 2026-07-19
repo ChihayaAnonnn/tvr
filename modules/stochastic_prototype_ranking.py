@@ -153,6 +153,8 @@ class StochasticRankLoss(nn.Module):
         batch_size, candidate_count, sample_count = stochastic_scores.shape
         if batch_size != candidate_count:
             raise ValueError("stochastic_scores must be square with shape [batch, batch, samples]")
+        if batch_size == 0:
+            raise ValueError("stochastic_scores must have a nonempty batch")
         if sample_count == 0:
             raise ValueError("stochastic_scores must have a nonempty samples dimension")
         if not stochastic_scores.is_floating_point():
