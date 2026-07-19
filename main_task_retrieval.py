@@ -23,7 +23,7 @@ from experiment_tracking import (
 )
 from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_to_text_sim
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from modules.modeling_retrieval import UATVR
+from modules.modeling import UATVR
 from modules.optimization import BertAdam
 from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
 from util import get_logger, parallel_apply
@@ -653,10 +653,11 @@ def _fmt_time(seconds):
 
 
 def _unpack_train_batch(batch):
+    group_ids = None
     if len(batch) == 5:
         input_ids, input_mask, segment_ids, video, video_mask = batch
     elif len(batch) == 6:
-        input_ids, input_mask, segment_ids, video, video_mask, _group_id = batch
+        input_ids, input_mask, segment_ids, video, video_mask, group_ids = batch
     elif len(batch) == 8:
         (
             input_ids,
@@ -678,11 +679,11 @@ def _unpack_train_batch(batch):
             _segment_ids_a,
             video,
             video_mask,
-            _group_id,
+            group_ids,
         ) = batch
     else:
         raise ValueError(f"Unexpected training batch size={len(batch)}")
-    return input_ids, input_mask, segment_ids, video, video_mask
+    return input_ids, input_mask, segment_ids, video, video_mask, group_ids
 
 
 def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, scheduler, global_step, local_rank=0):
@@ -700,8 +701,15 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     for step, batch in enumerate(train_dataloader):
         batch = tuple(t.to(device=device, non_blocking=True) for t in batch)
 
-        input_ids, input_mask, segment_ids, video, video_mask = (
+        input_ids, input_mask, segment_ids, video, video_mask, group_ids = (
             _unpack_train_batch(batch)
+        )
+        warmup_epochs = max(getattr(args, "rspr_warmup_epochs", 0.0), 0.0)
+        progress_epoch = epoch + step / max(num_steps, 1)
+        rspr_warmup_scale = (
+            1.0
+            if warmup_epochs == 0
+            else min(1.0, progress_epoch / warmup_epochs)
         )
         loss = model(
             input_ids,
@@ -709,6 +717,9 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             input_mask,
             video,
             video_mask,
+            group_ids=group_ids,
+            rspr_rank_scale=rspr_warmup_scale,
+            rspr_anchor_scale=rspr_warmup_scale,
         )
 
         if n_gpu > 1:

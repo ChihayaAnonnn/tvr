@@ -292,24 +292,45 @@ class MultiPositiveCrossEn(nn.Module):
             - torch.logsumexp(logits, dim=1)
         ).mean()
 
-    def bidirectional(self, logits, group_ids):
-        """Compute square T2V/V2T loss while reusing one positive mask."""
+    def bidirectional(
+        self, logits, text_group_ids, video_group_ids=None
+    ):
+        """Compute T2V/V2T loss while reusing one positive mask."""
 
-        if logits.dim() != 2 or logits.size(0) != logits.size(1):
+        if logits.dim() != 2:
             raise ValueError(
-                "bidirectional multi-positive logits must be square, got "
+                f"bidirectional multi-positive logits must be 2D, got "
                 f"shape={tuple(logits.shape)}"
             )
-        group_ids = self._prepare_group_ids(
-            group_ids, "group_ids", logits.device
+        text_group_ids = self._prepare_group_ids(
+            text_group_ids, "text_group_ids", logits.device
         )
-        if group_ids.numel() != logits.size(0):
+        if video_group_ids is None:
+            video_group_ids = text_group_ids
+        else:
+            video_group_ids = self._prepare_group_ids(
+                video_group_ids, "video_group_ids", logits.device
+            )
+        expected_shape = (
+            text_group_ids.numel(),
+            video_group_ids.numel(),
+        )
+        if tuple(logits.shape) != expected_shape:
             raise ValueError(
                 f"logit/group shape mismatch: logits={tuple(logits.shape)} "
-                f"groups={group_ids.numel()}"
+                f"text={text_group_ids.numel()} "
+                f"video={video_group_ids.numel()}"
             )
 
-        positive_mask = group_ids[:, None].eq(group_ids[None, :])
+        positive_mask = text_group_ids[:, None].eq(
+            video_group_ids[None, :]
+        )
+        self._validate_positive_rows(
+            positive_mask, text_group_ids, "text"
+        )
+        self._validate_positive_rows(
+            positive_mask.T, video_group_ids, "video"
+        )
         text_to_video = self._loss_from_positive_mask(
             logits, positive_mask
         )
@@ -320,6 +341,17 @@ class MultiPositiveCrossEn(nn.Module):
             logits.T, positive_mask.T
         )
         return (text_to_video + video_to_text) / 2, positive_mask
+
+    @staticmethod
+    def _validate_positive_rows(positive_mask, group_ids, direction):
+        missing = (~positive_mask.any(dim=1)).nonzero(as_tuple=False).reshape(-1)
+        if missing.numel():
+            missing_groups = group_ids[missing]
+            raise ValueError(
+                f"multi-positive target missing positive {direction} "
+                f"indices={missing.tolist()} "
+                f"group IDs={missing_groups.tolist()}"
+            )
 
     @staticmethod
     def _loss_from_positive_mask(logits, positive_mask):

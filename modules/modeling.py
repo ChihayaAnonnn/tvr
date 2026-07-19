@@ -8,7 +8,7 @@ import logging
 import torch
 from torch import nn
 
-from modules.until_module import PreTrainedModel, AllGather, CrossEn, MILNCELoss, MILNCELoss_BoF, KLdivergence
+from modules.until_module import PreTrainedModel, AllGather, CrossEn, MILNCELoss, MILNCELoss_BoF, KLdivergence, MultiPositiveCrossEn
 from modules.module_cross import CrossModel, CrossConfig, Transformer as TransformerClip
 
 from modules.module_clip import CLIP, convert_weights
@@ -24,6 +24,15 @@ except:
 
 logger = logging.getLogger(__name__)
 allgather = AllGather.apply
+
+
+def gather_group_ids(group_ids, task_config):
+    if group_ids is None:
+        raise ValueError("RSPR training requires explicit group_ids")
+    ids = torch.as_tensor(group_ids)
+    if ids.dtype not in MultiPositiveCrossEn._INTEGER_DTYPES:
+        raise ValueError("group_ids must use an integer dtype")
+    return allgather(ids.reshape(-1).long(), task_config)
 
 
 class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
@@ -310,6 +319,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         # loss function
         self.loss_fct = CrossEn()
+        self.multi_positive_loss = MultiPositiveCrossEn()
         # self.loss_MIL_fct = MILNCELoss()    # Ex27-2 50.0
         # self.loss_mc_con = MCSoftContrastiveLoss(reduction='mean')
         self.loss_MIL_fct = MILNCELoss_BoF()
@@ -327,7 +337,17 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         self.apply(self.init_weights)
 
-    def forward(self, input_ids, token_type_ids, attention_mask, video, video_mask=None):
+    def forward(
+        self,
+        input_ids,
+        token_type_ids,
+        attention_mask,
+        video,
+        video_mask=None,
+        group_ids=None,
+        rspr_rank_scale=1.0,
+        rspr_anchor_scale=1.0,
+    ):
         # (B 1 32)  (B 1 132) (B 1 32)
         input_ids = input_ids.view(-1, input_ids.shape[-1])
         token_type_ids = token_type_ids.view(-1, token_type_ids.shape[-1])
@@ -339,6 +359,13 @@ class UATVR(CLIP4ClipPreTrainedModel):
         b, pair, bs, ts, channel, h, w = video.shape  # batch 2xclip num_frame 1 3 224 224
         video = video.view(b * pair * bs * ts, channel, h, w)
         video_frame = bs * ts
+
+        global_group_ids = None
+        if self.training:
+            rspr_mode = getattr(self.task_config, "rspr_mode", "legacy")
+            requires_group_ids = rspr_mode in {"off", "mean", "stochastic"}
+            if group_ids is not None or requires_group_ids:
+                global_group_ids = gather_group_ids(group_ids, self.task_config)
 
         sequence_output, text_token = self.get_sequence_output(input_ids, token_type_ids, attention_mask, shaped=True)
         visual_output = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_frame)
@@ -355,9 +382,14 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 loose_type=self.loose_type,
             )
 
-            sim_loss1 = self.loss_fct(sim_matrix)
-            sim_loss2 = self.loss_fct(sim_matrix.T)
-            sim_loss = (sim_loss1 + sim_loss2) / 2
+            if global_group_ids is None:
+                sim_loss = 0.5 * (
+                    self.loss_fct(sim_matrix) + self.loss_fct(sim_matrix.T)
+                )
+            else:
+                sim_loss, _positive_mask = self.multi_positive_loss.bidirectional(
+                    sim_matrix, global_group_ids
+                )
             loss += sim_loss  # token-wise DRL (extra v & t cls token)
             loss += mcsoft_loss  # superNCE
             loss += vib_loss  # kl divergence
