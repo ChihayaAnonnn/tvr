@@ -235,16 +235,21 @@ def test_rank_loss_rejects_an_empty_batch_with_a_readable_error():
         )
 
 
-def test_rank_loss_validates_constructor_and_matching_score_dtypes():
+def test_rank_loss_validates_constructor_and_supports_mixed_precision_mining():
     with pytest.raises(ValueError, match="temperature"):
         StochasticRankLoss(temperature=0)
     with pytest.raises(ValueError, match="hard_negative_count"):
         StochasticRankLoss(hard_negative_count=0)
     with pytest.raises(ValueError, match="margin"):
         StochasticRankLoss(margin=float("inf"))
-    with pytest.raises(ValueError, match="same dtype"):
-        StochasticRankLoss()(
-            torch.randn(2, 2, 1, dtype=torch.float32),
-            torch.tensor([0, 1]),
-            torch.randn(2, 2, dtype=torch.float64),
-        )
+
+    output = StochasticRankLoss(hard_negative_count=1)(
+        torch.randn(3, 3, 1, dtype=torch.float32),
+        torch.tensor([0, 1, 2]),
+        torch.tensor(
+            [[0.0, 2.0, 1.0], [3.0, 0.0, 2.0], [1.0, 3.0, 0.0]],
+            dtype=torch.float16,
+        ),
+    )
+
+    torch.testing.assert_close(output.negative_indices, torch.tensor([[1], [0], [1]]))

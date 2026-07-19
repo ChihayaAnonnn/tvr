@@ -171,8 +171,6 @@ class StochasticRankLoss(nn.Module):
             raise ValueError("mining_logits must use a floating-point dtype")
         if stochastic_scores.device != group_ids.device or stochastic_scores.device != mining_logits.device:
             raise ValueError("stochastic_scores, group_ids, and mining_logits must use the same device")
-        if stochastic_scores.dtype != mining_logits.dtype:
-            raise ValueError("stochastic_scores and mining_logits must use the same dtype")
 
     def forward(
         self,
@@ -193,9 +191,11 @@ class StochasticRankLoss(nn.Module):
 
         candidate_count = int(negative_mask.sum(dim=1).min().item())
         negative_count = min(self.hard_negative_count, candidate_count)
+        mining_scores = mining_logits.detach()
+        if mining_scores.dtype in {torch.float16, torch.bfloat16}:
+            mining_scores = mining_scores.float()
         negative_indices = (
-            mining_logits.detach()
-            .masked_fill(~negative_mask, float("-inf"))
+            mining_scores.masked_fill(~negative_mask, float("-inf"))
             .topk(
                 negative_count,
                 dim=1,
