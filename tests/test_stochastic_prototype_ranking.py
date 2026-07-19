@@ -1,0 +1,105 @@
+import pytest
+import torch
+import torch.nn.functional as F
+
+from modules.stochastic_prototype_ranking import BidirectionalSoftPrototypeMatcher
+
+
+def test_soft_matcher_supports_rectangular_batches():
+    matcher = BidirectionalSoftPrototypeMatcher(temperature=0.07)
+
+    output = matcher(torch.randn(2, 4, 8), torch.randn(3, 4, 8))
+
+    assert output.logits.shape == (2, 3)
+    assert output.pair_uncertainty.shape == (2, 3)
+    assert output.text_prototype_scores.shape == (2, 3, 4)
+    assert output.video_prototype_scores.shape == (2, 3, 4)
+    assert output.stochastic_pair_scores.shape == (2, 3, 4)
+
+
+def test_soft_matcher_supports_single_prototype():
+    matcher = BidirectionalSoftPrototypeMatcher(temperature=0.07)
+
+    output = matcher(torch.randn(2, 1, 8), torch.randn(3, 1, 8))
+
+    assert output.logits.shape == (2, 3)
+    assert output.stochastic_pair_scores.shape == (2, 3, 1)
+
+
+def test_soft_matcher_is_invariant_to_duplicate_identical_prototypes():
+    text = F.normalize(torch.randn(2, 1, 8), dim=-1)
+    video = F.normalize(torch.randn(3, 1, 8), dim=-1)
+    matcher = BidirectionalSoftPrototypeMatcher(temperature=0.07)
+
+    one = matcher(text, video).logits
+    four = matcher(text.expand(-1, 4, -1), video.expand(-1, 4, -1)).logits
+
+    torch.testing.assert_close(one, four)
+
+
+def test_soft_matcher_outputs_are_finite_for_normalized_inputs_at_small_temperature():
+    text = F.normalize(torch.randn(2, 4, 8), dim=-1)
+    video = F.normalize(torch.randn(3, 4, 8), dim=-1)
+    matcher = BidirectionalSoftPrototypeMatcher(temperature=1e-6)
+
+    output = matcher(text, video)
+
+    for value in (
+        output.logits,
+        output.pair_uncertainty,
+        output.text_prototype_scores,
+        output.video_prototype_scores,
+        output.stochastic_pair_scores,
+    ):
+        assert torch.isfinite(value).all()
+
+
+def test_soft_matcher_reports_nonnegative_and_zero_uncertainty_for_identical_prototypes():
+    prototype_text = F.normalize(torch.randn(2, 1, 8), dim=-1)
+    prototype_video = F.normalize(torch.randn(3, 1, 8), dim=-1)
+    matcher = BidirectionalSoftPrototypeMatcher(temperature=0.07)
+
+    output = matcher(
+        prototype_text.expand(-1, 4, -1),
+        prototype_video.expand(-1, 4, -1),
+    )
+
+    assert torch.all(output.pair_uncertainty >= 0)
+    torch.testing.assert_close(output.pair_uncertainty, torch.zeros_like(output.pair_uncertainty))
+
+
+def test_soft_matcher_requires_equal_numbers_of_text_and_video_prototypes():
+    matcher = BidirectionalSoftPrototypeMatcher(temperature=0.07)
+
+    with pytest.raises(ValueError, match="same number of prototypes"):
+        matcher(torch.randn(2, 3, 8), torch.randn(3, 4, 8))
+
+
+def test_score_pairs_matches_diagonal_of_full_matcher():
+    text = torch.randn(3, 4, 8)
+    video = torch.randn(3, 4, 8)
+    matcher = BidirectionalSoftPrototypeMatcher(temperature=0.07)
+
+    paired = matcher.score_pairs(text, video)
+    full = matcher(text, video)
+
+    torch.testing.assert_close(paired.logits, full.logits.diagonal())
+    torch.testing.assert_close(
+        paired.stochastic_pair_scores,
+        full.stochastic_pair_scores[torch.arange(text.size(0)), torch.arange(text.size(0))],
+    )
+
+
+@pytest.mark.parametrize("hard_max", [False, True])
+def test_soft_and_hard_max_modes_backpropagate(hard_max):
+    text = torch.randn(2, 4, 8, requires_grad=True)
+    video = torch.randn(3, 4, 8, requires_grad=True)
+    matcher = BidirectionalSoftPrototypeMatcher(temperature=0.07, hard_max=hard_max)
+
+    output = matcher(text, video)
+    output.logits.sum().backward()
+
+    assert text.grad is not None
+    assert video.grad is not None
+    assert torch.isfinite(text.grad).all()
+    assert torch.isfinite(video.grad).all()
