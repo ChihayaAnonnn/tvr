@@ -22,10 +22,26 @@ class PrototypeMatchOutput:
     stochastic_pair_scores: torch.Tensor
 
 
+@dataclass(frozen=True)
+class StochasticRankOutput:
+    """Ranking loss and hard-negative diagnostics for one retrieval direction."""
+
+    loss: torch.Tensor
+    inversion_probability: torch.Tensor
+    negative_indices: torch.Tensor
+
+
 def _positive_finite(value: float, name: str) -> float:
     value = float(value)
     if not math.isfinite(value) or value <= 0:
         raise ValueError(f"{name} must be positive and finite")
+    return value
+
+
+def _nonnegative_finite(value: float, name: str) -> float:
+    value = float(value)
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be nonnegative and finite")
     return value
 
 
@@ -105,3 +121,108 @@ class BidirectionalSoftPrototypeMatcher(nn.Module):
             video = F.normalize(video_samples.float(), dim=-1, eps=self.eps)
             cosine = torch.einsum("pad,pbd->pab", text, video)
             return self._output(cosine, math.log(text.size(1)))
+
+
+class StochasticRankLoss(nn.Module):
+    """Mine cross-group negatives for multi-positive stochastic ranking."""
+
+    def __init__(
+        self,
+        temperature: float = 0.07,
+        *,
+        hard_negative_count: int = 8,
+        margin: float = 0.0,
+    ):
+        super().__init__()
+        self.temperature = _positive_finite(temperature, "temperature")
+        if isinstance(hard_negative_count, bool) or not isinstance(hard_negative_count, int):
+            raise ValueError("hard_negative_count must be a positive integer")
+        if hard_negative_count <= 0:
+            raise ValueError("hard_negative_count must be a positive integer")
+        self.hard_negative_count = hard_negative_count
+        self.margin = _nonnegative_finite(margin, "margin")
+
+    @staticmethod
+    def _validate_inputs(
+        stochastic_scores: torch.Tensor,
+        group_ids: torch.Tensor,
+        mining_logits: torch.Tensor,
+    ) -> None:
+        if stochastic_scores.ndim != 3:
+            raise ValueError("stochastic_scores must have shape [batch, batch, samples]")
+        batch_size, candidate_count, sample_count = stochastic_scores.shape
+        if batch_size != candidate_count:
+            raise ValueError("stochastic_scores must be square with shape [batch, batch, samples]")
+        if sample_count == 0:
+            raise ValueError("stochastic_scores must have a nonempty samples dimension")
+        if not stochastic_scores.is_floating_point():
+            raise ValueError("stochastic_scores must use a floating-point dtype")
+
+        if group_ids.ndim != 1 or group_ids.size(0) != batch_size:
+            raise ValueError("group_ids must have shape [batch]")
+        if group_ids.dtype == torch.bool or group_ids.is_floating_point() or group_ids.is_complex():
+            raise ValueError("group_ids must use an integer dtype")
+
+        if mining_logits.ndim != 2 or mining_logits.shape != (batch_size, batch_size):
+            raise ValueError("mining_logits must have shape [batch, batch]")
+        if not mining_logits.is_floating_point():
+            raise ValueError("mining_logits must use a floating-point dtype")
+        if stochastic_scores.device != group_ids.device or stochastic_scores.device != mining_logits.device:
+            raise ValueError("stochastic_scores, group_ids, and mining_logits must use the same device")
+        if stochastic_scores.dtype != mining_logits.dtype:
+            raise ValueError("stochastic_scores and mining_logits must use the same dtype")
+
+    def forward(
+        self,
+        stochastic_scores: torch.Tensor,
+        group_ids: torch.Tensor,
+        mining_logits: torch.Tensor,
+    ) -> StochasticRankOutput:
+        """Compute one directional loss with every same-group candidate as positive."""
+
+        self._validate_inputs(stochastic_scores, group_ids, mining_logits)
+        positive_mask = group_ids[:, None].eq(group_ids[None, :])
+        negative_mask = ~positive_mask
+        if not negative_mask.any(dim=1).all():
+            raise ValueError("each query must have at least one valid negative candidate")
+
+        positive_count = positive_mask.sum(dim=1, keepdim=True)
+        positive_scores = (stochastic_scores * positive_mask.unsqueeze(-1)).sum(dim=1) / positive_count
+
+        candidate_count = int(negative_mask.sum(dim=1).min().item())
+        negative_count = min(self.hard_negative_count, candidate_count)
+        negative_indices = (
+            mining_logits.detach()
+            .masked_fill(~negative_mask, float("-inf"))
+            .topk(
+                negative_count,
+                dim=1,
+            )
+            .indices
+        )
+        gather_index = negative_indices.unsqueeze(-1).expand(-1, -1, stochastic_scores.size(-1))
+        negative_scores = stochastic_scores.gather(dim=1, index=gather_index)
+        difference = negative_scores - positive_scores.unsqueeze(1)
+        loss = F.softplus((difference + self.margin) / self.temperature).mean()
+        inversion_probability = torch.sigmoid(difference / self.temperature).mean(dim=-1)
+        return StochasticRankOutput(
+            loss=loss,
+            inversion_probability=inversion_probability,
+            negative_indices=negative_indices,
+        )
+
+    def bidirectional(
+        self,
+        stochastic_scores: torch.Tensor,
+        group_ids: torch.Tensor,
+        mining_logits: torch.Tensor,
+    ) -> tuple[torch.Tensor, StochasticRankOutput, StochasticRankOutput]:
+        """Average directional losses after independently mining each direction."""
+
+        text_to_video = self(stochastic_scores, group_ids, mining_logits)
+        video_to_text = self(
+            stochastic_scores.transpose(0, 1),
+            group_ids,
+            mining_logits.transpose(0, 1),
+        )
+        return 0.5 * (text_to_video.loss + video_to_text.loss), text_to_video, video_to_text
