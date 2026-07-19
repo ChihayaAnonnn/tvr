@@ -10,6 +10,12 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from prob_models.reparameterized_distribution import (
+    DistributionOutput,
+    ReparameterizedDistributionHead,
+    antithetic_standard_normal,
+)
+
 
 @dataclass(frozen=True)
 class PrototypeMatchOutput:
@@ -31,6 +37,18 @@ class StochasticRankOutput:
     negative_indices: torch.Tensor
 
 
+@dataclass(frozen=True)
+class RSPROutput:
+    """Probability distributions and their stochastic retrieval scores."""
+
+    text_distribution: DistributionOutput
+    video_distribution: DistributionOutput
+    probabilistic_logits: torch.Tensor
+    pair_uncertainty: torch.Tensor
+    stochastic_pair_scores: torch.Tensor
+    anchor_kl: torch.Tensor
+
+
 def _positive_finite(value: float, name: str) -> float:
     value = float(value)
     if not math.isfinite(value) or value <= 0:
@@ -43,6 +61,22 @@ def _nonnegative_finite(value: float, name: str) -> float:
     if not math.isfinite(value) or value < 0:
         raise ValueError(f"{name} must be nonnegative and finite")
     return value
+
+
+def _positive_even_integer(value: int, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0 or value % 2:
+        raise ValueError(f"{name} must be a positive even integer")
+    return value
+
+
+def _validate_sampling_request(sample_count: int, mean_only: bool) -> None:
+    if isinstance(sample_count, bool) or not isinstance(sample_count, int):
+        raise ValueError("sample_count must be an integer")
+    if mean_only:
+        if sample_count != 1:
+            raise ValueError("mean-only sampling requires sample_count=1")
+        return
+    _positive_even_integer(sample_count, "sample_count")
 
 
 def _fp32_context(tensor: torch.Tensor):
@@ -228,3 +262,144 @@ class StochasticRankLoss(nn.Module):
             mining_logits.transpose(0, 1),
         )
         return 0.5 * (text_to_video.loss + video_to_text.loss), text_to_video, video_to_text
+
+
+class RSPRCore(nn.Module):
+    """Compose probabilistic embedding heads, matching, and ranking support."""
+
+    def __init__(
+        self,
+        dim: int,
+        sample_count: int = 4,
+        eval_sample_count: int = 8,
+        match_temperature: float = 0.07,
+        rank_temperature: float = 0.07,
+        hard_negative_count: int = 8,
+        prior_std: float = 0.1,
+        hard_max: bool = False,
+        eval_seed: int = 0,
+        *,
+        hidden_dim: int | None = None,
+        eps: float = 1e-6,
+    ):
+        super().__init__()
+        if isinstance(sample_count, bool) or not isinstance(sample_count, int) or sample_count <= 0:
+            raise ValueError("sample_count must be a positive integer")
+        if sample_count != 1:
+            _positive_even_integer(sample_count, "sample_count")
+        eval_sample_count = _positive_even_integer(eval_sample_count, "eval_sample_count")
+        if isinstance(eval_seed, bool) or not isinstance(eval_seed, int):
+            raise ValueError("eval_seed must be an integer")
+
+        self.sample_count = sample_count
+        self.eval_sample_count = eval_sample_count
+        self.text_distribution = ReparameterizedDistributionHead(
+            dim=dim,
+            hidden_dim=hidden_dim,
+            prior_std=prior_std,
+            eps=eps,
+        )
+        self.video_distribution = ReparameterizedDistributionHead(
+            dim=dim,
+            hidden_dim=hidden_dim,
+            prior_std=prior_std,
+            eps=eps,
+        )
+        self.matcher = BidirectionalSoftPrototypeMatcher(
+            temperature=match_temperature,
+            hard_max=hard_max,
+            eps=eps,
+        )
+        self.rank_loss = StochasticRankLoss(
+            temperature=rank_temperature,
+            hard_negative_count=hard_negative_count,
+        )
+
+        self.register_buffer(
+            "fixed_text_noise",
+            self._fixed_noise(dim, eval_sample_count, eval_seed),
+        )
+        self.register_buffer(
+            "fixed_video_noise",
+            self._fixed_noise(dim, eval_sample_count, eval_seed + 1),
+        )
+
+    @staticmethod
+    def _fixed_noise(dim: int, sample_count: int, seed: int) -> torch.Tensor:
+        generator = torch.Generator(device="cpu").manual_seed(seed)
+        return antithetic_standard_normal(
+            batch_size=1,
+            sample_count=sample_count,
+            dim=dim,
+            device=torch.device("cpu"),
+            dtype=torch.float32,
+            generator=generator,
+        ).squeeze(0)
+
+    def _evaluation_noise(
+        self,
+        fixed_noise: torch.Tensor,
+        *,
+        batch_size: int,
+        sample_count: int,
+    ) -> torch.Tensor:
+        return fixed_noise[:sample_count].unsqueeze(0).expand(batch_size, -1, -1)
+
+    def forward(
+        self,
+        text_tokens: torch.Tensor,
+        text_mask: torch.Tensor,
+        video_tokens: torch.Tensor,
+        video_mask: torch.Tensor,
+        *,
+        sample_count: int,
+        mean_only: bool = False,
+        detach_samples: bool = False,
+        text_noise: torch.Tensor | None = None,
+        video_noise: torch.Tensor | None = None,
+    ) -> RSPROutput:
+        """Return stochastic text-video scores and their source distributions."""
+
+        _validate_sampling_request(sample_count, mean_only)
+        if not self.training and sample_count > self.eval_sample_count:
+            raise ValueError("sample_count cannot exceed eval_sample_count during evaluation")
+
+        if not self.training:
+            if text_noise is None:
+                text_noise = self._evaluation_noise(
+                    self.fixed_text_noise,
+                    batch_size=text_tokens.size(0),
+                    sample_count=sample_count,
+                )
+            if video_noise is None:
+                video_noise = self._evaluation_noise(
+                    self.fixed_video_noise,
+                    batch_size=video_tokens.size(0),
+                    sample_count=sample_count,
+                )
+
+        text_distribution = self.text_distribution(
+            text_tokens,
+            text_mask,
+            sample_count=sample_count,
+            noise=text_noise,
+            mean_only=mean_only,
+            detach_samples=detach_samples,
+        )
+        video_distribution = self.video_distribution(
+            video_tokens,
+            video_mask,
+            sample_count=sample_count,
+            noise=video_noise,
+            mean_only=mean_only,
+            detach_samples=detach_samples,
+        )
+        match = self.matcher(text_distribution.samples, video_distribution.samples)
+        return RSPROutput(
+            text_distribution=text_distribution,
+            video_distribution=video_distribution,
+            probabilistic_logits=match.logits,
+            pair_uncertainty=match.pair_uncertainty,
+            stochastic_pair_scores=match.stochastic_pair_scores,
+            anchor_kl=0.5 * (text_distribution.anchor_kl + video_distribution.anchor_kl),
+        )
