@@ -10,6 +10,7 @@ from torch import nn
 
 from modules.until_module import PreTrainedModel, AllGather, CrossEn, MILNCELoss, MILNCELoss_BoF, KLdivergence, MultiPositiveCrossEn
 from modules.module_cross import CrossModel, CrossConfig, Transformer as TransformerClip
+from modules.stochastic_prototype_ranking import RSPRCore
 
 from modules.module_clip import CLIP, convert_weights
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
@@ -300,15 +301,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 num_layers=1,
             )
 
-        self.pie_net_video = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
-        self.uncertain_net_video = UncertaintyModuleImage(embed_dim, embed_dim, embed_dim // 2)
-
-        self.pie_net_text = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
-        self.uncertain_net_text = UncertaintyModuleImage(embed_dim, embed_dim, embed_dim // 2)
-
-        self.n_video_samples = self.task_config.n_video_embeddings  # numbers sampling from video distribution
-        self.n_text_samples = self.task_config.n_text_embeddings  # numbers sampling from text distribution
-
         # head
         self.text_weight_fc = nn.Sequential(
             nn.Linear(transformer_width, transformer_width), nn.ReLU(inplace=True), nn.Linear(transformer_width, 1)
@@ -319,11 +311,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         # loss function
         self.loss_fct = CrossEn()
+        self.rspr_mode = getattr(self.task_config, "rspr_mode", "legacy")
         self.multi_positive_loss = MultiPositiveCrossEn()
-        # self.loss_MIL_fct = MILNCELoss()    # Ex27-2 50.0
-        # self.loss_mc_con = MCSoftContrastiveLoss(reduction='mean')
-        self.loss_MIL_fct = MILNCELoss_BoF()
-        self.vib_loss = KLdivergence()
+        self.rspr = None
+        if self.rspr_mode not in {"mean", "stochastic"}:
+            self._initialize_probability_path(embed_dim)
 
         # extra class token num
         self.extra_cls_frame_num = self.task_config.extra_video_cls_num
@@ -332,10 +324,58 @@ class UATVR(CLIP4ClipPreTrainedModel):
         show_log(task_config, "CLIP UATVR Model ......")
         show_log(task_config, "\t Extra video Class token number: {}".format(self.extra_cls_frame_num))
         show_log(task_config, "\t Extra text Class token number: {}".format(self.extra_cls_text_num))
-        show_log(task_config, "\t Number of video sampling probabilistic embeddings: {}".format(self.n_video_samples))
-        show_log(task_config, "\t Number of text sampling probabilistic embeddings: {}".format(self.n_text_samples))
+        if self.rspr_mode == "legacy":
+            show_log(
+                task_config,
+                "\t Number of video sampling probabilistic embeddings: {}".format(
+                    self.n_video_samples
+                ),
+            )
+            show_log(
+                task_config,
+                "\t Number of text sampling probabilistic embeddings: {}".format(
+                    self.n_text_samples
+                ),
+            )
 
+        self._initialize_model_weights(embed_dim)
+
+    def _initialize_model_weights(self, embed_dim):
         self.apply(self.init_weights)
+        if self.rspr_mode in {"mean", "stochastic"}:
+            self._initialize_probability_path(embed_dim)
+
+    def _initialize_probability_path(self, embed_dim):
+        self.rspr_mode = getattr(self.task_config, "rspr_mode", "legacy")
+        self.multi_positive_loss = MultiPositiveCrossEn()
+        if self.rspr_mode in {"mean", "stochastic"}:
+            self.rspr = RSPRCore(
+                dim=embed_dim,
+                sample_count=self.task_config.rspr_sample_count,
+                eval_sample_count=self.task_config.rspr_eval_sample_count,
+                match_temperature=self.task_config.rspr_match_temperature,
+                rank_temperature=self.task_config.rspr_rank_temperature,
+                hard_negative_count=self.task_config.rspr_hard_negatives,
+                prior_std=self.task_config.rspr_prior_std,
+                hard_max=self.task_config.rspr_match_mode == "hard",
+                eval_seed=self.task_config.rspr_eval_seed,
+            )
+        else:
+            self.rspr = None
+
+        if self.rspr_mode == "legacy":
+            self.pie_net_video = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
+            self.uncertain_net_video = UncertaintyModuleImage(
+                embed_dim, embed_dim, embed_dim // 2
+            )
+            self.pie_net_text = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
+            self.uncertain_net_text = UncertaintyModuleImage(
+                embed_dim, embed_dim, embed_dim // 2
+            )
+            self.n_video_samples = self.task_config.n_video_embeddings
+            self.n_text_samples = self.task_config.n_text_embeddings
+            self.loss_MIL_fct = MILNCELoss_BoF()
+            self.vib_loss = KLdivergence()
 
     def forward(
         self,
@@ -371,8 +411,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         visual_output = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_frame)
 
         if self.training:
-            loss = 0.0
-            sim_matrix, mcsoft_loss, vib_loss = self.get_similarity_logits(
+            similarity_output = self.get_similarity_logits(
                 sequence_output,
                 text_token,
                 visual_output,
@@ -380,25 +419,101 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 video_mask,
                 shaped=True,
                 loose_type=self.loose_type,
+                return_refined=rspr_mode in {"mean", "stochastic"},
             )
+            sim_matrix, legacy_mil_loss, legacy_kl_loss = similarity_output[:3]
 
             if global_group_ids is None:
-                sim_loss = 0.5 * (
+                dsa_loss = 0.5 * (
                     self.loss_fct(sim_matrix) + self.loss_fct(sim_matrix.T)
                 )
             else:
-                sim_loss, _positive_mask = self.multi_positive_loss.bidirectional(
+                dsa_loss, _positive_mask = self.multi_positive_loss.bidirectional(
                     sim_matrix, global_group_ids
                 )
-            loss += sim_loss  # token-wise DRL (extra v & t cls token)
-            loss += mcsoft_loss  # superNCE
-            loss += vib_loss  # kl divergence
+            if rspr_mode == "legacy":
+                return dsa_loss + legacy_mil_loss + legacy_kl_loss
+            if rspr_mode == "off":
+                return dsa_loss
 
-            # show_log(self.task_config, "sim_loss:{}\t MILloss:{}\t vib_loss:{}".format(sim_loss, mcsoft_loss, vib_loss))
-
-            return loss
+            if len(similarity_output) != 10:
+                raise RuntimeError("RSPR similarity path did not return refined tokens")
+            (
+                refined_text,
+                refined_attention_mask,
+                refined_video,
+                refined_video_mask,
+                word_num,
+                frame_num,
+                wti_logits,
+            ) = similarity_output[3:]
+            rspr_output = self.rspr(
+                refined_text[:, :word_num],
+                refined_attention_mask[:, :word_num],
+                refined_video[:, :frame_num],
+                refined_video_mask[:, :frame_num],
+                sample_count=(
+                    1
+                    if self.rspr_mode == "mean"
+                    else self.task_config.rspr_sample_count
+                ),
+                mean_only=self.rspr_mode == "mean",
+                detach_samples=self.task_config.rspr_detach_samples,
+            )
+            probability_loss, _ = self.multi_positive_loss.bidirectional(
+                rspr_output.probabilistic_logits
+                / self.task_config.rspr_prob_temperature,
+                global_group_ids,
+            )
+            rank_loss = probability_loss.new_zeros(())
+            if self.rspr_mode == "stochastic":
+                rank_loss, _, _ = self.rspr.rank_loss.bidirectional(
+                    rspr_output.stochastic_pair_scores,
+                    global_group_ids,
+                    wti_logits.detach(),
+                )
+            return self._assemble_training_loss(
+                dsa_loss,
+                probability_loss,
+                rank_loss,
+                rspr_output,
+                rspr_rank_scale=rspr_rank_scale,
+                rspr_anchor_scale=rspr_anchor_scale,
+            )
         else:  # for inference
             return None
+
+    def _assemble_training_loss(
+        self,
+        dsa_loss,
+        probability_loss,
+        rank_loss,
+        rspr_output,
+        *,
+        rspr_rank_scale=1.0,
+        rspr_anchor_scale=1.0,
+    ):
+        self.last_loss_diagnostics = {
+            "dsa": dsa_loss.detach(),
+            "prob": probability_loss.detach(),
+            "rank": rank_loss.detach(),
+            "anchor": rspr_output.anchor_kl.detach(),
+            "pair_uncertainty_mean": rspr_output.pair_uncertainty.mean().detach(),
+            "text_variance_mean": rspr_output.text_distribution.logvar.exp()
+            .mean()
+            .detach(),
+            "video_variance_mean": rspr_output.video_distribution.logvar.exp()
+            .mean()
+            .detach(),
+        }
+        return (
+            dsa_loss
+            + self.task_config.rspr_prob_weight * probability_loss
+            + self.task_config.rspr_rank_weight * rspr_rank_scale * rank_loss
+            + self.task_config.rspr_anchor_weight
+            * rspr_anchor_scale
+            * rspr_output.anchor_kl
+        )
 
     def forward_eval(self, input_ids, token_type_ids, attention_mask, video, video_mask=None):
         # (B 1 32)  (B 1 132) (B 1 32)
@@ -521,8 +636,81 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         return text_out, video_out
 
+    def _refine_video_tokens(
+        self, visual_output: torch.Tensor, video_mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        visual_output_original = visual_output
+        extra_token_num = self.extra_cls_frame_num
+        seq_length = visual_output.size(1) + extra_token_num
+        position_ids = torch.arange(
+            seq_length, dtype=torch.long, device=visual_output.device
+        )
+        position_ids = position_ids.unsqueeze(0).expand(visual_output.size(0), -1)
+        frame_position_embeddings = self.frame_position_embeddings(position_ids)
+        frame_position_embeddings[:, 0 : visual_output.size(1), :] += visual_output
+        visual_output = frame_position_embeddings
+
+        tempo_mask = torch.cat(
+            [
+                video_mask,
+                torch.ones(visual_output.size(0), extra_token_num).to(
+                    visual_output.device
+                ),
+            ],
+            axis=1,
+        )
+        extended_video_mask = (1.0 - tempo_mask.unsqueeze(1)) * -1000000.0
+        extended_video_mask = extended_video_mask.expand(
+            -1, tempo_mask.size(1), -1
+        )
+        visual_output = visual_output.permute(1, 0, 2)
+        visual_output = self.transformerClip(visual_output, extended_video_mask)
+        visual_output = visual_output.permute(1, 0, 2).contiguous()
+        visual_output[:, : visual_output_original.size(1), :] += visual_output_original
+        return visual_output, tempo_mask
+
+    def _refine_text_tokens(
+        self, text_token: torch.Tensor, attention_mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        text_original = text_token
+        extra_text_num = self.extra_cls_text_num
+        seq_text_length = extra_text_num + text_token.size(1)
+        position_ids_text = torch.arange(
+            seq_text_length, dtype=torch.long, device=text_token.device
+        )
+        position_ids_text = position_ids_text.unsqueeze(0).expand(
+            text_token.size(0), -1
+        )
+        word_position_embeddings = self.word_position_embeddings(position_ids_text)
+        word_position_embeddings[:, 0 : text_token.size(1), :] += text_token
+        text_token = word_position_embeddings
+
+        tempo_mask = torch.cat(
+            [
+                attention_mask,
+                torch.ones(text_token.size(0), extra_text_num).to(text_token.device),
+            ],
+            axis=1,
+        )
+        extended_text_mask = (1.0 - tempo_mask.unsqueeze(1)) * -1000000.0
+        extended_text_mask = extended_text_mask.expand(
+            -1, tempo_mask.size(1), -1
+        )
+        text_token = text_token.permute(1, 0, 2)
+        text_token = self.transformerClip(text_token, extended_text_mask)
+        text_token = text_token.permute(1, 0, 2).contiguous()
+        text_token[:, : text_original.size(1), :] += text_original
+        return text_token, tempo_mask
+
     def _loose_similarity(
-        self, sequence_output, text_token, visual_output, attention_mask, video_mask, sim_header="seqTransf"
+        self,
+        sequence_output,
+        text_token,
+        visual_output,
+        attention_mask,
+        video_mask,
+        sim_header="seqTransf",
+        return_refined=False,
     ):
         sequence_output, visual_output = sequence_output.contiguous(), visual_output.contiguous()
         frame_num = visual_output.size(1)  # 12 / 64
@@ -547,49 +735,12 @@ class UATVR(CLIP4ClipPreTrainedModel):
             visual_output = visual_output + visual_output_original
         elif sim_header == "seqTransf":
             # Sequential type: Transformer Encoder +++++++++++++= extra token
-            visual_output_original = visual_output
-
-            extra_token_num = self.extra_cls_frame_num
-            seq_length = visual_output.size(1) + extra_token_num  # extra 2 learnable token
-            position_ids = torch.arange(seq_length, dtype=torch.long, device=visual_output.device)
-            position_ids = position_ids.unsqueeze(0).expand(visual_output.size(0), -1)
-            frame_position_embeddings = self.frame_position_embeddings(position_ids)  # bs num+extra_token_num dim
-            frame_position_embeddings[:, 0 : visual_output.size(1), :] += visual_output
-            visual_output = frame_position_embeddings
-
-            tempo_mask = torch.cat(
-                [video_mask, torch.ones(visual_output.size(0), extra_token_num).to(visual_output.device)], axis=1
+            visual_output, video_mask = self._refine_video_tokens(
+                visual_output, video_mask
             )
-            extended_video_mask = (1.0 - tempo_mask.unsqueeze(1)) * -1000000.0
-            extended_video_mask = extended_video_mask.expand(-1, tempo_mask.size(1), -1)
-            visual_output = visual_output.permute(1, 0, 2)  # NLD -> LND
-            visual_output = self.transformerClip(visual_output, extended_video_mask)
-            visual_output = visual_output.permute(1, 0, 2).contiguous()  # LND -> NLD
-            # multi extra token
-            # visual_output = visual_output[:, :visual_output_original.size(1), :] + visual_output_original   # residual fusion
-            visual_output[:, : visual_output_original.size(1), :] += visual_output_original
-            video_mask = tempo_mask
-
-            # sequential type: MLP for text with extra token
-            text_original = text_token  # save original
-            extra_text_num = self.extra_cls_text_num
-            seq_text_length = extra_text_num + text_token.size(1)
-            position_ids_text = torch.arange(seq_text_length, dtype=torch.long, device=text_token.device)
-            position_ids_text = position_ids_text.unsqueeze(0).expand(text_token.size(0), -1)
-            word_position_embeddings = self.word_position_embeddings(position_ids_text)
-            word_position_embeddings[:, 0 : text_token.size(1), :] += text_token
-            text_token = word_position_embeddings
-
-            tempo_mask_ = torch.cat(
-                [attention_mask, torch.ones(text_token.size(0), extra_text_num).to(text_token.device)], axis=1
+            text_token, attention_mask = self._refine_text_tokens(
+                text_token, attention_mask
             )
-            extended_text_mask = (1.0 - tempo_mask_.unsqueeze(1)) * -1000000.0
-            extended_text_mask = extended_text_mask.expand(-1, tempo_mask_.size(1), -1)
-            text_token = text_token.permute(1, 0, 2)
-            text_token = self.transformerClip(text_token, extended_text_mask)
-            text_token = text_token.permute(1, 0, 2).contiguous()
-            text_token[:, : text_original.size(1), :] += text_original
-            attention_mask = tempo_mask_
 
         if self.training:  # works only on ddp
             visual_output = allgather(visual_output, self.task_config)
@@ -615,6 +766,25 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         # ti_logits = self.token_wise_interaction(text_token=text_token, frame_token=visual_output, attention_mask=attention_mask, video_mask=video_mask)
         wti_logits = self.weighted_token_wise_intersection(text_token, visual_output, attention_mask, video_mask)
+        logit_scale = self.clip.logit_scale.exp()
+        retrieve_logits = logit_scale * wti_logits
+
+        if self.rspr_mode != "legacy":
+            zero = retrieve_logits.new_zeros(())
+            if self.training:
+                output = (retrieve_logits, zero, zero)
+                if return_refined:
+                    output += (
+                        text_token,
+                        attention_mask,
+                        visual_output,
+                        video_mask,
+                        word_num,
+                        frame_num,
+                        wti_logits,
+                    )
+                return output
+            return retrieve_logits
 
         ####################################################################
         ############### probabilistic embedding modeling part ##############
@@ -660,8 +830,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
             vib_loss = self.vib_loss(prob_video_embedding, prob_video_logsigma, prob_text_embedding, prob_text_logsigma)
 
         # loss
-        logit_scale = self.clip.logit_scale.exp()
-        retrieve_logits = logit_scale * wti_logits  # sim_matrix
         if self.training:
             return retrieve_logits, 1e-2 * MIL_loss, 1e-4 * vib_loss
         else:  # for inference
@@ -684,11 +852,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
     def weighted_token_wise_intersection(self, text_token, frame_token, attention_mask, video_mask):
         text_weight = self.text_weight_fc(text_token).squeeze(2)  # B x N_t x D -> B x N_t
-        text_weight.masked_fill_(torch.tensor((1 - attention_mask), dtype=torch.bool), float("-inf"))
+        text_weight.masked_fill_((1 - attention_mask).to(dtype=torch.bool), float("-inf"))
         text_weight = torch.softmax(text_weight, dim=-1)  # B x N_t
 
         video_weight = self.video_weight_fc(frame_token).squeeze(2)  # B x N_v x D -> B x N_v
-        video_weight.masked_fill_(torch.tensor((1 - video_mask), dtype=torch.bool), float("-inf"))
+        video_weight.masked_fill_((1 - video_mask).to(dtype=torch.bool), float("-inf"))
         video_weight = torch.softmax(video_weight, dim=-1)  # B x N_v
 
         # token-wise interaction
@@ -755,17 +923,30 @@ class UATVR(CLIP4ClipPreTrainedModel):
         return output
 
     def get_similarity_logits(
-        self, sequence_output, text_token, visual_output, attention_mask, video_mask, shaped=False, loose_type=False
+        self,
+        sequence_output,
+        text_token,
+        visual_output,
+        attention_mask,
+        video_mask,
+        shaped=False,
+        loose_type=False,
+        return_refined=False,
     ):
         if shaped is False:
             attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
             video_mask = video_mask.view(-1, video_mask.shape[-1])
 
         if self.training:
-            retrieve_logits, mcsoft_loss, vib_loss = self._loose_similarity(
-                sequence_output, text_token, visual_output, attention_mask, video_mask, sim_header=self.sim_header
+            return self._loose_similarity(
+                sequence_output,
+                text_token,
+                visual_output,
+                attention_mask,
+                video_mask,
+                sim_header=self.sim_header,
+                return_refined=return_refined,
             )
-            return retrieve_logits, mcsoft_loss, vib_loss
         else:
             retrieve_logits = self._loose_similarity(
                 sequence_output, text_token, visual_output, attention_mask, video_mask, sim_header=self.sim_header

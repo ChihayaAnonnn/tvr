@@ -2,6 +2,7 @@ from __future__ import division, print_function, unicode_literals
 
 import argparse
 import datetime
+import math
 import os
 import random
 import time
@@ -57,6 +58,48 @@ def validate_trusted_cli(args):
             raise ValueError(
                 "hygiene requires --gradient_accumulation_steps=1"
             )
+
+
+def validate_rspr_cli(args):
+    """Validate the mode-specific RSPR command-line contract."""
+    if args.rspr_mode not in {"mean", "stochastic"} and (
+        args.rspr_freeze_clip or args.rspr_freeze_dsa
+    ):
+        raise ValueError("RSPR freeze flags require mean or stochastic mode")
+
+    if args.rspr_mode == "legacy":
+        return
+
+    if args.rspr_mode == "mean" and args.rspr_sample_count != 1:
+        raise ValueError("mean mode requires sample_count=1")
+    if args.rspr_mode == "stochastic":
+        for name in ("rspr_sample_count", "rspr_eval_sample_count"):
+            value = getattr(args, name)
+            if isinstance(value, bool) or value <= 0 or value % 2:
+                raise ValueError(f"--{name} must be a positive even integer")
+
+    for name in (
+        "rspr_match_temperature",
+        "rspr_prob_temperature",
+        "rspr_rank_temperature",
+        "rspr_prior_std",
+        "rspr_pair_chunk_size",
+    ):
+        value = getattr(args, name)
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError(f"--{name} must be positive and finite")
+
+    for name in (
+        "rspr_prob_weight",
+        "rspr_rank_weight",
+        "rspr_anchor_weight",
+        "rspr_rerank_weight",
+        "rspr_warmup_epochs",
+        "rspr_top_r",
+    ):
+        value = getattr(args, name)
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"--{name} must be nonnegative and finite")
 
 
 def get_args(description="CLIP4Clip on Retrieval Task"):
@@ -290,6 +333,34 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         type=int,
         help="Number of probabilistic text embeddings sampled by UATVR.",
     )
+    parser.add_argument(
+        "--rspr_mode",
+        choices=["legacy", "off", "mean", "stochastic"],
+        default="legacy",
+    )
+    parser.add_argument("--rspr_sample_count", type=int, default=4)
+    parser.add_argument("--rspr_eval_sample_count", type=int, default=8)
+    parser.add_argument(
+        "--rspr_match_mode", choices=["soft", "hard"], default="soft"
+    )
+    parser.add_argument("--rspr_detach_samples", action="store_true")
+    parser.add_argument("--rspr_match_temperature", type=float, default=0.07)
+    parser.add_argument("--rspr_prob_temperature", type=float, default=0.07)
+    parser.add_argument("--rspr_rank_temperature", type=float, default=0.07)
+    parser.add_argument("--rspr_hard_negatives", type=int, default=8)
+    parser.add_argument("--rspr_prior_std", type=float, default=0.1)
+    parser.add_argument("--rspr_prob_weight", type=float, default=0.1)
+    parser.add_argument("--rspr_rank_weight", type=float, default=0.1)
+    parser.add_argument("--rspr_anchor_weight", type=float, default=1e-4)
+    parser.add_argument("--rspr_warmup_epochs", type=float, default=1.0)
+    parser.add_argument("--rspr_eval_seed", type=int, default=0)
+    parser.add_argument("--rspr_top_r", type=int, default=100)
+    parser.add_argument("--rspr_det_temperature", type=float, default=1.0)
+    parser.add_argument("--rspr_rerank_temperature", type=float, default=1.0)
+    parser.add_argument("--rspr_rerank_weight", type=float, default=0.1)
+    parser.add_argument("--rspr_pair_chunk_size", type=int, default=4096)
+    parser.add_argument("--rspr_freeze_clip", action="store_true")
+    parser.add_argument("--rspr_freeze_dsa", action="store_true")
     parser.add_argument("--DSL", default=False, type=bool, help="whether using dual softmax in post testing")
     parser.add_argument(
         "--eval_vid_chunk_size",
@@ -318,6 +389,7 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
     args = parser.parse_args()
 
+    validate_rspr_cli(args)
     validate_trusted_cli(args)
 
     # Check paramenters
@@ -430,6 +502,30 @@ def set_seed_logger(args):
                 "max_words_attrs",
                 "attr_num_blocks",
             ],
+            "RSPR": [
+                "rspr_mode",
+                "rspr_sample_count",
+                "rspr_eval_sample_count",
+                "rspr_match_mode",
+                "rspr_detach_samples",
+                "rspr_match_temperature",
+                "rspr_prob_temperature",
+                "rspr_rank_temperature",
+                "rspr_hard_negatives",
+                "rspr_prior_std",
+                "rspr_prob_weight",
+                "rspr_rank_weight",
+                "rspr_anchor_weight",
+                "rspr_warmup_epochs",
+                "rspr_eval_seed",
+                "rspr_top_r",
+                "rspr_det_temperature",
+                "rspr_rerank_temperature",
+                "rspr_rerank_weight",
+                "rspr_pair_chunk_size",
+                "rspr_freeze_clip",
+                "rspr_freeze_dsa",
+            ],
             "Protocol": [
                 "datatype",
                 "do_train",
@@ -525,6 +621,27 @@ def _should_keep_clip_parameter_trainable(name, args):
         return True
 
     return False
+
+
+def apply_rspr_freeze_contract(model, args):
+    if args.rspr_mode in {"mean", "stochastic"} and args.rspr_freeze_clip:
+        for parameter in model.clip.parameters():
+            parameter.requires_grad = False
+    if args.rspr_mode in {"mean", "stochastic"} and args.rspr_freeze_dsa:
+        dsa_modules = tuple(
+            module
+            for module in (
+                getattr(model, "transformerClip", None),
+                getattr(model, "frame_position_embeddings", None),
+                getattr(model, "word_position_embeddings", None),
+                model.text_weight_fc,
+                model.video_weight_fc,
+            )
+            if module is not None
+        )
+        for module in dsa_modules:
+            for parameter in module.parameters():
+                parameter.requires_grad = False
 
 
 def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, local_rank, coef_lr=1.0):
@@ -771,7 +888,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 )
 
                 logger.info(
-                    "[Epoch %d/%d] Step %d/%d (%.0f%%) | Loss: %.4f | LR clip=%.2e new=%.2e | %.2fs/step | ETA: %s",
+                    "[Epoch %d/%d] Step %d/%d (%.0f%%) | Loss: %.4f | LR clip=%.2e new=%.2e%s | %.2fs/step | ETA: %s",
                     epoch + 1,
                     args.epochs,
                     step + 1,
@@ -780,6 +897,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     float(loss),
                     lr_clip,
                     lr_new,
+                    _format_rspr_diagnostics(model),
                     time_per_step,
                     _fmt_time(eta),
                 )
@@ -795,6 +913,20 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             _fmt_time(epoch_time),
         )
     return total_loss, global_step
+
+
+def _format_rspr_diagnostics(model):
+    diagnostic_model = model.module if hasattr(model, "module") else model
+    diagnostics = getattr(diagnostic_model, "last_loss_diagnostics", None)
+    required = ("dsa", "prob", "rank", "anchor", "text_variance_mean", "video_variance_mean")
+    if not isinstance(diagnostics, dict) or any(
+        name not in diagnostics for name in required
+    ):
+        return ""
+    return (
+        " | dsa={:.4f} prob={:.4f} rank={:.4f} anchor={:.4f}"
+        " text_var={:.4f} video_var={:.4f}"
+    ).format(*(float(diagnostics[name]) for name in required))
 
 
 def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
@@ -1173,6 +1305,7 @@ def main():
 
     assert args.task_type == "retrieval"
     model = init_model(args, device, n_gpu, args.local_rank)
+    apply_rspr_freeze_contract(model, args)
 
     ## ####################################
     # freeze testing
