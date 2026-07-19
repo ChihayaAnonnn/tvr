@@ -76,9 +76,7 @@ class BidirectionalSoftPrototypeMatcher(nn.Module):
     def _output(self, cosine: torch.Tensor, log_k: float) -> PrototypeMatchOutput:
         text_scores, video_scores = self._scores_from_cosine(cosine, log_k)
         logits = 0.5 * (text_scores.mean(dim=-1) + video_scores.mean(dim=-1))
-        pair_uncertainty = 0.5 * (
-            text_scores.var(dim=-1, unbiased=False) + video_scores.var(dim=-1, unbiased=False)
-        )
+        pair_uncertainty = 0.5 * (text_scores.var(dim=-1, unbiased=False) + video_scores.var(dim=-1, unbiased=False))
         stochastic_pair_scores = 0.5 * (text_scores + video_scores)
         return PrototypeMatchOutput(
             logits=logits,
