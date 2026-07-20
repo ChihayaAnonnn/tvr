@@ -48,11 +48,38 @@ def _process_is_running(pid: int) -> bool:
     return True
 
 
-def _wait_for_process_exit(pid: int) -> None:
+def _process_group_is_running(process_group: int) -> bool:
+    try:
+        os.killpg(process_group, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def _wait_for_processes_exit(process_group: int, pids: list[int]) -> None:
     deadline = time.monotonic() + 2.0
-    while _process_is_running(pid) and time.monotonic() < deadline:
+    while (
+        _process_group_is_running(process_group)
+        or any(_process_is_running(pid) for pid in pids)
+    ) and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert not _process_is_running(pid)
+    assert not _process_group_is_running(process_group)
+    assert not any(_process_is_running(pid) for pid in pids)
+
+
+def _terminate_process_group(process_group: int, pids: list[int]) -> None:
+    try:
+        os.killpg(process_group, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        _wait_for_processes_exit(process_group, pids)
+    except AssertionError:
+        try:
+            os.killpg(process_group, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        _wait_for_processes_exit(process_group, pids)
 
 
 def _copy_script(tmp_path: Path) -> Path:
@@ -85,6 +112,7 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
     setsid_arguments = tmp_path / "setsid.args"
     setsid_pid = tmp_path / "setsid.pid"
     tail_arguments = tmp_path / "tail.args"
+    tail_pid = tmp_path / "tail.pid"
     pid_file = tmp_path / "train.pid"
     torchrun_pid = tmp_path / "torchrun.pid"
     log_marker = "fake worker is running"
@@ -104,6 +132,7 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
         fake_bin / "tail",
         (
             'printf "%s\\0" "$@" > "$TAIL_ARGUMENTS"\n'
+            'printf "%s" "$$" > "$TAIL_PID"\n'
             f'exec "{real_tail}" "$@"\n'
         ),
     )
@@ -128,6 +157,7 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
             "SETSID_ARGUMENTS": str(setsid_arguments),
             "SETSID_PID": str(setsid_pid),
             "TAIL_ARGUMENTS": str(tail_arguments),
+            "TAIL_PID": str(tail_pid),
             "TORCHRUN_PID": str(torchrun_pid),
         }
     )
@@ -148,11 +178,17 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
         start_new_session=True,
     )
     worker_pid = None
+    tail_process_pid = None
+    torchrun_process_pid = None
     try:
-        _wait_for(setsid_arguments)
         _wait_for(pid_file)
+        worker_pid = int(pid_file.read_text().strip())
+        _wait_for(setsid_arguments)
         _wait_for(setsid_pid)
+        _wait_for(tail_pid)
+        tail_process_pid = int(tail_pid.read_text())
         _wait_for(torchrun_pid)
+        torchrun_process_pid = int(torchrun_pid.read_text())
         log_file = tmp_path / "logs/20260720/121314_rspr_train_msrvtt.log"
         _wait_for_text(log_file, log_marker)
         setsid_args = _read_nul_arguments(setsid_arguments)
@@ -173,23 +209,27 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
             "-F",
             "logs/20260720/121314_rspr_train_msrvtt.log",
         ]
-        worker_pid = int(pid_file.read_text().strip())
         assert worker_pid == int(setsid_pid.read_text())
         assert os.getsid(worker_pid) == worker_pid
         assert _process_is_running(worker_pid)
-        assert _process_is_running(int(torchrun_pid.read_text()))
+        assert _process_is_running(torchrun_process_pid)
 
         os.killpg(controller.pid, signal.SIGINT)
         controller.wait(timeout=2.0)
         assert _process_is_running(worker_pid)
-        assert _process_is_running(int(torchrun_pid.read_text()))
+        assert _process_is_running(torchrun_process_pid)
     finally:
-        if controller.poll() is None:
-            os.killpg(controller.pid, signal.SIGTERM)
-            controller.wait(timeout=2.0)
-        if worker_pid is not None and _process_is_running(worker_pid):
-            os.killpg(worker_pid, signal.SIGTERM)
-            _wait_for_process_exit(worker_pid)
+        try:
+            controller_pids = [controller.pid]
+            if tail_process_pid is not None:
+                controller_pids.append(tail_process_pid)
+            _terminate_process_group(controller.pid, controller_pids)
+        finally:
+            if worker_pid is not None:
+                worker_pids = [worker_pid]
+                if torchrun_process_pid is not None:
+                    worker_pids.append(torchrun_process_pid)
+                _terminate_process_group(worker_pid, worker_pids)
 
 
 @pytest.mark.parametrize(
