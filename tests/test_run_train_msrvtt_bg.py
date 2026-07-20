@@ -245,6 +245,7 @@ def test_worker_preserves_validation_failures(
 
 def test_repository_has_one_supported_msrvtt_training_script():
     assert SCRIPT.is_file()
+    assert os.access(SCRIPT, os.X_OK)
     assert not (REPOSITORY / "train_msrvtt.sh").exists()
     subprocess.run(
         ["bash", "-n", str(SCRIPT), str(REPOSITORY / "run_train_bg.sh")],
