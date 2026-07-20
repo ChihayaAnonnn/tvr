@@ -199,7 +199,7 @@ def _temporary_argv(argv: list[str]):
 
 
 def build_task_args(cli_args: argparse.Namespace, checkpoint: str):
-    """Build a main_task_retrieval Namespace matching train_msrvtt.sh."""
+    """Build a main_task_retrieval Namespace matching run_train_msrvtt_bg.sh."""
 
     from main_task_retrieval import get_args
 
