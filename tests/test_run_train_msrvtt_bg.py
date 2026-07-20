@@ -82,6 +82,33 @@ def _terminate_process_group(process_group: int, pids: list[int]) -> None:
         _wait_for_processes_exit(process_group, pids)
 
 
+def _terminate_controller_process_group(
+    controller: subprocess.Popen[str], pids: list[int]
+) -> None:
+    process_group = controller.pid
+    if controller.returncode is None:
+        try:
+            os.killpg(process_group, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    try:
+        controller.wait(timeout=2.0)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process_group, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        controller.wait(timeout=2.0)
+    try:
+        _wait_for_processes_exit(process_group, pids)
+    except AssertionError:
+        try:
+            os.killpg(process_group, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        _wait_for_processes_exit(process_group, pids)
+
+
 def _copy_script(tmp_path: Path) -> Path:
     copied = tmp_path / SCRIPT.name
     shutil.copy2(SCRIPT, copied)
@@ -103,6 +130,31 @@ def _environment(tmp_path: Path, fake_bin: Path) -> dict[str, str]:
         }
     )
     return environment
+
+
+def test_controller_cleanup_reaps_exited_session_leader():
+    controller = subprocess.Popen(
+        ["bash", "-c", "exit 0"],
+        start_new_session=True,
+    )
+    try:
+        os.waitid(os.P_PID, controller.pid, os.WEXITED | os.WNOWAIT)
+        with pytest.raises(AssertionError):
+            _terminate_process_group(controller.pid, [controller.pid])
+        assert _process_is_running(controller.pid)
+
+        _terminate_controller_process_group(controller, [controller.pid])
+        assert controller.poll() is not None
+        assert not _process_is_running(controller.pid)
+    finally:
+        try:
+            controller.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(controller.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            controller.wait(timeout=2.0)
 
 
 def test_controller_relaunches_same_script_and_tails_log(tmp_path):
@@ -223,7 +275,7 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
             controller_pids = [controller.pid]
             if tail_process_pid is not None:
                 controller_pids.append(tail_process_pid)
-            _terminate_process_group(controller.pid, controller_pids)
+            _terminate_controller_process_group(controller, controller_pids)
         finally:
             if worker_pid is not None:
                 worker_pids = [worker_pid]
