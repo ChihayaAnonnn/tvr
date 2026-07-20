@@ -26,6 +26,7 @@ from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modules.modeling import UATVR
 from modules.optimization import BertAdam
+from modules.rspr_rerank import rerank_top_r
 from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
 from util import get_logger, parallel_apply
 
@@ -70,6 +71,13 @@ def validate_rspr_cli(args):
     if args.rspr_mode == "legacy":
         return
 
+    if (
+        args.rspr_mode in {"mean", "stochastic"}
+        and args.rspr_top_r > 0
+        and getattr(args, "DSL", False)
+    ):
+        raise ValueError("DSL cannot be combined with RSPR Top-R reranking")
+
     if args.rspr_mode == "mean" and args.rspr_sample_count != 1:
         raise ValueError("mean mode requires sample_count=1")
     if args.rspr_mode == "stochastic":
@@ -82,6 +90,8 @@ def validate_rspr_cli(args):
         "rspr_match_temperature",
         "rspr_prob_temperature",
         "rspr_rank_temperature",
+        "rspr_det_temperature",
+        "rspr_rerank_temperature",
         "rspr_prior_std",
         "rspr_pair_chunk_size",
     ):
@@ -979,24 +989,34 @@ def _run_on_single_gpu(
     device = next(model.parameters()).device
     chunk_size = getattr(args, "eval_vid_chunk_size", 128)
     n_vid = visual_output_all.size(0)
+    rspr_eval = args.rspr_mode in {"mean", "stochastic"}
     video_chunks = []
+    video_distributions = []
     for v_start in range(0, n_vid, chunk_size):
         v_end = min(v_start + chunk_size, n_vid)
-        video_chunks.append(
-            (
-                visual_output_all[v_start:v_end].to(device),
-                video_mask_all[v_start:v_end].to(device),
-            )
+        video_chunk = (
+            visual_output_all[v_start:v_end].to(device),
+            video_mask_all[v_start:v_end].to(device),
         )
+        video_chunks.append(video_chunk)
+        if rspr_eval:
+            video_distributions.append(
+                model.get_rspr_video_distribution(*video_chunk)
+            )
     del visual_output_all, video_mask_all
 
     sim_matrix = []
+    text_distributions = []
     for idx1, b1 in enumerate(batch_list_t):
         input_mask, _segment_ids, *_tmp = b1
         sequence_output, text_token = batch_sequence_output_list[idx1]
         sequence_output = sequence_output.to(device)
         text_token = text_token.to(device)
         input_mask = input_mask.to(device)
+        if rspr_eval:
+            text_distributions.append(
+                model.get_rspr_text_distribution(text_token, input_mask)
+            )
 
         row_logits = []
         for visual_output, video_mask in video_chunks:
@@ -1012,6 +1032,34 @@ def _run_on_single_gpu(
 
         b1_all_v_logits = torch.cat(row_logits, dim=1).cpu()
         sim_matrix.append(b1_all_v_logits.detach().numpy())
+
+    if rspr_eval:
+        deterministic_logits = torch.from_numpy(
+            np.concatenate(tuple(sim_matrix), axis=0)
+        ).to(device)
+        output = rerank_top_r(
+            deterministic_logits,
+            torch.cat([distribution.mean for distribution in text_distributions]),
+            torch.cat([distribution.mean for distribution in video_distributions]),
+            torch.cat(
+                [distribution.samples for distribution in text_distributions]
+            ),
+            torch.cat(
+                [distribution.samples for distribution in video_distributions]
+            ),
+            model.rspr.matcher,
+            top_r=args.rspr_top_r,
+            deterministic_temperature=args.rspr_det_temperature,
+            probabilistic_temperature=args.rspr_rerank_temperature,
+            probabilistic_weight=args.rspr_rerank_weight,
+            pair_chunk_size=args.rspr_pair_chunk_size,
+        )
+        return {
+            "t2v": output.text_to_video_logits.detach().cpu().numpy(),
+            "v2t": output.video_to_text_logits.detach().cpu().numpy(),
+            "mean": output.mean_logits.detach().cpu().numpy(),
+            "uncertainty": output.pair_uncertainty.detach().cpu().numpy(),
+        }
 
     return sim_matrix
 
@@ -1035,6 +1083,55 @@ def select_multi_sentence_video_rows(batch_start, batch_size, cut_off_points):
     ]
 
 
+def _reshape_multi_sentence_matrix(sim_matrix, cut_off_points):
+    max_length = max(
+        end - start
+        for start, end in zip([0] + cut_off_points[:-1], cut_off_points)
+    )
+    grouped = []
+    for start, end in zip([0] + cut_off_points[:-1], cut_off_points):
+        padding = np.full(
+            (max_length - end + start, sim_matrix.shape[1]),
+            -np.inf,
+        )
+        grouped.append(
+            np.concatenate((sim_matrix[start:end], padding), axis=0)
+        )
+    return np.stack(tuple(grouped), axis=0)
+
+
+def _compute_directional_metrics(
+    text_to_video_matrix,
+    video_to_text_matrix,
+    *,
+    cut_off_points=None,
+    independent_directions=True,
+):
+    if cut_off_points is None:
+        return (
+            compute_metrics(text_to_video_matrix),
+            compute_metrics(video_to_text_matrix.T),
+        )
+
+    text_to_video_grouped = _reshape_multi_sentence_matrix(
+        text_to_video_matrix,
+        cut_off_points,
+    )
+    multi_caption_v2t = (
+        video_to_text_matrix
+        if independent_directions
+        else text_to_video_matrix
+    )
+    video_to_text_grouped = _reshape_multi_sentence_matrix(
+        multi_caption_v2t,
+        cut_off_points,
+    )
+    return (
+        tensor_text_to_video_metrics(text_to_video_grouped),
+        compute_metrics(tensor_video_to_text_sim(video_to_text_grouped)),
+    )
+
+
 def evaluate_training_checkpoint(
     args,
     model,
@@ -1053,6 +1150,10 @@ def evaluate_training_checkpoint(
 
 
 def eval_epoch(args, model, eval_dataloader, device, n_gpu):
+    rspr_eval = args.rspr_mode in {"mean", "stochastic"}
+    if rspr_eval and args.rspr_top_r > 0 and args.DSL:
+        raise ValueError("DSL cannot be combined with RSPR Top-R reranking")
+
     if hasattr(model, "module"):
         model = model.module.to(device)
     else:
@@ -1151,7 +1252,11 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
         # 2. calculate the similarity
         # ----------------------------------
         torch.cuda.empty_cache()
-        if n_gpu > 1 and "LOCAL_RANK" not in os.environ:
+        if (
+            n_gpu > 1
+            and "LOCAL_RANK" not in os.environ
+            and not rspr_eval
+        ):
             device_ids = list(range(n_gpu))
             batch_list_t_splits = []
             batch_list_v_splits = []
@@ -1197,8 +1302,10 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
             for idx in range(len(parallel_outputs)):
                 sim_matrix += parallel_outputs[idx]
             sim_matrix = np.concatenate(tuple(sim_matrix), axis=0)
+            v2t_directional_matrix = sim_matrix
+            mus_matrix = sim_matrix
         else:
-            sim_matrix = _run_on_single_gpu(
+            retrieval_output = _run_on_single_gpu(
                 model,
                 args,
                 batch_list_t,
@@ -1206,11 +1313,18 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
                 batch_sequence_output_list,
                 batch_visual_output_list,
             )
-            sim_matrix = np.concatenate(tuple(sim_matrix), axis=0)
+            if rspr_eval:
+                sim_matrix = retrieval_output["t2v"]
+                v2t_directional_matrix = retrieval_output["v2t"]
+                mus_matrix = retrieval_output["mean"]
+            else:
+                sim_matrix = np.concatenate(tuple(retrieval_output), axis=0)
+                v2t_directional_matrix = sim_matrix
+                mus_matrix = sim_matrix
 
     # MUS 诊断日志：在相似度矩阵整合完成后、指标计算前输出
     if getattr(args, "log_mus_scores", False):
-        _log_mus_scores_tsv(args, sim_matrix)
+        _log_mus_scores_tsv(args, mus_matrix)
 
     if args.DSL:  # using dual softmax during evaluation
         logger.info("\t Using Dual Softmax evaluation.")
@@ -1223,35 +1337,34 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
         v2t_matrix = v2t_matrix * F.softmax(v2t_matrix / 1, dim=0) * len(v2t_matrix)
         v2t_matrix = v2t_matrix.detach().numpy()
 
+        v2t_directional_matrix = v2t_matrix.T
+    elif not rspr_eval:
+        v2t_directional_matrix = sim_matrix
+
     if multi_sentence_:
         logger.info("before reshape, sim matrix size: {} x {}".format(sim_matrix.shape[0], sim_matrix.shape[1]))
-        max_length = max(
-            e_ - s_
-            for s_, e_ in zip([0] + cut_off_points_[:-1], cut_off_points_)
-        )
-        sim_matrix_new = []
-        for s_, e_ in zip([0] + cut_off_points_[:-1], cut_off_points_):
-            sim_matrix_new.append(
-                np.concatenate(
-                    (sim_matrix[s_:e_], np.full((max_length - e_ + s_, sim_matrix.shape[1]), -np.inf)), axis=0
-                )
-            )
-        sim_matrix = np.stack(tuple(sim_matrix_new), axis=0)
+        grouped_shape = _reshape_multi_sentence_matrix(
+            sim_matrix,
+            cut_off_points_,
+        ).shape
         logger.info(
             "after reshape, sim matrix size: {} x {} x {}".format(
-                sim_matrix.shape[0], sim_matrix.shape[1], sim_matrix.shape[2]
+                grouped_shape[0], grouped_shape[1], grouped_shape[2]
             )
         )
 
-        tv_metrics = tensor_text_to_video_metrics(sim_matrix)
-        vt_metrics = compute_metrics(tensor_video_to_text_sim(sim_matrix))
+        tv_metrics, vt_metrics = _compute_directional_metrics(
+            sim_matrix,
+            v2t_directional_matrix,
+            cut_off_points=cut_off_points_,
+            independent_directions=rspr_eval,
+        )
     else:
         logger.info("Retrieval Evaluation | #Text: %d, #Video: %d", sim_matrix.shape[0], sim_matrix.shape[1])
-        tv_metrics = compute_metrics(sim_matrix)
-        if not args.DSL:
-            vt_metrics = compute_metrics(sim_matrix.T)
-        else:
-            vt_metrics = compute_metrics(v2t_matrix)
+        tv_metrics, vt_metrics = _compute_directional_metrics(
+            sim_matrix,
+            v2t_directional_matrix,
+        )
 
     logger.info(
         "  T2V | R@1: %5.1f  R@5: %5.1f  R@10: %5.1f  MdR: %5.1f  MnR: %5.1f",

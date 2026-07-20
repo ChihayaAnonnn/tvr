@@ -1,27 +1,31 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import logging
 
-
 import torch
 from torch import nn
-
-from modules.until_module import PreTrainedModel, AllGather, CrossEn, MILNCELoss, MILNCELoss_BoF, KLdivergence, MultiPositiveCrossEn
-from modules.module_cross import CrossModel, CrossConfig, Transformer as TransformerClip
-from modules.stochastic_prototype_ranking import RSPRCore
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from modules.module_clip import CLIP, convert_weights
-from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
+from modules.module_cross import CrossConfig, CrossModel
+from modules.module_cross import Transformer as TransformerClip
+from modules.stochastic_prototype_ranking import RSPRCore
+from modules.until_module import (
+    AllGather,
+    CrossEn,
+    KLdivergence,
+    MILNCELoss_BoF,
+    MultiPositiveCrossEn,
+    PreTrainedModel,
+)
+from prob_models.reparameterized_distribution import DistributionOutput
 
 try:
     from prob_models.pie_model import PIENet
-    from prob_models.uncertainty_module import UncertaintyModuleImage
     from prob_models.tensor_utils import l2_normalize, sample_gaussian_tensors
-    from prob_models.probemb import MCSoftContrastiveLoss
-except:
-    raise EnvironmentError
+    from prob_models.uncertainty_module import UncertaintyModuleImage
+except ImportError as error:
+    raise EnvironmentError from error
 
 logger = logging.getLogger(__name__)
 allgather = AllGather.apply
@@ -101,10 +105,10 @@ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
                     right_zeros = torch.zeros(*tuple(right_conv2_size), dtype=cp_weight.dtype, device=cp_weight.device)
 
                 cat_list = []
-                if left_zeros != None:
+                if left_zeros is not None:
                     cat_list.append(left_zeros)
                 cat_list.append(cp_weight.unsqueeze(2))
-                if right_zeros != None:
+                if right_zeros is not None:
                     cat_list.append(right_zeros)
                 cp_weight = torch.cat(cat_list, dim=2)
 
@@ -221,7 +225,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         transformer_width = clip_state_dict["ln_final.weight"].shape[0]
         transformer_heads = transformer_width // 64
         transformer_layers = len(
-            set(k.split(".")[2] for k in clip_state_dict if k.startswith(f"transformer.resblocks"))
+            set(k.split(".")[2] for k in clip_state_dict if k.startswith("transformer.resblocks"))
         )
 
         show_log(task_config, "\t embed_dim: {}".format(embed_dim))
@@ -702,6 +706,81 @@ class UATVR(CLIP4ClipPreTrainedModel):
         text_token[:, : text_original.size(1), :] += text_original
         return text_token, tempo_mask
 
+    def _get_rspr_distribution(
+        self,
+        tokens: torch.Tensor,
+        mask: torch.Tensor,
+        *,
+        modality: str,
+    ) -> DistributionOutput:
+        if self.rspr is None or self.rspr_mode not in {"mean", "stochastic"}:
+            raise RuntimeError(
+                "RSPR distributions require mean or stochastic mode"
+            )
+
+        original_length = tokens.size(1)
+        if modality == "text":
+            distribution = self.rspr.text_distribution
+            fixed_noise = self.rspr.fixed_text_noise
+        else:
+            distribution = self.rspr.video_distribution
+            fixed_noise = self.rspr.fixed_video_noise
+
+        if getattr(self, "sim_header", "seqTransf") == "seqTransf":
+            if modality == "text":
+                refined, refined_mask = self._refine_text_tokens(tokens, mask)
+            else:
+                refined, refined_mask = self._refine_video_tokens(tokens, mask)
+        else:
+            refined, refined_mask = tokens, mask
+
+        mean_only = self.rspr_mode == "mean"
+        sample_count = (
+            1
+            if mean_only
+            else (
+                self.rspr.sample_count
+                if self.training
+                else self.rspr.eval_sample_count
+            )
+        )
+        noise = None
+        if not self.training and not mean_only:
+            noise = self.rspr._evaluation_noise(
+                fixed_noise,
+                batch_size=tokens.size(0),
+                sample_count=sample_count,
+            )
+        return distribution(
+            refined[:, :original_length],
+            refined_mask[:, :original_length],
+            sample_count=sample_count,
+            noise=noise,
+            mean_only=mean_only,
+        )
+
+    def get_rspr_text_distribution(
+        self, text_token: torch.Tensor, attention_mask: torch.Tensor
+    ) -> DistributionOutput:
+        """Encode one text batch with refinement and the text RSPR head."""
+
+        return self._get_rspr_distribution(
+            text_token,
+            attention_mask,
+            modality="text",
+        )
+
+    def get_rspr_video_distribution(
+        self, visual_output: torch.Tensor, video_mask: torch.Tensor
+    ) -> DistributionOutput:
+        """Encode one video batch with refinement and the video RSPR head."""
+
+        return self._get_rspr_distribution(
+            visual_output,
+            video_mask,
+            modality="video",
+        )
+
     def _loose_similarity(
         self,
         sequence_output,
@@ -792,12 +871,10 @@ class UATVR(CLIP4ClipPreTrainedModel):
         prob_video = self.probabilistic_video(visual_pooled, visual_output[:, 0:frame_num, :].contiguous())
         prob_video_embedding = prob_video["embedding"]  # 从分布中采样m个embedding
         prob_video_logsigma = prob_video["logsigma"]  # 方差
-        prob_video_mean = prob_video["mean"]
 
         prob_text = self.probabilistic_text(text_pooled, text_token[:, 0:word_num, :].contiguous())
         prob_text_embedding = prob_text["embedding"]  # b n 512
         prob_text_logsigma = prob_text["logsigma"]  # bs 512
-        prob_text_mean = prob_text["mean"]  # bs 512
 
         if self.training:
             ####################################################################
@@ -863,9 +940,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         retrieve_logits = torch.einsum("atd,bvd->abtv", [text_token, frame_token])
         retrieve_logits = torch.einsum("abtv,at->abtv", [retrieve_logits, attention_mask])
         retrieve_logits = torch.einsum("abtv,bv->abtv", [retrieve_logits, video_mask])
-        text_sum = attention_mask.sum(-1)
-        video_sum = video_mask.sum(-1)
-
         t2v_logits, max_idx1 = retrieve_logits.max(dim=-1)  # abtv -> abt
         t2v_logits = torch.einsum("abt,at->ab", [t2v_logits, text_weight])
 
