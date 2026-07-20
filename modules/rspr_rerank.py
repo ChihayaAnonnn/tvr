@@ -23,6 +23,45 @@ class TopRRetrievalOutput:
     pair_uncertainty: torch.Tensor
 
 
+def _stable_descending_ranks(scores: torch.Tensor) -> torch.Tensor:
+    order = torch.argsort(
+        scores,
+        dim=1,
+        descending=True,
+        stable=True,
+    )
+    ranks = torch.empty_like(order)
+    rank_values = torch.arange(
+        scores.size(1),
+        device=scores.device,
+        dtype=order.dtype,
+    ).unsqueeze(0).expand_as(order)
+    ranks.scatter_(1, order, rank_values)
+    return ranks
+
+
+def build_full_ranking_scores(
+    sparse_logits: torch.Tensor,
+    mean_logits: torch.Tensor,
+) -> torch.Tensor:
+    """Return unique finite scores preserving Top-R then mean-tail order."""
+
+    if sparse_logits.ndim != 2 or mean_logits.shape != sparse_logits.shape:
+        raise ValueError(
+            "sparse_logits and mean_logits must have the same 2D shape"
+        )
+
+    selected = torch.isfinite(sparse_logits)
+    selected_ranks = _stable_descending_ranks(sparse_logits)
+    mean_ranks = _stable_descending_ranks(mean_logits)
+    combined_ranks = torch.where(
+        selected,
+        selected_ranks,
+        sparse_logits.size(1) + mean_ranks,
+    )
+    return -combined_ranks.to(dtype=torch.float64)
+
+
 def _score_selected_pairs(
     text_indices: torch.Tensor,
     video_indices: torch.Tensor,
@@ -91,13 +130,23 @@ def rerank_top_r(
     t2v_count = min(top_r, video_count)
     v2t_count = min(top_r, text_count)
 
-    t2v_video_indices = mean_logits.topk(t2v_count, dim=1).indices
+    t2v_video_indices = torch.argsort(
+        mean_logits,
+        dim=1,
+        descending=True,
+        stable=True,
+    )[:, :t2v_count]
     t2v_text_indices = (
         torch.arange(text_count, device=mean_logits.device)
         .unsqueeze(1)
         .expand(-1, t2v_count)
     )
-    v2t_text_indices = mean_logits.topk(v2t_count, dim=0).indices
+    v2t_text_indices = torch.argsort(
+        mean_logits,
+        dim=0,
+        descending=True,
+        stable=True,
+    )[:v2t_count]
     v2t_video_indices = (
         torch.arange(video_count, device=mean_logits.device)
         .unsqueeze(0)

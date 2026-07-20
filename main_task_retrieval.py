@@ -26,7 +26,7 @@ from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modules.modeling import UATVR
 from modules.optimization import BertAdam
-from modules.rspr_rerank import rerank_top_r
+from modules.rspr_rerank import build_full_ranking_scores, rerank_top_r
 from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
 from util import get_logger, parallel_apply
 
@@ -1100,6 +1100,22 @@ def _reshape_multi_sentence_matrix(sim_matrix, cut_off_points):
     return np.stack(tuple(grouped), axis=0)
 
 
+def _build_rspr_metric_matrices(
+    text_to_video_logits,
+    video_to_text_logits,
+    mean_logits,
+):
+    text_to_video = build_full_ranking_scores(
+        torch.from_numpy(text_to_video_logits),
+        torch.from_numpy(mean_logits),
+    )
+    video_to_text = build_full_ranking_scores(
+        torch.from_numpy(video_to_text_logits.T),
+        torch.from_numpy(mean_logits.T),
+    ).T
+    return text_to_video.numpy(), video_to_text.numpy()
+
+
 def _compute_directional_metrics(
     text_to_video_matrix,
     video_to_text_matrix,
@@ -1341,10 +1357,19 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
     elif not rspr_eval:
         v2t_directional_matrix = sim_matrix
 
+    metric_t2v_matrix = sim_matrix
+    metric_v2t_matrix = v2t_directional_matrix
+    if rspr_eval:
+        metric_t2v_matrix, metric_v2t_matrix = _build_rspr_metric_matrices(
+            sim_matrix,
+            v2t_directional_matrix,
+            mus_matrix,
+        )
+
     if multi_sentence_:
         logger.info("before reshape, sim matrix size: {} x {}".format(sim_matrix.shape[0], sim_matrix.shape[1]))
         grouped_shape = _reshape_multi_sentence_matrix(
-            sim_matrix,
+            metric_t2v_matrix,
             cut_off_points_,
         ).shape
         logger.info(
@@ -1354,16 +1379,16 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
         )
 
         tv_metrics, vt_metrics = _compute_directional_metrics(
-            sim_matrix,
-            v2t_directional_matrix,
+            metric_t2v_matrix,
+            metric_v2t_matrix,
             cut_off_points=cut_off_points_,
             independent_directions=rspr_eval,
         )
     else:
         logger.info("Retrieval Evaluation | #Text: %d, #Video: %d", sim_matrix.shape[0], sim_matrix.shape[1])
         tv_metrics, vt_metrics = _compute_directional_metrics(
-            sim_matrix,
-            v2t_directional_matrix,
+            metric_t2v_matrix,
+            metric_v2t_matrix,
         )
 
     logger.info(

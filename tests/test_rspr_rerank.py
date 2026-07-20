@@ -1,3 +1,4 @@
+import logging
 from types import MethodType, SimpleNamespace
 
 import pytest
@@ -6,7 +7,9 @@ import torch.nn.functional as F
 from torch import nn
 
 import main_task_retrieval
+import modules.rspr_rerank as rspr_rerank
 from main_task_retrieval import _run_on_single_gpu, validate_rspr_cli
+from metrics import compute_metrics
 from modules.modeling import UATVR
 from modules.rspr_rerank import rerank_top_r
 from modules.stochastic_prototype_ranking import (
@@ -88,6 +91,35 @@ def test_top_r_candidate_masks_are_direction_independent():
         torch.isfinite(output.pair_uncertainty),
         expected_t2v_mask | expected_v2t_mask,
     )
+
+
+def test_mean_recall_breaks_complete_ties_by_original_candidate_index():
+    deterministic_logits = torch.zeros(5, 5)
+    text_mean = torch.zeros(5, 8)
+    video_mean = torch.zeros(5, 8)
+    text_samples = torch.zeros(5, 4, 8)
+    video_samples = torch.zeros(5, 4, 8)
+
+    output = rerank_top_r(
+        deterministic_logits,
+        text_mean,
+        video_mean,
+        text_samples,
+        video_samples,
+        _SpyMatcher(),
+        top_r=2,
+        deterministic_temperature=1.0,
+        probabilistic_temperature=1.0,
+        probabilistic_weight=1.0,
+        pair_chunk_size=4,
+    )
+
+    expected_t2v = torch.zeros(5, 5, dtype=torch.bool)
+    expected_t2v[:, :2] = True
+    expected_v2t = torch.zeros(5, 5, dtype=torch.bool)
+    expected_v2t[:2, :] = True
+    assert torch.equal(torch.isfinite(output.text_to_video_logits), expected_t2v)
+    assert torch.equal(torch.isfinite(output.video_to_text_logits), expected_v2t)
 
 
 def test_top_r_uses_probability_formula_and_mean_recall_candidates():
@@ -538,3 +570,201 @@ def test_multi_caption_metrics_can_preserve_legacy_single_matrix(monkeypatch):
     )
 
     assert (seen["v2t"] < 100).all()
+
+
+def _complete_metric_scores(sparse_scores, mean_scores):
+    return rspr_rerank.build_full_ranking_scores(
+        torch.as_tensor(sparse_scores),
+        torch.as_tensor(mean_scores),
+    ).numpy()
+
+
+def test_full_metric_ranking_counts_partial_top_r_misses_once_each():
+    sparse = torch.tensor(
+        [
+            [5.0, -torch.inf, -torch.inf],
+            [5.0, -torch.inf, -torch.inf],
+            [5.0, -torch.inf, -torch.inf],
+        ]
+    )
+    mean = torch.tensor(
+        [
+            [3.0, 2.0, 1.0],
+            [3.0, 2.0, 1.0],
+            [3.0, 2.0, 1.0],
+        ]
+    )
+
+    metrics = compute_metrics(_complete_metric_scores(sparse, mean))
+
+    assert metrics["R1"] == pytest.approx(100 / 3)
+    assert metrics["cols"] == [0, 1, 2]
+
+
+def test_full_metric_ranking_all_top_r_misses_return_zero_recall():
+    sparse = torch.tensor(
+        [
+            [-torch.inf, 5.0, -torch.inf],
+            [-torch.inf, -torch.inf, 5.0],
+            [5.0, -torch.inf, -torch.inf],
+        ]
+    )
+    mean = torch.tensor(
+        [
+            [3.0, 2.0, 1.0],
+            [1.0, 3.0, 2.0],
+            [2.0, 1.0, 3.0],
+        ]
+    )
+
+    metrics = compute_metrics(_complete_metric_scores(sparse, mean))
+
+    assert metrics["R1"] == 0.0
+    assert metrics["R5"] == 100.0
+    assert metrics["cols"] == [1, 1, 1]
+
+
+def test_multi_caption_real_misses_count_but_reshape_padding_does_not():
+    sparse_t2v = torch.tensor(
+        [
+            [5.0, -torch.inf],
+            [-torch.inf, 5.0],
+            [5.0, -torch.inf],
+        ]
+    )
+    sparse_v2t = torch.tensor(
+        [
+            [5.0, 5.0],
+            [-torch.inf, -torch.inf],
+            [-torch.inf, -torch.inf],
+        ]
+    )
+    mean = torch.tensor(
+        [
+            [2.0, 1.0],
+            [2.0, 1.0],
+            [2.0, 1.0],
+        ]
+    )
+    t2v_metric, v2t_metric = main_task_retrieval._build_rspr_metric_matrices(
+        sparse_t2v.numpy(),
+        sparse_v2t.numpy(),
+        mean.numpy(),
+    )
+
+    tv_metrics, vt_metrics = main_task_retrieval._compute_directional_metrics(
+        t2v_metric,
+        v2t_metric,
+        cut_off_points=[2, 3],
+    )
+
+    assert tv_metrics["R1"] == pytest.approx(100 / 3)
+    assert tv_metrics["R5"] == 100.0
+    assert vt_metrics["R1"] == 50.0
+    assert vt_metrics["R5"] == 100.0
+
+
+def test_directional_metric_matrices_count_all_misses_in_both_directions():
+    sparse_t2v = torch.tensor(
+        [
+            [-torch.inf, 5.0, -torch.inf],
+            [-torch.inf, -torch.inf, 5.0],
+            [5.0, -torch.inf, -torch.inf],
+        ]
+    )
+    sparse_v2t = sparse_t2v.T.contiguous()
+    mean = torch.tensor(
+        [
+            [3.0, 2.0, 1.0],
+            [1.0, 3.0, 2.0],
+            [2.0, 1.0, 3.0],
+        ]
+    )
+
+    t2v_metric, v2t_metric = main_task_retrieval._build_rspr_metric_matrices(
+        sparse_t2v.numpy(),
+        sparse_v2t.numpy(),
+        mean.numpy(),
+    )
+    tv_metrics, vt_metrics = main_task_retrieval._compute_directional_metrics(
+        t2v_metric,
+        v2t_metric,
+    )
+
+    assert tv_metrics["R1"] == 0.0
+    assert vt_metrics["R1"] == 0.0
+    assert tv_metrics["cols"] == [1, 1, 1]
+    assert vt_metrics["cols"] == [1, 1, 1]
+
+
+def test_full_metric_ranking_breaks_mean_and_final_ties_by_original_index():
+    sparse = torch.tensor([[7.0, -torch.inf, 7.0, -torch.inf]])
+    mean = torch.zeros(1, 4)
+
+    metric_scores = torch.from_numpy(_complete_metric_scores(sparse, mean))
+
+    assert metric_scores.argsort(dim=1, descending=True).tolist() == [
+        [0, 2, 1, 3]
+    ]
+
+
+def test_fully_tied_metric_matrix_counts_each_query_exactly_once():
+    tied = torch.zeros(3, 3)
+
+    metrics = compute_metrics(_complete_metric_scores(tied, tied))
+
+    assert metrics["cols"] == [0, 1, 2]
+    assert metrics["R1"] == pytest.approx(100 / 3)
+
+
+def test_mean_only_eval_counts_each_fully_tied_query_once(monkeypatch):
+    tied = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ]
+    ).numpy()
+    retrieval_output = {
+        "t2v": tied.copy(),
+        "v2t": tied.copy(),
+        "mean": tied.copy(),
+        "uncertainty": torch.full((3, 3), torch.nan).numpy(),
+    }
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "_run_on_single_gpu",
+        lambda *_args, **_kwargs: retrieval_output,
+    )
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "logger",
+        logging.getLogger("test.rspr.mean_only_ties"),
+        raising=False,
+    )
+    model = nn.Linear(1, 1)
+
+    class _EmptyLoader:
+        dataset = SimpleNamespace(multi_sentence_per_video=False)
+
+        def __iter__(self):
+            return iter(())
+
+    dataloader = _EmptyLoader()
+    args = SimpleNamespace(
+        rspr_mode="mean",
+        rspr_top_r=0,
+        DSL=False,
+        local_rank=0,
+        log_mus_scores=False,
+    )
+
+    r1 = main_task_retrieval.eval_epoch(
+        args,
+        model,
+        dataloader,
+        torch.device("cpu"),
+        n_gpu=1,
+    )
+
+    assert r1 == pytest.approx(200 / 3)
