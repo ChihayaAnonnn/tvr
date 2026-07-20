@@ -1,4 +1,5 @@
 import os
+import signal
 import shutil
 import subprocess
 import time
@@ -18,7 +19,8 @@ def _write_executable(path: Path, body: str) -> None:
 
 def _read_nul_arguments(path: Path) -> list[str]:
     payload = path.read_bytes()
-    return [item.decode() for item in payload.split(b"\0") if item]
+    assert payload.endswith(b"\0")
+    return [item.decode() for item in payload[:-1].split(b"\0")]
 
 
 def _wait_for(path: Path) -> None:
@@ -26,6 +28,31 @@ def _wait_for(path: Path) -> None:
     while not path.exists() and time.monotonic() < deadline:
         time.sleep(0.01)
     assert path.exists()
+
+
+def _wait_for_text(path: Path, text: str) -> None:
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        if path.exists() and text in path.read_text():
+            return
+        time.sleep(0.01)
+    assert path.exists()
+    assert text in path.read_text()
+
+
+def _process_is_running(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def _wait_for_process_exit(pid: int) -> None:
+    deadline = time.monotonic() + 2.0
+    while _process_is_running(pid) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert not _process_is_running(pid)
 
 
 def _copy_script(tmp_path: Path) -> Path:
@@ -56,15 +83,39 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     setsid_arguments = tmp_path / "setsid.args"
+    setsid_pid = tmp_path / "setsid.pid"
     tail_arguments = tmp_path / "tail.args"
     pid_file = tmp_path / "train.pid"
+    torchrun_pid = tmp_path / "torchrun.pid"
+    log_marker = "fake worker is running"
+    real_setsid = shutil.which("setsid")
+    real_tail = shutil.which("tail")
+    assert real_setsid is not None
+    assert real_tail is not None
     _write_executable(
         fake_bin / "setsid",
-        'printf "%s\\0" "$@" > "$SETSID_ARGUMENTS"\n',
+        (
+            'printf "%s\\0" "$@" > "$SETSID_ARGUMENTS"\n'
+            'printf "%s" "$$" > "$SETSID_PID"\n'
+            f'exec "{real_setsid}" "$@"\n'
+        ),
     )
     _write_executable(
         fake_bin / "tail",
-        'printf "%s\\0" "$@" > "$TAIL_ARGUMENTS"\n',
+        (
+            'printf "%s\\0" "$@" > "$TAIL_ARGUMENTS"\n'
+            f'exec "{real_tail}" "$@"\n'
+        ),
+    )
+    _write_executable(fake_bin / "python3", "exit 0\n")
+    _write_executable(
+        fake_bin / "torchrun",
+        (
+            'printf "%s" "$$" > "$TORCHRUN_PID"\n'
+            f'printf "%s\\n" "{log_marker}"\n'
+            "trap 'exit 0' INT TERM\n"
+            "while :; do sleep 0.01; done\n"
+        ),
     )
     environment = _environment(tmp_path, fake_bin)
     environment.update(
@@ -75,13 +126,14 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
             "RUN_ID": "20260720_121314_rspr",
             "TRAIN_PID_FILE": str(pid_file),
             "SETSID_ARGUMENTS": str(setsid_arguments),
+            "SETSID_PID": str(setsid_pid),
             "TAIL_ARGUMENTS": str(tail_arguments),
+            "TORCHRUN_PID": str(torchrun_pid),
         }
     )
 
-    subprocess.run(
+    controller = subprocess.Popen(
         [
-            "bash",
             str(script),
             "--rspr_mode",
             "stochastic",
@@ -91,33 +143,72 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
         cwd=tmp_path,
         env=environment,
         text=True,
-        capture_output=True,
-        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
     )
+    worker_pid = None
+    try:
+        _wait_for(setsid_arguments)
+        _wait_for(pid_file)
+        _wait_for(setsid_pid)
+        _wait_for(torchrun_pid)
+        log_file = tmp_path / "logs/20260720/121314_rspr_train_msrvtt.log"
+        _wait_for_text(log_file, log_marker)
+        setsid_args = _read_nul_arguments(setsid_arguments)
+        assert setsid_args == [
+            "env",
+            "RUN_ID=20260720_121314_rspr",
+            "RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER=1",
+            "bash",
+            str(script),
+            "--rspr_mode",
+            "stochastic",
+            "--experiment_desc",
+            "two words",
+        ]
+        assert _read_nul_arguments(tail_arguments) == [
+            "-n",
+            "50",
+            "-F",
+            "logs/20260720/121314_rspr_train_msrvtt.log",
+        ]
+        worker_pid = int(pid_file.read_text().strip())
+        assert worker_pid == int(setsid_pid.read_text())
+        assert os.getsid(worker_pid) == worker_pid
+        assert _process_is_running(worker_pid)
+        assert _process_is_running(int(torchrun_pid.read_text()))
 
-    _wait_for(setsid_arguments)
-    setsid_args = _read_nul_arguments(setsid_arguments)
-    assert setsid_args == [
-        "env",
-        "RUN_ID=20260720_121314_rspr",
-        "RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER=1",
-        "bash",
-        str(script),
-        "--rspr_mode",
-        "stochastic",
-        "--experiment_desc",
-        "two words",
-    ]
-    assert _read_nul_arguments(tail_arguments) == [
-        "-n",
-        "50",
-        "-F",
-        "logs/20260720/121314_rspr_train_msrvtt.log",
-    ]
-    assert pid_file.read_text().strip().isdigit()
+        os.killpg(controller.pid, signal.SIGINT)
+        controller.wait(timeout=2.0)
+        assert _process_is_running(worker_pid)
+        assert _process_is_running(int(torchrun_pid.read_text()))
+    finally:
+        if controller.poll() is None:
+            os.killpg(controller.pid, signal.SIGTERM)
+            controller.wait(timeout=2.0)
+        if worker_pid is not None and _process_is_running(worker_pid):
+            os.killpg(worker_pid, signal.SIGTERM)
+            _wait_for_process_exit(worker_pid)
 
 
-def test_worker_runs_split_builder_and_torchrun_without_recursing(tmp_path):
+@pytest.mark.parametrize(
+    ("checkpointing", "extra_clip_arguments"),
+    (
+        (
+            "1",
+            [
+                "--clip_gradient_checkpointing",
+                "--clip_visual_checkpoint_layers",
+                "4",
+            ],
+        ),
+        ("0", []),
+    ),
+)
+def test_worker_runs_split_builder_and_torchrun_without_recursing(
+    tmp_path, checkpointing, extra_clip_arguments
+):
     script = _copy_script(tmp_path)
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -143,9 +234,18 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(tmp_path):
             'touch "$FORBIDDEN_CALL"\nexit 97\n',
         )
     environment = _environment(tmp_path, fake_bin)
+    if checkpointing == "0":
+        environment.update(
+            {
+                "RUN_ID": "a800_no_ckpt_unit",
+                "OUTPUT_DIR": str(tmp_path / "a800_no_ckpt_unit_checkpoints"),
+                "A800_THROUGHPUT_COMPARISON": "1",
+            }
+        )
     environment.update(
         {
             "RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER": "1",
+            "CLIP_GRADIENT_CHECKPOINTING": checkpointing,
             "PYTHON_ARGUMENTS": str(python_arguments),
             "TORCHRUN_ARGUMENTS": str(torchrun_arguments),
             "WORKER_ENVIRONMENT": str(worker_environment),
@@ -171,17 +271,96 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(tmp_path):
 
     assert not forbidden_call.exists()
     assert worker_environment.read_text() == "unset"
-    python_args = _read_nul_arguments(python_arguments)
-    assert python_args[0] == str(tmp_path / "scripts/build_msrvtt_trusted_split.py")
-    manifest_index = python_args.index("--manifest")
-    assert python_args[manifest_index + 1] == str(
-        tmp_path / "dataloaders/splits/msrvtt_trusted_v1_seed0.json"
-    )
+    split_manifest = tmp_path / "dataloaders/splits/msrvtt_trusted_v1_seed0.json"
+    generated_split_dir = tmp_path / "data/generated/msrvtt_trusted_v1"
+    assert _read_nul_arguments(python_arguments) == [
+        str(tmp_path / "scripts/build_msrvtt_trusted_split.py"),
+        "--train-csv",
+        "/dataset/csv/MSRVTT_train.9k.csv",
+        "--annotation-json",
+        "/dataset/annotation/MSRVTT_v2.json",
+        "--test-csv",
+        "/dataset/csv/MSRVTT_JSFUSION_test.csv",
+        "--manifest",
+        str(split_manifest),
+        "--output-dir",
+        str(generated_split_dir),
+    ]
     torchrun_args = _read_nul_arguments(torchrun_arguments)
-    assert "--nproc_per_node=2" in torchrun_args
-    assert str(tmp_path / "main_task_retrieval.py") in torchrun_args
-    assert "--run_final_test" in torchrun_args
-    assert torchrun_args[-4:] == [
+    output_dir = Path(environment["OUTPUT_DIR"])
+    assert torchrun_args == [
+        "--nproc_per_node=2",
+        "--master_addr=127.0.0.9",
+        "--master_port=29547",
+        str(tmp_path / "main_task_retrieval.py"),
+        "--do_train",
+        "--run_final_test",
+        "--num_thread_reader",
+        "8",
+        "--prefetch_factor",
+        "2",
+        "--epochs=5",
+        "--batch_size",
+        "256",
+        "--gradient_accumulation_steps",
+        "1",
+        "--n_display=20",
+        "--train_csv",
+        str(generated_split_dir / "train.csv"),
+        "--val_csv",
+        str(generated_split_dir / "val.csv"),
+        "--source_train_csv",
+        "/dataset/csv/MSRVTT_train.9k.csv",
+        "--test_csv",
+        "/dataset/csv/MSRVTT_JSFUSION_test.csv",
+        "--split_manifest",
+        str(split_manifest),
+        "--eval_split",
+        "val",
+        "--data_path",
+        "/dataset/annotation/MSRVTT_v2.json",
+        "--features_path",
+        "/dataset/videos/compressed_videos/msrvtt_224_12fps/",
+        "--tqfs_cache_dir",
+        "/home/xujie/.cache/uatvr/tqfs/msrvtt_trusted_v1_f1_m8_r224",
+        "--output_dir",
+        str(output_dir),
+        "--lr",
+        "1e-4",
+        "--max_words",
+        "32",
+        "--max_frames",
+        "8",
+        "--batch_size_val",
+        "16",
+        "--datatype",
+        "msrvtt",
+        "--expand_msrvtt_sentences",
+        "--feature_framerate",
+        "1",
+        "--coef_lr",
+        "1e-3",
+        "--freeze_layer_num",
+        "0",
+        "--slice_framepos",
+        "3",
+        "--linear_patch",
+        "2d",
+        "--sim_header",
+        "seqTransf",
+        "--pretrained_clip_name",
+        "ViT-B/16",
+        "--clip_layer_norm_precision",
+        "fp16",
+        *extra_clip_arguments,
+        "--extra_video_cls_num",
+        "2",
+        "--extra_text_cls_num",
+        "2",
+        "--experiment_profile",
+        "default",
+        "--experiment_desc",
+        "",
         "--rspr_mode",
         "stochastic",
         "--experiment_desc",
