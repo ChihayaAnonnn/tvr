@@ -31,6 +31,10 @@ MAX_WORDS_ATTRS=${MAX_WORDS_ATTRS:-77}
 EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-hygiene}   # default | hygiene
 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION:-fp16} # fp16 | fp32
 rspr_load_effective_config "$@" || exit $?
+if [[ "${#RSPR_TRAILING_ARGS[@]}" -ne 0 ]]; then
+  echo "Unsupported eval argument ${RSPR_TRAILING_ARGS[0]}; only RSPR overrides are accepted" >&2
+  exit 2
+fi
 if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
   echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
   exit 2
@@ -152,5 +156,4 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4}" \
   --batch_size_val 8 \
   --slice_framepos 3 \
   "${EXTRA_ARGS[@]}" \
-  "${RSPR_TRAILING_ARGS[@]}" \
   2>&1 | tee "${LOG_FILE}"

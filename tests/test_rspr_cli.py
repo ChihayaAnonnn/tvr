@@ -65,6 +65,15 @@ def test_get_args_exposes_exact_rspr_defaults(monkeypatch, tmp_path):
         ({"rspr_mode": "mean", "rspr_sample_count": 2}, "sample_count=1"),
         ({"rspr_mode": "stochastic", "rspr_sample_count": 3}, "positive even"),
         ({"rspr_mode": "stochastic", "rspr_eval_sample_count": 3}, "positive even"),
+        ({"rspr_mode": "stochastic", "rspr_hard_negatives": 0}, "hard_negatives"),
+        (
+            {
+                "rspr_mode": "mean",
+                "rspr_sample_count": 1,
+                "rspr_hard_negatives": -1,
+            },
+            "hard_negatives",
+        ),
         ({"rspr_mode": "off", "rspr_match_temperature": 0.0}, "positive"),
         ({"rspr_mode": "off", "rspr_prob_temperature": -0.1}, "positive"),
         ({"rspr_mode": "off", "rspr_rank_temperature": 0.0}, "positive"),

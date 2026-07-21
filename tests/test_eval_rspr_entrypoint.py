@@ -2,6 +2,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPOSITORY = Path(__file__).resolve().parents[1]
 SCRIPT = REPOSITORY / "eval.sh"
 
@@ -142,4 +144,41 @@ def test_eval_rejects_invalid_temperature_before_torchrun(tmp_path):
 
     assert result.returncode == 2
     assert "RSPR_MATCH_TEMPERATURE=0e0" in result.stderr
+    assert not torchrun_marker.exists()
+
+
+@pytest.mark.parametrize("argument", ("--eval_split", "--DSL", "--do_train"))
+def test_eval_rejects_non_rspr_trailing_arguments_before_split_or_torchrun(
+    tmp_path, argument
+):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    split_marker = tmp_path / "split.called"
+    torchrun_marker = tmp_path / "torchrun.called"
+    _write_executable(fake_bin / "python3", 'touch "$SPLIT_MARKER"\nexit 97\n')
+    _write_executable(fake_bin / "torchrun", 'touch "$TORCHRUN_MARKER"\nexit 97\n')
+    environment = _environment(tmp_path, fake_bin)
+    environment.update(
+        {
+            "DATATYPE": "msrvtt",
+            "SPLIT_MARKER": str(split_marker),
+            "TORCHRUN_MARKER": str(torchrun_marker),
+        }
+    )
+    arguments = ["bash", str(SCRIPT), argument]
+    if argument == "--eval_split":
+        arguments.append("test")
+
+    result = subprocess.run(
+        arguments,
+        cwd=REPOSITORY,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert f"Unsupported eval argument {argument}" in result.stderr
+    assert not split_marker.exists()
     assert not torchrun_marker.exists()

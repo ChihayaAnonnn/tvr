@@ -143,6 +143,10 @@ rspr_validate_effective_config() {
             fi
         done
     fi
+    if [[ "${RSPR_MODE}" == "mean" || "${RSPR_MODE}" == "stochastic" ]] && (( RSPR_HARD_NEGATIVES <= 0 )); then
+        echo "Unsupported RSPR_HARD_NEGATIVES=${RSPR_HARD_NEGATIVES}; expected a positive integer" >&2
+        return 2
+    fi
     for _RSPR_POSITIVE in RSPR_PRIOR_STD; do
         if ! rspr_is_positive_finite "${!_RSPR_POSITIVE}"; then
             echo "Unsupported ${_RSPR_POSITIVE}=${!_RSPR_POSITIVE}; expected a positive finite number" >&2

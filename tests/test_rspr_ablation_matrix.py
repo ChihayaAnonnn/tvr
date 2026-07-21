@@ -48,7 +48,7 @@ def test_print_shell_args_round_trips_without_launching_training(ablation, tmp_p
     for command in ("torchrun", "bash", "setsid"):
         path = fake_bin / command
         path.write_text(
-            "#!/usr/bin/env bash\n"
+            "#!/bin/bash\n"
             "touch \"$TRAINING_LAUNCH_MARKER\"\n"
             "exit 97\n"
         )

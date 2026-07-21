@@ -318,6 +318,14 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
             {"RSPR_MODE": "legacy", "RSPR_FREEZE_CLIP": "1"},
             "RSPR freeze flags require mean or stochastic mode",
         ),
+        (
+            {"RSPR_MODE": "stochastic", "RSPR_HARD_NEGATIVES": "0"},
+            "RSPR_HARD_NEGATIVES=0",
+        ),
+        (
+            {"RSPR_MODE": "stochastic", "RSPR_HARD_NEGATIVES": "-1"},
+            "RSPR_HARD_NEGATIVES=-1",
+        ),
     ),
 )
 def test_controller_rejects_invalid_rspr_before_detaching_or_building_split(

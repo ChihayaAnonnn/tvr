@@ -85,6 +85,10 @@ def validate_rspr_cli(args):
             value = getattr(args, name)
             if isinstance(value, bool) or value <= 0 or value % 2:
                 raise ValueError(f"--{name} must be a positive even integer")
+    if args.rspr_mode in {"mean", "stochastic"} and (
+        isinstance(args.rspr_hard_negatives, bool) or args.rspr_hard_negatives <= 0
+    ):
+        raise ValueError("--rspr_hard_negatives must be a positive integer")
 
     for name in (
         "rspr_match_temperature",
