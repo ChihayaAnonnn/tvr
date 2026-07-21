@@ -83,6 +83,28 @@ run_worker() {
     TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
     TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS:-1}
     FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-0}
+    RSPR_MODE=${RSPR_MODE:-legacy}
+    RSPR_SAMPLE_COUNT=${RSPR_SAMPLE_COUNT:-4}
+    RSPR_EVAL_SAMPLE_COUNT=${RSPR_EVAL_SAMPLE_COUNT:-8}
+    RSPR_MATCH_MODE=${RSPR_MATCH_MODE:-soft}
+    RSPR_DETACH_SAMPLES=${RSPR_DETACH_SAMPLES:-0}
+    RSPR_MATCH_TEMPERATURE=${RSPR_MATCH_TEMPERATURE:-0.07}
+    RSPR_PROB_TEMPERATURE=${RSPR_PROB_TEMPERATURE:-0.07}
+    RSPR_RANK_TEMPERATURE=${RSPR_RANK_TEMPERATURE:-0.07}
+    RSPR_HARD_NEGATIVES=${RSPR_HARD_NEGATIVES:-8}
+    RSPR_PRIOR_STD=${RSPR_PRIOR_STD:-0.1}
+    RSPR_PROB_WEIGHT=${RSPR_PROB_WEIGHT:-0.1}
+    RSPR_RANK_WEIGHT=${RSPR_RANK_WEIGHT:-0.1}
+    RSPR_ANCHOR_WEIGHT=${RSPR_ANCHOR_WEIGHT:-1e-4}
+    RSPR_WARMUP_EPOCHS=${RSPR_WARMUP_EPOCHS:-1.0}
+    RSPR_EVAL_SEED=${RSPR_EVAL_SEED:-0}
+    RSPR_TOP_R=${RSPR_TOP_R:-100}
+    RSPR_DET_TEMPERATURE=${RSPR_DET_TEMPERATURE:-1.0}
+    RSPR_RERANK_TEMPERATURE=${RSPR_RERANK_TEMPERATURE:-1.0}
+    RSPR_RERANK_WEIGHT=${RSPR_RERANK_WEIGHT:-0.1}
+    RSPR_PAIR_CHUNK_SIZE=${RSPR_PAIR_CHUNK_SIZE:-4096}
+    RSPR_FREEZE_CLIP=${RSPR_FREEZE_CLIP:-0}
+    RSPR_FREEZE_DSA=${RSPR_FREEZE_DSA:-0}
     if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
         echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
         exit 2
@@ -142,12 +164,58 @@ run_worker() {
         echo "Unsupported TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR}; expected a positive integer" >&2
         exit 2
     fi
+    if [[ "${RSPR_MODE}" != "legacy" && "${RSPR_MODE}" != "off" && "${RSPR_MODE}" != "mean" && "${RSPR_MODE}" != "stochastic" ]]; then
+        echo "Unsupported RSPR_MODE=${RSPR_MODE}; expected legacy, off, mean, or stochastic" >&2
+        exit 2
+    fi
+    if [[ "${RSPR_MATCH_MODE}" != "soft" && "${RSPR_MATCH_MODE}" != "hard" ]]; then
+        echo "Unsupported RSPR_MATCH_MODE=${RSPR_MATCH_MODE}; expected soft or hard" >&2
+        exit 2
+    fi
+    for _RSPR_BOOLEAN in RSPR_DETACH_SAMPLES RSPR_FREEZE_CLIP RSPR_FREEZE_DSA; do
+        if [[ "${!_RSPR_BOOLEAN}" != "0" && "${!_RSPR_BOOLEAN}" != "1" ]]; then
+            echo "Unsupported ${_RSPR_BOOLEAN}=${!_RSPR_BOOLEAN}; expected 0 or 1" >&2
+            exit 2
+        fi
+    done
+    if [[ "${RSPR_MODE}" == "mean" && "${RSPR_SAMPLE_COUNT}" != "1" ]]; then
+        echo "RSPR_MODE=mean requires RSPR_SAMPLE_COUNT=1" >&2
+        exit 2
+    fi
+    if [[ "${RSPR_MODE}" == "stochastic" ]]; then
+        for _RSPR_K in RSPR_SAMPLE_COUNT RSPR_EVAL_SAMPLE_COUNT; do
+            if ! [[ "${!_RSPR_K}" =~ ^[1-9][0-9]*$ ]] || (( ${!_RSPR_K} % 2 )); then
+                echo "Unsupported ${_RSPR_K}=${!_RSPR_K}; stochastic mode requires a positive even integer" >&2
+                exit 2
+            fi
+        done
+    fi
+    for _RSPR_TEMPERATURE in RSPR_MATCH_TEMPERATURE RSPR_PROB_TEMPERATURE RSPR_RANK_TEMPERATURE RSPR_DET_TEMPERATURE RSPR_RERANK_TEMPERATURE; do
+        if ! [[ "${!_RSPR_TEMPERATURE}" =~ ^([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$ ]] || ! awk -v value="${!_RSPR_TEMPERATURE}" 'BEGIN { exit !(value > 0 && value < 1e308) }'; then
+            echo "Unsupported ${_RSPR_TEMPERATURE}=${!_RSPR_TEMPERATURE}; expected a positive finite number" >&2
+            exit 2
+        fi
+    done
+    if ! [[ "${RSPR_TOP_R}" =~ ^[0-9]+$ ]]; then
+        echo "Unsupported RSPR_TOP_R=${RSPR_TOP_R}; expected a non-negative integer" >&2
+        exit 2
+    fi
     EXTRA_CLIP_ARGS=()
     if [[ "${CLIP_GRADIENT_CHECKPOINTING}" == "1" ]]; then
         EXTRA_CLIP_ARGS+=(
             --clip_gradient_checkpointing
             --clip_visual_checkpoint_layers "${CLIP_VISUAL_CHECKPOINT_LAYERS}"
         )
+    fi
+    RSPR_OPTIONAL_ARGS=()
+    if [[ "${RSPR_DETACH_SAMPLES}" == "1" ]]; then
+        RSPR_OPTIONAL_ARGS+=(--rspr_detach_samples)
+    fi
+    if [[ "${RSPR_FREEZE_CLIP}" == "1" ]]; then
+        RSPR_OPTIONAL_ARGS+=(--rspr_freeze_clip)
+    fi
+    if [[ "${RSPR_FREEZE_DSA}" == "1" ]]; then
+        RSPR_OPTIONAL_ARGS+=(--rspr_freeze_dsa)
     fi
 
     # hygiene baseline 固定 batch 256 + accum 1，有效 batch = 256；4 卡时每卡 micro-batch 64。
@@ -205,6 +273,7 @@ run_worker() {
     fi
     echo "[run_train_msrvtt_bg:worker] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} NPROC=${NPROC} TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS} TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR} TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE} TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS} TQFS_CACHE_DIR=${TQFS_CACHE_DIR} CLIP_CACHE_DIR=${CLIP_CACHE_DIR}"
     echo "[run_train_msrvtt_bg:worker] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION} CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING} CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS}"
+    echo "[run_train_msrvtt_bg:worker] RSPR_MODE=${RSPR_MODE} RSPR_K=${RSPR_SAMPLE_COUNT} RSPR_EVAL_K=${RSPR_EVAL_SAMPLE_COUNT} RSPR_PROB_WEIGHT=${RSPR_PROB_WEIGHT} RSPR_RANK_WEIGHT=${RSPR_RANK_WEIGHT} RSPR_ANCHOR_WEIGHT=${RSPR_ANCHOR_WEIGHT} RSPR_FREEZE_CLIP=${RSPR_FREEZE_CLIP} RSPR_FREEZE_DSA=${RSPR_FREEZE_DSA} RSPR_TOP_R=${RSPR_TOP_R} RSPR_EVAL_SEED=${RSPR_EVAL_SEED}"
 
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
         torchrun --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29547 \
@@ -236,6 +305,26 @@ run_worker() {
         --extra_text_cls_num 2 \
         --experiment_profile "${EXPERIMENT_PROFILE}" \
         --experiment_desc "${EXPERIMENT_DESC:-}" \
+        --rspr_mode "${RSPR_MODE}" \
+        --rspr_sample_count "${RSPR_SAMPLE_COUNT}" \
+        --rspr_eval_sample_count "${RSPR_EVAL_SAMPLE_COUNT}" \
+        --rspr_match_mode "${RSPR_MATCH_MODE}" \
+        --rspr_match_temperature "${RSPR_MATCH_TEMPERATURE}" \
+        --rspr_prob_temperature "${RSPR_PROB_TEMPERATURE}" \
+        --rspr_rank_temperature "${RSPR_RANK_TEMPERATURE}" \
+        --rspr_hard_negatives "${RSPR_HARD_NEGATIVES}" \
+        --rspr_prior_std "${RSPR_PRIOR_STD}" \
+        --rspr_prob_weight "${RSPR_PROB_WEIGHT}" \
+        --rspr_rank_weight "${RSPR_RANK_WEIGHT}" \
+        --rspr_anchor_weight "${RSPR_ANCHOR_WEIGHT}" \
+        --rspr_warmup_epochs "${RSPR_WARMUP_EPOCHS}" \
+        --rspr_eval_seed "${RSPR_EVAL_SEED}" \
+        --rspr_top_r "${RSPR_TOP_R}" \
+        --rspr_det_temperature "${RSPR_DET_TEMPERATURE}" \
+        --rspr_rerank_temperature "${RSPR_RERANK_TEMPERATURE}" \
+        --rspr_rerank_weight "${RSPR_RERANK_WEIGHT}" \
+        --rspr_pair_chunk_size "${RSPR_PAIR_CHUNK_SIZE}" \
+        "${RSPR_OPTIONAL_ARGS[@]}" \
         "$@"
 }
 

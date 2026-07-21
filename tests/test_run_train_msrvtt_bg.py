@@ -1,12 +1,11 @@
 import os
-import signal
 import shutil
+import signal
 import subprocess
 import time
 from pathlib import Path
 
 import pytest
-
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SCRIPT = REPOSITORY / "run_train_msrvtt_bg.sh"
@@ -454,6 +453,44 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
         "--experiment_desc",
         "",
         "--rspr_mode",
+        "legacy",
+        "--rspr_sample_count",
+        "4",
+        "--rspr_eval_sample_count",
+        "8",
+        "--rspr_match_mode",
+        "soft",
+        "--rspr_match_temperature",
+        "0.07",
+        "--rspr_prob_temperature",
+        "0.07",
+        "--rspr_rank_temperature",
+        "0.07",
+        "--rspr_hard_negatives",
+        "8",
+        "--rspr_prior_std",
+        "0.1",
+        "--rspr_prob_weight",
+        "0.1",
+        "--rspr_rank_weight",
+        "0.1",
+        "--rspr_anchor_weight",
+        "1e-4",
+        "--rspr_warmup_epochs",
+        "1.0",
+        "--rspr_eval_seed",
+        "0",
+        "--rspr_top_r",
+        "100",
+        "--rspr_det_temperature",
+        "1.0",
+        "--rspr_rerank_temperature",
+        "1.0",
+        "--rspr_rerank_weight",
+        "0.1",
+        "--rspr_pair_chunk_size",
+        "4096",
+        "--rspr_mode",
         "stochastic",
         "--experiment_desc",
         "two words",
@@ -476,6 +513,11 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
             },
             ("--batch_size", "128"),
             "hygiene cannot override protected baseline option",
+        ),
+        (
+            {"EXPERIMENT_PROFILE": "default", "RSPR_MATCH_TEMPERATURE": "0e0"},
+            (),
+            "RSPR_MATCH_TEMPERATURE=0e0; expected a positive finite number",
         ),
     ),
 )
