@@ -9,6 +9,7 @@ import pytest
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SCRIPT = REPOSITORY / "run_train_msrvtt_bg.sh"
+RSPR_CONFIG = REPOSITORY / "scripts" / "rspr_shell_config.sh"
 
 
 def _write_executable(path: Path, body: str) -> None:
@@ -110,8 +111,27 @@ def _terminate_controller_process_group(
 
 def _copy_script(tmp_path: Path) -> Path:
     copied = tmp_path / SCRIPT.name
+    config_directory = tmp_path / "scripts"
+    config_directory.mkdir()
     shutil.copy2(SCRIPT, copied)
+    shutil.copy2(RSPR_CONFIG, config_directory / RSPR_CONFIG.name)
     return copied
+
+
+def _rspr_arguments(arguments: list[str]) -> dict[str, str | bool]:
+    result: dict[str, str | bool] = {}
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument in {"--rspr_detach_samples", "--rspr_freeze_clip", "--rspr_freeze_dsa"}:
+            result[argument] = True
+            index += 1
+        elif argument.startswith("--rspr_"):
+            result[argument] = arguments[index + 1]
+            index += 2
+        else:
+            index += 1
+    return result
 
 
 def _environment(tmp_path: Path, fake_bin: Path) -> dict[str, str]:
@@ -284,6 +304,118 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
 
 
 @pytest.mark.parametrize(
+    ("invalid_rspr", "message"),
+    (
+        (
+            {"RSPR_MODE": "stochastic", "RSPR_SAMPLE_COUNT": "3"},
+            "RSPR_SAMPLE_COUNT=3",
+        ),
+        (
+            {"RSPR_MODE": "off", "RSPR_PROB_WEIGHT": "-1"},
+            "RSPR_PROB_WEIGHT=-1",
+        ),
+        (
+            {"RSPR_MODE": "legacy", "RSPR_FREEZE_CLIP": "1"},
+            "RSPR freeze flags require mean or stochastic mode",
+        ),
+    ),
+)
+def test_controller_rejects_invalid_rspr_before_detaching_or_building_split(
+    tmp_path, invalid_rspr, message
+):
+    script = _copy_script(tmp_path)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    setsid_marker = tmp_path / "setsid.called"
+    split_marker = tmp_path / "split.called"
+    _write_executable(fake_bin / "setsid", 'touch "$SETSID_MARKER"\nexit 97\n')
+    _write_executable(fake_bin / "tail", "exit 0\n")
+    _write_executable(fake_bin / "python3", 'touch "$SPLIT_MARKER"\nexit 97\n')
+    environment = _environment(tmp_path, fake_bin)
+    environment.update(
+        {**invalid_rspr, "SETSID_MARKER": str(setsid_marker), "SPLIT_MARKER": str(split_marker)}
+    )
+
+    result = subprocess.run(
+        ["bash", str(script)],
+        cwd=tmp_path,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert message in result.stderr
+    assert not setsid_marker.exists()
+    assert not split_marker.exists()
+
+
+@pytest.mark.parametrize(
+    ("ablation_args", "expected", "expected_log"),
+    (
+        (
+            ("--rspr_mode", "mean", "--rspr_sample_count", "1", "--rspr_top_r", "0"),
+            {"--rspr_mode": "mean", "--rspr_sample_count": "1", "--rspr_top_r": "0"},
+            "RSPR_MODE=mean RSPR_K=1",
+        ),
+        (
+            ("--rspr_mode", "stochastic", "--rspr_detach_samples"),
+            {"--rspr_mode": "stochastic", "--rspr_detach_samples": True},
+            "RSPR_MODE=stochastic",
+        ),
+        (
+            (
+                "--rspr_mode",
+                "stochastic",
+                "--rspr_match_mode",
+                "soft",
+                "--rspr_rank_weight",
+                "0",
+            ),
+            {"--rspr_mode": "stochastic", "--rspr_match_mode": "soft", "--rspr_rank_weight": "0"},
+            "RSPR_RANK_WEIGHT=0",
+        ),
+    ),
+)
+def test_worker_uses_effective_rspr_cli_configuration_for_log_and_launch(
+    tmp_path, ablation_args, expected, expected_log
+):
+    script = _copy_script(tmp_path)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    python_marker = tmp_path / "split.called"
+    torchrun_arguments = tmp_path / "torchrun.args"
+    _write_executable(fake_bin / "python3", 'touch "$SPLIT_MARKER"\n')
+    _write_executable(fake_bin / "torchrun", 'printf "%s\\0" "$@" > "$TORCHRUN_ARGUMENTS"\n')
+    environment = _environment(tmp_path, fake_bin)
+    environment.update(
+        {
+            "RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER": "1",
+            "SPLIT_MARKER": str(python_marker),
+            "TORCHRUN_ARGUMENTS": str(torchrun_arguments),
+        }
+    )
+
+    result = subprocess.run(
+        ["bash", str(script), *ablation_args],
+        cwd=tmp_path,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert python_marker.exists()
+    assert expected_log in result.stdout
+    launch_arguments = _read_nul_arguments(torchrun_arguments)
+    rspr_arguments = _rspr_arguments(launch_arguments)
+    for key, value in expected.items():
+        assert rspr_arguments[key] == value
+    assert launch_arguments.count("--rspr_mode") == 1
+
+
+@pytest.mark.parametrize(
     ("checkpointing", "extra_clip_arguments"),
     (
         (
@@ -453,7 +585,7 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
         "--experiment_desc",
         "",
         "--rspr_mode",
-        "legacy",
+        "stochastic",
         "--rspr_sample_count",
         "4",
         "--rspr_eval_sample_count",
@@ -490,8 +622,6 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
         "0.1",
         "--rspr_pair_chunk_size",
         "4096",
-        "--rspr_mode",
-        "stochastic",
         "--experiment_desc",
         "two words",
     ]
@@ -561,6 +691,12 @@ def test_repository_has_one_supported_msrvtt_training_script():
     assert os.access(SCRIPT, os.X_OK)
     assert not (REPOSITORY / "train_msrvtt.sh").exists()
     subprocess.run(
-        ["bash", "-n", str(SCRIPT), str(REPOSITORY / "run_train_bg.sh")],
+        [
+            "bash",
+            "-n",
+            str(SCRIPT),
+            str(RSPR_CONFIG),
+            str(REPOSITORY / "run_train_bg.sh"),
+        ],
         check=True,
     )
