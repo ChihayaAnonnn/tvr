@@ -65,7 +65,7 @@ def parse_args(argv=None):
     )
     parser.add_argument(
         "--split-manifest",
-        default=str(PROJECT_ROOT / "dataloaders/splits/msrvtt_trusted_v1_seed42.json"),
+        default=str(PROJECT_ROOT / "dataloaders/splits/msrvtt_trusted_v1_seed0.json"),
     )
     parser.add_argument(
         "--val-csv",

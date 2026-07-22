@@ -104,7 +104,7 @@ def parse_args() -> argparse.Namespace:
         "--split_manifest",
         default=str(
             PROJECT_ROOT
-            / "dataloaders/splits/msrvtt_trusted_v1_seed42.json"
+            / "dataloaders/splits/msrvtt_trusted_v1_seed0.json"
         ),
     )
     parser.add_argument(
@@ -786,7 +786,6 @@ def write_report(path: str | Path, args: argparse.Namespace, stats: dict, elapse
             "",
             "- `model_rank` is the 1-based rank of the selected hard video inside the model top-k list.",
             "- Missing mappings are allowed; the dataloader marks them invalid and masks the explicit HN loss for those samples.",
-            "- Run `scripts/audit_msrvtt_hard_negatives.py` on this output before training.",
         ]
     )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

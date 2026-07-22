@@ -303,7 +303,7 @@ def parse_args() -> argparse.Namespace:
         "--split_manifest",
         default=str(
             PROJECT_ROOT
-            / "dataloaders/splits/msrvtt_trusted_v1_seed42.json"
+            / "dataloaders/splits/msrvtt_trusted_v1_seed0.json"
         ),
     )
     parser.add_argument(
