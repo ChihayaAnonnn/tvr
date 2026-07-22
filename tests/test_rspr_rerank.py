@@ -759,7 +759,7 @@ def test_mean_only_eval_counts_each_fully_tied_query_once(monkeypatch):
         log_mus_scores=False,
     )
 
-    r1 = main_task_retrieval.eval_epoch(
+    metrics = main_task_retrieval.eval_epoch(
         args,
         model,
         dataloader,
@@ -767,4 +767,7 @@ def test_mean_only_eval_counts_each_fully_tied_query_once(monkeypatch):
         n_gpu=1,
     )
 
-    assert r1 == pytest.approx(200 / 3)
+    assert metrics["t2v"]["R1"] == pytest.approx(200 / 3)
+    assert metrics["v2t"]["R1"] == pytest.approx(200 / 3)
+    assert metrics["t2v"]["cols"] == [0, 0, 2]
+    assert metrics["v2t"]["cols"] == [0, 0, 2]
