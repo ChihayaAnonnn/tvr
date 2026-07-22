@@ -213,7 +213,7 @@ git commit -m "feat: streamline rspr research training"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu --format=csv,noheader
 ```
 
-选择当前训练脚本默认的 `CUDA_VISIBLE_DEVICES=0,1,2,4`。用当前时间生成一次性标识，并把实际展开值记录到执行日志；不得复用正式实验目录：
+选择当前训练脚本默认的 `CUDA_VISIBLE_DEVICES=0,1,2,3`。用当前时间生成一次性标识，并把实际展开值记录到执行日志；不得复用正式实验目录：
 
 ```bash
 SMOKE_STAMP="$(date +%Y%m%d_%H%M%S)"

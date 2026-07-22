@@ -156,8 +156,8 @@ run_worker() {
     fi
 
     # hygiene baseline 固定 batch 256 + accum 1，有效 batch = 256；4 卡时每卡 micro-batch 64。
-    # 0/1 位于 NUMA 0，2/4 位于 NUMA 1，且 2/4 之间为 NV8。
-    CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,4}"
+    # 当前主机可见 GPU 为 0–3；0/1 位于 NUMA 0，2/3 位于 NUMA 1。
+    CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
     if ! [[ "${CUDA_VISIBLE_DEVICES}" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
         echo "malformed CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}; expected comma-separated integer GPU IDs" >&2
         exit 2
