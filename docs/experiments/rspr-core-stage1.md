@@ -1,6 +1,7 @@
 # RSPR core Stage 1: MSR-VTT protocol
 
-Status: engineering protocol prepared on the current commit. No GPU smoke run, A0–A8 training, or second-dataset work has been executed; all run-time fields below remain pending.
+Status: A3 GPU smoke completed on commit `6fde108`; A0–A8 full training and
+second-dataset work have not been executed.
 
 ## Fixed end-to-end training
 
@@ -49,12 +50,22 @@ Fill one row for every ablation and seed, using the same trusted split manifest.
 
 Stop the main experiment and repair the implementation before continuing if any loss is NaN or Inf; `logvar` in every dimension remains at either -8 or 2 for a continuous epoch; A3 fails to produce finite gradients for DSA, mean, or logvar; or fixed-noise repeated evaluation has inconsistent rankings.
 
-## Pending run-time acceptance
+## Runtime acceptance
 
-The 20-optimizer-step A3 smoke run is pending. It uses the canonical four-GPU
-entrypoint and only verifies that initialization, forward, backward, optimizer
-step, total/four component losses, pair uncertainty, learning rates, and timing
-are finite. It does not add a separate diagnostic framework.
+The canonical four-GPU A3 smoke used
+`RUN_ID=rspr_smoke_20260722_105328`. At optimizer step 20 it reported total
+loss `3.0812`, DSA `2.5358`, probability `5.4342`, rank `0.6918`, anchor
+`0.0000`, pair uncertainty `0.0003`, text/video variance means `0.0100/0.0100`,
+CLIP/other learning rates `5.72e-09/5.72e-06`, and `0.93s` per step. All values
+were finite, with no OOM, NaN, Inf, or training traceback before intentional
+termination. Polling allowed the run to reach step 80 before its isolated
+worker process group was stopped; the final torchrun `SignalException` records
+that requested `SIGTERM`, not a training failure.
+
+Smoke log:
+`logs/20260722/105328_rspr_smoke_train_msrvtt.log`. Smoke output:
+`ckpts/ckpt_msrvtt_rspr_smoke_20260722_105328/`. No checkpoint was written
+because the run stopped before the first epoch completed.
 
 Step 7 (MSR-VTT A0–A8) is pending. Run A0, A1, A3, A6, A7, and A8 first, then A2, A4, and A5; each needs at least three seeds on the same trusted split manifest. Do not create or implement Beta evidence until all records and cost diagnostics are complete.
 
