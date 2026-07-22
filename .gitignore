@@ -1,6 +1,6 @@
 # 本地/占空间/非必要纳入版本管理的内容
 logs/
-docs/
+# docs/
 cache_dir/
 
 /deploy_qwen/
@@ -15,7 +15,7 @@ research_refs/
 /ref
 *.png
 !docs/**/*.png
-*.pdf
+# *.pdf
 # *.md
 !.gitignore
 
