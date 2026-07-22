@@ -180,6 +180,7 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "seed": getattr(args, "seed", None),
         "profile": getattr(args, "experiment_profile", "default"),
         "rspr": rspr,
+        "run_final_test": bool(getattr(args, "run_final_test", False)),
         "backbone": backbone,
         "data": data,
         "batch": batch_semantics,

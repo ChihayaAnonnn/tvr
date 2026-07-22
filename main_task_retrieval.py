@@ -49,6 +49,8 @@ def validate_trusted_cli(args):
         raise ValueError(
             "trusted-v1 MSRVTT training requires --expand_msrvtt_sentences"
         )
+    if args.run_final_test and not args.do_train:
+        raise ValueError("--run_final_test requires --do_train")
     if args.do_eval and not args.do_train and not args.init_model:
         raise ValueError("--do_eval requires --init_model")
 
@@ -131,7 +133,7 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument(
         "--split_manifest",
         type=str,
-        default="dataloaders/splits/msrvtt_trusted_v1_seed42.json",
+        default="dataloaders/splits/msrvtt_trusted_v1_seed0.json",
         help="Versioned trusted-v1 MSRVTT split manifest.",
     )
     parser.add_argument(
@@ -139,6 +141,14 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         choices=["val", "test"],
         default="val",
         help="Evaluation split. Training always evaluates internal val.",
+    )
+    parser.add_argument(
+        "--run_final_test",
+        action="store_true",
+        help=(
+            "After training, reload each checkpoint selected on internal val and "
+            "evaluate it on the final test split."
+        ),
     )
     parser.add_argument("--data_path", type=str, default="data/caption.pickle", help="data pickle file path")
     parser.add_argument("--features_path", type=str, default="data/videos_feature.pickle", help="feature path")
@@ -205,7 +215,7 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         help="若设置，在每次评估时将每条查询的 MUS（映射不确定性）写入 logs/mus_scores/ 下的 TSV 文件。",
     )
     parser.add_argument("--video_dim", type=int, default=1024, help="video feature dimension")
-    parser.add_argument("--seed", type=int, default=42, help="random seed")
+    parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument("--max_words", type=int, default=20, help="")
     parser.add_argument("--max_frames", type=int, default=100, help="")
     parser.add_argument("--feature_framerate", type=int, default=1, help="")
@@ -1076,7 +1086,7 @@ def _run_on_single_gpu(
 def select_best_checkpoint(
     best_score, best_path, candidate_score, candidate_path
 ):
-    """Select by validation T2V R@1; ties deliberately prefer the later epoch."""
+    """Select by one validation R@1 metric; ties prefer the later epoch."""
     if candidate_score >= best_score:
         return candidate_score, candidate_path
     return best_score, best_path
@@ -1157,21 +1167,11 @@ def _compute_directional_metrics(
     )
 
 
-def evaluate_training_checkpoint(
-    args,
-    model,
-    eval_dataloader,
-    device,
-    n_gpu,
-    best_score,
-    best_path,
-    candidate_path,
-):
-    """Evaluate one candidate without suppressing validation failures."""
-    candidate_score = eval_epoch(args, model, eval_dataloader, device, n_gpu)
-    return select_best_checkpoint(
-        best_score, best_path, candidate_score, candidate_path
-    )
+def _serialize_retrieval_metrics(metrics):
+    return {
+        name: value if isinstance(value, list) else float(value)
+        for name, value in metrics.items()
+    }
 
 
 def eval_epoch(args, model, eval_dataloader, device, n_gpu):
@@ -1409,8 +1409,10 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
         vt_metrics["R1"], vt_metrics["R5"], vt_metrics["R10"], vt_metrics["MR"], vt_metrics["MeanR"],
     )
 
-    R1 = tv_metrics["R1"]
-    return R1
+    return {
+        "t2v": _serialize_retrieval_metrics(tv_metrics),
+        "v2t": _serialize_retrieval_metrics(vt_metrics),
+    }
 
 
 def main():
@@ -1534,8 +1536,10 @@ def main():
                 num_train_optimization_steps,
             )
 
-        best_score = float("-inf")
-        best_output_model_file = "None"
+        best_t2v_score = float("-inf")
+        best_t2v_checkpoint = "None"
+        best_v2t_score = float("-inf")
+        best_v2t_checkpoint = "None"
         ## ##############################################################
         # resume optimizer state besides loss to continue train
         ## ##############################################################
@@ -1584,23 +1588,104 @@ def main():
                 output_model_file = save_model(
                     epoch, args, model, optimizer, tr_loss, type_name=""
                 )
-                best_score, best_output_model_file = evaluate_training_checkpoint(
-                    args=args,
-                    model=model,
-                    eval_dataloader=eval_dataloader,
-                    device=device,
-                    n_gpu=n_gpu,
-                    best_score=best_score,
-                    best_path=best_output_model_file,
-                    candidate_path=output_model_file,
+                validation_metrics = eval_epoch(
+                    args, model, eval_dataloader, device, n_gpu
+                )
+                best_t2v_score, best_t2v_checkpoint = select_best_checkpoint(
+                    best_t2v_score,
+                    best_t2v_checkpoint,
+                    validation_metrics["t2v"]["R1"],
+                    output_model_file,
+                )
+                best_v2t_score, best_v2t_checkpoint = select_best_checkpoint(
+                    best_v2t_score,
+                    best_v2t_checkpoint,
+                    validation_metrics["v2t"]["R1"],
+                    output_model_file,
                 )
                 logger.info(
                     "  Best %s T2V R@1: %.1f | %s",
                     eval_split,
-                    best_score,
-                    best_output_model_file,
+                    best_t2v_score,
+                    best_t2v_checkpoint,
+                )
+                logger.info(
+                    "  Best %s V2T R@1: %.1f | %s",
+                    eval_split,
+                    best_v2t_score,
+                    best_v2t_checkpoint,
                 )
                 logger.info("=" * 60)
+
+        if args.local_rank == 0:
+            if best_t2v_checkpoint == "None" or best_v2t_checkpoint == "None":
+                raise RuntimeError("training completed without a validation checkpoint")
+            selection_payload = {
+                "selection_split": "val",
+                "tie_break": "later_epoch",
+                "t2v": {
+                    "selection_metric": "t2v_r1",
+                    "selection_score": best_t2v_score,
+                    "checkpoint": best_t2v_checkpoint,
+                },
+                "v2t": {
+                    "selection_metric": "v2t_r1",
+                    "selection_score": best_v2t_score,
+                    "checkpoint": best_v2t_checkpoint,
+                },
+            }
+            atomic_write_json(
+                Path(args.output_dir) / "best_validation_checkpoints.json",
+                selection_payload,
+            )
+
+            if args.run_final_test:
+                model_to_evaluate = model.module if hasattr(model, "module") else model
+                test_factory = DATALOADER_DICT[args.datatype].get("test")
+                if test_factory is None:
+                    raise ValueError(f"{args.datatype} has no test dataloader")
+                test_dataloader, test_length = test_factory(args, tokenizer, subset="test")
+
+                logger.info(
+                    "  Split: test | Samples: %d | Steps: %d | Batch: %d",
+                    test_length,
+                    len(test_dataloader),
+                    args.batch_size_val,
+                )
+                previous_eval_split = args.eval_split
+                args.eval_split = "test"
+                try:
+                    test_metrics_by_checkpoint = {}
+                    final_test_payload = {}
+                    for direction in ("t2v", "v2t"):
+                        selection = selection_payload[direction]
+                        checkpoint_path = selection["checkpoint"]
+                        if checkpoint_path not in test_metrics_by_checkpoint:
+                            logger.info(
+                                "***** Running final test from %s-selected checkpoint: %s *****",
+                                direction.upper(),
+                                checkpoint_path,
+                            )
+                            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+                            model_to_evaluate.load_state_dict(checkpoint)
+                            model_to_evaluate.to(device)
+                            test_metrics_by_checkpoint[checkpoint_path] = eval_epoch(
+                                args, model_to_evaluate, test_dataloader, device, n_gpu
+                            )
+                        final_test_payload[direction] = {
+                            **selection,
+                            "test_metrics": test_metrics_by_checkpoint[checkpoint_path],
+                        }
+                finally:
+                    args.eval_split = previous_eval_split
+
+                atomic_write_json(
+                    Path(args.output_dir) / "final_test.json",
+                    {
+                        "test_split": "test",
+                        "selections": final_test_payload,
+                    },
+                )
 
     elif args.do_eval:
         if args.local_rank == 0:

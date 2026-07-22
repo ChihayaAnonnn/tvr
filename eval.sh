@@ -62,7 +62,7 @@ if [[ "${DATATYPE}" == "msrvtt" ]]; then
   SOURCE_TRAIN_CSV="${MSRVTT_DATA_PATH}/csv/MSRVTT_train.9k.csv"
   TEST_CSV="${MSRVTT_DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv"
   ANNOTATION_JSON="${MSRVTT_DATA_PATH}/annotation/MSRVTT_v2.json"
-  SPLIT_MANIFEST="${ROOT_DIR}/dataloaders/splits/msrvtt_trusted_v1_seed42.json"
+  SPLIT_MANIFEST="${ROOT_DIR}/dataloaders/splits/msrvtt_trusted_v1_seed0.json"
   GENERATED_SPLIT_DIR="${ROOT_DIR}/data/generated/msrvtt_trusted_v1"
   "${TVR_PYTHON}" "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
     --train-csv "${SOURCE_TRAIN_CSV}" \
@@ -137,7 +137,7 @@ fi
 echo "[eval.sh] LOG_FILE=${LOG_FILE}"
 
 set -o pipefail
-CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4}" \
+CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}" \
   "${TVR_TORCHRUN}" --nproc_per_node=1 --master_addr=127.0.0.9 --master_port="${MASTER_PORT:-29520}" \
   "${ROOT_DIR}/main_task_retrieval.py" \
   --do_eval \
