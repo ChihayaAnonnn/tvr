@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_PATH="${ROOT_DIR}/run_train_msrvtt_bg.sh"
+TVR_PYTHON=${TVR_PYTHON:-/home/xujie/.conda/envs/tvr/bin/python}
+TVR_TORCHRUN=${TVR_TORCHRUN:-/home/xujie/.conda/envs/tvr/bin/torchrun}
 cd "${ROOT_DIR}"
 source "${ROOT_DIR}/scripts/rspr_shell_config.sh"
 
@@ -66,7 +68,7 @@ run_worker() {
     TQFS_CACHE_DIR=${TQFS_CACHE_DIR:-/home/xujie/.cache/uatvr/tqfs/msrvtt_trusted_v1_f1_m8_r224}
     export CLIP_CACHE_DIR=${CLIP_CACHE_DIR:-${ROOT_DIR}/.cache}
 
-    python3 "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
+    "${TVR_PYTHON}" "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
         --train-csv "${SOURCE_TRAIN_CSV}" \
         --annotation-json "${ANNOTATION_JSON}" \
         --test-csv "${TEST_CSV}" \
@@ -85,7 +87,7 @@ run_worker() {
     TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR:-2}
     TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
     TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS:-1}
-    FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-0}
+    FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-8}
     if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
         echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
         exit 2
@@ -208,10 +210,11 @@ run_worker() {
     fi
     echo "[run_train_msrvtt_bg:worker] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} NPROC=${NPROC} TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS} TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR} TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE} TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS} TQFS_CACHE_DIR=${TQFS_CACHE_DIR} CLIP_CACHE_DIR=${CLIP_CACHE_DIR}"
     echo "[run_train_msrvtt_bg:worker] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION} CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING} CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS}"
+    echo "[Runtime] python=${TVR_PYTHON} torchrun=${TVR_TORCHRUN}"
     rspr_log_effective_config "run_train_msrvtt_bg:worker"
 
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
-        torchrun --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29547 \
+        "${TVR_TORCHRUN}" --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29547 \
         "${ROOT_DIR}/main_task_retrieval.py" \
         --do_train --run_final_test --num_thread_reader "${TRAIN_NUM_WORKERS}" \
         --prefetch_factor "${TRAIN_PREFETCH_FACTOR}" --epochs=5 \

@@ -20,6 +20,8 @@ fi
 
 RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TVR_PYTHON=${TVR_PYTHON:-/home/xujie/.conda/envs/tvr/bin/python}
+TVR_TORCHRUN=${TVR_TORCHRUN:-/home/xujie/.conda/envs/tvr/bin/torchrun}
 source "${ROOT_DIR}/scripts/rspr_shell_config.sh"
 DATATYPE=${DATATYPE:-msrvtt}        # msrvtt | msvd
 USE_ATTRIBUTES=${USE_ATTRIBUTES:-0} # 0 | 1
@@ -62,7 +64,7 @@ if [[ "${DATATYPE}" == "msrvtt" ]]; then
   ANNOTATION_JSON="${MSRVTT_DATA_PATH}/annotation/MSRVTT_v2.json"
   SPLIT_MANIFEST="${ROOT_DIR}/dataloaders/splits/msrvtt_trusted_v1_seed42.json"
   GENERATED_SPLIT_DIR="${ROOT_DIR}/data/generated/msrvtt_trusted_v1"
-  python3 "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
+  "${TVR_PYTHON}" "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
     --train-csv "${SOURCE_TRAIN_CSV}" \
     --annotation-json "${ANNOTATION_JSON}" \
     --test-csv "${TEST_CSV}" \
@@ -125,6 +127,7 @@ fi
 echo "[eval.sh] RUN_ID=${RUN_ID}"
 echo "[eval.sh] DATATYPE=${DATATYPE} EVAL_SPLIT=${EVAL_SPLIT} USE_ATTRIBUTES=${USE_ATTRIBUTES} EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}"
 echo "[eval.sh] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION}"
+echo "[Runtime] python=${TVR_PYTHON} torchrun=${TVR_TORCHRUN}"
 rspr_log_effective_config "eval.sh"
 echo "[eval.sh] INIT_MODEL=${INIT_MODEL}"
 echo "[eval.sh] OUTPUT_DIR=${OUTPUT_DIR}"
@@ -135,7 +138,7 @@ echo "[eval.sh] LOG_FILE=${LOG_FILE}"
 
 set -o pipefail
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4}" \
-  torchrun --nproc_per_node=1 --master_addr=127.0.0.9 --master_port="${MASTER_PORT:-29520}" \
+  "${TVR_TORCHRUN}" --nproc_per_node=1 --master_addr=127.0.0.9 --master_port="${MASTER_PORT:-29520}" \
   "${ROOT_DIR}/main_task_retrieval.py" \
   --do_eval \
   --log_mus_scores \

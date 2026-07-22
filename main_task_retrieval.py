@@ -487,7 +487,7 @@ def set_seed_logger(args):
         logger.info("Effective parameters:")
         if args.experiment_desc:
             logger.info("    [Experiment] %s", args.experiment_desc)
-        # 按类别分组打印关键参数，其余用紧凑格式
+        # 按类别分组打印关键参数；完整参数由 experiment manifest 记录。
         key_params = {
             "Training": [
                 "epochs",
@@ -553,20 +553,13 @@ def set_seed_logger(args):
                 "experiment_profile",
             ],
         }
-        printed_keys = set()
         for group, keys in key_params.items():
             vals = []
             for k in keys:
                 if k in args.__dict__:
                     vals.append(f"{k}={args.__dict__[k]}")
-                    printed_keys.add(k)
             if vals:
                 logger.info("  [%s] %s", group, " | ".join(vals))
-        # 剩余参数紧凑打印
-        rest = {k: v for k, v in sorted(args.__dict__.items()) if k not in printed_keys}
-        if rest:
-            rest_str = " | ".join(f"{k}={v}" for k, v in rest.items())
-            logger.info("  [Other] %s", rest_str)
 
     return args
 
@@ -902,16 +895,17 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 )
 
                 logger.info(
-                    "[Epoch %d/%d] Step %d/%d (%.0f%%) | Loss: %.4f | LR clip=%.2e new=%.2e%s | %.2fs/step | ETA: %s",
+                    "[Epoch %d/%d] step=%d/%d progress=%.0f%% | loss=%.4f%s | "
+                    "lr=%.2e/%.2e | time=%.2fs eta=%s",
                     epoch + 1,
                     args.epochs,
                     step + 1,
                     num_steps,
                     progress,
                     float(loss),
+                    _format_rspr_diagnostics(model),
                     lr_clip,
                     lr_new,
-                    _format_rspr_diagnostics(model),
                     time_per_step,
                     _fmt_time(eta),
                 )
@@ -932,15 +926,26 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
 def _format_rspr_diagnostics(model):
     diagnostic_model = model.module if hasattr(model, "module") else model
     diagnostics = getattr(diagnostic_model, "last_loss_diagnostics", None)
-    required = ("dsa", "prob", "rank", "anchor", "text_variance_mean", "video_variance_mean")
+    required = (
+        "dsa",
+        "prob",
+        "rank",
+        "anchor",
+        "pair_uncertainty_mean",
+        "text_variance_mean",
+        "video_variance_mean",
+    )
     if not isinstance(diagnostics, dict) or any(
         name not in diagnostics for name in required
     ):
         return ""
+    values = {name: float(diagnostics[name]) for name in required}
     return (
-        " | dsa={:.4f} prob={:.4f} rank={:.4f} anchor={:.4f}"
-        " text_var={:.4f} video_var={:.4f}"
-    ).format(*(float(diagnostics[name]) for name in required))
+        " | dsa={dsa:.4f} prob={prob:.4f} rank={rank:.4f} anchor={anchor:.4f}"
+        " u_pair={pair_uncertainty_mean:.4f}"
+        " variance_t={text_variance_mean:.4f}"
+        " variance_v={video_variance_mean:.4f}"
+    ).format(**values)
 
 
 def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
