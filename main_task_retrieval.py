@@ -1123,16 +1123,36 @@ def _build_rspr_metric_matrices(
     text_to_video_logits,
     video_to_text_logits,
     mean_logits,
+    directions=None,
 ):
-    text_to_video = build_full_ranking_scores(
-        torch.from_numpy(text_to_video_logits),
-        torch.from_numpy(mean_logits),
-    )
-    video_to_text = build_full_ranking_scores(
-        torch.from_numpy(video_to_text_logits.T),
-        torch.from_numpy(mean_logits.T),
-    ).T
-    return text_to_video.numpy(), video_to_text.numpy()
+    if directions is None:
+        directions = ("t2v", "v2t")
+        legacy_tuple = True
+    else:
+        directions = _normalize_eval_directions(directions)
+        legacy_tuple = False
+
+    metric_matrices = {}
+    if "t2v" in directions:
+        metric_matrices["t2v"] = build_full_ranking_scores(
+            torch.from_numpy(text_to_video_logits),
+            torch.from_numpy(mean_logits),
+        ).numpy()
+    if "v2t" in directions:
+        metric_matrices["v2t"] = build_full_ranking_scores(
+            torch.from_numpy(video_to_text_logits.T),
+            torch.from_numpy(mean_logits.T),
+        ).T.numpy()
+    if legacy_tuple:
+        return metric_matrices["t2v"], metric_matrices["v2t"]
+    return metric_matrices
+
+
+def _normalize_eval_directions(directions):
+    directions = tuple(dict.fromkeys(directions))
+    if not directions or any(direction not in {"t2v", "v2t"} for direction in directions):
+        raise ValueError("directions must contain one or both of: t2v, v2t")
+    return directions
 
 
 def _compute_directional_metrics(
@@ -1141,30 +1161,36 @@ def _compute_directional_metrics(
     *,
     cut_off_points=None,
     independent_directions=True,
+    directions=("t2v", "v2t"),
 ):
+    directions = _normalize_eval_directions(directions)
     if cut_off_points is None:
-        return (
-            compute_metrics(text_to_video_matrix),
-            compute_metrics(video_to_text_matrix.T),
-        )
+        metrics = {}
+        if "t2v" in directions:
+            metrics["t2v"] = compute_metrics(text_to_video_matrix)
+        if "v2t" in directions:
+            metrics["v2t"] = compute_metrics(video_to_text_matrix.T)
+        return metrics
 
-    text_to_video_grouped = _reshape_multi_sentence_matrix(
-        text_to_video_matrix,
-        cut_off_points,
-    )
-    multi_caption_v2t = (
-        video_to_text_matrix
-        if independent_directions
-        else text_to_video_matrix
-    )
-    video_to_text_grouped = _reshape_multi_sentence_matrix(
-        multi_caption_v2t,
-        cut_off_points,
-    )
-    return (
-        tensor_text_to_video_metrics(text_to_video_grouped),
-        compute_metrics(tensor_video_to_text_sim(video_to_text_grouped)),
-    )
+    metrics = {}
+    if "t2v" in directions:
+        text_to_video_grouped = _reshape_multi_sentence_matrix(
+            text_to_video_matrix,
+            cut_off_points,
+        )
+        metrics["t2v"] = tensor_text_to_video_metrics(text_to_video_grouped)
+    if "v2t" in directions:
+        multi_caption_v2t = (
+            video_to_text_matrix
+            if independent_directions
+            else text_to_video_matrix
+        )
+        video_to_text_grouped = _reshape_multi_sentence_matrix(
+            multi_caption_v2t,
+            cut_off_points,
+        )
+        metrics["v2t"] = compute_metrics(tensor_video_to_text_sim(video_to_text_grouped))
+    return metrics
 
 
 def _serialize_retrieval_metrics(metrics):
@@ -1174,7 +1200,8 @@ def _serialize_retrieval_metrics(metrics):
     }
 
 
-def eval_epoch(args, model, eval_dataloader, device, n_gpu):
+def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "v2t")):
+    directions = _normalize_eval_directions(directions)
     rspr_eval = args.rspr_mode in {"mean", "stochastic"}
     if rspr_eval and args.rspr_top_r > 0 and args.DSL:
         raise ValueError("DSL cannot be combined with RSPR Top-R reranking")
@@ -1369,11 +1396,14 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
     metric_t2v_matrix = sim_matrix
     metric_v2t_matrix = v2t_directional_matrix
     if rspr_eval:
-        metric_t2v_matrix, metric_v2t_matrix = _build_rspr_metric_matrices(
+        metric_matrices = _build_rspr_metric_matrices(
             sim_matrix,
             v2t_directional_matrix,
             mus_matrix,
+            directions=directions,
         )
+        metric_t2v_matrix = metric_matrices.get("t2v")
+        metric_v2t_matrix = metric_matrices.get("v2t")
 
     if multi_sentence_:
         logger.info("before reshape, sim matrix size: {} x {}".format(sim_matrix.shape[0], sim_matrix.shape[1]))
@@ -1387,31 +1417,32 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
             )
         )
 
-        tv_metrics, vt_metrics = _compute_directional_metrics(
+        directional_metrics = _compute_directional_metrics(
             metric_t2v_matrix,
             metric_v2t_matrix,
             cut_off_points=cut_off_points_,
             independent_directions=rspr_eval,
+            directions=directions,
         )
     else:
         logger.info("Retrieval Evaluation | #Text: %d, #Video: %d", sim_matrix.shape[0], sim_matrix.shape[1])
-        tv_metrics, vt_metrics = _compute_directional_metrics(
+        directional_metrics = _compute_directional_metrics(
             metric_t2v_matrix,
             metric_v2t_matrix,
+            directions=directions,
         )
 
-    logger.info(
-        "  T2V | R@1: %5.1f  R@5: %5.1f  R@10: %5.1f  MdR: %5.1f  MnR: %5.1f",
-        tv_metrics["R1"], tv_metrics["R5"], tv_metrics["R10"], tv_metrics["MR"], tv_metrics["MeanR"],
-    )
-    logger.info(
-        "  V2T | R@1: %5.1f  R@5: %5.1f  R@10: %5.1f  MdR: %5.1f  MnR: %5.1f",
-        vt_metrics["R1"], vt_metrics["R5"], vt_metrics["R10"], vt_metrics["MR"], vt_metrics["MeanR"],
-    )
+    for direction in directions:
+        metrics = directional_metrics[direction]
+        logger.info(
+            "  %s | R@1: %5.1f  R@5: %5.1f  R@10: %5.1f  MdR: %5.1f  MnR: %5.1f",
+            direction.upper(),
+            metrics["R1"], metrics["R5"], metrics["R10"], metrics["MR"], metrics["MeanR"],
+        )
 
     return {
-        "t2v": _serialize_retrieval_metrics(tv_metrics),
-        "v2t": _serialize_retrieval_metrics(vt_metrics),
+        direction: _serialize_retrieval_metrics(directional_metrics[direction])
+        for direction in directions
     }
 
 
@@ -1660,7 +1691,8 @@ def main():
                     for direction in ("t2v", "v2t"):
                         selection = selection_payload[direction]
                         checkpoint_path = selection["checkpoint"]
-                        if checkpoint_path not in test_metrics_by_checkpoint:
+                        cache_key = (checkpoint_path, direction)
+                        if cache_key not in test_metrics_by_checkpoint:
                             logger.info(
                                 "***** Running final test from %s-selected checkpoint: %s *****",
                                 direction.upper(),
@@ -1669,12 +1701,17 @@ def main():
                             checkpoint = torch.load(checkpoint_path, map_location="cpu")
                             model_to_evaluate.load_state_dict(checkpoint)
                             model_to_evaluate.to(device)
-                            test_metrics_by_checkpoint[checkpoint_path] = eval_epoch(
-                                args, model_to_evaluate, test_dataloader, device, n_gpu
+                            test_metrics_by_checkpoint[cache_key] = eval_epoch(
+                                args,
+                                model_to_evaluate,
+                                test_dataloader,
+                                device,
+                                n_gpu,
+                                directions=(direction,),
                             )
                         final_test_payload[direction] = {
                             **selection,
-                            "test_metrics": test_metrics_by_checkpoint[checkpoint_path],
+                            "test_metrics": test_metrics_by_checkpoint[cache_key],
                         }
                 finally:
                     args.eval_split = previous_eval_split

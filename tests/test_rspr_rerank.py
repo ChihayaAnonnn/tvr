@@ -1,6 +1,7 @@
 import logging
 from types import MethodType, SimpleNamespace
 
+import numpy as np
 import pytest
 import torch
 import torch.nn.functional as F
@@ -526,14 +527,14 @@ def test_multi_caption_metrics_reshape_each_direction_independently(monkeypatch)
     )
     monkeypatch.setattr(main_task_retrieval, "compute_metrics", fake_compute)
 
-    tv_metrics, vt_metrics = main_task_retrieval._compute_directional_metrics(
+    metrics = main_task_retrieval._compute_directional_metrics(
         t2v,
         v2t,
         cut_off_points=[2, 4],
     )
 
-    assert tv_metrics == {"direction": "t2v"}
-    assert vt_metrics == {"direction": "v2t"}
+    assert metrics["t2v"] == {"direction": "t2v"}
+    assert metrics["v2t"] == {"direction": "v2t"}
     assert seen["t2v"].shape == (2, 2, 2)
     assert seen["v2t"].shape == (2, 2, 2)
     assert (seen["t2v"] < 100).all()
@@ -652,16 +653,16 @@ def test_multi_caption_real_misses_count_but_reshape_padding_does_not():
         mean.numpy(),
     )
 
-    tv_metrics, vt_metrics = main_task_retrieval._compute_directional_metrics(
+    metrics = main_task_retrieval._compute_directional_metrics(
         t2v_metric,
         v2t_metric,
         cut_off_points=[2, 3],
     )
 
-    assert tv_metrics["R1"] == pytest.approx(100 / 3)
-    assert tv_metrics["R5"] == 100.0
-    assert vt_metrics["R1"] == 50.0
-    assert vt_metrics["R5"] == 100.0
+    assert metrics["t2v"]["R1"] == pytest.approx(100 / 3)
+    assert metrics["t2v"]["R5"] == 100.0
+    assert metrics["v2t"]["R1"] == 50.0
+    assert metrics["v2t"]["R5"] == 100.0
 
 
 def test_directional_metric_matrices_count_all_misses_in_both_directions():
@@ -686,15 +687,37 @@ def test_directional_metric_matrices_count_all_misses_in_both_directions():
         sparse_v2t.numpy(),
         mean.numpy(),
     )
-    tv_metrics, vt_metrics = main_task_retrieval._compute_directional_metrics(
+    metrics = main_task_retrieval._compute_directional_metrics(
         t2v_metric,
         v2t_metric,
     )
 
-    assert tv_metrics["R1"] == 0.0
-    assert vt_metrics["R1"] == 0.0
-    assert tv_metrics["cols"] == [1, 1, 1]
-    assert vt_metrics["cols"] == [1, 1, 1]
+    assert metrics["t2v"]["R1"] == 0.0
+    assert metrics["v2t"]["R1"] == 0.0
+    assert metrics["t2v"]["cols"] == [1, 1, 1]
+    assert metrics["v2t"]["cols"] == [1, 1, 1]
+
+
+def test_rspr_metric_matrix_builder_skips_unrequested_direction(monkeypatch):
+    seen = []
+
+    def fake_build(scores, means):
+        seen.append((scores.shape, means.shape))
+        return scores
+
+    monkeypatch.setattr(main_task_retrieval, "build_full_ranking_scores", fake_build)
+    t2v = np.eye(2)
+    v2t = np.eye(2)
+
+    metrics = main_task_retrieval._build_rspr_metric_matrices(
+        t2v,
+        v2t,
+        t2v,
+        directions=("t2v",),
+    )
+
+    assert set(metrics) == {"t2v"}
+    assert len(seen) == 1
 
 
 def test_full_metric_ranking_breaks_mean_and_final_ties_by_original_index():
@@ -771,3 +794,49 @@ def test_mean_only_eval_counts_each_fully_tied_query_once(monkeypatch):
     assert metrics["v2t"]["R1"] == pytest.approx(200 / 3)
     assert metrics["t2v"]["cols"] == [0, 0, 2]
     assert metrics["v2t"]["cols"] == [0, 0, 2]
+
+
+def test_eval_epoch_single_direction_returns_only_requested_metrics(monkeypatch):
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "_run_on_single_gpu",
+        lambda *_args, **_kwargs: [np.eye(2)],
+    )
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "logger",
+        logging.getLogger("test.directional_eval"),
+        raising=False,
+    )
+    model = nn.Linear(1, 1)
+
+    class _EmptyLoader:
+        dataset = SimpleNamespace(multi_sentence_per_video=False)
+
+        def __iter__(self):
+            return iter(())
+
+    args = SimpleNamespace(
+        rspr_mode="off",
+        rspr_top_r=0,
+        DSL=False,
+        local_rank=0,
+        log_mus_scores=False,
+    )
+
+    metrics = main_task_retrieval.eval_epoch(
+        args,
+        model,
+        _EmptyLoader(),
+        torch.device("cpu"),
+        n_gpu=1,
+        directions=("v2t",),
+    )
+
+    assert set(metrics) == {"v2t"}
+
+
+@pytest.mark.parametrize("directions", [(), ("invalid",)])
+def test_eval_epoch_rejects_empty_or_unknown_directions(directions):
+    with pytest.raises(ValueError, match="directions"):
+        main_task_retrieval._normalize_eval_directions(directions)
