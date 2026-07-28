@@ -31,6 +31,60 @@ logger = logging.getLogger(__name__)
 allgather = AllGather.apply
 
 
+def configure_clip_gradient_checkpointing(backbone, enabled, visual_layers):
+    """Trade compute for activation memory in the CLIP visual tower.
+
+    Returns the number of checkpointed layers so a run can log it: the flag
+    silently did nothing between 2026-07-18 and 2026-07-28, and only the
+    official-parity recipe -- nothing frozen, 12 frames, 128 clips per rank --
+    used enough memory for anyone to find out.
+
+    The text tower is explicitly left alone. At 32 tokens its activations are
+    negligible next to 128x12 frames of 197 patches, so recomputing them buys
+    nothing and costs a second forward pass.
+    """
+
+    text_transformer = getattr(backbone, "transformer", None)
+    if text_transformer is not None and hasattr(
+        text_transformer, "grad_checkpointing"
+    ):
+        text_transformer.grad_checkpointing = False
+        text_transformer.grad_checkpointing_layers = 0
+
+    visual_transformer = getattr(
+        getattr(backbone, "visual", None), "transformer", None
+    )
+    if visual_transformer is None or not hasattr(
+        visual_transformer, "grad_checkpointing"
+    ):
+        if not enabled:
+            return 0
+        raise RuntimeError(
+            "CLIP gradient checkpointing requires a visual transformer"
+        )
+
+    available_layers = int(
+        getattr(
+            visual_transformer,
+            "layers",
+            len(getattr(visual_transformer, "resblocks", ())),
+        )
+    )
+    requested_layers = (
+        available_layers if visual_layers is None else int(visual_layers)
+    )
+    if requested_layers < 0 or requested_layers > available_layers:
+        raise ValueError(
+            "clip_visual_checkpoint_layers must be in "
+            f"[0, {available_layers}], got {requested_layers}"
+        )
+
+    active_layers = requested_layers if enabled else 0
+    visual_transformer.grad_checkpointing = active_layers > 0
+    visual_transformer.grad_checkpointing_layers = active_layers
+    return int(active_layers)
+
+
 def gather_group_ids(group_ids, task_config):
     if group_ids is None:
         raise ValueError("RSPR training requires explicit group_ids")
@@ -266,6 +320,19 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 del clip_state_dict[key]
 
         convert_weights(self.clip)
+        self.clip_checkpointed_visual_layers = configure_clip_gradient_checkpointing(
+            self.clip,
+            enabled=bool(
+                getattr(task_config, "clip_gradient_checkpointing", False)
+            ),
+            visual_layers=getattr(task_config, "clip_visual_checkpoint_layers", None),
+        )
+        show_log(
+            task_config,
+            "\t checkpointed CLIP visual layers: {}".format(
+                self.clip_checkpointed_visual_layers
+            ),
+        )
         # <=== End of CLIP Encoders
 
         self.sim_header = "meanP"
