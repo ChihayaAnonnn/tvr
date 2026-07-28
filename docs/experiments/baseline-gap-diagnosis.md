@@ -120,13 +120,52 @@ changed the model. The restored helper returns its layer count and the run
 log prints it, so the assertion is now about the outcome rather than the
 input.
 
-## Status
+## Result
 
-Parity baseline `parity_a0_seed0` launched 2026-07-28 13:34, RSPR off,
-5 epochs, ~4 h. Target 49.6 T2V R@1.
+`parity_a0_seed0`, RSPR off, 5 epochs, 35 min/epoch, 21 GB peak per rank.
+Log `logs/20260728/parity_a0_seed0_133440_train_msrvtt.log`.
 
-Open: if parity lands materially short of 49.6, the remaining gap is not the
-optimization recipe and the next suspect is the TI/DSA implementation
-itself. If it lands at or near 49.6, re-run the RSPR arms on top of it —
-every existing RSPR result was measured against the crippled baseline and
-none of them carry over.
+Per-epoch T2V R@1 on JSFUSION test:
+
+| epoch | 1 | 2 | 3 | 4 | 5 |
+| --- | --- | --- | --- | --- | --- |
+| T2V R@1 | 46.6 | 47.7 | **48.9** | 47.3 | 47.3 |
+
+Selected checkpoint (epoch 3):
+
+| | R@1 | R@5 | R@10 | MdR | MnR |
+| --- | --- | --- | --- | --- | --- |
+| T2V | 48.9 | 74.4 | 82.2 | 2.0 | 13.5 |
+| V2T | 48.3 | 75.1 | 84.6 | 2.0 | 8.9 |
+
+**48.9 vs the published 49.6: a 0.7 gap, down from 3.2, and inside 1σ
+(1.6pp).** The optimization recipe was the problem. The TI/DSA
+implementation does not need to be the next suspect.
+
+### Read this number carefully
+
+It is comparable to the literature and to nothing else. Both 48.9 and the
+published 49.6 are a max over five epochs *on the reported test set*, so
+they are like-for-like — but the local A0/A1 numbers (46.4, 46.8) were
+selected on a held-out val set and evaluated on test once, which is the
+honest protocol and a strictly harder one.
+
+The premium test-set selection buys is visible in the epoch table: 48.9 at
+the best epoch against 47.3 at the last, i.e. up to 1.6 points. So
+"46.4 → 48.9" overstates what changed. The defensible claims are:
+
+- against the literature, like-for-like: gap 3.2 → 0.7.
+- against our own prior baseline: the recipe is worth something, but how
+  much is not yet measured, because no run has used the fixed recipe under
+  val selection.
+
+Single seed. Two hardware deviations as described above.
+
+## Next
+
+1. Port the fixed recipe (`freeze_layer_num 0`, 12 frames, batch 512,
+   `slice_framepos 2`, `lr 5e-5`) into the `hygiene` profile and re-run A0
+   on the trusted split with val selection. That, not the parity number, is
+   the baseline every RSPR arm must beat.
+2. Re-run the RSPR arms on top of it. Every existing RSPR result was
+   measured against the crippled baseline; none of them carry over.
