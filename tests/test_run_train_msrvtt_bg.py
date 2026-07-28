@@ -813,6 +813,23 @@ def test_parity_profile_trains_on_the_full_9k_split_and_evaluates_on_jsfusion(
     assert _option(arguments, "--val_csv") == "/dataset/csv/MSRVTT_JSFUSION_test.csv"
     assert _option(arguments, "--eval_split") == "val"
     assert "--expand_msrvtt_sentences" in arguments
+    # The 9k CSV is the trusted manifest's train IDs plus its held-out val
+    # IDs, and the dataloader checks the training scope against the manifest
+    # either way -- so the widened scope has to be requested, not inferred.
+    assert "--fold_val_into_train" in arguments
+
+
+def test_non_parity_profiles_train_only_on_the_trusted_split(tmp_path):
+    arguments = _launch_arguments(
+        tmp_path,
+        {
+            "EXPERIMENT_PROFILE": "hygiene",
+            "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+            "NPROC": "4",
+        },
+    )
+
+    assert "--fold_val_into_train" not in arguments
 
 
 def test_parity_profile_checkpoints_every_visual_layer(tmp_path):

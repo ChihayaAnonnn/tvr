@@ -49,6 +49,7 @@ def dataloader_msrvtt_train(args, tokenizer):
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
         split_manifest_path=args.split_manifest,
         tqfs_cache_dir=getattr(args, "tqfs_cache_dir", ""),
+        fold_val_into_train=getattr(args, "fold_val_into_train", False),
     )
 
     local_batch_size = args.batch_size // args.n_gpu

@@ -138,6 +138,10 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "annotation_json": getattr(args, "data_path", ""),
         "split_manifest": getattr(args, "split_manifest", ""),
         "tqfs_cache_dir": getattr(args, "tqfs_cache_dir", ""),
+        # True means the run trained on all 9000 source videos, including the
+        # 500 trusted-v1 holds out, so its number is comparable to published
+        # ones and not to our own.
+        "fold_val_into_train": bool(getattr(args, "fold_val_into_train", False)),
     }
     # How much of the backbone trains, and on what input, dominates every RSPR
     # effect measured on top of it. Recording these next to the RSPR knobs is

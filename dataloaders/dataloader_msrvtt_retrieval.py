@@ -571,6 +571,7 @@ class MSRVTT_TrainDataLoader(Dataset):
             split_manifest_path=None,
             tqfs_cache_dir="",
             expected_captions_per_video=20,
+            fold_val_into_train=False,
     ):
         self.unfold_sentences = bool(unfold_sentences)
         if not self.unfold_sentences:
@@ -593,7 +594,18 @@ class MSRVTT_TrainDataLoader(Dataset):
 
         self.csv_video_ids, _ = _read_msrvtt_csv(csv_path, need_sentence=False)
         manifest = load_trusted_manifest(split_manifest_path)
-        manifest_train_ids = manifest["train_video_ids"]
+        # trusted-v1 holds 500 of the 9000 source train videos out for local
+        # validation; the official recipe trains on all 9000 and reports on
+        # JSFUSION test. Folding the held-out IDs back in is how a parity run
+        # widens the scope -- explicitly, from the same manifest, and still as
+        # an exact set comparison. The held-out IDs are appended rather than
+        # merged in sorted order so a video keeps its group ID in both scopes.
+        self.fold_val_into_train = bool(fold_val_into_train)
+        expected_scope = "train_video_ids"
+        manifest_train_ids = list(manifest["train_video_ids"])
+        if self.fold_val_into_train:
+            expected_scope = "train_video_ids+val_video_ids"
+            manifest_train_ids += list(manifest["val_video_ids"])
         self.video_group_ids = {
             video_id: index for index, video_id in enumerate(manifest_train_ids)
         }
@@ -608,7 +620,7 @@ class MSRVTT_TrainDataLoader(Dataset):
             extra = sorted(csv_video_id_set - manifest_video_id_set)
             raise ValueError(
                 "train CSV video IDs do not match trusted manifest "
-                f"train_video_ids: missing={missing[:5]} extra={extra[:5]} "
+                f"{expected_scope}: missing={missing[:5]} extra={extra[:5]} "
                 f"duplicates={duplicate_csv_ids[:5]}"
             )
 

@@ -184,6 +184,7 @@ def _trusted_args(**overrides):
         "slice_framepos": 2,
         "lr": 5e-5,
         "coef_lr": 1e-3,
+        "fold_val_into_train": True,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -191,6 +192,19 @@ def _trusted_args(**overrides):
 
 def test_validate_trusted_cli_accepts_the_official_parity_recipe():
     main_task_retrieval.validate_trusted_cli(_trusted_args())
+
+
+def test_validate_trusted_cli_keeps_the_held_out_split_out_of_other_profiles():
+    """Only parity may train on the 500 videos trusted-v1 holds out.
+
+    Folding them in is what makes a parity number comparable to a published
+    one; doing it anywhere else would silently contaminate our own val set.
+    """
+
+    with pytest.raises(ValueError, match="fold_val_into_train"):
+        main_task_retrieval.validate_trusted_cli(
+            _trusted_args(experiment_profile="hygiene", batch_size=256)
+        )
 
 
 @pytest.mark.parametrize(
@@ -203,6 +217,8 @@ def test_validate_trusted_cli_accepts_the_official_parity_recipe():
         ({"freeze_layer_num": 8}, "freeze_layer_num=0"),
         ({"max_frames": 8}, "max_frames=12"),
         ({"slice_framepos": 3}, "slice_framepos=2"),
+        # The official recipe trains on all 9000 source videos.
+        ({"fold_val_into_train": False}, "fold_val_into_train"),
     ),
 )
 def test_validate_trusted_cli_rejects_parity_that_is_not_parity(overrides, message):
@@ -250,6 +266,72 @@ def test_effective_parameter_log_shows_how_much_of_the_backbone_trains(
     assert len(training_lines) == 1
     for expected in ("freeze_layer_num=8", "slice_framepos=3"):
         assert expected in training_lines[0]
+
+
+def test_effective_parameter_log_shows_which_videos_training_may_see(
+    monkeypatch, caplog, tmp_path
+):
+    """Training scope belongs in the run log next to the split manifest."""
+
+    args = _args(
+        seed=3,
+        output_dir=str(tmp_path),
+        local_rank=0,
+        experiment_desc="",
+        fold_val_into_train=True,
+    )
+    logger = logging.getLogger("test.rspr.protocol.parameters")
+    monkeypatch.setattr(main_task_retrieval, "get_logger", lambda _path: logger)
+    monkeypatch.setattr(torch.distributed, "get_world_size", lambda: 1)
+    monkeypatch.setattr(torch.distributed, "get_rank", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    caplog.set_level(logging.INFO, logger=logger.name)
+
+    main_task_retrieval.set_seed_logger(args)
+
+    protocol_lines = [
+        record.getMessage()
+        for record in caplog.records
+        if "[Protocol]" in record.getMessage()
+    ]
+    assert len(protocol_lines) == 1
+    assert "fold_val_into_train=True" in protocol_lines[0]
+
+
+def test_experiment_manifest_records_the_training_split_scope():
+    manifest = build_experiment_manifest(
+        _args(fold_val_into_train=True),
+        split_summary=None,
+        batch_semantics={},
+        git_state={},
+    )
+
+    assert manifest["data"]["fold_val_into_train"] is True
+
+
+def test_experiment_manifest_defaults_the_training_split_scope_to_trusted():
+    manifest = build_experiment_manifest(
+        _args(), split_summary=None, batch_semantics={}, git_state={}
+    )
+
+    assert manifest["data"]["fold_val_into_train"] is False
+
+
+def test_get_args_defaults_to_the_trusted_training_split(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main_task_retrieval.py",
+            "--do_eval",
+            "--init_model",
+            "checkpoint.bin",
+            "--output_dir",
+            str(tmp_path),
+        ],
+    )
+
+    assert main_task_retrieval.get_args().fold_val_into_train is False
 
 
 def test_experiment_manifest_records_all_rspr_fields_explicitly():

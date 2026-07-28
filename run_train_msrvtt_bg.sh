@@ -250,9 +250,14 @@ run_worker() {
     # parity numbers are for comparison with the literature, not for claims.
     TRAIN_CSV="${GENERATED_SPLIT_DIR}/train.csv"
     VAL_CSV="${GENERATED_SPLIT_DIR}/val.csv"
+    SPLIT_SCOPE_ARGS=()
     if [[ "${EXPERIMENT_PROFILE}" == "parity" ]]; then
         TRAIN_CSV="${SOURCE_TRAIN_CSV}"
         VAL_CSV="${TEST_CSV}"
+        # The 9k CSV is the manifest's train IDs plus its held-out val IDs.
+        # The dataloader checks the training scope against the manifest in
+        # both cases, so the wider scope is requested rather than inferred.
+        SPLIT_SCOPE_ARGS=(--fold_val_into_train)
         echo "[run_train_msrvtt_bg:worker] parity: training on the full 9k split and selecting on JSFUSION test"
     fi
     echo "[Runtime] python=${TVR_PYTHON} torchrun=${TVR_TORCHRUN}"
@@ -271,6 +276,7 @@ run_worker() {
         --source_train_csv "${SOURCE_TRAIN_CSV}" \
         --test_csv "${TEST_CSV}" \
         --split_manifest "${SPLIT_MANIFEST}" \
+        "${SPLIT_SCOPE_ARGS[@]}" \
         --eval_split val \
         --data_path "${ANNOTATION_JSON}" \
         --features_path "${DATA_PATH}/videos/compressed_videos/msrvtt_224_12fps/" \

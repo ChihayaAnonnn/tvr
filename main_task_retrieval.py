@@ -69,6 +69,15 @@ def validate_trusted_cli(args):
                 "hygiene requires --gradient_accumulation_steps=1"
             )
 
+    # The held-out 500 are what make a local number ours rather than the
+    # literature's. Only parity may spend them, and parity must.
+    if getattr(args, "fold_val_into_train", False) and (
+        args.experiment_profile != "parity"
+    ):
+        raise ValueError(
+            "--fold_val_into_train requires --experiment_profile=parity"
+        )
+
     if args.do_train and args.experiment_profile == "parity":
         # research_refs/UATVR_official/train.sh. A 'parity' run whose recipe
         # quietly differs is worse than no parity run: it produces a number
@@ -84,6 +93,11 @@ def validate_trusted_cli(args):
         ):
             if getattr(args, name) != expected:
                 raise ValueError(f"parity requires --{name}={expected}")
+        if not getattr(args, "fold_val_into_train", False):
+            raise ValueError(
+                "parity requires --fold_val_into_train: the official recipe "
+                "trains on all 9000 source videos"
+            )
 
 
 def validate_rspr_cli(args):
@@ -171,6 +185,15 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         type=str,
         default="dataloaders/splits/msrvtt_trusted_v1_seed0.json",
         help="Versioned trusted-v1 MSRVTT split manifest.",
+    )
+    parser.add_argument(
+        "--fold_val_into_train",
+        action="store_true",
+        help=(
+            "Train on the manifest's train and val video IDs, i.e. all 9000 "
+            "source train videos, as the official recipe does. Parity only: "
+            "it removes the held-out set that makes a local number our own."
+        ),
     )
     parser.add_argument(
         "--eval_split",
@@ -629,6 +652,7 @@ def set_seed_logger(args):
                 "source_train_csv",
                 "test_csv",
                 "split_manifest",
+                "fold_val_into_train",
                 "tqfs_cache_dir",
                 "experiment_profile",
             ],
