@@ -827,6 +827,44 @@ def test_parity_profile_trains_on_the_full_9k_split_and_evaluates_on_jsfusion(
     assert "--fold_val_into_train" in arguments
 
 
+def test_resume_from_env_becomes_a_flag_when_set(tmp_path):
+    """RESUME_FROM=<dir> should turn into --resume_from <dir> on torchrun.
+
+    The recipe checks live in resolve_resume_target inside the python
+    process, not here -- the launcher's job is just to forward the pointer.
+    """
+
+    arguments = _launch_arguments(
+        tmp_path,
+        {
+            "EXPERIMENT_PROFILE": "hygiene",
+            "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+            "NPROC": "4",
+            "RESUME_FROM": "/some/ckpt/dir",
+        },
+    )
+
+    assert _option(arguments, "--resume_from") == "/some/ckpt/dir"
+
+
+def test_resume_from_env_is_omitted_when_unset(tmp_path):
+    """--resume_from must NOT appear when RESUME_FROM is empty; passing an
+    empty string would trip validate_trusted_cli's mutual-exclusion logic
+    the moment someone also set --init_model.
+    """
+
+    arguments = _launch_arguments(
+        tmp_path,
+        {
+            "EXPERIMENT_PROFILE": "hygiene",
+            "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+            "NPROC": "4",
+        },
+    )
+
+    assert "--resume_from" not in arguments
+
+
 def test_non_parity_profiles_train_only_on_the_trusted_split(tmp_path):
     arguments = _launch_arguments(
         tmp_path,

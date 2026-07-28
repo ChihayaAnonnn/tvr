@@ -255,6 +255,14 @@ run_worker() {
         SPLIT_SCOPE_ARGS=(--fold_val_into_train)
         echo "[run_train_msrvtt_bg:worker] parity: training on the full 9k split and selecting on JSFUSION test"
     fi
+    # RESUME_FROM=<ckpt_dir> continues an OOM'd or otherwise interrupted run.
+    # The dir's experiment_manifest.json has to agree with the current recipe;
+    # that check happens inside resolve_resume_target(), not here.
+    RESUME_ARGS=()
+    if [[ -n "${RESUME_FROM:-}" ]]; then
+        RESUME_ARGS=(--resume_from "${RESUME_FROM}")
+        echo "[run_train_msrvtt_bg:worker] resuming from ${RESUME_FROM}"
+    fi
     echo "[Runtime] python=${TVR_PYTHON} torchrun=${TVR_TORCHRUN}"
     rspr_log_effective_config "run_train_msrvtt_bg:worker"
 
@@ -291,6 +299,7 @@ run_worker() {
         --extra_text_cls_num 2 \
         --experiment_profile "${EXPERIMENT_PROFILE}" \
         --experiment_desc "${EXPERIMENT_DESC:-}" \
+        "${RESUME_ARGS[@]}" \
         "${RSPR_CLI_ARGS[@]}" \
         "${RSPR_TRAILING_ARGS[@]}"
 }

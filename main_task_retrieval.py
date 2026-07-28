@@ -2,12 +2,15 @@ from __future__ import division, print_function, unicode_literals
 
 import argparse
 import datetime
+import json
 import logging
 import math
 import os
 import random
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import torch
@@ -49,6 +52,20 @@ def validate_trusted_cli(args):
 
     if args.datatype != "msrvtt":
         return
+
+    # --resume_from is the single entry point for continuation; the other two
+    # flags either seed weights (--init_model) or seed opt-only state
+    # (--resume_model). Letting more than one through would silently pick one
+    # and hide the ambiguity.
+    if getattr(args, "resume_from", None):
+        if getattr(args, "init_model", None):
+            raise ValueError(
+                "--resume_from and --init_model are mutually exclusive"
+            )
+        if getattr(args, "resume_model", None):
+            raise ValueError(
+                "--resume_from and --resume_model are mutually exclusive"
+            )
 
     if args.do_train and args.eval_split == "test":
         raise ValueError("trusted-v1 training cannot use eval_split=test")
@@ -289,6 +306,21 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--cross_model", default="cross-base", type=str, required=False, help="Cross module")
     parser.add_argument("--init_model", default=None, type=str, required=False, help="Initial model.")
     parser.add_argument("--resume_model", default=None, type=str, required=False, help="Resume train model.")
+    parser.add_argument(
+        "--resume_from",
+        type=str,
+        default=None,
+        help=(
+            "Resume training from the latest checkpoint in this directory. "
+            "Loads model weights, optimizer state (BertAdam carries the "
+            "warmup+cosine step counter inside its own state), and best-val "
+            "trackers, then continues at the epoch after the one saved. "
+            "Refuses to run if the directory's experiment_manifest.json "
+            "disagrees with the current CLI on any knob that would change "
+            "the training curve. Mutually exclusive with --init_model and "
+            "--resume_model."
+        ),
+    )
     parser.add_argument("--do_lower_case", action="store_true", help="Set this flag if you are using an uncased model.")
     parser.add_argument(
         "--warmup_proportion",
@@ -823,6 +855,162 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
     )
 
     return optimizer, scheduler, model
+
+
+@dataclass(frozen=True)
+class ResumeState:
+    """Everything the training loop needs to continue an interrupted run.
+
+    ``epochs_completed`` is the number of epochs that finished cleanly in the
+    source run (i.e. one more than the largest saved bin index). ``start_epoch``
+    is the value the epoch loop's ``range()`` should start at -- they are equal
+    by construction, so the pair is redundant, but keeping both makes the
+    resume log line readable without arithmetic.
+    """
+
+    model_path: Path
+    opt_path: Path
+    start_epoch: int
+    epochs_completed: int
+    best_val: Optional[dict]
+
+
+_RESUME_RECIPE_FIELDS = (
+    # (accessor, args attribute, human name). Anything that changes the
+    # training curve has to match; anything that only changes bookkeeping
+    # (output_dir, run_id, workers, prefetch) does not.
+    (("profile",), "experiment_profile", "profile"),
+    (("seed",), "seed", "seed"),
+    (("batch", "requested_effective_batch"), "batch_size", "batch"),
+    (
+        ("batch", "gradient_accumulation_steps"),
+        "gradient_accumulation_steps",
+        "gradient_accumulation_steps",
+    ),
+    (("optimization", "epochs"), "epochs", "epochs"),
+    (("optimization", "lr"), "lr", "lr"),
+    (("optimization", "coef_lr"), "coef_lr", "coef_lr"),
+    (
+        ("optimization", "freeze_layer_num"),
+        "freeze_layer_num",
+        "freeze_layer_num",
+    ),
+    (("optimization", "max_frames"), "max_frames", "max_frames"),
+    (("optimization", "max_words"), "max_words", "max_words"),
+    (("optimization", "slice_framepos"), "slice_framepos", "slice_framepos"),
+)
+
+
+def _dig(mapping, path):
+    for key in path:
+        if not isinstance(mapping, dict) or key not in mapping:
+            return None
+        mapping = mapping[key]
+    return mapping
+
+
+def resolve_resume_target(directory, args):
+    """Find the latest resumable epoch in ``directory`` and check its recipe.
+
+    Returns a ``ResumeState``. Raises ``ValueError`` if the directory is
+    missing, its manifest is missing, its recipe disagrees with ``args`` on
+    any curve-affecting knob, no (model, opt) pair survives on disk, or every
+    epoch in ``args.epochs`` is already saved (nothing to continue).
+    """
+
+    path = Path(directory)
+    if not path.exists():
+        raise ValueError(f"resume directory does not exist: {path}")
+
+    manifest_path = path / "experiment_manifest.json"
+    if not manifest_path.exists():
+        raise ValueError(
+            f"resume directory has no experiment_manifest.json: {path}"
+        )
+    manifest = json.loads(manifest_path.read_text())
+
+    mismatches = []
+    for accessor, attr, name in _RESUME_RECIPE_FIELDS:
+        saved = _dig(manifest, accessor)
+        current = getattr(args, attr, None)
+        if saved != current:
+            mismatches.append(f"{name}: saved={saved!r} current={current!r}")
+    if mismatches:
+        raise ValueError(
+            "resume manifest disagrees with current recipe on: "
+            + "; ".join(mismatches)
+        )
+
+    # The largest bin.N with a matching opt.bin.N. A bin without its opt
+    # cannot resume BertAdam's step counter, so it is discarded rather than
+    # used with a fabricated LR position.
+    saved_epochs = []
+    for entry in path.glob("pytorch_model.bin.*"):
+        suffix = entry.name[len("pytorch_model.bin."):]
+        if not suffix.isdigit():
+            continue
+        epoch = int(suffix)
+        opt = path / f"pytorch_opt.bin.{epoch}"
+        if opt.exists():
+            saved_epochs.append(epoch)
+    if not saved_epochs:
+        raise ValueError(f"resume directory has no saved epochs: {path}")
+
+    latest = max(saved_epochs)
+    epochs_completed = latest + 1
+    if epochs_completed >= int(getattr(args, "epochs", 0)):
+        raise ValueError(
+            f"resume source already completed {epochs_completed} of "
+            f"{args.epochs} epochs; nothing to resume"
+        )
+
+    best_val = None
+    snapshot = path / "best_validation_checkpoints.json"
+    if snapshot.exists():
+        best_val = json.loads(snapshot.read_text())
+
+    return ResumeState(
+        model_path=path / f"pytorch_model.bin.{latest}",
+        opt_path=path / f"pytorch_opt.bin.{latest}",
+        start_epoch=epochs_completed,
+        epochs_completed=epochs_completed,
+        best_val=best_val,
+    )
+
+
+def write_best_validation_snapshot(
+    directory,
+    *,
+    epochs_completed,
+    best_t2v_score,
+    best_t2v_checkpoint,
+    best_v2t_score,
+    best_v2t_checkpoint,
+):
+    """Persist the best-val trackers after every epoch.
+
+    The old code wrote this file only at end-of-loop, so an OOM at epoch 4
+    left resume with no way to know that epoch 2 had already beaten every
+    epoch 4-5 might produce. Writing per epoch is cheap (one JSON, atomic)
+    and turns the trackers into resumable state.
+    """
+
+    payload = {
+        "selection_split": "val",
+        "tie_break": "later_epoch",
+        "epochs_completed": int(epochs_completed),
+        "t2v": {
+            "selection_metric": "t2v_r1",
+            "selection_score": float(best_t2v_score),
+            "checkpoint": str(best_t2v_checkpoint),
+        },
+        "v2t": {
+            "selection_metric": "v2t_r1",
+            "selection_score": float(best_v2t_score),
+            "checkpoint": str(best_v2t_checkpoint),
+        },
+    }
+    atomic_write_json(Path(directory) / "best_validation_checkpoints.json", payload)
 
 
 def save_model(epoch, args, model, optimizer, tr_loss, type_name=""):
@@ -1601,6 +1789,21 @@ def main():
     tokenizer = ClipTokenizer()
 
     assert args.task_type == "retrieval"
+    # Resolve --resume_from before init_model() runs: the resume dir's newest
+    # bin.N is what init_model() should load, so we point --init_model at it
+    # and stash the rest of the resume state on args for the training loop.
+    args._resume_state = None
+    if getattr(args, "resume_from", None):
+        args._resume_state = resolve_resume_target(args.resume_from, args)
+        args.init_model = str(args._resume_state.model_path)
+        if is_global_rank_zero(args):
+            logger.info(
+                "Resuming from %s: %d/%d epochs completed, next epoch %d",
+                args.resume_from,
+                args._resume_state.epochs_completed,
+                args.epochs,
+                args._resume_state.start_epoch + 1,
+            )
     model = init_model(args, device, n_gpu, args.local_rank)
     apply_rspr_freeze_contract(model, args)
 
@@ -1692,17 +1895,34 @@ def main():
         # resume optimizer state besides loss to continue train
         ## ##############################################################
         resumed_epoch = 0
-        if args.resume_model:
+        if args._resume_state is not None:
+            resume_state = args._resume_state
+            checkpoint = torch.load(str(resume_state.opt_path), map_location="cpu")
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            resumed_epoch = resume_state.start_epoch
+            if resume_state.best_val is not None:
+                best_t2v_score = float(resume_state.best_val["t2v"]["selection_score"])
+                best_t2v_checkpoint = str(resume_state.best_val["t2v"]["checkpoint"])
+                best_v2t_score = float(resume_state.best_val["v2t"]["selection_score"])
+                best_v2t_checkpoint = str(resume_state.best_val["v2t"]["checkpoint"])
+        elif args.resume_model:
             checkpoint = torch.load(args.resume_model, map_location="cpu")
             optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             resumed_epoch = checkpoint["epoch"] + 1
             # resumed_loss = checkpoint['loss']  # unused (kept for potential debugging)
 
-        global_step = 0
+        # global_step drives log cadence and the ETA display. BertAdam's own
+        # step counter is inside the optimizer state and was restored above;
+        # this just lines the human-facing counter up with it.
+        global_step = resumed_epoch * batch_semantics["optimizer_steps_per_epoch"]
 
         if args.local_rank == 0:
             if resumed_epoch > 0:
-                logger.info("Resuming training from epoch %d", resumed_epoch + 1)
+                logger.info(
+                    "Resuming training from epoch %d (best T2V R@1 so far: %.1f)",
+                    resumed_epoch + 1,
+                    best_t2v_score if best_t2v_score != float("-inf") else 0.0,
+                )
             logger.info("=" * 60)
 
         for epoch in range(resumed_epoch, args.epochs):
@@ -1763,29 +1983,21 @@ def main():
                     best_v2t_score,
                     best_v2t_checkpoint,
                 )
+                # Snapshot the trackers after every epoch so an OOM at epoch N
+                # does not lose the ranking established through epoch N-1.
+                write_best_validation_snapshot(
+                    args.output_dir,
+                    epochs_completed=epoch + 1,
+                    best_t2v_score=best_t2v_score,
+                    best_t2v_checkpoint=best_t2v_checkpoint,
+                    best_v2t_score=best_v2t_score,
+                    best_v2t_checkpoint=best_v2t_checkpoint,
+                )
                 logger.info("=" * 60)
 
         if args.local_rank == 0:
             if best_t2v_checkpoint == "None" or best_v2t_checkpoint == "None":
                 raise RuntimeError("training completed without a validation checkpoint")
-            selection_payload = {
-                "selection_split": "val",
-                "tie_break": "later_epoch",
-                "t2v": {
-                    "selection_metric": "t2v_r1",
-                    "selection_score": best_t2v_score,
-                    "checkpoint": best_t2v_checkpoint,
-                },
-                "v2t": {
-                    "selection_metric": "v2t_r1",
-                    "selection_score": best_v2t_score,
-                    "checkpoint": best_v2t_checkpoint,
-                },
-            }
-            atomic_write_json(
-                Path(args.output_dir) / "best_validation_checkpoints.json",
-                selection_payload,
-            )
 
             if args.run_final_test:
                 model_to_evaluate = model.module if hasattr(model, "module") else model
