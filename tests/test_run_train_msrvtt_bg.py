@@ -139,6 +139,8 @@ def _environment(tmp_path: Path, fake_bin: Path) -> dict[str, str]:
     environment.update(
         {
             "PATH": f"{fake_bin}:{environment['PATH']}",
+            "TVR_TORCHRUN": str(fake_bin / "torchrun"),
+            "TVR_PYTHON": str(fake_bin / "python3"),
             "DATA_PATH": "/dataset",
             "OUTPUT_DIR": str(tmp_path / "checkpoints"),
             "RUN_ID": "unit-run",
@@ -260,7 +262,9 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
         tail_process_pid = int(tail_pid.read_text())
         _wait_for(torchrun_pid)
         torchrun_process_pid = int(torchrun_pid.read_text())
-        log_file = tmp_path / "logs/20260720/121314_rspr_train_msrvtt.log"
+        log_file = (
+            tmp_path / "logs/20260720/20260720_121314_rspr_121314_train_msrvtt.log"
+        )
         _wait_for_text(log_file, log_marker)
         setsid_args = _read_nul_arguments(setsid_arguments)
         assert setsid_args == [
@@ -278,7 +282,7 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
             "-n",
             "50",
             "-F",
-            "logs/20260720/121314_rspr_train_msrvtt.log",
+            "logs/20260720/20260720_121314_rspr_121314_train_msrvtt.log",
         ]
         assert worker_pid == int(setsid_pid.read_text())
         assert os.getsid(worker_pid) == worker_pid
@@ -325,6 +329,14 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
         (
             {"RSPR_MODE": "stochastic", "RSPR_HARD_NEGATIVES": "-1"},
             "RSPR_HARD_NEGATIVES=-1",
+        ),
+        (
+            {"RSPR_MODE": "stochastic", "RSPR_RECALL_SOURCE": "probabilistic"},
+            "RSPR_RECALL_SOURCE=probabilistic",
+        ),
+        (
+            {"RSPR_MODE": "stochastic", "RSPR_RERANK_SCALE": "bogus"},
+            "RSPR_RERANK_SCALE=bogus",
         ),
     ),
 )
@@ -384,6 +396,30 @@ def test_controller_rejects_invalid_rspr_before_detaching_or_building_split(
             {"--rspr_mode": "stochastic", "--rspr_match_mode": "soft", "--rspr_rank_weight": "0"},
             "RSPR_RANK_WEIGHT=0",
         ),
+        (
+            (
+                "--rspr_mode",
+                "stochastic",
+                "--rspr_recall_source",
+                "mean",
+                "--rspr_rerank_scale",
+                "none",
+            ),
+            {
+                "--rspr_mode": "stochastic",
+                "--rspr_recall_source": "mean",
+                "--rspr_rerank_scale": "none",
+            },
+            "RSPR_RECALL_SOURCE=mean",
+        ),
+        (
+            ("--rspr_mode", "stochastic"),
+            {
+                "--rspr_recall_source": "deterministic",
+                "--rspr_rerank_scale": "logit_scale",
+            },
+            "RSPR_RERANK_SCALE=logit_scale",
+        ),
     ),
 )
 def test_worker_uses_effective_rspr_cli_configuration_for_log_and_launch(
@@ -421,6 +457,49 @@ def test_worker_uses_effective_rspr_cli_configuration_for_log_and_launch(
     for key, value in expected.items():
         assert rspr_arguments[key] == value
     assert launch_arguments.count("--rspr_mode") == 1
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_coef_lr"),
+    (
+        ({}, "1e-3"),
+        ({"COEF_LR": "1e-2"}, "1e-2"),
+    ),
+)
+def test_worker_forwards_the_configured_trunk_learning_rate_ratio(
+    tmp_path, overrides, expected_coef_lr
+):
+    script = _copy_script(tmp_path)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    torchrun_arguments = tmp_path / "torchrun.args"
+    _write_executable(fake_bin / "python3", "exit 0\n")
+    _write_executable(
+        fake_bin / "torchrun",
+        'printf "%s\\0" "$@" > "$TORCHRUN_ARGUMENTS"\n',
+    )
+    environment = _environment(tmp_path, fake_bin)
+    environment.update(
+        {
+            "RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER": "1",
+            "TORCHRUN_ARGUMENTS": str(torchrun_arguments),
+            **overrides,
+        }
+    )
+
+    subprocess.run(
+        ["bash", str(script), "--rspr_mode", "stochastic"],
+        cwd=tmp_path,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    launch_arguments = _read_nul_arguments(torchrun_arguments)
+    assert launch_arguments.count("--coef_lr") == 1
+    index = launch_arguments.index("--coef_lr")
+    assert launch_arguments[index + 1] == expected_coef_lr
 
 
 @pytest.mark.parametrize(
@@ -572,7 +651,7 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
         "--coef_lr",
         "1e-3",
         "--freeze_layer_num",
-        "0",
+        "8",
         "--slice_framepos",
         "3",
         "--linear_patch",
@@ -604,6 +683,8 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
         "0.07",
         "--rspr_prob_temperature",
         "0.07",
+        "--rspr_prob_loss",
+        "soft_bce",
         "--rspr_rank_temperature",
         "0.07",
         "--rspr_hard_negatives",
@@ -628,6 +709,10 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
         "1.0",
         "--rspr_rerank_weight",
         "0.1",
+        "--rspr_recall_source",
+        "deterministic",
+        "--rspr_rerank_scale",
+        "logit_scale",
         "--rspr_pair_chunk_size",
         "4096",
         "--experiment_desc",
@@ -651,6 +736,11 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
             },
             ("--batch_size", "128"),
             "hygiene cannot override protected baseline option",
+        ),
+        (
+            {"EXPERIMENT_PROFILE": "default", "RSPR_PROB_LOSS": "bogus"},
+            (),
+            "RSPR_PROB_LOSS=bogus; expected soft_bce or infonce",
         ),
         (
             {"EXPERIMENT_PROFILE": "default", "RSPR_MATCH_TEMPERATURE": "0e0"},

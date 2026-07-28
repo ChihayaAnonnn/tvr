@@ -155,6 +155,7 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "rspr_detach_samples": bool(getattr(args, "rspr_detach_samples", False)),
         "rspr_match_temperature": getattr(args, "rspr_match_temperature", 0.07),
         "rspr_prob_temperature": getattr(args, "rspr_prob_temperature", 0.07),
+        "rspr_prob_loss": getattr(args, "rspr_prob_loss", "soft_bce"),
         "rspr_rank_temperature": getattr(args, "rspr_rank_temperature", 0.07),
         "rspr_hard_negatives": getattr(args, "rspr_hard_negatives", 8),
         "rspr_prior_std": getattr(args, "rspr_prior_std", 0.1),
@@ -169,9 +170,14 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
             args, "rspr_rerank_temperature", 1.0
         ),
         "rspr_rerank_weight": getattr(args, "rspr_rerank_weight", 0.1),
+        "rspr_recall_source": getattr(
+            args, "rspr_recall_source", "deterministic"
+        ),
+        "rspr_rerank_scale": getattr(args, "rspr_rerank_scale", "logit_scale"),
         "rspr_pair_chunk_size": getattr(args, "rspr_pair_chunk_size", 4096),
         "rspr_freeze_clip": bool(getattr(args, "rspr_freeze_clip", False)),
         "rspr_freeze_dsa": bool(getattr(args, "rspr_freeze_dsa", False)),
+        "rspr_grad_diagnostics": bool(getattr(args, "rspr_grad_diagnostics", False)),
     }
     return {
         "protocol_version": split.get("protocol_version") if split else None,

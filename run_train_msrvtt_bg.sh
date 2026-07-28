@@ -23,7 +23,7 @@ run_controller() {
     RUN_ID="${RUN_ID:-${RUN_DATE}_${RUN_SUFFIX}}"
     LOG_DIR="logs/${RUN_DATE}"
     mkdir -p "${LOG_DIR}"
-    LOG_FILE="${LOG_DIR}/${RUN_SUFFIX}_train_msrvtt.log"
+    LOG_FILE="${LOG_DIR}/${RUN_ID}_${RUN_TIME}_train_msrvtt.log"
     TRAIN_PID_FILE="${TRAIN_PID_FILE:-}"
 
     echo "[run_train_msrvtt_bg] RUN_DATE=${RUN_DATE} RUN_TIME=${RUN_TIME} RUN_TAG=${RUN_TAG}"
@@ -51,6 +51,8 @@ run_controller() {
 run_worker() {
     unset RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER
     rspr_load_effective_config "$@" || return $?
+    RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
+    echo "[Experiment] name=${RUN_ID}"
 
     # 抑制 DDP 多卡重复警告（Grad strides do not match 等）
     export TORCH_WARN_ONCE=1
@@ -76,7 +78,6 @@ run_worker() {
         --output-dir "${GENERATED_SPLIT_DIR}"
 
     # Auto-run id to avoid overwriting checkpoints/logs across runs
-    RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
     OUTPUT_DIR=${OUTPUT_DIR:-ckpts/ckpt_msrvtt_${RUN_ID}}
     EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-hygiene}
     CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION:-fp16}
@@ -88,6 +89,7 @@ run_worker() {
     TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
     TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS:-1}
     FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-8}
+    COEF_LR=${COEF_LR:-1e-3}
     if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
         echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
         exit 2
@@ -210,6 +212,7 @@ run_worker() {
     fi
     echo "[run_train_msrvtt_bg:worker] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} NPROC=${NPROC} TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS} TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR} TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE} TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS} TQFS_CACHE_DIR=${TQFS_CACHE_DIR} CLIP_CACHE_DIR=${CLIP_CACHE_DIR}"
     echo "[run_train_msrvtt_bg:worker] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION} CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING} CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS}"
+    echo "[run_train_msrvtt_bg:worker] COEF_LR=${COEF_LR} FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM}"
     echo "[Runtime] python=${TVR_PYTHON} torchrun=${TVR_TORCHRUN}"
     rspr_log_effective_config "run_train_msrvtt_bg:worker"
 
@@ -233,7 +236,7 @@ run_worker() {
         --output_dir "${OUTPUT_DIR}" \
         --lr 1e-4 --max_words 32 --max_frames 8 --batch_size_val 16 \
         --datatype msrvtt --expand_msrvtt_sentences \
-        --feature_framerate 1 --coef_lr 1e-3 \
+        --feature_framerate 1 --coef_lr "${COEF_LR}" \
         --freeze_layer_num "${FREEZE_LAYER_NUM}" --slice_framepos 3 \
         --linear_patch 2d --sim_header seqTransf \
         --pretrained_clip_name ViT-B/16 \

@@ -16,6 +16,7 @@ RSPR_DEFAULTS = {
     "rspr_detach_samples": False,
     "rspr_match_temperature": 0.07,
     "rspr_prob_temperature": 0.07,
+    "rspr_prob_loss": "soft_bce",
     "rspr_rank_temperature": 0.07,
     "rspr_hard_negatives": 8,
     "rspr_prior_std": 0.1,
@@ -28,9 +29,12 @@ RSPR_DEFAULTS = {
     "rspr_det_temperature": 1.0,
     "rspr_rerank_temperature": 1.0,
     "rspr_rerank_weight": 0.1,
+    "rspr_recall_source": "deterministic",
+    "rspr_rerank_scale": "logit_scale",
     "rspr_pair_chunk_size": 4096,
     "rspr_freeze_clip": False,
     "rspr_freeze_dsa": False,
+    "rspr_grad_diagnostics": False,
 }
 
 
@@ -74,6 +78,9 @@ def test_get_args_exposes_exact_rspr_defaults(monkeypatch, tmp_path):
             },
             "hard_negatives",
         ),
+        ({"rspr_mode": "off", "rspr_prob_loss": "bogus"}, "prob_loss"),
+        ({"rspr_mode": "off", "rspr_recall_source": "bogus"}, "recall_source"),
+        ({"rspr_mode": "off", "rspr_rerank_scale": "bogus"}, "rerank_scale"),
         ({"rspr_mode": "off", "rspr_match_temperature": 0.0}, "positive"),
         ({"rspr_mode": "off", "rspr_prob_temperature": -0.1}, "positive"),
         ({"rspr_mode": "off", "rspr_rank_temperature": 0.0}, "positive"),

@@ -1,6 +1,7 @@
 import logging
 from types import MethodType, SimpleNamespace
 
+import numpy as np
 import pytest
 import torch
 import torch.nn.functional as F
@@ -51,16 +52,26 @@ def _inputs(seed=7):
     )
 
 
-def _rerank(matcher, *, top_r=2, pair_chunk_size=3):
-    return rerank_top_r(
-        *_inputs(),
-        matcher,
-        top_r=top_r,
-        deterministic_temperature=2.0,
-        probabilistic_temperature=0.5,
-        probabilistic_weight=0.25,
-        pair_chunk_size=pair_chunk_size,
-    )
+def _rerank(matcher, *, top_r=2, pair_chunk_size=3, **overrides):
+    kwargs = {
+        "top_r": top_r,
+        "deterministic_temperature": 2.0,
+        "probabilistic_temperature": 0.5,
+        "probabilistic_weight": 0.25,
+        "pair_chunk_size": pair_chunk_size,
+    }
+    kwargs.update(overrides)
+    return rerank_top_r(*_inputs(), matcher, **kwargs)
+
+
+def _mean_matrix(text_mean, video_mean):
+    return F.normalize(text_mean, dim=-1) @ F.normalize(video_mean, dim=-1).T
+
+
+def _candidate_mask(scores, top_r, dim):
+    mask = torch.zeros(scores.shape, dtype=torch.bool)
+    mask.scatter_(dim, scores.topk(top_r, dim=dim).indices, True)
+    return mask
 
 
 def test_top_r_scores_only_aligned_candidate_pairs_in_bounded_chunks():
@@ -77,12 +88,8 @@ def test_top_r_candidate_masks_are_direction_independent():
     matcher = _SpyMatcher()
     output = _rerank(matcher, top_r=1)
 
-    t2v_candidates = output.mean_logits.topk(1, dim=1).indices
-    expected_t2v_mask = torch.zeros(3, 5, dtype=torch.bool)
-    expected_t2v_mask.scatter_(1, t2v_candidates, True)
-    v2t_candidates = output.mean_logits.topk(1, dim=0).indices
-    expected_v2t_mask = torch.zeros(3, 5, dtype=torch.bool)
-    expected_v2t_mask.scatter_(0, v2t_candidates, True)
+    expected_t2v_mask = _candidate_mask(output.recall_logits, 1, dim=1)
+    expected_v2t_mask = _candidate_mask(output.recall_logits, 1, dim=0)
 
     assert torch.equal(torch.isfinite(output.text_to_video_logits), expected_t2v_mask)
     assert torch.equal(torch.isfinite(output.video_to_text_logits), expected_v2t_mask)
@@ -93,7 +100,46 @@ def test_top_r_candidate_masks_are_direction_independent():
     )
 
 
-def test_mean_recall_breaks_complete_ties_by_original_candidate_index():
+def test_top_r_recalls_candidates_by_deterministic_logits_by_default():
+    """The RSPR mean retrieves worse than DSA, so it must not gate the pool."""
+
+    deterministic_logits, text_mean, video_mean, *_ = _inputs()
+
+    output = _rerank(_SpyMatcher(), top_r=1)
+
+    torch.testing.assert_close(output.recall_logits, deterministic_logits)
+    deterministic_mask = _candidate_mask(deterministic_logits, 1, dim=1)
+    mean_mask = _candidate_mask(_mean_matrix(text_mean, video_mean), 1, dim=1)
+    assert torch.equal(
+        torch.isfinite(output.text_to_video_logits), deterministic_mask
+    )
+    # the fixture is only meaningful if the two scorers actually disagree
+    assert not torch.equal(deterministic_mask, mean_mask)
+
+
+def test_top_r_can_still_recall_by_probability_mean_for_ablation():
+    deterministic_logits, text_mean, video_mean, *_ = _inputs()
+    expected_mean = _mean_matrix(text_mean, video_mean)
+
+    output = _rerank(_SpyMatcher(), top_r=1, recall_source="mean")
+
+    torch.testing.assert_close(output.recall_logits, expected_mean)
+    assert torch.equal(
+        torch.isfinite(output.text_to_video_logits),
+        _candidate_mask(expected_mean, 1, dim=1),
+    )
+    assert not torch.equal(
+        torch.isfinite(output.text_to_video_logits),
+        _candidate_mask(deterministic_logits, 1, dim=1),
+    )
+
+
+def test_rerank_rejects_an_unknown_recall_source():
+    with pytest.raises(ValueError, match="recall_source"):
+        _rerank(_SpyMatcher(), recall_source="probabilistic")
+
+
+def test_recall_breaks_complete_ties_by_original_candidate_index():
     deterministic_logits = torch.zeros(5, 5)
     text_mean = torch.zeros(5, 8)
     video_mean = torch.zeros(5, 8)
@@ -122,7 +168,7 @@ def test_mean_recall_breaks_complete_ties_by_original_candidate_index():
     assert torch.equal(torch.isfinite(output.video_to_text_logits), expected_v2t)
 
 
-def test_top_r_uses_probability_formula_and_mean_recall_candidates():
+def test_top_r_uses_probability_formula_on_deterministic_candidates():
     matcher = _SpyMatcher()
     inputs = _inputs()
     output = rerank_top_r(
@@ -136,14 +182,80 @@ def test_top_r_uses_probability_formula_and_mean_recall_candidates():
     )
 
     deterministic_logits, text_mean, video_mean, text_samples, video_samples = inputs
-    expected_mean = F.normalize(text_mean, dim=-1) @ F.normalize(video_mean, dim=-1).T
-    torch.testing.assert_close(output.mean_logits, expected_mean)
+    # the RSPR mean stays available as a diagnostic even when it no longer recalls
+    torch.testing.assert_close(
+        output.mean_logits, _mean_matrix(text_mean, video_mean)
+    )
 
     row = torch.arange(3).unsqueeze(1).expand(-1, 2)
-    col = expected_mean.topk(2, dim=1).indices
+    col = deterministic_logits.topk(2, dim=1).indices
     probability = (text_samples[row] * video_samples[col]).sum(dim=-1).mean(dim=-1)
     expected = deterministic_logits[row, col] / 2.0 + 0.25 * probability / 0.5
     torch.testing.assert_close(output.text_to_video_logits[row, col], expected)
+
+
+def test_probabilistic_scale_lifts_the_matcher_onto_the_deterministic_scale():
+    """DSA logits carry logit_scale (~100); the matcher returns bare cosines."""
+
+    deterministic_logits, _text_mean, _video_mean, text_samples, video_samples = (
+        _inputs()
+    )
+
+    unscaled = _rerank(_SpyMatcher(), top_r=2)
+    scaled = _rerank(_SpyMatcher(), top_r=2, probabilistic_scale=100.0)
+
+    row = torch.arange(3).unsqueeze(1).expand(-1, 2)
+    col = deterministic_logits.topk(2, dim=1).indices
+    probability = (text_samples[row] * video_samples[col]).sum(dim=-1).mean(dim=-1)
+    deterministic = deterministic_logits[row, col] / 2.0
+
+    torch.testing.assert_close(
+        unscaled.text_to_video_logits[row, col],
+        deterministic + 0.25 * probability / 0.5,
+    )
+    torch.testing.assert_close(
+        scaled.text_to_video_logits[row, col],
+        deterministic + 0.25 * 100.0 * probability / 0.5,
+    )
+
+
+@pytest.mark.parametrize("value", (0.0, -1.0, float("nan"), float("inf")))
+def test_rerank_rejects_nonpositive_or_nonfinite_probabilistic_scale(value):
+    with pytest.raises(ValueError, match="probabilistic_scale"):
+        _rerank(_SpyMatcher(), probabilistic_scale=value)
+
+
+def test_rerank_exposes_the_raw_matcher_score_on_the_candidate_pairs():
+    """The bare matcher score is the only way to audit what reranking adds.
+
+    Without it a permutation control cannot be run offline, so a reranking gain
+    cannot be told apart from a tie-breaking artefact.
+    """
+
+    deterministic_logits, _text_mean, _video_mean, text_samples, video_samples = (
+        _inputs()
+    )
+
+    output = _rerank(_SpyMatcher(), top_r=2)
+
+    row = torch.arange(3).unsqueeze(1).expand(-1, 2)
+    col = deterministic_logits.topk(2, dim=1).indices
+    probability = (text_samples[row] * video_samples[col]).sum(dim=-1).mean(dim=-1)
+    torch.testing.assert_close(output.probability_logits[row, col], probability)
+
+
+def test_unscored_pairs_leave_the_probability_matrix_undefined():
+    output = _rerank(_SpyMatcher(), top_r=2)
+
+    scored = torch.isfinite(output.probability_logits)
+    torch.testing.assert_close(scored, torch.isfinite(output.pair_uncertainty))
+    assert not scored.all()
+
+
+def test_zero_top_r_scores_no_pair_probabilities():
+    output = _rerank(_SpyMatcher(), top_r=0)
+
+    assert torch.isnan(output.probability_logits).all()
 
 
 def test_top_r_is_elementwise_deterministic_for_fixed_inputs():
@@ -157,22 +269,36 @@ def test_top_r_is_elementwise_deterministic_for_fixed_inputs():
         "video_to_text_logits",
         "mean_logits",
         "pair_uncertainty",
+        "probability_logits",
     ):
         torch.testing.assert_close(
             getattr(first, name), getattr(second, name), equal_nan=True
         )
 
 
-def test_zero_top_r_returns_mean_only_without_calling_matcher():
+def test_zero_top_r_returns_the_recall_matrix_without_calling_matcher():
     matcher = _SpyMatcher()
+    deterministic_logits, *_ = _inputs()
 
     output = _rerank(matcher, top_r=0)
 
     assert matcher.pair_batch_sizes == []
     assert matcher.forward_calls == 0
-    torch.testing.assert_close(output.text_to_video_logits, output.mean_logits)
-    torch.testing.assert_close(output.video_to_text_logits, output.mean_logits)
+    torch.testing.assert_close(output.text_to_video_logits, deterministic_logits)
+    torch.testing.assert_close(output.video_to_text_logits, deterministic_logits)
     assert torch.isnan(output.pair_uncertainty).all()
+
+
+def test_zero_top_r_with_mean_recall_reproduces_pure_rspr_retrieval():
+    matcher = _SpyMatcher()
+    _deterministic, text_mean, video_mean, *_ = _inputs()
+
+    output = _rerank(matcher, top_r=0, recall_source="mean")
+
+    expected = _mean_matrix(text_mean, video_mean)
+    assert matcher.pair_batch_sizes == []
+    torch.testing.assert_close(output.text_to_video_logits, expected)
+    torch.testing.assert_close(output.video_to_text_logits, expected)
 
 
 def _distribution_model(mode="stochastic", seed=23):
@@ -227,6 +353,20 @@ def test_distribution_interfaces_refine_modalities_and_exclude_extra_tokens():
         torch.testing.assert_close(first.mean, second.mean)
         torch.testing.assert_close(first.logvar, second.logvar)
         torch.testing.assert_close(first.samples, second.samples)
+
+
+def test_distribution_interfaces_flatten_dataloader_masks():
+    model = _distribution_model()
+    text_tokens = torch.randn(2, 3, 8)
+    video_tokens = torch.randn(2, 4, 8)
+    text_mask = torch.tensor([[[1, 1, 0]], [[1, 1, 1]]])
+    video_mask = torch.tensor([[[1, 1, 0, 0]], [[1, 1, 1, 1]]])
+
+    text_output = model.get_rspr_text_distribution(text_tokens, text_mask)
+    video_output = model.get_rspr_video_distribution(video_tokens, video_mask)
+
+    assert text_output.samples.shape == (2, 4, 8)
+    assert video_output.samples.shape == (2, 4, 8)
 
 
 def test_mean_distribution_interface_returns_one_normalized_mean_sample():
@@ -300,7 +440,9 @@ class _EvaluationModel(nn.Module):
         start, end = self.text_offset, self.text_offset + batch_size
         self.text_offset = end
         self.text_distribution_batches.append(batch_size)
-        mean = text_token[:, 0]
+        # The RSPR head learns its own embedding, so its mean ranks candidates
+        # differently from the DSA similarity; flipping keeps that deterministic.
+        mean = text_token[:, 0].flip(-1)
         samples = F.normalize(
             mean.unsqueeze(1) + self.text_noise[start:end], dim=-1
         )
@@ -330,6 +472,8 @@ def _evaluation_inputs(seed):
         rspr_rerank_temperature=0.7,
         rspr_rerank_weight=0.4,
         rspr_pair_chunk_size=3,
+        rspr_recall_source="deterministic",
+        rspr_rerank_scale="logit_scale",
         eval_vid_chunk_size=2,
     )
     text_sizes = (2, 2)
@@ -372,11 +516,119 @@ def test_rspr_evaluation_returns_full_directional_matrices_and_encodes_once():
 
     output = _run_on_single_gpu(*inputs)
 
-    assert set(output) == {"t2v", "v2t", "mean", "uncertainty"}
+    assert set(output) == {
+        "t2v",
+        "v2t",
+        "mean",
+        "recall",
+        "uncertainty",
+        "probability",
+    }
     assert all(matrix.shape == (4, 5) for matrix in output.values())
     assert model.text_distribution_batches == [2, 2]
     assert model.video_distribution_batches == [2, 2, 1]
     assert (torch.from_numpy(output["v2t"]).isfinite().sum(dim=0) == 2).all()
+
+
+def test_evaluation_reports_the_raw_probability_matrix():
+    """Auditing what reranking adds needs the matcher score, not just S_final."""
+
+    model, inputs = _evaluation_inputs(seed=17)
+
+    output = _run_on_single_gpu(*inputs)
+
+    assert output["probability"].shape == (4, 5)
+    scored = np.isfinite(output["probability"])
+    assert scored.any() and not scored.all()
+    np.testing.assert_array_equal(scored, np.isfinite(output["uncertainty"]))
+
+
+def test_score_dump_round_trips_every_evaluation_matrix(tmp_path):
+    model, inputs = _evaluation_inputs(seed=17)
+    destination = tmp_path / "nested" / "scores.npz"
+    inputs[1].rspr_dump_scores = str(destination)
+
+    output = _run_on_single_gpu(*inputs)
+    main_task_retrieval.dump_rspr_scores(inputs[1], output)
+
+    restored = np.load(destination)
+    assert set(restored) == set(output)
+    for name, matrix in output.items():
+        np.testing.assert_array_equal(restored[name], matrix)
+
+
+def test_score_dump_is_skipped_when_no_destination_is_configured(tmp_path):
+    model, inputs = _evaluation_inputs(seed=17)
+    inputs[1].rspr_dump_scores = ""
+
+    main_task_retrieval.dump_rspr_scores(inputs[1], _run_on_single_gpu(*inputs))
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_evaluation_recall_matrix_is_the_deterministic_similarity():
+    model, inputs = _evaluation_inputs(seed=17)
+
+    output = _run_on_single_gpu(*inputs)
+
+    text = torch.cat([values for values, _ in inputs[4]])[:, 0]
+    video = torch.cat(inputs[5])[:, 0]
+    torch.testing.assert_close(
+        torch.from_numpy(output["recall"]), text @ video.T
+    )
+    # the RSPR mean is still reported, it just no longer gates the candidates
+    assert not torch.allclose(
+        torch.from_numpy(output["recall"]), torch.from_numpy(output["mean"])
+    )
+
+
+def test_evaluation_scales_the_probabilistic_term_by_clip_logit_scale(monkeypatch):
+    _model, inputs = _evaluation_inputs(seed=17)
+    inputs[0].clip = SimpleNamespace(logit_scale=torch.tensor(4.0).log())
+    seen = {}
+    original = main_task_retrieval.rerank_top_r
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(main_task_retrieval, "rerank_top_r", spy)
+    _run_on_single_gpu(*inputs)
+
+    assert seen["probabilistic_scale"] == pytest.approx(4.0)
+    assert seen["recall_source"] == "deterministic"
+
+
+def test_evaluation_can_disable_scale_matching_for_ablation(monkeypatch):
+    _model, inputs = _evaluation_inputs(seed=17)
+    inputs[0].clip = SimpleNamespace(logit_scale=torch.tensor(4.0).log())
+    inputs[1].rspr_rerank_scale = "none"
+    seen = {}
+    original = main_task_retrieval.rerank_top_r
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "rerank_top_r",
+        lambda *args, **kwargs: (seen.update(kwargs), original(*args, **kwargs))[1],
+    )
+
+    _run_on_single_gpu(*inputs)
+
+    assert seen["probabilistic_scale"] == pytest.approx(1.0)
+
+
+def test_evaluation_without_a_clip_trunk_falls_back_to_unit_scale(monkeypatch):
+    _model, inputs = _evaluation_inputs(seed=17)
+    seen = {}
+    original = main_task_retrieval.rerank_top_r
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "rerank_top_r",
+        lambda *args, **kwargs: (seen.update(kwargs), original(*args, **kwargs))[1],
+    )
+
+    _run_on_single_gpu(*inputs)
+
+    assert seen["probabilistic_scale"] == pytest.approx(1.0)
 
 
 def test_rspr_evaluation_is_repeatable_and_seed_only_changes_reranking():
@@ -729,6 +981,7 @@ def test_mean_only_eval_counts_each_fully_tied_query_once(monkeypatch):
         "t2v": tied.copy(),
         "v2t": tied.copy(),
         "mean": tied.copy(),
+        "recall": tied.copy(),
         "uncertainty": torch.full((3, 3), torch.nan).numpy(),
     }
     monkeypatch.setattr(

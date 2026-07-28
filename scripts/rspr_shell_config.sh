@@ -9,6 +9,7 @@ rspr_load_effective_config() {
     RSPR_DETACH_SAMPLES=${RSPR_DETACH_SAMPLES:-0}
     RSPR_MATCH_TEMPERATURE=${RSPR_MATCH_TEMPERATURE:-0.07}
     RSPR_PROB_TEMPERATURE=${RSPR_PROB_TEMPERATURE:-0.07}
+    RSPR_PROB_LOSS=${RSPR_PROB_LOSS:-soft_bce}
     RSPR_RANK_TEMPERATURE=${RSPR_RANK_TEMPERATURE:-0.07}
     RSPR_HARD_NEGATIVES=${RSPR_HARD_NEGATIVES:-8}
     RSPR_PRIOR_STD=${RSPR_PRIOR_STD:-0.1}
@@ -21,9 +22,15 @@ rspr_load_effective_config() {
     RSPR_DET_TEMPERATURE=${RSPR_DET_TEMPERATURE:-1.0}
     RSPR_RERANK_TEMPERATURE=${RSPR_RERANK_TEMPERATURE:-1.0}
     RSPR_RERANK_WEIGHT=${RSPR_RERANK_WEIGHT:-0.1}
+    RSPR_RECALL_SOURCE=${RSPR_RECALL_SOURCE:-deterministic}
+    RSPR_RERANK_SCALE=${RSPR_RERANK_SCALE:-logit_scale}
     RSPR_PAIR_CHUNK_SIZE=${RSPR_PAIR_CHUNK_SIZE:-4096}
+    # Empty means "do not dump"; a path lets reranking controls replay the run's
+    # score matrices offline instead of costing another GPU pass per question.
+    RSPR_DUMP_SCORES=${RSPR_DUMP_SCORES:-}
     RSPR_FREEZE_CLIP=${RSPR_FREEZE_CLIP:-0}
     RSPR_FREEZE_DSA=${RSPR_FREEZE_DSA:-0}
+    RSPR_GRAD_DIAGNOSTICS=${RSPR_GRAD_DIAGNOSTICS:-0}
 
     RSPR_TRAILING_ARGS=()
     while [[ "$#" -gt 0 ]]; do
@@ -40,7 +47,11 @@ rspr_load_effective_config() {
                 RSPR_FREEZE_DSA=1
                 shift
                 ;;
-            --rspr_mode|--rspr_sample_count|--rspr_eval_sample_count|--rspr_match_mode|--rspr_match_temperature|--rspr_prob_temperature|--rspr_rank_temperature|--rspr_hard_negatives|--rspr_prior_std|--rspr_prob_weight|--rspr_rank_weight|--rspr_anchor_weight|--rspr_warmup_epochs|--rspr_eval_seed|--rspr_top_r|--rspr_det_temperature|--rspr_rerank_temperature|--rspr_rerank_weight|--rspr_pair_chunk_size)
+            --rspr_grad_diagnostics)
+                RSPR_GRAD_DIAGNOSTICS=1
+                shift
+                ;;
+            --rspr_mode|--rspr_sample_count|--rspr_eval_sample_count|--rspr_match_mode|--rspr_match_temperature|--rspr_prob_temperature|--rspr_prob_loss|--rspr_rank_temperature|--rspr_hard_negatives|--rspr_prior_std|--rspr_prob_weight|--rspr_rank_weight|--rspr_anchor_weight|--rspr_warmup_epochs|--rspr_eval_seed|--rspr_top_r|--rspr_det_temperature|--rspr_rerank_temperature|--rspr_rerank_weight|--rspr_recall_source|--rspr_rerank_scale|--rspr_pair_chunk_size|--rspr_dump_scores)
                 if [[ "$#" -lt 2 ]]; then
                     echo "Missing value for $1" >&2
                     return 2
@@ -76,6 +87,7 @@ rspr_assign_cli_value() {
         --rspr_match_mode) RSPR_MATCH_MODE="$2" ;;
         --rspr_match_temperature) RSPR_MATCH_TEMPERATURE="$2" ;;
         --rspr_prob_temperature) RSPR_PROB_TEMPERATURE="$2" ;;
+        --rspr_prob_loss) RSPR_PROB_LOSS="$2" ;;
         --rspr_rank_temperature) RSPR_RANK_TEMPERATURE="$2" ;;
         --rspr_hard_negatives) RSPR_HARD_NEGATIVES="$2" ;;
         --rspr_prior_std) RSPR_PRIOR_STD="$2" ;;
@@ -88,7 +100,10 @@ rspr_assign_cli_value() {
         --rspr_det_temperature) RSPR_DET_TEMPERATURE="$2" ;;
         --rspr_rerank_temperature) RSPR_RERANK_TEMPERATURE="$2" ;;
         --rspr_rerank_weight) RSPR_RERANK_WEIGHT="$2" ;;
+        --rspr_recall_source) RSPR_RECALL_SOURCE="$2" ;;
+        --rspr_rerank_scale) RSPR_RERANK_SCALE="$2" ;;
         --rspr_pair_chunk_size) RSPR_PAIR_CHUNK_SIZE="$2" ;;
+        --rspr_dump_scores) RSPR_DUMP_SCORES="$2" ;;
         *)
             echo "Unsupported RSPR CLI option $1" >&2
             return 2
@@ -106,7 +121,19 @@ rspr_validate_effective_config() {
         echo "Unsupported RSPR_MATCH_MODE=${RSPR_MATCH_MODE}; expected soft or hard" >&2
         return 2
     fi
-    for _RSPR_BOOLEAN in RSPR_DETACH_SAMPLES RSPR_FREEZE_CLIP RSPR_FREEZE_DSA; do
+    if [[ "${RSPR_PROB_LOSS}" != "soft_bce" && "${RSPR_PROB_LOSS}" != "infonce" ]]; then
+        echo "Unsupported RSPR_PROB_LOSS=${RSPR_PROB_LOSS}; expected soft_bce or infonce" >&2
+        return 2
+    fi
+    if [[ "${RSPR_RECALL_SOURCE}" != "deterministic" && "${RSPR_RECALL_SOURCE}" != "mean" ]]; then
+        echo "Unsupported RSPR_RECALL_SOURCE=${RSPR_RECALL_SOURCE}; expected deterministic or mean" >&2
+        return 2
+    fi
+    if [[ "${RSPR_RERANK_SCALE}" != "logit_scale" && "${RSPR_RERANK_SCALE}" != "none" ]]; then
+        echo "Unsupported RSPR_RERANK_SCALE=${RSPR_RERANK_SCALE}; expected logit_scale or none" >&2
+        return 2
+    fi
+    for _RSPR_BOOLEAN in RSPR_DETACH_SAMPLES RSPR_FREEZE_CLIP RSPR_FREEZE_DSA RSPR_GRAD_DIAGNOSTICS; do
         if [[ "${!_RSPR_BOOLEAN}" != "0" && "${!_RSPR_BOOLEAN}" != "1" ]]; then
             echo "Unsupported ${_RSPR_BOOLEAN}=${!_RSPR_BOOLEAN}; expected 0 or 1" >&2
             return 2
@@ -188,6 +215,7 @@ rspr_build_cli_args() {
         --rspr_match_mode "${RSPR_MATCH_MODE}"
         --rspr_match_temperature "${RSPR_MATCH_TEMPERATURE}"
         --rspr_prob_temperature "${RSPR_PROB_TEMPERATURE}"
+        --rspr_prob_loss "${RSPR_PROB_LOSS}"
         --rspr_rank_temperature "${RSPR_RANK_TEMPERATURE}"
         --rspr_hard_negatives "${RSPR_HARD_NEGATIVES}"
         --rspr_prior_std "${RSPR_PRIOR_STD}"
@@ -200,8 +228,13 @@ rspr_build_cli_args() {
         --rspr_det_temperature "${RSPR_DET_TEMPERATURE}"
         --rspr_rerank_temperature "${RSPR_RERANK_TEMPERATURE}"
         --rspr_rerank_weight "${RSPR_RERANK_WEIGHT}"
+        --rspr_recall_source "${RSPR_RECALL_SOURCE}"
+        --rspr_rerank_scale "${RSPR_RERANK_SCALE}"
         --rspr_pair_chunk_size "${RSPR_PAIR_CHUNK_SIZE}"
     )
+    if [[ -n "${RSPR_DUMP_SCORES}" ]]; then
+        RSPR_CLI_ARGS+=(--rspr_dump_scores "${RSPR_DUMP_SCORES}")
+    fi
     if [[ "${RSPR_DETACH_SAMPLES}" == "1" ]]; then
         RSPR_CLI_ARGS+=(--rspr_detach_samples)
     fi
@@ -211,10 +244,13 @@ rspr_build_cli_args() {
     if [[ "${RSPR_FREEZE_DSA}" == "1" ]]; then
         RSPR_CLI_ARGS+=(--rspr_freeze_dsa)
     fi
+    if [[ "${RSPR_GRAD_DIAGNOSTICS}" == "1" ]]; then
+        RSPR_CLI_ARGS+=(--rspr_grad_diagnostics)
+    fi
 }
 
 
 rspr_log_effective_config() {
     local prefix="$1"
-    echo "[${prefix}] RSPR_MODE=${RSPR_MODE} RSPR_K=${RSPR_SAMPLE_COUNT} RSPR_EVAL_K=${RSPR_EVAL_SAMPLE_COUNT} RSPR_PROB_WEIGHT=${RSPR_PROB_WEIGHT} RSPR_RANK_WEIGHT=${RSPR_RANK_WEIGHT} RSPR_ANCHOR_WEIGHT=${RSPR_ANCHOR_WEIGHT} RSPR_FREEZE_CLIP=${RSPR_FREEZE_CLIP} RSPR_FREEZE_DSA=${RSPR_FREEZE_DSA} RSPR_TOP_R=${RSPR_TOP_R} RSPR_EVAL_SEED=${RSPR_EVAL_SEED}"
+    echo "[${prefix}] RSPR_MODE=${RSPR_MODE} RSPR_K=${RSPR_SAMPLE_COUNT} RSPR_EVAL_K=${RSPR_EVAL_SAMPLE_COUNT} RSPR_PROB_WEIGHT=${RSPR_PROB_WEIGHT} RSPR_RANK_WEIGHT=${RSPR_RANK_WEIGHT} RSPR_ANCHOR_WEIGHT=${RSPR_ANCHOR_WEIGHT} RSPR_FREEZE_CLIP=${RSPR_FREEZE_CLIP} RSPR_FREEZE_DSA=${RSPR_FREEZE_DSA} RSPR_TOP_R=${RSPR_TOP_R} RSPR_RECALL_SOURCE=${RSPR_RECALL_SOURCE} RSPR_RERANK_SCALE=${RSPR_RERANK_SCALE} RSPR_EVAL_SEED=${RSPR_EVAL_SEED}"
 }

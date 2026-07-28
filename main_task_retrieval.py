@@ -2,6 +2,7 @@ from __future__ import division, print_function, unicode_literals
 
 import argparse
 import datetime
+import logging
 import math
 import os
 import random
@@ -26,11 +27,17 @@ from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modules.modeling import UATVR
 from modules.optimization import BertAdam
-from modules.rspr_rerank import build_full_ranking_scores, rerank_top_r
+from modules.rspr_rerank import (
+    RECALL_SOURCES,
+    build_full_ranking_scores,
+    rerank_top_r,
+)
 from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
 from util import get_logger, parallel_apply
 
-global logger
+# ``main`` rebinds this to the run's file logger; the module-level default keeps
+# helpers importable and callable outside a training run.
+logger = logging.getLogger(__name__)
 
 
 def validate_trusted_cli(args):
@@ -91,6 +98,19 @@ def validate_rspr_cli(args):
         isinstance(args.rspr_hard_negatives, bool) or args.rspr_hard_negatives <= 0
     ):
         raise ValueError("--rspr_hard_negatives must be a positive integer")
+
+    if getattr(args, "rspr_prob_loss", "soft_bce") not in {"soft_bce", "infonce"}:
+        raise ValueError("--rspr_prob_loss must be soft_bce or infonce")
+
+    if getattr(args, "rspr_recall_source", "deterministic") not in RECALL_SOURCES:
+        raise ValueError(
+            f"--rspr_recall_source must be one of {RECALL_SOURCES}"
+        )
+    if getattr(args, "rspr_rerank_scale", "logit_scale") not in {
+        "logit_scale",
+        "none",
+    }:
+        raise ValueError("--rspr_rerank_scale must be logit_scale or none")
 
     for name in (
         "rspr_match_temperature",
@@ -370,6 +390,8 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--rspr_detach_samples", action="store_true")
     parser.add_argument("--rspr_match_temperature", type=float, default=0.07)
     parser.add_argument("--rspr_prob_temperature", type=float, default=0.07)
+    parser.add_argument("--rspr_prob_loss", type=str, default="soft_bce")
+    parser.add_argument("--rspr_grad_diagnostics", action="store_true")
     parser.add_argument("--rspr_rank_temperature", type=float, default=0.07)
     parser.add_argument("--rspr_hard_negatives", type=int, default=8)
     parser.add_argument("--rspr_prior_std", type=float, default=0.1)
@@ -382,6 +404,29 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--rspr_det_temperature", type=float, default=1.0)
     parser.add_argument("--rspr_rerank_temperature", type=float, default=1.0)
     parser.add_argument("--rspr_rerank_weight", type=float, default=0.1)
+    parser.add_argument(
+        "--rspr_recall_source",
+        type=str,
+        default="deterministic",
+        choices=RECALL_SOURCES,
+        help="Scorer that picks the Top-R candidates. The RSPR mean retrieves "
+             "worse than the DSA head, so recalling with it caps the pipeline.",
+    )
+    parser.add_argument(
+        "--rspr_rerank_scale",
+        type=str,
+        default="logit_scale",
+        choices=("logit_scale", "none"),
+        help="Lift the matcher's cosine onto the deterministic logit scale "
+             "before reranking. 'none' reproduces the unscaled ablation.",
+    )
+    parser.add_argument(
+        "--rspr_dump_scores",
+        type=str,
+        default="",
+        help="Write the evaluation score matrices to this .npz so reranking "
+             "controls can be replayed offline. Empty disables the dump.",
+    )
     parser.add_argument("--rspr_pair_chunk_size", type=int, default=4096)
     parser.add_argument("--rspr_freeze_clip", action="store_true")
     parser.add_argument("--rspr_freeze_dsa", action="store_true")
@@ -534,6 +579,7 @@ def set_seed_logger(args):
                 "rspr_detach_samples",
                 "rspr_match_temperature",
                 "rspr_prob_temperature",
+                "rspr_prob_loss",
                 "rspr_rank_temperature",
                 "rspr_hard_negatives",
                 "rspr_prior_std",
@@ -546,9 +592,12 @@ def set_seed_logger(args):
                 "rspr_det_temperature",
                 "rspr_rerank_temperature",
                 "rspr_rerank_weight",
+                "rspr_recall_source",
+                "rspr_rerank_scale",
                 "rspr_pair_chunk_size",
                 "rspr_freeze_clip",
                 "rspr_freeze_dsa",
+                "rspr_grad_diagnostics",
             ],
             "Protocol": [
                 "datatype",
@@ -845,6 +894,8 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             if warmup_epochs == 0
             else min(1.0, progress_epoch / warmup_epochs)
         )
+        # Warm-up throttles the discriminative pressure (prob/rank); the anchor
+        # KL is the only variance-preserving force and must stay at full weight.
         loss = model(
             input_ids,
             segment_ids,
@@ -852,8 +903,9 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             video,
             video_mask,
             group_ids=group_ids,
+            rspr_prob_scale=rspr_warmup_scale,
             rspr_rank_scale=rspr_warmup_scale,
-            rspr_anchor_scale=rspr_warmup_scale,
+            rspr_anchor_scale=1.0,
         )
 
         if n_gpu > 1:
@@ -950,12 +1002,18 @@ def _format_rspr_diagnostics(model):
     ):
         return ""
     values = {name: float(diagnostics[name]) for name in required}
-    return (
+    formatted = (
         " | dsa={dsa:.4f} prob={prob:.4f} rank={rank:.4f} anchor={anchor:.4f}"
         " u_pair={pair_uncertainty_mean:.4f}"
         " variance_t={text_variance_mean:.4f}"
         " variance_v={video_variance_mean:.4f}"
     ).format(**values)
+    gradient_names = ("grad_prob_logvar", "grad_rank_logvar", "grad_anchor_logvar")
+    if all(name in diagnostics for name in gradient_names):
+        formatted += "".join(
+            f" {name}={float(diagnostics[name]):.3e}" for name in gradient_names
+        )
+    return formatted
 
 
 def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
@@ -990,6 +1048,42 @@ def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
         "MUS stats | mean=%.4f  high_ratio(>0.5)=%.3f  n_queries=%d  log=%s",
         mean_mus, high_ratio, len(mus_scores), out_file,
     )
+
+
+def dump_rspr_scores(args, retrieval_output):
+    """Persist the raw evaluation matrices so controls can run without a GPU.
+
+    Reranking questions ("does the matcher carry information, or is it only
+    breaking ties?", "does the pair uncertainty predict correctness?") are all
+    answerable from these matrices, and re-running the model for each one costs
+    far more than storing them once.
+    """
+
+    destination = getattr(args, "rspr_dump_scores", "")
+    if not destination:
+        return
+    directory = os.path.dirname(destination)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    np.savez(destination, **retrieval_output)
+    logger.info("RSPR score matrices written to %s", destination)
+
+
+def _rerank_probabilistic_scale(model, args):
+    """Return the factor that puts the matcher on the deterministic scale.
+
+    The deterministic logits are CLIP cosines multiplied by ``logit_scale``
+    (~100 after training), while the matcher emits bare cosines. Reranking with
+    the raw matcher output therefore perturbs the ranking by ~1e-3 of a rank gap
+    no matter how ``rspr_rerank_weight`` is tuned.
+    """
+
+    if getattr(args, "rspr_rerank_scale", "logit_scale") != "logit_scale":
+        return 1.0
+    logit_scale = getattr(getattr(model, "clip", None), "logit_scale", None)
+    if logit_scale is None:
+        return 1.0
+    return float(logit_scale.detach().exp())
 
 
 def _run_on_single_gpu(
@@ -1072,12 +1166,16 @@ def _run_on_single_gpu(
             probabilistic_temperature=args.rspr_rerank_temperature,
             probabilistic_weight=args.rspr_rerank_weight,
             pair_chunk_size=args.rspr_pair_chunk_size,
+            probabilistic_scale=_rerank_probabilistic_scale(model, args),
+            recall_source=getattr(args, "rspr_recall_source", "deterministic"),
         )
         return {
             "t2v": output.text_to_video_logits.detach().cpu().numpy(),
             "v2t": output.video_to_text_logits.detach().cpu().numpy(),
             "mean": output.mean_logits.detach().cpu().numpy(),
+            "recall": output.recall_logits.detach().cpu().numpy(),
             "uncertainty": output.pair_uncertainty.detach().cpu().numpy(),
+            "probability": output.probability_logits.detach().cpu().numpy(),
         }
 
     return sim_matrix
@@ -1122,15 +1220,17 @@ def _reshape_multi_sentence_matrix(sim_matrix, cut_off_points):
 def _build_rspr_metric_matrices(
     text_to_video_logits,
     video_to_text_logits,
-    mean_logits,
+    tail_logits,
 ):
+    """Order the reranked Top-R head above the tail left by the recall scorer."""
+
     text_to_video = build_full_ranking_scores(
         torch.from_numpy(text_to_video_logits),
-        torch.from_numpy(mean_logits),
+        torch.from_numpy(tail_logits),
     )
     video_to_text = build_full_ranking_scores(
         torch.from_numpy(video_to_text_logits.T),
-        torch.from_numpy(mean_logits.T),
+        torch.from_numpy(tail_logits.T),
     ).T
     return text_to_video.numpy(), video_to_text.numpy()
 
@@ -1339,9 +1439,13 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
                 batch_visual_output_list,
             )
             if rspr_eval:
+                dump_rspr_scores(args, retrieval_output)
                 sim_matrix = retrieval_output["t2v"]
                 v2t_directional_matrix = retrieval_output["v2t"]
-                mus_matrix = retrieval_output["mean"]
+                # The unreranked tail must keep the order of whichever scorer
+                # picked the Top-R candidates, not some third ranking.
+                tail_matrix = retrieval_output["recall"]
+                mus_matrix = tail_matrix
             else:
                 sim_matrix = np.concatenate(tuple(retrieval_output), axis=0)
                 v2t_directional_matrix = sim_matrix
@@ -1372,7 +1476,7 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
         metric_t2v_matrix, metric_v2t_matrix = _build_rspr_metric_matrices(
             sim_matrix,
             v2t_directional_matrix,
-            mus_matrix,
+            tail_matrix,
         )
 
     if multi_sentence_:

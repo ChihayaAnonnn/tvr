@@ -13,6 +13,9 @@ from modules.stochastic_prototype_ranking import (
 )
 
 
+RECALL_SOURCES = ("deterministic", "mean")
+
+
 @dataclass(frozen=True)
 class TopRRetrievalOutput:
     """Directional retrieval scores and shared pair diagnostics."""
@@ -20,7 +23,9 @@ class TopRRetrievalOutput:
     text_to_video_logits: torch.Tensor
     video_to_text_logits: torch.Tensor
     mean_logits: torch.Tensor
+    recall_logits: torch.Tensor
     pair_uncertainty: torch.Tensor
+    probability_logits: torch.Tensor
 
 
 def _stable_descending_ranks(scores: torch.Tensor) -> torch.Tensor:
@@ -42,22 +47,27 @@ def _stable_descending_ranks(scores: torch.Tensor) -> torch.Tensor:
 
 def build_full_ranking_scores(
     sparse_logits: torch.Tensor,
-    mean_logits: torch.Tensor,
+    tail_logits: torch.Tensor,
 ) -> torch.Tensor:
-    """Return unique finite scores preserving Top-R then mean-tail order."""
+    """Return unique finite scores preserving Top-R then recall-tail order.
 
-    if sparse_logits.ndim != 2 or mean_logits.shape != sparse_logits.shape:
+    ``tail_logits`` must be the same scores that selected the Top-R candidates,
+    otherwise the reranked head and the unreranked tail are ordered by two
+    different scorers.
+    """
+
+    if sparse_logits.ndim != 2 or tail_logits.shape != sparse_logits.shape:
         raise ValueError(
-            "sparse_logits and mean_logits must have the same 2D shape"
+            "sparse_logits and tail_logits must have the same 2D shape"
         )
 
     selected = torch.isfinite(sparse_logits)
     selected_ranks = _stable_descending_ranks(sparse_logits)
-    mean_ranks = _stable_descending_ranks(mean_logits)
+    tail_ranks = _stable_descending_ranks(tail_logits)
     combined_ranks = torch.where(
         selected,
         selected_ranks,
-        sparse_logits.size(1) + mean_ranks,
+        sparse_logits.size(1) + tail_ranks,
     )
     return -combined_ranks.to(dtype=torch.float64)
 
@@ -96,8 +106,16 @@ def rerank_top_r(
     probabilistic_temperature: float,
     probabilistic_weight: float,
     pair_chunk_size: int,
+    probabilistic_scale: float = 1.0,
+    recall_source: str = "deterministic",
 ) -> TopRRetrievalOutput:
-    """Recall candidates by normalized means and rerank aligned pairs only."""
+    """Recall candidates by ``recall_source`` and rerank aligned pairs only.
+
+    ``probabilistic_scale`` lifts the matcher's bare cosine onto the scale of
+    the deterministic logits, which carry CLIP's ``logit_scale`` (~100). Without
+    it the reranking term is three orders of magnitude too small to reorder
+    anything, whatever ``probabilistic_weight`` is set to.
+    """
 
     if isinstance(top_r, bool) or not isinstance(top_r, int) or top_r < 0:
         raise ValueError("top_r must be a nonnegative integer")
@@ -110,20 +128,35 @@ def rerank_top_r(
     for name, value in (
         ("deterministic_temperature", deterministic_temperature),
         ("probabilistic_temperature", probabilistic_temperature),
+        ("probabilistic_scale", probabilistic_scale),
     ):
         if not math.isfinite(value) or value <= 0:
             raise ValueError(f"{name} must be positive and finite")
+    if recall_source not in RECALL_SOURCES:
+        raise ValueError(
+            f"recall_source must be one of {RECALL_SOURCES}, got {recall_source!r}"
+        )
 
     mean_logits = F.normalize(text_mean, dim=-1) @ F.normalize(
         video_mean, dim=-1
     ).T
+    # The RSPR mean retrieves worse than the deterministic head, so letting it
+    # pick the candidate pool caps the whole pipeline at its recall.
+    recall_logits = (
+        deterministic_logits if recall_source == "deterministic" else mean_logits
+    )
     pair_uncertainty = torch.full_like(mean_logits, torch.nan)
+    # Kept alongside the final score so a permutation control can separate the
+    # matcher's information from its tie-breaking effect without a second pass.
+    probability_logits = torch.full_like(mean_logits, torch.nan)
     if top_r == 0:
         return TopRRetrievalOutput(
-            text_to_video_logits=mean_logits,
-            video_to_text_logits=mean_logits,
+            text_to_video_logits=recall_logits,
+            video_to_text_logits=recall_logits,
             mean_logits=mean_logits,
+            recall_logits=recall_logits,
             pair_uncertainty=pair_uncertainty,
+            probability_logits=probability_logits,
         )
 
     text_count, video_count = mean_logits.shape
@@ -131,24 +164,24 @@ def rerank_top_r(
     v2t_count = min(top_r, text_count)
 
     t2v_video_indices = torch.argsort(
-        mean_logits,
+        recall_logits,
         dim=1,
         descending=True,
         stable=True,
     )[:, :t2v_count]
     t2v_text_indices = (
-        torch.arange(text_count, device=mean_logits.device)
+        torch.arange(text_count, device=recall_logits.device)
         .unsqueeze(1)
         .expand(-1, t2v_count)
     )
     v2t_text_indices = torch.argsort(
-        mean_logits,
+        recall_logits,
         dim=0,
         descending=True,
         stable=True,
     )[:v2t_count]
     v2t_video_indices = (
-        torch.arange(video_count, device=mean_logits.device)
+        torch.arange(video_count, device=recall_logits.device)
         .unsqueeze(0)
         .expand(v2t_count, -1)
     )
@@ -171,7 +204,10 @@ def rerank_top_r(
     deterministic = deterministic_logits[all_text_indices, all_video_indices]
     selected_final = (
         deterministic / deterministic_temperature
-        + probabilistic_weight * probability / probabilistic_temperature
+        + probabilistic_weight
+        * probabilistic_scale
+        * probability
+        / probabilistic_temperature
     )
 
     t2v_pair_count = flat_t2v_text.numel()
@@ -186,10 +222,15 @@ def rerank_top_r(
     pair_uncertainty[all_text_indices, all_video_indices] = uncertainty.to(
         pair_uncertainty.dtype
     )
+    probability_logits[all_text_indices, all_video_indices] = probability.to(
+        probability_logits.dtype
+    )
 
     return TopRRetrievalOutput(
         text_to_video_logits=text_to_video_logits,
         video_to_text_logits=video_to_text_logits,
         mean_logits=mean_logits,
+        recall_logits=recall_logits,
         pair_uncertainty=pair_uncertainty,
+        probability_logits=probability_logits,
     )
