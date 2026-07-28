@@ -5,14 +5,6 @@ line-length = 120
 # Enable isort-compatible import sorting rules.
 extend-select = ["I"]
 
-[tool.ruff.lint.per-file-ignores]
-# Vendored PCME. `forward_` reads two names whose only assignment upstream
-# commented out, so it raises NameError if anything ever calls it -- but
-# nothing does, and nothing in this repo imports probemb at all. Silencing it
-# here keeps the F821 gate in tests/test_lint.py meaningful for our own code
-# rather than leaving it permanently red against somebody else's dead branch.
-"prob_models/probemb.py" = ["F821"]
-
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
