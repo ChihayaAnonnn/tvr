@@ -152,8 +152,14 @@ Selected checkpoint (epoch 3):
 | V2T | 48.3 | 75.1 | 84.6 | 2.0 | 8.9 |
 
 **48.9 vs the published 49.6: a 0.7 gap, down from 3.2, and inside 1σ
-(1.6pp).** The optimization recipe was the problem. The TI/DSA
-implementation does not need to be the next suspect.
+(1.6pp).** The TI/DSA implementation does not need to be the next suspect.
+
+> **Correction, later the same night.** The sentence that stood here said
+> "the optimization recipe was the problem." That was wrong, and it was
+> wrong in the way this document warns about: it credited the recipe for a
+> change that also moved the protocol. The controlled comparison is below
+> under *What the recipe was actually worth* — the recipe is worth −0.1
+> R@1. The gap was the protocol.
 
 ### Read this number carefully
 
@@ -179,12 +185,128 @@ Single seed. Two hardware deviations as described above.
 `scripts/run_baseline_hygiene_seed0.sh`, run id `hygiene_a0_seed0`. Same
 recipe, trusted split, val selection, test touched once. Launched
 2026-07-28 18:27; 332 steps per epoch, 26 GB per rank, ~33 min per epoch.
-Log `logs/20260728/hygiene_a0_seed0_182753_train_msrvtt.log`.
 
-_Result pending._ This number, not 48.9, is what every RSPR arm must beat.
+Per-epoch validation (500 held-out videos × 20 captions — not comparable to
+any 1000×1 test number on this page):
+
+| epoch | 1 | 2 | 3 | 4 | 5 |
+| --- | --- | --- | --- | --- | --- |
+| val T2V R@1 | 57.8 | **59.0** | 58.0 | 57.8 | 57.5 |
+| val V2T R@1 | 86.6 | 87.0 | **87.8** | 86.2 | 84.6 |
+
+Test, from the val-selected checkpoints (`final_test.json`):
+
+| selected by | ckpt | T2V R@1 | R@5 | R@10 | MdR | MnR |
+| --- | --- | --- | --- | --- | --- | --- |
+| **val T2V (59.0)** | bin.1 | **46.3** | 75.4 | 84.0 | 2.0 | 13.1 |
+| val V2T (87.8) | bin.2 | 46.9 | 74.2 | 83.8 | 2.0 | 14.3 |
+
+| selected by | ckpt | V2T R@1 | R@5 | R@10 | MdR | MnR |
+| --- | --- | --- | --- | --- | --- | --- |
+| val T2V (59.0) | bin.1 | 47.0 | 75.7 | 84.4 | 2.0 | 8.4 |
+| **val V2T (87.8)** | bin.2 | **47.3** | 74.6 | 83.5 | 2.0 | 9.2 |
+
+**46.3 T2V R@1. This number, not 48.9, is what every RSPR arm must beat.**
+
+### Provenance
+
+Two caveats, neither affecting the number but both worth stating.
+
+The run was interrupted after epoch 3 by a CUDA OOM that was not ours —
+another user's vLLM job (26 GB) landed on a rank of the shared box while our
+steady state was 26 GB of 40. Epochs 4–5 were recovered with `--resume_from`
+(commit `db46433`) rather than retrained. Resume restores weights, optimizer
+state, and the best-val trackers; it does not restore RNG or sampler state,
+so this is a paused run rather than a bit-for-bit reproduction of an
+uninterrupted one.
+
+`best_validation_checkpoints.json` for epochs 1–3 was reconstructed by hand
+from the log, because the code that writes it per epoch did not exist when
+those epochs ran. Epochs 4–5 wrote it themselves. The reconstructed values
+match the log lines they came from, and the selection they encode (bin.1 at
+59.0) survived epochs 4–5 on its own merits — both scored lower.
+
+The final test pass itself was lost to a `NameError` (`selection_payload`,
+fixed in `841f254`) after all five checkpoints were already on disk, and was
+recovered with `scripts/final_test_from_ckpt.sh` (commit `fd55ba3`). That
+script reproduced 46.3 for bin.1 exactly, matching an earlier one-off eval of
+the same checkpoint through a different code path.
+
+## What the recipe was actually worth
+
+The parity section above left this open: "the recipe is worth something, but
+how much is not yet measured, because no run has used the fixed recipe under
+val selection." It is measured now, and the answer is that it is worth
+nothing.
+
+`rspr_a0_seed0` and `hygiene_a0_seed0` are the same protocol — hygiene
+profile, seed 0, RSPR off, 8500 train videos, val selection, test touched
+once. The only difference between them is the recipe.
+
+| | recipe | val T2V R@1 | **test T2V R@1** |
+| --- | --- | --- | --- |
+| `rspr_a0_seed0` | drifted (batch 256, freeze 8, 8 frames, lr 1e-4, TQFS) | 59.6 | **46.4** |
+| `hygiene_a0_seed0` | official (batch 512, freeze 0, 12 frames, lr 5e-5, uniform) | 59.0 | **46.3** |
+
+**−0.1 R@1.** The official recipe is not better than the drifted one on our
+protocol; it is indistinguishable from it, and its val score is marginally
+lower.
+
+So the 3.2-point gap decomposes the other way round from what the parity run
+suggested:
+
+| | train videos | selects on | T2V R@1 |
+| --- | --- | --- | --- |
+| `hygiene_a0_seed0` | 8500 | held-out val | 46.3 |
+| `parity_a0_seed0` | 9000 | JSFUSION test | 48.9 |
+| published TI+DSA | 9000 | JSFUSION test | 49.6 |
+
+Everything between 46.3 and 48.9 is protocol: 500 more training videos, and
+a max over five epochs on the test set instead of one shot from a val-chosen
+checkpoint. The parity epoch table bounds the second term at up to 1.6
+points on its own (48.9 best vs 47.3 last). Splitting the 2.6 between the
+two would cost five test evals of the existing hygiene checkpoints; it has
+not been done, and doing it spends test-set information on a diagnostic.
+
+### What this does to the prior RSPR results
+
+The standing decision was that every RSPR number was void because the
+baseline was crippled. That was over-broad.
+
+All seven arms and their 46.4 baseline share `requested_effective_batch: 256`
+in their manifests, and the launcher default plus the inline
+`FREEZE_LAYER_NUM=8` pins (removed in `7a93b9c`) put the same freeze on all
+of them. The arms were compared against a baseline trained the same wrong
+way, so those comparisons were internally consistent. What the drift cost
+was comparability to the literature — not internal validity.
+
+Read that way, the arms already have their answer:
+
+| arm | test T2V R@1 | vs 46.4 |
+| --- | --- | --- |
+| A1 | 47.0 | +0.6 |
+| A3fixv3 | 47.0 | +0.6 |
+| A1v3 | 46.8 | +0.4 |
+| **A0 (baseline)** | **46.4** | — |
+| A3fix | 46.0 | −0.4 |
+| A3fixv2 | 45.8 | −0.6 |
+| A0v2 | 45.3 | −1.1 |
+
+Every one of these is inside 1σ (1.6pp) of the baseline. The spread is
+consistent with seed noise around zero effect. Re-running them on the
+official recipe will make them comparable to the literature, but the recipe
+moved the baseline by 0.1, so there is no reason to expect it to move an arm
+by more — and no reason to expect a re-run alone to turn +0.6 into a result.
 
 ## Next
 
-1. Re-run the RSPR arms on top of the own-protocol baseline. Every existing
-   RSPR result was measured against the crippled baseline; none of them
-   carry over.
+1. Decide what re-running the arms is for. On the evidence above it buys
+   comparability, not significance; expecting the official recipe to reveal
+   an RSPR effect is not supported by what it did to the baseline.
+2. Nothing here yet clears the R@1 gate. The largest arm effect observed is
+   +0.6 against a 1.6pp 1σ, on one seed. Either the effect is real and needs
+   seeds to resolve, or the design needs to change — and the two are
+   distinguishable for the cost of two more seeds on the best arm.
+3. If the 46.3 → 48.9 decomposition matters for the writeup, five test evals
+   of the existing `hygiene_a0_seed0` checkpoints settle it. Diagnostic
+   only; it must not become a selection.
