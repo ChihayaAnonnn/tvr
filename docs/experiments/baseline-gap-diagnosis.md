@@ -298,15 +298,95 @@ official recipe will make them comparable to the literature, but the recipe
 moved the baseline by 0.1, so there is no reason to expect it to move an arm
 by more — and no reason to expect a re-run alone to turn +0.6 into a result.
 
+## 2026-07-29: reading the arm manifests killed the table twice over
+
+Two facts turned up in the manifests that the table above cannot survive.
+
+### A0 and A0v2 are the same configuration, 1.1 R@1 apart
+
+Diffing `ckpts/ckpt_msrvtt_rspr_a0_seed0/experiment_manifest.json` against
+`ckpts/ckpt_msrvtt_rspr_a0v2_seed0/experiment_manifest.json` field by field
+returns exactly two differences: the list of uncommitted paths, and
+`rspr_recall_source` / `rspr_rerank_scale`. Both of those are rerank knobs,
+and both runs are `rspr_mode: off`, where `rspr_eval` is False and the rerank
+never executes. Same seed, same batch 256, same freeze 8, same lr.
+
+| run | val T2V R@1 | test T2V R@1 |
+| --- | --- | --- |
+| `rspr_a0_seed0` | 59.6 | 46.4 |
+| `rspr_a0v2_seed0` | 57.2 | 45.3 |
+
+**Same-configuration reproduction error: 1.1 on test, 2.4 on val.** Not seed
+variation — nondeterminism at fixed seed. (Caveat: both runs had dirty trees
+including `modules/modeling.py`, so bit-identical code is not provable. The
+RSPR files in those trees cannot matter — `off` sets `self.rspr = None` and
+returns `dsa_loss` alone.)
+
+Set that against what is being measured. The entire probabilistic apparatus
+in the UATVR paper is worth +1.2 (TI+DSA 49.6 → full 50.8). The ruler's
+graduation is the size of the object. Every entry in the arm table, largest
+effect +0.6, is smaller than the pipeline's own reproduction error at n=1.
+
+Resolving +0.6 to 2σ at σ≈1.6 needs ~28 seeds per arm. That is not a budget
+question to be negotiated; it is outside the machine.
+
+### Every non-`off` arm's test number went through the reranker
+
+`--rspr_top_r` defaulted to 100, and `rspr_eval` is True for `mean` and
+`stochastic`, so `_run_on_single_gpu` returned reranked matrices. No arm ever
+set it to 0 — including `a1_seed0`, whose canonical definition in
+`scripts/rspr_ablation_matrix.py` said `--rspr_top_r 0` while its manifest
+says 100.
+
+| arm | mode | `rspr_rerank_scale` | eval path |
+| --- | --- | --- | --- |
+| a0, a0v2 | off | — | clean DSA |
+| a1, a3, a3fix | mean/stoch | absent | **defective rerank** |
+| a1v3, a3fixv2, a3fixv3 | mean/stoch | `logit_scale` | fixed rerank |
+
+So the arms do not measure the training-side auxiliary loss. They measure it
+plus a rerank term, and the first generation's rerank added bare cosines to
+logit-scale logits (see `rspr-rerank-scale-defect`). The two generations are
+not comparable to each other, and neither is comparable to A0.
+
+The one question the ablation was built to answer has never been asked.
+
+### What was deleted, and why deletion was the fix
+
+Reranking is the only path by which RSPR reached the inference ranking:
+`forward()` returns `None` at eval, so the two distribution heads, the
+matcher, `SoftContrastiveMatchLoss`, `StochasticRankLoss` and `anchor_kl` are
+otherwise an auxiliary loss on the trunk and nothing else. That path is
+measured and null — `u_pair` residual AUC below random, reranked score never
+beating the λ=0 control — and it was contaminating every arm by default.
+
+`70df3a4` removes it: `modules/rspr_rerank.py`,
+`modules/rspr_score_analysis.py`, `scripts/analyze_rspr_scores.py`, the
+eval-side plumbing in `main_task_retrieval.py`, and eight flags.
+`c467b8d` removes the unimported `prob_models/probemb.py` (and the ruff
+exemption that existed only to keep its dead branch off the F821 gate),
+`prob_models/screening_utils.py`, and nine superseded per-arm launchers.
+3434 lines net; suite 372 → 298 with the deleted tests.
+
+`get_rspr_{text,video}_distribution` and `scripts/probe_rspr_uncertainty.py`
+stay. Whether the variance channel can be made to carry information is still
+open, and that script is how it gets measured.
+
 ## Next
 
-1. Decide what re-running the arms is for. On the evidence above it buys
-   comparability, not significance; expecting the official recipe to reveal
-   an RSPR effect is not supported by what it did to the baseline.
-2. Nothing here yet clears the R@1 gate. The largest arm effect observed is
-   +0.6 against a 1.6pp 1σ, on one seed. Either the effect is real and needs
-   seeds to resolve, or the design needs to change — and the two are
-   distinguishable for the cost of two more seeds on the best arm.
+1. **Run A4 (`--rspr_mode legacy`) once.** `ckpts/` contains no legacy run:
+   UATVR's own DUA — `PIENet` + `UncertaintyModuleImage` + `MILNCE_BoF` +
+   `KLdivergence`, the published +0.5-to-+1.2 — has never been measured under
+   this protocol, while seven replacements for it have. It is the calibration
+   the whole ablation was missing. If DUA also lands within ±1, the finding is
+   that the apparatus cannot resolve effects of this size, which is a result
+   about the experimental design and can be written as one. If it clears +0.5
+   cleanly, the apparatus is fine and the RSPR design is what needs to change.
+   One training run, ~3 hours, and it decides whether the core four
+   components stay.
+2. **Do not re-run the seven arms.** They buy comparability, not
+   significance, and post-deletion they would be measuring something the
+   originals did not measure anyway.
 3. If the 46.3 → 48.9 decomposition matters for the writeup, five test evals
    of the existing `hygiene_a0_seed0` checkpoints settle it. Diagnostic
    only; it must not become a selection.
