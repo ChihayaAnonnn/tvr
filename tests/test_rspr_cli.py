@@ -25,13 +25,6 @@ RSPR_DEFAULTS = {
     "rspr_anchor_weight": 1e-4,
     "rspr_warmup_epochs": 1.0,
     "rspr_eval_seed": 0,
-    "rspr_top_r": 100,
-    "rspr_det_temperature": 1.0,
-    "rspr_rerank_temperature": 1.0,
-    "rspr_rerank_weight": 0.1,
-    "rspr_recall_source": "deterministic",
-    "rspr_rerank_scale": "logit_scale",
-    "rspr_pair_chunk_size": 4096,
     "rspr_freeze_clip": False,
     "rspr_freeze_dsa": False,
     "rspr_grad_diagnostics": False,
@@ -98,19 +91,14 @@ def test_get_args_exposes_exact_rspr_defaults(monkeypatch, tmp_path):
             "hard_negatives",
         ),
         ({"rspr_mode": "off", "rspr_prob_loss": "bogus"}, "prob_loss"),
-        ({"rspr_mode": "off", "rspr_recall_source": "bogus"}, "recall_source"),
-        ({"rspr_mode": "off", "rspr_rerank_scale": "bogus"}, "rerank_scale"),
         ({"rspr_mode": "off", "rspr_match_temperature": 0.0}, "positive"),
         ({"rspr_mode": "off", "rspr_prob_temperature": -0.1}, "positive"),
         ({"rspr_mode": "off", "rspr_rank_temperature": 0.0}, "positive"),
         ({"rspr_mode": "off", "rspr_prior_std": 0.0}, "positive"),
-        ({"rspr_mode": "off", "rspr_pair_chunk_size": 0}, "positive"),
         ({"rspr_mode": "off", "rspr_prob_weight": -0.1}, "nonnegative"),
         ({"rspr_mode": "off", "rspr_rank_weight": -0.1}, "nonnegative"),
         ({"rspr_mode": "off", "rspr_anchor_weight": -0.1}, "nonnegative"),
-        ({"rspr_mode": "off", "rspr_rerank_weight": -0.1}, "nonnegative"),
         ({"rspr_mode": "off", "rspr_warmup_epochs": -0.1}, "nonnegative"),
-        ({"rspr_mode": "off", "rspr_top_r": -1}, "nonnegative"),
         ({"rspr_mode": "legacy", "rspr_freeze_clip": True}, "freeze"),
         ({"rspr_mode": "legacy", "rspr_freeze_dsa": True}, "freeze"),
     ),
@@ -118,10 +106,6 @@ def test_get_args_exposes_exact_rspr_defaults(monkeypatch, tmp_path):
 def test_validate_rspr_cli_rejects_invalid_contracts(overrides, message):
     with pytest.raises(ValueError, match=message):
         main_task_retrieval.validate_rspr_cli(_args(**overrides))
-
-
-def test_validate_rspr_cli_allows_top_r_zero():
-    main_task_retrieval.validate_rspr_cli(_args(rspr_mode="off", rspr_top_r=0))
 
 
 def test_validate_rspr_cli_legacy_ignores_numeric_rspr_values():
@@ -137,8 +121,6 @@ def test_validate_rspr_cli_legacy_ignores_numeric_rspr_values():
             rspr_rank_weight=-1.0,
             rspr_anchor_weight=-1.0,
             rspr_warmup_epochs=-1.0,
-            rspr_top_r=-1,
-            rspr_pair_chunk_size=0,
         )
     )
 

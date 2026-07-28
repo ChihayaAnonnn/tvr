@@ -330,14 +330,6 @@ def test_controller_relaunches_same_script_and_tails_log(tmp_path):
             {"RSPR_MODE": "stochastic", "RSPR_HARD_NEGATIVES": "-1"},
             "RSPR_HARD_NEGATIVES=-1",
         ),
-        (
-            {"RSPR_MODE": "stochastic", "RSPR_RECALL_SOURCE": "probabilistic"},
-            "RSPR_RECALL_SOURCE=probabilistic",
-        ),
-        (
-            {"RSPR_MODE": "stochastic", "RSPR_RERANK_SCALE": "bogus"},
-            "RSPR_RERANK_SCALE=bogus",
-        ),
     ),
 )
 def test_controller_rejects_invalid_rspr_before_detaching_or_building_split(
@@ -375,8 +367,8 @@ def test_controller_rejects_invalid_rspr_before_detaching_or_building_split(
     ("ablation_args", "expected", "expected_log"),
     (
         (
-            ("--rspr_mode", "mean", "--rspr_sample_count", "1", "--rspr_top_r", "0"),
-            {"--rspr_mode": "mean", "--rspr_sample_count": "1", "--rspr_top_r": "0"},
+            ("--rspr_mode", "mean", "--rspr_sample_count", "1"),
+            {"--rspr_mode": "mean", "--rspr_sample_count": "1"},
             "RSPR_MODE=mean RSPR_K=1",
         ),
         (
@@ -397,28 +389,12 @@ def test_controller_rejects_invalid_rspr_before_detaching_or_building_split(
             "RSPR_RANK_WEIGHT=0",
         ),
         (
-            (
-                "--rspr_mode",
-                "stochastic",
-                "--rspr_recall_source",
-                "mean",
-                "--rspr_rerank_scale",
-                "none",
-            ),
-            {
-                "--rspr_mode": "stochastic",
-                "--rspr_recall_source": "mean",
-                "--rspr_rerank_scale": "none",
-            },
-            "RSPR_RECALL_SOURCE=mean",
-        ),
-        (
             ("--rspr_mode", "stochastic"),
             {
-                "--rspr_recall_source": "deterministic",
-                "--rspr_rerank_scale": "logit_scale",
+                "--rspr_prob_loss": "soft_bce",
+                "--rspr_eval_seed": "0",
             },
-            "RSPR_RERANK_SCALE=logit_scale",
+            "RSPR_EVAL_SEED=0",
         ),
     ),
 )
@@ -701,20 +677,6 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
         "1.0",
         "--rspr_eval_seed",
         "0",
-        "--rspr_top_r",
-        "100",
-        "--rspr_det_temperature",
-        "1.0",
-        "--rspr_rerank_temperature",
-        "1.0",
-        "--rspr_rerank_weight",
-        "0.1",
-        "--rspr_recall_source",
-        "deterministic",
-        "--rspr_rerank_scale",
-        "logit_scale",
-        "--rspr_pair_chunk_size",
-        "4096",
         "--experiment_desc",
         "two words",
     ]

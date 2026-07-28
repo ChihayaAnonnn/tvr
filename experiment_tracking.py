@@ -186,17 +186,6 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "rspr_anchor_weight": getattr(args, "rspr_anchor_weight", 1e-4),
         "rspr_warmup_epochs": getattr(args, "rspr_warmup_epochs", 1.0),
         "rspr_eval_seed": getattr(args, "rspr_eval_seed", 0),
-        "rspr_top_r": getattr(args, "rspr_top_r", 100),
-        "rspr_det_temperature": getattr(args, "rspr_det_temperature", 1.0),
-        "rspr_rerank_temperature": getattr(
-            args, "rspr_rerank_temperature", 1.0
-        ),
-        "rspr_rerank_weight": getattr(args, "rspr_rerank_weight", 0.1),
-        "rspr_recall_source": getattr(
-            args, "rspr_recall_source", "deterministic"
-        ),
-        "rspr_rerank_scale": getattr(args, "rspr_rerank_scale", "logit_scale"),
-        "rspr_pair_chunk_size": getattr(args, "rspr_pair_chunk_size", 4096),
         "rspr_freeze_clip": bool(getattr(args, "rspr_freeze_clip", False)),
         "rspr_freeze_dsa": bool(getattr(args, "rspr_freeze_dsa", False)),
         "rspr_grad_diagnostics": bool(getattr(args, "rspr_grad_diagnostics", False)),

@@ -30,11 +30,6 @@ from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modules.modeling import UATVR
 from modules.optimization import BertAdam
-from modules.rspr_rerank import (
-    RECALL_SOURCES,
-    build_full_ranking_scores,
-    rerank_top_r,
-)
 from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
 from util import get_logger, parallel_apply
 
@@ -140,13 +135,6 @@ def validate_rspr_cli(args):
     if args.rspr_mode == "legacy":
         return
 
-    if (
-        args.rspr_mode in {"mean", "stochastic"}
-        and args.rspr_top_r > 0
-        and getattr(args, "DSL", False)
-    ):
-        raise ValueError("DSL cannot be combined with RSPR Top-R reranking")
-
     if args.rspr_mode == "mean" and args.rspr_sample_count != 1:
         raise ValueError("mean mode requires sample_count=1")
     if args.rspr_mode == "stochastic":
@@ -162,24 +150,11 @@ def validate_rspr_cli(args):
     if getattr(args, "rspr_prob_loss", "soft_bce") not in {"soft_bce", "infonce"}:
         raise ValueError("--rspr_prob_loss must be soft_bce or infonce")
 
-    if getattr(args, "rspr_recall_source", "deterministic") not in RECALL_SOURCES:
-        raise ValueError(
-            f"--rspr_recall_source must be one of {RECALL_SOURCES}"
-        )
-    if getattr(args, "rspr_rerank_scale", "logit_scale") not in {
-        "logit_scale",
-        "none",
-    }:
-        raise ValueError("--rspr_rerank_scale must be logit_scale or none")
-
     for name in (
         "rspr_match_temperature",
         "rspr_prob_temperature",
         "rspr_rank_temperature",
-        "rspr_det_temperature",
-        "rspr_rerank_temperature",
         "rspr_prior_std",
-        "rspr_pair_chunk_size",
     ):
         value = getattr(args, name)
         if not math.isfinite(value) or value <= 0:
@@ -189,9 +164,7 @@ def validate_rspr_cli(args):
         "rspr_prob_weight",
         "rspr_rank_weight",
         "rspr_anchor_weight",
-        "rspr_rerank_weight",
         "rspr_warmup_epochs",
-        "rspr_top_r",
     ):
         value = getattr(args, name)
         if not math.isfinite(value) or value < 0:
@@ -484,34 +457,6 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--rspr_anchor_weight", type=float, default=1e-4)
     parser.add_argument("--rspr_warmup_epochs", type=float, default=1.0)
     parser.add_argument("--rspr_eval_seed", type=int, default=0)
-    parser.add_argument("--rspr_top_r", type=int, default=100)
-    parser.add_argument("--rspr_det_temperature", type=float, default=1.0)
-    parser.add_argument("--rspr_rerank_temperature", type=float, default=1.0)
-    parser.add_argument("--rspr_rerank_weight", type=float, default=0.1)
-    parser.add_argument(
-        "--rspr_recall_source",
-        type=str,
-        default="deterministic",
-        choices=RECALL_SOURCES,
-        help="Scorer that picks the Top-R candidates. The RSPR mean retrieves "
-             "worse than the DSA head, so recalling with it caps the pipeline.",
-    )
-    parser.add_argument(
-        "--rspr_rerank_scale",
-        type=str,
-        default="logit_scale",
-        choices=("logit_scale", "none"),
-        help="Lift the matcher's cosine onto the deterministic logit scale "
-             "before reranking. 'none' reproduces the unscaled ablation.",
-    )
-    parser.add_argument(
-        "--rspr_dump_scores",
-        type=str,
-        default="",
-        help="Write the evaluation score matrices to this .npz so reranking "
-             "controls can be replayed offline. Empty disables the dump.",
-    )
-    parser.add_argument("--rspr_pair_chunk_size", type=int, default=4096)
     parser.add_argument("--rspr_freeze_clip", action="store_true")
     parser.add_argument("--rspr_freeze_dsa", action="store_true")
     parser.add_argument("--DSL", default=False, type=bool, help="whether using dual softmax in post testing")
@@ -681,13 +626,6 @@ def set_seed_logger(args):
                 "rspr_anchor_weight",
                 "rspr_warmup_epochs",
                 "rspr_eval_seed",
-                "rspr_top_r",
-                "rspr_det_temperature",
-                "rspr_rerank_temperature",
-                "rspr_rerank_weight",
-                "rspr_recall_source",
-                "rspr_rerank_scale",
-                "rspr_pair_chunk_size",
                 "rspr_freeze_clip",
                 "rspr_freeze_dsa",
                 "rspr_grad_diagnostics",
@@ -1427,42 +1365,6 @@ def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
     )
 
 
-def dump_rspr_scores(args, retrieval_output):
-    """Persist the raw evaluation matrices so controls can run without a GPU.
-
-    Reranking questions ("does the matcher carry information, or is it only
-    breaking ties?", "does the pair uncertainty predict correctness?") are all
-    answerable from these matrices, and re-running the model for each one costs
-    far more than storing them once.
-    """
-
-    destination = getattr(args, "rspr_dump_scores", "")
-    if not destination:
-        return
-    directory = os.path.dirname(destination)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    np.savez(destination, **retrieval_output)
-    logger.info("RSPR score matrices written to %s", destination)
-
-
-def _rerank_probabilistic_scale(model, args):
-    """Return the factor that puts the matcher on the deterministic scale.
-
-    The deterministic logits are CLIP cosines multiplied by ``logit_scale``
-    (~100 after training), while the matcher emits bare cosines. Reranking with
-    the raw matcher output therefore perturbs the ranking by ~1e-3 of a rank gap
-    no matter how ``rspr_rerank_weight`` is tuned.
-    """
-
-    if getattr(args, "rspr_rerank_scale", "logit_scale") != "logit_scale":
-        return 1.0
-    logit_scale = getattr(getattr(model, "clip", None), "logit_scale", None)
-    if logit_scale is None:
-        return 1.0
-    return float(logit_scale.detach().exp())
-
-
 def _run_on_single_gpu(
     model,
     args,
@@ -1479,34 +1381,24 @@ def _run_on_single_gpu(
     device = next(model.parameters()).device
     chunk_size = getattr(args, "eval_vid_chunk_size", 128)
     n_vid = visual_output_all.size(0)
-    rspr_eval = args.rspr_mode in {"mean", "stochastic"}
     video_chunks = []
-    video_distributions = []
     for v_start in range(0, n_vid, chunk_size):
         v_end = min(v_start + chunk_size, n_vid)
-        video_chunk = (
-            visual_output_all[v_start:v_end].to(device),
-            video_mask_all[v_start:v_end].to(device),
-        )
-        video_chunks.append(video_chunk)
-        if rspr_eval:
-            video_distributions.append(
-                model.get_rspr_video_distribution(*video_chunk)
+        video_chunks.append(
+            (
+                visual_output_all[v_start:v_end].to(device),
+                video_mask_all[v_start:v_end].to(device),
             )
+        )
     del visual_output_all, video_mask_all
 
     sim_matrix = []
-    text_distributions = []
     for idx1, b1 in enumerate(batch_list_t):
         input_mask, _segment_ids, *_tmp = b1
         sequence_output, text_token = batch_sequence_output_list[idx1]
         sequence_output = sequence_output.to(device)
         text_token = text_token.to(device)
         input_mask = input_mask.to(device)
-        if rspr_eval:
-            text_distributions.append(
-                model.get_rspr_text_distribution(text_token, input_mask)
-            )
 
         row_logits = []
         for visual_output, video_mask in video_chunks:
@@ -1522,38 +1414,6 @@ def _run_on_single_gpu(
 
         b1_all_v_logits = torch.cat(row_logits, dim=1).cpu()
         sim_matrix.append(b1_all_v_logits.detach().numpy())
-
-    if rspr_eval:
-        deterministic_logits = torch.from_numpy(
-            np.concatenate(tuple(sim_matrix), axis=0)
-        ).to(device)
-        output = rerank_top_r(
-            deterministic_logits,
-            torch.cat([distribution.mean for distribution in text_distributions]),
-            torch.cat([distribution.mean for distribution in video_distributions]),
-            torch.cat(
-                [distribution.samples for distribution in text_distributions]
-            ),
-            torch.cat(
-                [distribution.samples for distribution in video_distributions]
-            ),
-            model.rspr.matcher,
-            top_r=args.rspr_top_r,
-            deterministic_temperature=args.rspr_det_temperature,
-            probabilistic_temperature=args.rspr_rerank_temperature,
-            probabilistic_weight=args.rspr_rerank_weight,
-            pair_chunk_size=args.rspr_pair_chunk_size,
-            probabilistic_scale=_rerank_probabilistic_scale(model, args),
-            recall_source=getattr(args, "rspr_recall_source", "deterministic"),
-        )
-        return {
-            "t2v": output.text_to_video_logits.detach().cpu().numpy(),
-            "v2t": output.video_to_text_logits.detach().cpu().numpy(),
-            "mean": output.mean_logits.detach().cpu().numpy(),
-            "recall": output.recall_logits.detach().cpu().numpy(),
-            "uncertainty": output.pair_uncertainty.detach().cpu().numpy(),
-            "probability": output.probability_logits.detach().cpu().numpy(),
-        }
 
     return sim_matrix
 
@@ -1594,30 +1454,11 @@ def _reshape_multi_sentence_matrix(sim_matrix, cut_off_points):
     return np.stack(tuple(grouped), axis=0)
 
 
-def _build_rspr_metric_matrices(
-    text_to_video_logits,
-    video_to_text_logits,
-    tail_logits,
-):
-    """Order the reranked Top-R head above the tail left by the recall scorer."""
-
-    text_to_video = build_full_ranking_scores(
-        torch.from_numpy(text_to_video_logits),
-        torch.from_numpy(tail_logits),
-    )
-    video_to_text = build_full_ranking_scores(
-        torch.from_numpy(video_to_text_logits.T),
-        torch.from_numpy(tail_logits.T),
-    ).T
-    return text_to_video.numpy(), video_to_text.numpy()
-
-
 def _compute_directional_metrics(
     text_to_video_matrix,
     video_to_text_matrix,
     *,
     cut_off_points=None,
-    independent_directions=True,
 ):
     if cut_off_points is None:
         return (
@@ -1629,13 +1470,8 @@ def _compute_directional_metrics(
         text_to_video_matrix,
         cut_off_points,
     )
-    multi_caption_v2t = (
-        video_to_text_matrix
-        if independent_directions
-        else text_to_video_matrix
-    )
     video_to_text_grouped = _reshape_multi_sentence_matrix(
-        multi_caption_v2t,
+        video_to_text_matrix,
         cut_off_points,
     )
     return (
@@ -1652,10 +1488,6 @@ def _serialize_retrieval_metrics(metrics):
 
 
 def eval_epoch(args, model, eval_dataloader, device, n_gpu):
-    rspr_eval = args.rspr_mode in {"mean", "stochastic"}
-    if rspr_eval and args.rspr_top_r > 0 and args.DSL:
-        raise ValueError("DSL cannot be combined with RSPR Top-R reranking")
-
     if hasattr(model, "module"):
         model = model.module.to(device)
     else:
@@ -1754,11 +1586,7 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
         # 2. calculate the similarity
         # ----------------------------------
         torch.cuda.empty_cache()
-        if (
-            n_gpu > 1
-            and "LOCAL_RANK" not in os.environ
-            and not rspr_eval
-        ):
+        if n_gpu > 1 and "LOCAL_RANK" not in os.environ:
             device_ids = list(range(n_gpu))
             batch_list_t_splits = []
             batch_list_v_splits = []
@@ -1804,8 +1632,6 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
             for idx in range(len(parallel_outputs)):
                 sim_matrix += parallel_outputs[idx]
             sim_matrix = np.concatenate(tuple(sim_matrix), axis=0)
-            v2t_directional_matrix = sim_matrix
-            mus_matrix = sim_matrix
         else:
             retrieval_output = _run_on_single_gpu(
                 model,
@@ -1815,18 +1641,9 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
                 batch_sequence_output_list,
                 batch_visual_output_list,
             )
-            if rspr_eval:
-                dump_rspr_scores(args, retrieval_output)
-                sim_matrix = retrieval_output["t2v"]
-                v2t_directional_matrix = retrieval_output["v2t"]
-                # The unreranked tail must keep the order of whichever scorer
-                # picked the Top-R candidates, not some third ranking.
-                tail_matrix = retrieval_output["recall"]
-                mus_matrix = tail_matrix
-            else:
-                sim_matrix = np.concatenate(tuple(retrieval_output), axis=0)
-                v2t_directional_matrix = sim_matrix
-                mus_matrix = sim_matrix
+            sim_matrix = np.concatenate(tuple(retrieval_output), axis=0)
+        v2t_directional_matrix = sim_matrix
+        mus_matrix = sim_matrix
 
     # MUS 诊断日志：在相似度矩阵整合完成后、指标计算前输出
     if getattr(args, "log_mus_scores", False):
@@ -1844,17 +1661,9 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
         v2t_matrix = v2t_matrix.detach().numpy()
 
         v2t_directional_matrix = v2t_matrix.T
-    elif not rspr_eval:
-        v2t_directional_matrix = sim_matrix
 
     metric_t2v_matrix = sim_matrix
     metric_v2t_matrix = v2t_directional_matrix
-    if rspr_eval:
-        metric_t2v_matrix, metric_v2t_matrix = _build_rspr_metric_matrices(
-            sim_matrix,
-            v2t_directional_matrix,
-            tail_matrix,
-        )
 
     if multi_sentence_:
         logger.info("before reshape, sim matrix size: {} x {}".format(sim_matrix.shape[0], sim_matrix.shape[1]))
@@ -1872,7 +1681,6 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
             metric_t2v_matrix,
             metric_v2t_matrix,
             cut_off_points=cut_off_points_,
-            independent_directions=rspr_eval,
         )
     else:
         logger.info("Retrieval Evaluation | #Text: %d, #Video: %d", sim_matrix.shape[0], sim_matrix.shape[1])

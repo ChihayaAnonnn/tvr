@@ -15,7 +15,7 @@ MATRIX_SCRIPT = REPOSITORY / "scripts" / "rspr_ablation_matrix.py"
 def test_ablation_matrix_covers_a0_through_a8_with_required_deltas():
     assert ABLATIONS == {
         "A0": ["--rspr_mode", "off"],
-        "A1": ["--rspr_mode", "mean", "--rspr_sample_count", "1", "--rspr_top_r", "0"],
+        "A1": ["--rspr_mode", "mean", "--rspr_sample_count", "1"],
         "A2": ["--rspr_mode", "stochastic", "--rspr_detach_samples"],
         "A3": ["--rspr_mode", "stochastic"],
         "A4": ["--rspr_mode", "legacy"],

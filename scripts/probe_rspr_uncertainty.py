@@ -192,7 +192,7 @@ def main() -> None:
                 match.pair_uncertainty.float().cpu().numpy(),
             )
 
-    print("\n=== 2. rerank term magnitude vs deterministic logits ===")
+    print("\n=== 2. matcher score spread vs deterministic logits ===")
     det_np = deterministic.numpy()
     top10 = np.sort(det_np, axis=1)[:, -10:]
     det_gap = (top10[:, -1] - top10[:, 0]).mean()
@@ -202,13 +202,6 @@ def main() -> None:
     print(f"  deterministic logits         range=[{det_np.min():.3f}, {det_np.max():.3f}]")
     print(f"  deterministic top1-top10 gap mean={det_gap:.4f}")
     print(f"  matcher probability          range=[{all_probs.min():.4f}, {all_probs.max():.4f}] std={all_probs.std():.5f}")
-    weight = getattr(args, "rspr_rerank_weight", 0.1)
-    print(f"  rerank weight                {weight}")
-    print(
-        f"  weighted prob spread         {weight * all_probs.std():.6f}  "
-        f"vs deterministic gap {det_gap:.4f}  "
-        f"=> ratio {weight * all_probs.std() / max(det_gap, 1e-9):.2e}"
-    )
 
     print("\n=== 3. does uncertainty predict retrieval failure? ===")
     n = min(n_text, n_video)
