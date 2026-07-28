@@ -38,8 +38,27 @@ RSPR_DEFAULTS = {
 }
 
 
+# The knobs that decide how much of the backbone actually trains. A silent
+# change to any of them moves R@1 by more than the whole RSPR module does, so
+# the manifest has to carry them next to the RSPR settings.
+OPTIMIZATION_DEFAULTS = {
+    "lr": 0.0001,
+    "coef_lr": 1.0,
+    "lr_decay": 0.9,
+    "warmup_proportion": 0.1,
+    "epochs": 20,
+    "freeze_layer_num": 0,
+    "max_words": 20,
+    "max_frames": 100,
+    "feature_framerate": 1,
+    "slice_framepos": 0,
+    "expand_msrvtt_sentences": False,
+}
+
+
 def _args(**overrides):
     values = dict(RSPR_DEFAULTS)
+    values.update(OPTIMIZATION_DEFAULTS)
     values.update(overrides)
     return SimpleNamespace(**values)
 
@@ -148,6 +167,42 @@ def test_effective_parameter_log_has_explicit_rspr_group(
         assert f"{name}={value}" in rspr_lines[0]
 
 
+def test_effective_parameter_log_shows_how_much_of_the_backbone_trains(
+    monkeypatch, caplog, tmp_path
+):
+    """freeze_layer_num and slice_framepos changed silently and were never logged.
+
+    They belong in the run's own log, not only in the manifest, because that
+    is where a run is read while it is still worth killing.
+    """
+
+    args = _args(
+        seed=3,
+        output_dir=str(tmp_path),
+        local_rank=0,
+        experiment_desc="",
+        freeze_layer_num=8,
+        slice_framepos=3,
+    )
+    logger = logging.getLogger("test.rspr.training.parameters")
+    monkeypatch.setattr(main_task_retrieval, "get_logger", lambda _path: logger)
+    monkeypatch.setattr(torch.distributed, "get_world_size", lambda: 1)
+    monkeypatch.setattr(torch.distributed, "get_rank", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    caplog.set_level(logging.INFO, logger=logger.name)
+
+    main_task_retrieval.set_seed_logger(args)
+
+    training_lines = [
+        record.getMessage()
+        for record in caplog.records
+        if "[Training]" in record.getMessage()
+    ]
+    assert len(training_lines) == 1
+    for expected in ("freeze_layer_num=8", "slice_framepos=3"):
+        assert expected in training_lines[0]
+
+
 def test_experiment_manifest_records_all_rspr_fields_explicitly():
     args = _args()
 
@@ -156,3 +211,57 @@ def test_experiment_manifest_records_all_rspr_fields_explicitly():
     )
 
     assert manifest["rspr"] == RSPR_DEFAULTS
+
+
+def test_experiment_manifest_records_the_optimization_recipe():
+    """The manifest logged 24 RSPR knobs and no learning rate.
+
+    A freeze_layer_num default that changed from 0 to 8 therefore sat
+    unnoticed for six days while every arm was compared against a baseline it
+    had quietly crippled. These fields make that regression visible in the
+    diff between two runs' manifests.
+    """
+
+    args = _args()
+
+    manifest = build_experiment_manifest(
+        args, split_summary=None, batch_semantics={}, git_state={}
+    )
+
+    assert manifest["optimization"] == OPTIMIZATION_DEFAULTS
+
+
+def test_experiment_manifest_reports_the_run_s_own_optimization_values():
+    args = _args(freeze_layer_num=8, max_frames=8, lr=5e-5, slice_framepos=3)
+
+    manifest = build_experiment_manifest(
+        args, split_summary=None, batch_semantics={}, git_state={}
+    )
+
+    assert manifest["optimization"]["freeze_layer_num"] == 8
+    assert manifest["optimization"]["max_frames"] == 8
+    assert manifest["optimization"]["lr"] == pytest.approx(5e-5)
+    assert manifest["optimization"]["slice_framepos"] == 3
+
+
+def test_get_args_exposes_exact_optimization_defaults(monkeypatch, tmp_path):
+    """Pins the parser defaults to the values the manifest falls back on."""
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main_task_retrieval.py",
+            "--do_eval",
+            "--init_model",
+            "checkpoint.bin",
+            "--output_dir",
+            str(tmp_path),
+        ],
+    )
+
+    parsed = main_task_retrieval.get_args()
+
+    assert {
+        name: getattr(parsed, name) for name in OPTIMIZATION_DEFAULTS
+    } == OPTIMIZATION_DEFAULTS

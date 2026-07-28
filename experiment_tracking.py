@@ -139,6 +139,24 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "split_manifest": getattr(args, "split_manifest", ""),
         "tqfs_cache_dir": getattr(args, "tqfs_cache_dir", ""),
     }
+    # How much of the backbone trains, and on what input, dominates every RSPR
+    # effect measured on top of it. Recording these next to the RSPR knobs is
+    # what makes an unintended change show up in a diff of two manifests.
+    optimization = {
+        "lr": float(getattr(args, "lr", 1e-4)),
+        "coef_lr": float(getattr(args, "coef_lr", 1.0)),
+        "lr_decay": float(getattr(args, "lr_decay", 0.9)),
+        "warmup_proportion": float(getattr(args, "warmup_proportion", 0.1)),
+        "epochs": int(getattr(args, "epochs", 20)),
+        "freeze_layer_num": int(getattr(args, "freeze_layer_num", 0)),
+        "max_words": int(getattr(args, "max_words", 20)),
+        "max_frames": int(getattr(args, "max_frames", 100)),
+        "feature_framerate": int(getattr(args, "feature_framerate", 1)),
+        "slice_framepos": int(getattr(args, "slice_framepos", 0)),
+        "expand_msrvtt_sentences": bool(
+            getattr(args, "expand_msrvtt_sentences", False)
+        ),
+    }
     workers = int(getattr(args, "num_thread_reader", 0))
     runtime = {
         "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
@@ -186,6 +204,7 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "seed": getattr(args, "seed", None),
         "profile": getattr(args, "experiment_profile", "default"),
         "rspr": rspr,
+        "optimization": optimization,
         "run_final_test": bool(getattr(args, "run_final_test", False)),
         "backbone": backbone,
         "data": data,

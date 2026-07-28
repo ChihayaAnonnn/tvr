@@ -551,8 +551,12 @@ def set_seed_logger(args):
                 "coef_lr",
                 "gradient_accumulation_steps",
                 "fp16",
+                # How much of the backbone trains, and on what input. These
+                # outweigh every RSPR knob below and used to be invisible here.
+                "freeze_layer_num",
                 "max_frames",
                 "max_words",
+                "slice_framepos",
                 "seed",
             ],
             "Model": [
