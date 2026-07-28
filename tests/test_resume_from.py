@@ -346,3 +346,66 @@ def test_write_best_validation_snapshot_writes_after_every_epoch(tmp_path):
     assert payload["v2t"]["selection_score"] == 87.0
     assert payload["selection_split"] == "val"
     assert payload["tie_break"] == "later_epoch"
+
+
+def test_write_best_validation_snapshot_returns_what_it_wrote(tmp_path):
+    """The writer returns the payload so callers need not re-read the file."""
+
+    returned = main_task_retrieval.write_best_validation_snapshot(
+        tmp_path,
+        epochs_completed=2,
+        best_t2v_score=59.0,
+        best_t2v_checkpoint=str(tmp_path / "pytorch_model.bin.1"),
+        best_v2t_score=87.0,
+        best_v2t_checkpoint=str(tmp_path / "pytorch_model.bin.1"),
+    )
+
+    on_disk = json.loads(
+        (tmp_path / "best_validation_checkpoints.json").read_text()
+    )
+    assert returned == on_disk
+
+
+# --- build_best_validation_payload ---
+
+
+@pytest.mark.parametrize("direction", ("t2v", "v2t"))
+def test_build_best_validation_payload_carries_the_final_test_keys(direction):
+    """The final test spreads each direction's dict into its own record.
+
+    It reads "checkpoint" to decide what to load and keeps the rest as
+    provenance, so those keys are a contract between the two call sites --
+    not an implementation detail of the snapshot file.
+    """
+
+    payload = main_task_retrieval.build_best_validation_payload(
+        epochs_completed=5,
+        best_t2v_score=59.0,
+        best_t2v_checkpoint="ckpts/run/pytorch_model.bin.1",
+        best_v2t_score=87.8,
+        best_v2t_checkpoint="ckpts/run/pytorch_model.bin.2",
+    )
+
+    assert set(payload[direction]) == {
+        "selection_metric",
+        "selection_score",
+        "checkpoint",
+    }
+
+
+def test_build_best_validation_payload_keeps_the_directions_apart():
+    """T2V and V2T select independently; a run usually ends with two different
+    checkpoints, and swapping them would silently report the wrong number."""
+
+    payload = main_task_retrieval.build_best_validation_payload(
+        epochs_completed=5,
+        best_t2v_score=59.0,
+        best_t2v_checkpoint="ckpts/run/pytorch_model.bin.1",
+        best_v2t_score=87.8,
+        best_v2t_checkpoint="ckpts/run/pytorch_model.bin.2",
+    )
+
+    assert payload["t2v"]["checkpoint"] == "ckpts/run/pytorch_model.bin.1"
+    assert payload["t2v"]["selection_score"] == 59.0
+    assert payload["v2t"]["checkpoint"] == "ckpts/run/pytorch_model.bin.2"
+    assert payload["v2t"]["selection_score"] == 87.8

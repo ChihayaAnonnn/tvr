@@ -978,6 +978,41 @@ def resolve_resume_target(directory, args):
     )
 
 
+def build_best_validation_payload(
+    *,
+    epochs_completed,
+    best_t2v_score,
+    best_t2v_checkpoint,
+    best_v2t_score,
+    best_v2t_checkpoint,
+):
+    """Describe which checkpoint each direction selected, and on what score.
+
+    Both the per-epoch snapshot and the final test need this, and they used to
+    build it in two places -- the loop built it inline and the final test read
+    the loop's leftover local. Moving the snapshot into a helper deleted that
+    local and left the read behind, so a five-epoch run died on a NameError
+    after every checkpoint was already on disk. One builder, called at each
+    point of use, means neither block can outlive the other's variables.
+    """
+
+    return {
+        "selection_split": "val",
+        "tie_break": "later_epoch",
+        "epochs_completed": int(epochs_completed),
+        "t2v": {
+            "selection_metric": "t2v_r1",
+            "selection_score": float(best_t2v_score),
+            "checkpoint": str(best_t2v_checkpoint),
+        },
+        "v2t": {
+            "selection_metric": "v2t_r1",
+            "selection_score": float(best_v2t_score),
+            "checkpoint": str(best_v2t_checkpoint),
+        },
+    }
+
+
 def write_best_validation_snapshot(
     directory,
     *,
@@ -995,22 +1030,15 @@ def write_best_validation_snapshot(
     and turns the trackers into resumable state.
     """
 
-    payload = {
-        "selection_split": "val",
-        "tie_break": "later_epoch",
-        "epochs_completed": int(epochs_completed),
-        "t2v": {
-            "selection_metric": "t2v_r1",
-            "selection_score": float(best_t2v_score),
-            "checkpoint": str(best_t2v_checkpoint),
-        },
-        "v2t": {
-            "selection_metric": "v2t_r1",
-            "selection_score": float(best_v2t_score),
-            "checkpoint": str(best_v2t_checkpoint),
-        },
-    }
+    payload = build_best_validation_payload(
+        epochs_completed=epochs_completed,
+        best_t2v_score=best_t2v_score,
+        best_t2v_checkpoint=best_t2v_checkpoint,
+        best_v2t_score=best_v2t_score,
+        best_v2t_checkpoint=best_v2t_checkpoint,
+    )
     atomic_write_json(Path(directory) / "best_validation_checkpoints.json", payload)
+    return payload
 
 
 def save_model(epoch, args, model, optimizer, tr_loss, type_name=""):
@@ -2000,6 +2028,17 @@ def main():
                 raise RuntimeError("training completed without a validation checkpoint")
 
             if args.run_final_test:
+                # Rebuilt from the trackers rather than carried out of the epoch
+                # loop: the loop only writes this payload on epochs that ran
+                # validation, so reading its local here made the final test
+                # depend on a variable that may never have been bound.
+                selection_payload = build_best_validation_payload(
+                    epochs_completed=args.epochs,
+                    best_t2v_score=best_t2v_score,
+                    best_t2v_checkpoint=best_t2v_checkpoint,
+                    best_v2t_score=best_v2t_score,
+                    best_v2t_checkpoint=best_v2t_checkpoint,
+                )
                 model_to_evaluate = model.module if hasattr(model, "module") else model
                 test_factory = DATALOADER_DICT[args.datatype].get("test")
                 if test_factory is None:
