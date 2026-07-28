@@ -1,19 +1,22 @@
-"""The set of videos a training run is allowed to see.
+"""Which videos a run trains on, and which set it then selects on.
 
 The trusted-v1 protocol holds 500 of the 9000 source train videos out as a
 local validation set, and the train dataloader enforces that the train CSV is
 exactly the remaining 8500. The official UATVR recipe trains on all 9000 and
 reports on JSFUSION test, so an official-parity run has to be able to say
 "fold the held-out 500 back in" -- explicitly, and without loosening the
-equality check that makes the protocol auditable.
+equality check that makes the protocol auditable. Folding them in also means
+there is no held-out val left, so the eval loader is the reported test set.
 """
 
 import csv
 import hashlib
 import json
+from types import SimpleNamespace
 
 import pytest
 
+import dataloaders.data_dataloaders as data_dataloaders
 from dataloaders.dataloader_msrvtt_retrieval import MSRVTT_TrainDataLoader
 
 CAPTIONS_PER_VIDEO = 2
@@ -149,3 +152,49 @@ def test_folding_val_into_train_names_the_scope_it_expected(tmp_path):
 
     with pytest.raises(ValueError, match="train_video_ids\\+val_video_ids"):
         _build(tmp_path, TRAIN_IDS, fold_val_into_train=True)
+
+
+def _eval_loader_kwargs(monkeypatch, **argument_overrides):
+    captured = {}
+
+    def _capture(**kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(data_dataloaders, "MSRVTT_DataLoader", _capture)
+    monkeypatch.setattr(data_dataloaders, "_build_msrvtt_eval_loader", lambda *_: None)
+    arguments = {
+        "val_csv": "val.csv",
+        "features_path": "videos",
+        "max_words": 32,
+        "feature_framerate": 1,
+        "max_frames": 12,
+        "eval_frame_order": 0,
+        "slice_framepos": 2,
+        "num_thread_reader": 0,
+        "batch_size_val": 16,
+        "fold_val_into_train": False,
+    }
+    arguments.update(argument_overrides)
+    data_dataloaders.dataloader_msrvtt_val(SimpleNamespace(**arguments), tokenizer=None)
+    return captured
+
+
+def test_trusted_val_loader_requires_twenty_contiguous_captions(monkeypatch):
+    kwargs = _eval_loader_kwargs(monkeypatch)
+
+    assert kwargs["multi_sentence_per_video"] is True
+    assert kwargs["expected_captions_per_video"] == 20
+
+
+def test_parity_selects_on_jsfusion_which_has_one_caption_per_video(monkeypatch):
+    """Folding val into train leaves no held-out set to select on.
+
+    The parity eval CSV is JSFUSION test: 1000 rows, one caption each. Asking
+    it for the trusted val set's 20-caption layout is what killed the run.
+    """
+
+    kwargs = _eval_loader_kwargs(monkeypatch, fold_val_into_train=True)
+
+    assert kwargs["multi_sentence_per_video"] is False
+    assert kwargs["expected_captions_per_video"] is None

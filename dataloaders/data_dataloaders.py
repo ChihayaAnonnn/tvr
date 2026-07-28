@@ -76,6 +76,11 @@ def _build_msrvtt_eval_loader(dataset, args):
 
 
 def dataloader_msrvtt_val(args, tokenizer, subset="val"):
+    # Folding the held-out videos into training leaves no local val set, so
+    # the official-parity loop selects on JSFUSION test: one caption per
+    # video. Otherwise this is the trusted val CSV, whose 20 contiguous
+    # captions per video are checked rather than assumed.
+    trusted_val = not getattr(args, "fold_val_into_train", False)
     msrvtt_valset = MSRVTT_DataLoader(
         csv_path=args.val_csv,
         features_path=args.features_path,
@@ -90,8 +95,8 @@ def dataloader_msrvtt_val(args, tokenizer, subset="val"):
         attributes_path=getattr(args, "msrvtt_attributes_path", ""),
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
         tqfs_cache_dir=getattr(args, "tqfs_cache_dir", ""),
-        multi_sentence_per_video=True,
-        expected_captions_per_video=20,
+        multi_sentence_per_video=trusted_val,
+        expected_captions_per_video=20 if trusted_val else None,
     )
     return _build_msrvtt_eval_loader(msrvtt_valset, args), len(msrvtt_valset)
 
