@@ -73,8 +73,22 @@ def validate_trusted_cli(args):
         raise ValueError(
             "trusted-v1 MSRVTT training requires --expand_msrvtt_sentences"
         )
+    # --run_final_test without --do_train finishes a run whose training is
+    # already on disk: the selection comes from best_validation_checkpoints.json
+    # in --output_dir. What it must not do is let the caller nominate a
+    # checkpoint, because then the test number belongs to a checkpoint no
+    # validation run actually selected.
     if args.run_final_test and not args.do_train:
-        raise ValueError("--run_final_test requires --do_train")
+        if args.do_eval:
+            raise ValueError(
+                "--run_final_test and --do_eval are mutually exclusive: they "
+                "score different checkpoints on different splits"
+            )
+        if args.init_model:
+            raise ValueError(
+                "--run_final_test without --do_train ignores --init_model; the "
+                "tested checkpoints come from best_validation_checkpoints.json"
+            )
     if args.do_eval and not args.do_train and not args.init_model:
         raise ValueError("--do_eval requires --init_model")
 
@@ -537,8 +551,12 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         raise ValueError(
             "Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(args.gradient_accumulation_steps)
         )
-    if not args.do_train and not args.do_eval:
-        raise ValueError("At least one of `do_train` or `do_eval` must be True.")
+    # --run_final_test is a third mode, not a modifier on training: it scores a
+    # finished run's val-selected checkpoints without retraining them.
+    if not args.do_train and not args.do_eval and not args.run_final_test:
+        raise ValueError(
+            "At least one of `do_train`, `do_eval` or `run_final_test` must be True."
+        )
     if args.clip_visual_checkpoint_layers < 0:
         raise ValueError("--clip_visual_checkpoint_layers must be non-negative")
     if args.num_thread_reader < 0:
@@ -1011,6 +1029,105 @@ def build_best_validation_payload(
             "checkpoint": str(best_v2t_checkpoint),
         },
     }
+
+
+def run_final_test(args, model, tokenizer, device, n_gpu, selection_payload):
+    """Score the val-selected checkpoints on the test split and record it.
+
+    Called from two places -- at the end of training, and standalone against a
+    finished checkpoint directory -- so that a run which lost only its test
+    pass does not have to retrain to recover it. Both callers supply the same
+    payload shape, one built from live trackers and one read off disk.
+
+    T2V and V2T usually select different epochs. When they select the same
+    one it is loaded and scored once; the cache is keyed on the checkpoint
+    path, not the direction.
+    """
+
+    model_to_evaluate = model.module if hasattr(model, "module") else model
+    test_factory = DATALOADER_DICT[args.datatype].get("test")
+    if test_factory is None:
+        raise ValueError(f"{args.datatype} has no test dataloader")
+    test_dataloader, test_length = test_factory(args, tokenizer, subset="test")
+
+    logger.info(
+        "  Split: test | Samples: %d | Steps: %d | Batch: %d",
+        test_length,
+        len(test_dataloader),
+        args.batch_size_val,
+    )
+    # eval_epoch reads args.eval_split to label its output; restore it after
+    # so a caller that still has work to do is not left pointing at test.
+    previous_eval_split = args.eval_split
+    args.eval_split = "test"
+    try:
+        test_metrics_by_checkpoint = {}
+        final_test_payload = {}
+        for direction in ("t2v", "v2t"):
+            selection = selection_payload[direction]
+            checkpoint_path = selection["checkpoint"]
+            if checkpoint_path not in test_metrics_by_checkpoint:
+                logger.info(
+                    "***** Running final test from %s-selected checkpoint: %s *****",
+                    direction.upper(),
+                    checkpoint_path,
+                )
+                checkpoint = torch.load(checkpoint_path, map_location="cpu")
+                model_to_evaluate.load_state_dict(checkpoint)
+                model_to_evaluate.to(device)
+                test_metrics_by_checkpoint[checkpoint_path] = eval_epoch(
+                    args, model_to_evaluate, test_dataloader, device, n_gpu
+                )
+            final_test_payload[direction] = {
+                **selection,
+                "test_metrics": test_metrics_by_checkpoint[checkpoint_path],
+            }
+    finally:
+        args.eval_split = previous_eval_split
+
+    atomic_write_json(
+        Path(args.output_dir) / "final_test.json",
+        {
+            "test_split": "test",
+            "selections": final_test_payload,
+        },
+    )
+    return final_test_payload
+
+
+def load_best_validation_snapshot(directory):
+    """Read back which checkpoint each direction selected, and verify it exists.
+
+    This is what makes --run_final_test runnable without --do_train. Both
+    directions and both checkpoint files are required up front so a recovery
+    run fails in a second rather than after building the test dataloader --
+    the bins are 400 MB each and outliving the snapshot is a normal way for a
+    cleaned-up run to end, not a corruption case.
+    """
+
+    path = Path(directory) / "best_validation_checkpoints.json"
+    if not path.exists():
+        raise ValueError(
+            f"no best_validation_checkpoints.json in {directory}: this run "
+            "never completed a validation epoch, so nothing selected a "
+            "checkpoint to test"
+        )
+    payload = json.loads(path.read_text())
+
+    for direction in ("t2v", "v2t"):
+        selection = payload.get(direction)
+        if not isinstance(selection, dict) or "checkpoint" not in selection:
+            raise ValueError(
+                f"best_validation_checkpoints.json has no {direction} selection"
+            )
+        checkpoint = Path(selection["checkpoint"])
+        if not checkpoint.exists():
+            raise ValueError(
+                f"{direction} selection points at a missing checkpoint: "
+                f"{checkpoint}"
+            )
+
+    return payload
 
 
 def write_best_validation_snapshot(
@@ -2032,59 +2149,33 @@ def main():
                 # loop: the loop only writes this payload on epochs that ran
                 # validation, so reading its local here made the final test
                 # depend on a variable that may never have been bound.
-                selection_payload = build_best_validation_payload(
-                    epochs_completed=args.epochs,
-                    best_t2v_score=best_t2v_score,
-                    best_t2v_checkpoint=best_t2v_checkpoint,
-                    best_v2t_score=best_v2t_score,
-                    best_v2t_checkpoint=best_v2t_checkpoint,
+                run_final_test(
+                    args,
+                    model,
+                    tokenizer,
+                    device,
+                    n_gpu,
+                    build_best_validation_payload(
+                        epochs_completed=args.epochs,
+                        best_t2v_score=best_t2v_score,
+                        best_t2v_checkpoint=best_t2v_checkpoint,
+                        best_v2t_score=best_v2t_score,
+                        best_v2t_checkpoint=best_v2t_checkpoint,
+                    ),
                 )
-                model_to_evaluate = model.module if hasattr(model, "module") else model
-                test_factory = DATALOADER_DICT[args.datatype].get("test")
-                if test_factory is None:
-                    raise ValueError(f"{args.datatype} has no test dataloader")
-                test_dataloader, test_length = test_factory(args, tokenizer, subset="test")
 
-                logger.info(
-                    "  Split: test | Samples: %d | Steps: %d | Batch: %d",
-                    test_length,
-                    len(test_dataloader),
-                    args.batch_size_val,
-                )
-                previous_eval_split = args.eval_split
-                args.eval_split = "test"
-                try:
-                    test_metrics_by_checkpoint = {}
-                    final_test_payload = {}
-                    for direction in ("t2v", "v2t"):
-                        selection = selection_payload[direction]
-                        checkpoint_path = selection["checkpoint"]
-                        if checkpoint_path not in test_metrics_by_checkpoint:
-                            logger.info(
-                                "***** Running final test from %s-selected checkpoint: %s *****",
-                                direction.upper(),
-                                checkpoint_path,
-                            )
-                            checkpoint = torch.load(checkpoint_path, map_location="cpu")
-                            model_to_evaluate.load_state_dict(checkpoint)
-                            model_to_evaluate.to(device)
-                            test_metrics_by_checkpoint[checkpoint_path] = eval_epoch(
-                                args, model_to_evaluate, test_dataloader, device, n_gpu
-                            )
-                        final_test_payload[direction] = {
-                            **selection,
-                            "test_metrics": test_metrics_by_checkpoint[checkpoint_path],
-                        }
-                finally:
-                    args.eval_split = previous_eval_split
-
-                atomic_write_json(
-                    Path(args.output_dir) / "final_test.json",
-                    {
-                        "test_split": "test",
-                        "selections": final_test_payload,
-                    },
-                )
+    elif args.run_final_test:
+        # Training already finished; only its test number is missing. The
+        # selection is read off disk instead of being recomputed, so this
+        # produces the same artifact the in-loop path would have.
+        if args.local_rank == 0:
+            selection_payload = load_best_validation_snapshot(args.output_dir)
+            logger.info(
+                "***** Final test only: selection from %s (%d epochs) *****",
+                Path(args.output_dir) / "best_validation_checkpoints.json",
+                selection_payload.get("epochs_completed", -1),
+            )
+            run_final_test(args, model, tokenizer, device, n_gpu, selection_payload)
 
     elif args.do_eval:
         if args.local_rank == 0:
