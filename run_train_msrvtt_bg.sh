@@ -25,6 +25,16 @@ run_controller() {
     mkdir -p "${LOG_DIR}"
     LOG_FILE="${LOG_DIR}/${RUN_ID}_${RUN_TIME}_train_msrvtt.log"
     TRAIN_PID_FILE="${TRAIN_PID_FILE:-}"
+    # The controller normally ends by following the log, which is what you want
+    # from a terminal. Set TRAIN_FOLLOW_LOG=0 when the caller is a script or an
+    # agent: the controller then returns as soon as the worker is detached, so
+    # nothing is left holding the invocation open and nothing can be killed by
+    # tearing that invocation down.
+    TRAIN_FOLLOW_LOG="${TRAIN_FOLLOW_LOG:-1}"
+    if [[ "${TRAIN_FOLLOW_LOG}" != "0" && "${TRAIN_FOLLOW_LOG}" != "1" ]]; then
+        echo "Unsupported TRAIN_FOLLOW_LOG=${TRAIN_FOLLOW_LOG}; expected 0 or 1" >&2
+        return 2
+    fi
 
     echo "[run_train_msrvtt_bg] RUN_DATE=${RUN_DATE} RUN_TIME=${RUN_TIME} RUN_TAG=${RUN_TAG}"
     echo "[run_train_msrvtt_bg] LOG_FILE=${LOG_FILE}"
@@ -44,7 +54,9 @@ run_controller() {
     echo "[run_train_msrvtt_bg] 随时可以运行以下命令查看日志："
     echo "tail -f ${LOG_FILE}"
 
-    tail -n 50 -F "${LOG_FILE}"
+    if [[ "${TRAIN_FOLLOW_LOG}" == "1" ]]; then
+        tail -n 50 -F "${LOG_FILE}"
+    fi
 }
 
 
