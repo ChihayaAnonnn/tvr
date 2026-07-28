@@ -40,7 +40,6 @@ RSPR_MODE=stochastic \
 RSPR_FREEZE_CLIP=0 \
 RSPR_FREEZE_DSA=0 \
 RSPR_WARMUP_EPOCHS=1 \
-FREEZE_LAYER_NUM=8 \
 RUN_ID="${RUN_ID}" \
 ./run_train_msrvtt_bg.sh >>"${MONITOR_LOG}" 2>&1 &
 CONTROLLER_PID=$!

@@ -90,27 +90,22 @@ run_worker() {
         exit 2
     fi
 
-    # The optimization recipe. parity reproduces research_refs/UATVR_official
-    # exactly; the local default trains only the top four resblocks at a trunk
-    # rate of lr*coef_lr = 1e-7 and lands about three R@1 below the published
-    # TI+DSA number, which swamps anything RSPR does on top of it.
-    if [[ "${EXPERIMENT_PROFILE}" == "parity" ]]; then
-        TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-512}
-        FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-0}
-        TRAIN_LR=${TRAIN_LR:-5e-5}
-        TRAIN_MAX_FRAMES=${TRAIN_MAX_FRAMES:-12}
-        TRAIN_SLICE_FRAMEPOS=${TRAIN_SLICE_FRAMEPOS:-2}
-        # 128 clips of 12 frames per rank with nothing frozen; every visual
-        # layer is recomputed rather than stored.
-        CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS:-12}
-    else
-        TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
-        FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-8}
-        TRAIN_LR=${TRAIN_LR:-1e-4}
-        TRAIN_MAX_FRAMES=${TRAIN_MAX_FRAMES:-8}
-        TRAIN_SLICE_FRAMEPOS=${TRAIN_SLICE_FRAMEPOS:-3}
-        CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS:-4}
-    fi
+    # The optimization recipe, shared by every profile: it is
+    # research_refs/UATVR_official/train.sh. The local recipe that used to sit
+    # here froze eight resblocks, so only the top four moved and they moved at
+    # the trunk rate lr*coef_lr; it landed 3.2 R@1 below the published TI+DSA
+    # number, which is wider than the effect RSPR is trying to measure. It had
+    # drifted there by accident and had no defender. Profiles now differ only
+    # in the data protocol -- which videos training sees and which set picks
+    # the checkpoint -- so an RSPR arm and its baseline are optimized alike.
+    TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-512}
+    FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-0}
+    TRAIN_LR=${TRAIN_LR:-5e-5}
+    TRAIN_MAX_FRAMES=${TRAIN_MAX_FRAMES:-12}
+    TRAIN_SLICE_FRAMEPOS=${TRAIN_SLICE_FRAMEPOS:-2}
+    # 128 clips of 12 frames per rank with nothing frozen; every visual layer
+    # is recomputed rather than stored, which is what makes it fit in 40 GB.
+    CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS:-12}
     TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS:-1}
     TRAIN_MAX_WORDS=${TRAIN_MAX_WORDS:-32}
     COEF_LR=${COEF_LR:-1e-3}
@@ -177,7 +172,8 @@ run_worker() {
         )
     fi
 
-    # hygiene baseline 固定 batch 256 + accum 1，有效 batch = 256；4 卡时每卡 micro-batch 64。
+    # hygiene 与 parity 都固定 batch 512 + accum 1，有效对比批 = 512；4 卡时每卡
+    # micro-batch 128（官方脚本是 8 卡 × 64）。
     # 当前主机可见 GPU 为 0–3；0/1 位于 NUMA 0，2/3 位于 NUMA 1。
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
     if ! [[ "${CUDA_VISIBLE_DEVICES}" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
@@ -190,14 +186,13 @@ run_worker() {
     if [[ "${EXPERIMENT_PROFILE}" == "hygiene" || "${EXPERIMENT_PROFILE}" == "parity" ]]; then
         if [[ "${EXPERIMENT_PROFILE}" == "parity" ]]; then
             _BATCH_PROFILE_LABEL="parity baseline"
-            # Eight ranks of 64 in the official script; four of 128 here. The
-            # contrastive batch is the forward batch, so accumulation cannot
-            # stand in for it.
-            _REQUIRED_BATCH_SIZE=512
         else
             _BATCH_PROFILE_LABEL="hygiene baseline"
-            _REQUIRED_BATCH_SIZE=256
         fi
+        # Eight ranks of 64 in the official script; four of 128 here. The
+        # contrastive batch is the forward batch, so accumulation cannot stand
+        # in for it.
+        _REQUIRED_BATCH_SIZE=512
         if [[ "${#_GPUS[@]}" -ne 4 ]]; then
             echo "${_BATCH_PROFILE_LABEL} requires exactly 4 GPUs; got CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}" >&2
             exit 2

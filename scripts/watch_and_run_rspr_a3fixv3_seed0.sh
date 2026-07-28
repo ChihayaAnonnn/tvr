@@ -12,7 +12,7 @@ cd "${ROOT_DIR}"
 #     的梯度份额,只改变 trunk 每步走多远(对两个损失同等)。所以 v2 观察到的
 #     +0.4 (T2V) / +1.4 (V2T) 既可能来自 λx3,也可能来自 trunk 走得更远。
 # 本 run 填上 2x2 里缺的那格 (λx3, coef_lr=1e-3),对照基线是已有的 rspr_a0_seed0。
-# 其余(seed0、hygiene、FREEZE_LAYER_NUM=8、5 epochs、warmup=1)与 a3fix/a0 对齐。
+# 其余(seed0、hygiene、官方配方、5 epochs、warmup=1)与 a3fix/a0 对齐。
 RUN_ID="rspr_a3fixv3_seed0"
 MONITOR_DIR="${ROOT_DIR}/logs/monitor"
 MONITOR_LOG="${MONITOR_DIR}/${RUN_ID}.log"
@@ -55,7 +55,6 @@ RSPR_GRAD_DIAGNOSTICS=1 \
 RSPR_FREEZE_CLIP=0 \
 RSPR_FREEZE_DSA=0 \
 RSPR_WARMUP_EPOCHS=1 \
-FREEZE_LAYER_NUM=8 \
 RUN_ID="${RUN_ID}" \
 ./run_train_msrvtt_bg.sh >>"${MONITOR_LOG}" 2>&1 &
 CONTROLLER_PID=$!

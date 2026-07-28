@@ -194,6 +194,19 @@ def test_validate_trusted_cli_accepts_the_official_parity_recipe():
     main_task_retrieval.validate_trusted_cli(_trusted_args())
 
 
+def test_validate_trusted_cli_accepts_the_official_recipe_on_the_trusted_split():
+    """hygiene runs the same recipe as parity, on our own data protocol.
+
+    The recipe drift that cost 3.2 R@1 was accidental, so there is no local
+    recipe left to defend: profiles differ in which videos they train on and
+    which set selects the checkpoint, not in how the backbone is optimized.
+    """
+
+    main_task_retrieval.validate_trusted_cli(
+        _trusted_args(experiment_profile="hygiene", fold_val_into_train=False)
+    )
+
+
 def test_validate_trusted_cli_keeps_the_held_out_split_out_of_other_profiles():
     """Only parity may train on the 500 videos trusted-v1 holds out.
 
@@ -203,33 +216,48 @@ def test_validate_trusted_cli_keeps_the_held_out_split_out_of_other_profiles():
 
     with pytest.raises(ValueError, match="fold_val_into_train"):
         main_task_retrieval.validate_trusted_cli(
-            _trusted_args(experiment_profile="hygiene", batch_size=256)
+            _trusted_args(experiment_profile="hygiene")
         )
 
 
+@pytest.mark.parametrize("profile", ("parity", "hygiene"))
 @pytest.mark.parametrize(
     ("overrides", "message"),
     (
         # Accumulation restores the optimizer batch but not the contrastive
-        # one, so 256x2 trains a 256-way InfoNCE and is not parity.
+        # one, so 256x2 trains a 256-way InfoNCE and is not the recipe.
         ({"batch_size": 256, "gradient_accumulation_steps": 2}, "batch_size=512"),
         ({"gradient_accumulation_steps": 2}, "gradient_accumulation_steps=1"),
         ({"freeze_layer_num": 8}, "freeze_layer_num=0"),
         ({"max_frames": 8}, "max_frames=12"),
         ({"slice_framepos": 3}, "slice_framepos=2"),
-        # The official recipe trains on all 9000 source videos.
-        ({"fold_val_into_train": False}, "fold_val_into_train"),
     ),
 )
-def test_validate_trusted_cli_rejects_parity_that_is_not_parity(overrides, message):
-    """A 'parity' run that quietly differs is worse than no parity run at all.
+def test_validate_trusted_cli_rejects_a_recipe_that_is_not_the_recipe(
+    profile, overrides, message
+):
+    """A run that quietly differs is worse than no run at all.
 
-    The point of the profile is to make one number comparable to a published
-    one, so every knob the comparison rests on is checked rather than assumed.
+    Both profiles exist to make one number comparable -- to the literature or
+    to the other RSPR arms -- so every knob the comparison rests on is
+    checked rather than assumed.
     """
 
+    arguments = _trusted_args(
+        experiment_profile=profile,
+        fold_val_into_train=profile == "parity",
+        **overrides,
+    )
+
     with pytest.raises(ValueError, match=message):
-        main_task_retrieval.validate_trusted_cli(_trusted_args(**overrides))
+        main_task_retrieval.validate_trusted_cli(arguments)
+
+
+def test_validate_trusted_cli_requires_parity_to_train_on_all_9000_videos():
+    with pytest.raises(ValueError, match="fold_val_into_train"):
+        main_task_retrieval.validate_trusted_cli(
+            _trusted_args(fold_val_into_train=False)
+        )
 
 
 def test_effective_parameter_log_shows_how_much_of_the_backbone_trains(

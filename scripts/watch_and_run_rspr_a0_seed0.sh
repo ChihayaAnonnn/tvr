@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 # A0 baseline: RSPR_MODE=off (纯 DSA)，与 A3-fixed 严格可比的确定性对照。
-# seed0 协议、hygiene profile、FREEZE_LAYER_NUM=8、5 epochs 全部与 A3-fixed 对齐。
+# seed0 协议、hygiene profile、官方配方、5 epochs 全部与 A3-fixed 对齐。
 RUN_ID="rspr_a0_seed0"
 MONITOR_DIR="${ROOT_DIR}/logs/monitor"
 MONITOR_LOG="${MONITOR_DIR}/${RUN_ID}.log"
@@ -39,7 +39,6 @@ log "all GPUs are free; launching ${RUN_ID}"
 TVR_PYTHON=/home/xujie/.conda/envs/tvr/bin/python \
 TVR_TORCHRUN=/home/xujie/.conda/envs/tvr/bin/torchrun \
 RSPR_MODE=off \
-FREEZE_LAYER_NUM=8 \
 RUN_ID="${RUN_ID}" \
 ./run_train_msrvtt_bg.sh >>"${MONITOR_LOG}" 2>&1 &
 CONTROLLER_PID=$!

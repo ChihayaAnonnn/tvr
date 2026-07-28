@@ -510,7 +510,7 @@ def test_worker_forwards_the_configured_trunk_learning_rate_ratio(
             [
                 "--clip_gradient_checkpointing",
                 "--clip_visual_checkpoint_layers",
-                "4",
+                "12",
             ],
         ),
         ("0", []),
@@ -611,7 +611,7 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
         "2",
         "--epochs=5",
         "--batch_size",
-        "256",
+        "512",
         "--gradient_accumulation_steps",
         "1",
         "--n_display=20",
@@ -636,11 +636,11 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
         "--output_dir",
         str(output_dir),
         "--lr",
-        "1e-4",
+        "5e-5",
         "--max_words",
         "32",
         "--max_frames",
-        "8",
+        "12",
         "--batch_size_val",
         "16",
         "--datatype",
@@ -651,9 +651,9 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
         "--coef_lr",
         "1e-3",
         "--freeze_layer_num",
-        "8",
+        "0",
         "--slice_framepos",
-        "3",
+        "2",
         "--linear_patch",
         "2d",
         "--sim_header",
@@ -755,10 +755,11 @@ def _option(arguments: list[str], name: str) -> str:
     return arguments[arguments.index(name) + 1]
 
 
+@pytest.mark.parametrize("profile", ("parity", "hygiene", "default"))
 @pytest.mark.parametrize(
     ("option", "value"),
     (
-        # The published TI+DSA number is 49.6 R@1 and the local baseline sits at
+        # The published TI+DSA number is 49.6 R@1 and the local baseline sat at
         # 46.4. Every one of these differed from research_refs/UATVR_official,
         # and freeze_layer_num=8 alone left only the top four resblocks trainable
         # at a trunk rate of lr*coef_lr = 1e-7.
@@ -776,13 +777,20 @@ def _option(arguments: list[str], name: str) -> str:
         ("--pretrained_clip_name", "ViT-B/16"),
     ),
 )
-def test_parity_profile_reproduces_the_official_training_recipe(
-    tmp_path, option, value
+def test_every_profile_uses_the_official_training_recipe(
+    tmp_path, profile, option, value
 ):
+    """The recipe is not what a profile chooses; the data protocol is.
+
+    hygiene has to optimize exactly as parity does, or its baseline is not the
+    thing the parity run validated -- and default has to match hygiene, or a
+    forgotten profile flag silently reintroduces the drift that cost 3.2 R@1.
+    """
+
     arguments = _launch_arguments(
         tmp_path,
         {
-            "EXPERIMENT_PROFILE": "parity",
+            "EXPERIMENT_PROFILE": profile,
             "CUDA_VISIBLE_DEVICES": "0,1,2,3",
             "NPROC": "4",
         },
@@ -832,13 +840,14 @@ def test_non_parity_profiles_train_only_on_the_trusted_split(tmp_path):
     assert "--fold_val_into_train" not in arguments
 
 
-def test_parity_profile_checkpoints_every_visual_layer(tmp_path):
+@pytest.mark.parametrize("profile", ("parity", "hygiene", "default"))
+def test_every_profile_checkpoints_every_visual_layer(tmp_path, profile):
     """128 clips of 12 frames per rank with nothing frozen needs the memory."""
 
     arguments = _launch_arguments(
         tmp_path,
         {
-            "EXPERIMENT_PROFILE": "parity",
+            "EXPERIMENT_PROFILE": profile,
             "CUDA_VISIBLE_DEVICES": "0,1,2,3",
             "NPROC": "4",
         },
@@ -873,6 +882,18 @@ def test_parity_profile_checkpoints_every_visual_layer(tmp_path):
             },
             (),
             "parity baseline requires TRAIN_GRADIENT_ACCUMULATION_STEPS=1",
+        ),
+        (
+            {
+                "EXPERIMENT_PROFILE": "hygiene",
+                "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+                "NPROC": "4",
+                "TRAIN_BATCH_SIZE": "256",
+            },
+            (),
+            # The old hygiene batch. An arm trained at 256 against a baseline
+            # trained at 512 differs in negatives, not in RSPR.
+            "hygiene baseline requires TRAIN_BATCH_SIZE=512",
         ),
         (
             {"EXPERIMENT_PROFILE": "default", "CUDA_VISIBLE_DEVICES": "gpu0"},

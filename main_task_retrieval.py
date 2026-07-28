@@ -61,13 +61,26 @@ def validate_trusted_cli(args):
     if args.do_eval and not args.do_train and not args.init_model:
         raise ValueError("--do_eval requires --init_model")
 
-    if args.do_train and args.experiment_profile == "hygiene":
-        if args.batch_size != 256:
-            raise ValueError("hygiene requires --batch_size=256")
-        if args.gradient_accumulation_steps != 1:
-            raise ValueError(
-                "hygiene requires --gradient_accumulation_steps=1"
-            )
+    if args.do_train and args.experiment_profile in {"hygiene", "parity"}:
+        # research_refs/UATVR_official/train.sh. A run whose recipe quietly
+        # differs is worse than no run: it produces a number that looks
+        # comparable -- to the published one under parity, to the other RSPR
+        # arms under hygiene -- and is not. The local recipe that drifted away
+        # from this cost 3.2 R@1 and had no defender, so both profiles now
+        # optimize identically and differ only in which videos they train on.
+        # Accumulation is pinned because it restores the optimizer batch, not
+        # the contrastive one, so 256x2 is a 256-way InfoNCE.
+        for name, expected in (
+            ("batch_size", 512),
+            ("gradient_accumulation_steps", 1),
+            ("freeze_layer_num", 0),
+            ("max_frames", 12),
+            ("slice_framepos", 2),
+        ):
+            if getattr(args, name) != expected:
+                raise ValueError(
+                    f"{args.experiment_profile} requires --{name}={expected}"
+                )
 
     # The held-out 500 are what make a local number ours rather than the
     # literature's. Only parity may spend them, and parity must.
@@ -79,20 +92,6 @@ def validate_trusted_cli(args):
         )
 
     if args.do_train and args.experiment_profile == "parity":
-        # research_refs/UATVR_official/train.sh. A 'parity' run whose recipe
-        # quietly differs is worse than no parity run: it produces a number
-        # that looks comparable to the published one and is not. Accumulation
-        # is pinned because it restores the optimizer batch, not the
-        # contrastive one, so 256x2 is a 256-way InfoNCE.
-        for name, expected in (
-            ("batch_size", 512),
-            ("gradient_accumulation_steps", 1),
-            ("freeze_layer_num", 0),
-            ("max_frames", 12),
-            ("slice_framepos", 2),
-        ):
-            if getattr(args, name) != expected:
-                raise ValueError(f"parity requires --{name}={expected}")
         if not getattr(args, "fold_val_into_train", False):
             raise ValueError(
                 "parity requires --fold_val_into_train: the official recipe "

@@ -6,7 +6,7 @@ cd "${ROOT_DIR}"
 
 # A0-v2 baseline: RSPR_MODE=off (纯 DSA)，COEF_LR=1e-2。
 # 提高 coef_lr 会改变 DSA 自身的收敛轨迹，所以 A3fix-v2 不能再拿旧 A0 当对照，
-# 必须有这条同 coef_lr 的匹配基线。其余（seed0、hygiene、FREEZE_LAYER_NUM=8、
+# 必须有这条同 coef_lr 的匹配基线。其余（seed0、hygiene、官方配方、
 # 5 epochs）与 A3fix-v2 逐项对齐。
 RUN_ID="rspr_a0v2_seed0"
 MONITOR_DIR="${ROOT_DIR}/logs/monitor"
@@ -42,7 +42,6 @@ TVR_PYTHON=/home/xujie/.conda/envs/tvr/bin/python \
 TVR_TORCHRUN=/home/xujie/.conda/envs/tvr/bin/torchrun \
 RSPR_MODE=off \
 COEF_LR=1e-2 \
-FREEZE_LAYER_NUM=8 \
 RUN_ID="${RUN_ID}" \
 ./run_train_msrvtt_bg.sh >>"${MONITOR_LOG}" 2>&1 &
 CONTROLLER_PID=$!
