@@ -19,6 +19,27 @@ Stochastic Prototype Ranking）**。模块以 UATVR 的 CLIP—DSA—词/帧匹�
 - [DUQ 模块设计报告](../../reference/duq_dual_uncertainty_quantification_text_video_retrieval_design_report.md)；
 - [概率嵌入与不确定性研究报告](../../deep-research-report.md)。
 
+### 1.1 修订记录
+
+**2026-07-25 修订（方差塌缩修复）。** A3 seed0 首跑（2026-07-23）中
+`variance_t/v` 在第一个 epoch 内从先验 0.01 单调滑落到
+$\exp(\ell_{\min})=\exp(-8)$ 并永久停驻，`anchor` 同步升至塌缩对应的
+KL 平台值。根因分析结论：判别损失（$L_{prob}$、$L_{rank}$）对 $\sigma$
+的梯度恒为下压方向，目标函数中不存在给 $\sigma$ 内点最优的力；
+$\lambda_a\le10^{-4}$ 加 warm-up 归零使唯一反向力失效；硬 clip 在越界后
+切断包括 anchor KL 在内的全部恢复梯度，使下界成为吸收态。本修订据此
+变更四处规格：
+
+1. §6.2：<code>logvar</code> 硬 clip 改为 sigmoid 软边界参数化；
+2. §7.1：$L_{prob}$ 由 MultiPosCE 改为 PCME 式逐样本对匹配概率 BCE，
+   原形式保留为消融选项；
+3. §7：$\lambda_a$ 改用对 <code>logvar</code> 的梯度范数匹配标定，
+   建议区间上调至 $10^{-2}$–$10^{-1}$；
+4. §8.1：warm-up 方向反转——$\lambda_p,\lambda_r$ 线性升温，
+   $\lambda_a$ 从第一步全额。
+
+同时在 §12.2 新增 A12（闭式 CSD 变体）与 A13（InfoNCE 回退）两条消融。
+
 ## 2. 背景与设计缺口
 
 UATVR 使用高斯概率嵌入和多实例对比损失增强训练，但实际推理仍以 DSA
@@ -178,25 +199,47 @@ h+
 \right).
 $$
 
-方差头统一输出 <code>logvar</code>：
+方差头输出无约束原始量 $u$，再经 sigmoid 软边界映射到
+$(\ell_{\min},\ell_{\max})$：
+
+$$
+u
+=
+\operatorname{MLP}_{\sigma}
+\left(
+\operatorname{LN}([h;d;H(a)])
+\right),
+$$
 
 $$
 \ell
 =
 \log\sigma^2
 =
-\operatorname{clip}
-\left(
-\operatorname{MLP}_{\sigma}
-\left(
-\operatorname{LN}([h;d;H(a)])
-\right),
-\ell_{\min},
-\ell_{\max}
-\right).
+\ell_{\min}
++
+(\ell_{\max}-\ell_{\min})\cdot\operatorname{sigmoid}(u).
 $$
 
-第一版建议：
+**禁止使用硬 <code>clip</code>**：clip 在越界后梯度恒为零，且 anchor KL
+以 clip 后的 $\ell$ 计算，一旦触底连恢复梯度也被切断，下界成为吸收态
+（A3 seed0 已实证：$\ell$ 触底后 660 步内无任何恢复）。sigmoid 软边界在
+全域保留非零梯度，边界附近梯度按 $\operatorname{sigmoid}'$ 衰减但不消失。
+
+方差头末层权重零初始化，bias 初始化为
+
+$$
+u_0
+=
+\operatorname{logit}
+\left(
+\frac{\ell_{prior}-\ell_{\min}}{\ell_{\max}-\ell_{\min}}
+\right),
+\qquad
+\ell_{prior}=\log\sigma_0^2,
+$$
+
+使初始 $\ell$ 精确等于先验 log-variance。边界建议维持：
 
 $$
 \ell_{\min}=-8,\qquad \ell_{\max}=2.
@@ -592,26 +635,48 @@ L_{DSA}
 \lambda_aL_{anchor}.
 $$
 
-概率检索损失为支持多正样本的双向对比损失：
+概率检索损失为 PCME/HIB 式的逐样本对匹配概率 BCE（soft
+contrastive）。对文本 $i$、视频 $j$ 的第 $k$ 个随机配对分数
+$s_{ij}^{(k)}$（即 $\tfrac12(g_{ij}^{k}+q_{ij}^{k})$），定义匹配概率：
+
+$$
+p_{ij}
+=
+\frac1K
+\sum_k
+\operatorname{sigmoid}
+\left(
+\frac{s_{ij}^{(k)}-m}{\tau_p}
+\right),
+$$
+
+其中 $m$ 为可学习标量偏移。以 <code>pair_id</code> 构造匹配标签
+$y_{ij}$，损失按正负两类分别平均后等权合并：
 
 $$
 L_{prob}
 =
 \frac12
-\left[
-\operatorname{MultiPosCE}
-\left(
-\tau_p S^{prob},
-\operatorname{pairId}
-\right)
+\operatorname{mean}_{y_{ij}=1}
+\left[-\log p_{ij}\right]
 +
-\operatorname{MultiPosCE}
-\left(
-\tau_p(S^{prob})^\top,
-\operatorname{pairId}
-\right)
-\right].
+\frac12
+\operatorname{mean}_{y_{ij}=0}
+\left[-\log(1-p_{ij})\right].
 $$
+
+**选择 BCE 而非 MultiPosCE（InfoNCE）的原因**：InfoNCE 通过 softmax
+归一化，样本散布只会稀释正对分数并抬高 logsumexp，对 $\sigma$ 的梯度
+恒为下压方向，$\sigma^*=\ell_{\min}$ 是其全局最优（A3 seed0 塌缩的主
+因）。BCE 在易分对上饱和后不再惩罚散布，而一对多歧义对（MSR-VTT 每
+视频 20 条 caption）需要中间概率来拟合，$\sigma$ 由此获得内点激励。
+原 MultiPosCE 形式保留为消融选项（<code>--rspr_prob_loss
+infonce</code>，见 A13），默认 <code>soft_bce</code>。
+
+数值实现要求：$\log p_{ij}$ 与 $\log(1-p_{ij})$ 必须经
+$\operatorname{logmeanexp}_k(\operatorname{logsigmoid}(\pm x_k))$
+在对数域计算（利用 $1-\operatorname{sigmoid}(x)=
+\operatorname{sigmoid}(-x)$），不得先求概率再取对数。
 
 ### 7.2 Beta 增强版本
 
@@ -638,14 +703,85 @@ $$
 | $\lambda_p$ | 0.05–0.2 |
 | $\lambda_r$ | 0.05–0.2 |
 | $\lambda_e$ | 0.01–0.05 |
-| $\lambda_a$ | $10^{-5}$–$10^{-4}$ |
+| $\lambda_a$ | $10^{-2}$–$10^{-1}$（梯度匹配标定，见下） |
 | $K_{train}$ | 4 |
 | $K_{eval}$ | 8 |
 | hard negatives/query | 8 或 16 |
 | $\tau_m$ | 0.05–0.1 |
 
-这些范围是实验起点，不是固定论文超参数。各损失应先记录未经加权的实际量级，
-再确定最终系数。
+这些范围是实验起点，不是固定论文超参数。
+
+**$\lambda_a$ 标定程序（梯度匹配）**：正则项的职责是梯度对抗，损失值
+量级匹配无法反映各项对 <code>logvar</code> 的实际作用力（判别项梯度被
+$1/\tau$ 与维度放大）。标定必须比较梯度而非损失值：开启
+<code>--rspr_grad_diagnostics</code> 做几百 step 的短跑，记录
+$\|\partial L_{prob}/\partial\ell\|$、
+$\|\partial L_{rank}/\partial\ell\|$、
+$\|\partial L_{anchor}/\partial\ell\|$（均为未加权梯度范数），选取
+$\lambda_a$ 使 anchor 的恢复力与判别项合计下压力同量级：
+
+$$
+\lambda_a
+\approx
+\frac{
+\lambda_p\|\partial L_{prob}/\partial\ell\|
++
+\lambda_r\|\partial L_{rank}/\partial\ell\|
+}{
+\|\partial L_{anchor}/\partial\ell\|
+}.
+$$
+
+历史教训：2026-07-23 A3 首跑按损失量级取 $\lambda_a=10^{-4}$（旧建议
+区间上界），实际梯度对抗差约三个数量级，方差在 460 step 内塌缩到底。
+
+**$\lambda_p,\lambda_r$ 标定程序（对 trunk 的梯度份额）**：上面的 $\lambda_a$
+程序只校准 RSPR 三项彼此之间在 <code>logvar</code> 上的平衡，不涉及 RSPR
+相对 $L_{DSA}$ 对共享 CLNoLP trunk 的影响力。后者决定 RSPR 究竟有没有在塑造
+表征，必须单独测量：
+
+$$
+\rho
+=
+\frac{
+\left\|
+\partial
+\left(
+\lambda_p L_{prob}
++
+\lambda_r L_{rank}
++
+\lambda_a L_{anchor}
+\right)
+/
+\partial\theta_{clip}
+\right\|
+}{
+\left\|
+\partial L_{DSA} / \partial\theta_{clip}
+\right\|
+}.
+$$
+
+用 <code>scripts/probe_rspr_gradient_flow.py</code> 在若干 checkpoint 上测
+$\rho$。**$\rho$ 必须沿轨迹测，不能只测初始点**：RSPR 的绝对 trunk 梯度基本
+恒定，而 $L_{DSA}$ 会随收敛塌缩，因此 $\rho$ 单调上升。A3-fixed
+（$\lambda_p=\lambda_r=0.1$，$\lambda_a=10^{-2}$）实测：
+
+| checkpoint | $L_{DSA}$ | $\|\partial L_{DSA}/\partial\theta_{clip}\|$ | $\rho$ |
+| --- | --- | --- | --- |
+| CLIP 初始化 | 1.573 | 1.17e+02 | 0.18% |
+| epoch 1 末 | 0.433 | 3.94e+01 | 2.93% |
+| epoch 3 末 | 0.035 | 1.03e+01 | 8.90% |
+| epoch 5 末 | 0.013 | 5.51e+00 | 15.03% |
+
+标定规则：取 $\lambda$ 的整体缩放因子，使 $\rho$ 在表征仍可塑的
+epoch 1–3 达到 $10\%$–$30\%$，且在训练末端不超过 $100\%$。按初始点标定会
+严重高估所需倍数——初始点的 0.18% 是 $\rho$ 的下界而非典型值。
+
+同时注意 $\rho$ 高不等于表征真的在动：<code>coef_lr=1e-3</code> 时 trunk
+学习率仅 $10^{-7}$ 且 8/12 层冻结，两条支路都几乎推不动 trunk。$\rho$ 与
+<code>coef_lr</code> 需一并考虑。
 
 ## 8. 训练流程
 
@@ -656,8 +792,12 @@ $$
 - 在同一个作业和 optimizer 中连续训练 5 epochs；
 - <code>FREEZE_LAYER_NUM=8</code>，CLIP 后 4 个 block 与 DSA、WTI、RSPR
   从第一步联合训练；
-- $L_{DSA}$ 与 $L_{prob}$ 从第一步使用完整权重；
-- $\lambda_r$ 与 $\lambda_a$ 在第一个 epoch 内线性 warm-up；
+- $L_{DSA}$ 与 $\lambda_a L_{anchor}$ 从第一步使用完整权重；
+- $\lambda_p$ 与 $\lambda_r$ 在第一个 epoch 内线性 warm-up；
+- **warm-up 方向依据**：判别项是压方差的力，anchor 是唯一托底的力。
+  2026-07-23 首跑将方向写反（$L_{prob}$ 满功率、$\lambda_a$ 从零升温），
+  塌缩恰好发生在 anchor 有效权重接近零的窗口内。升温必须作用于施压方，
+  不得作用于对抗方；
 - 每个 query 使用显式 <code>pair_id</code> 排除多正样本后选择困难负样本；
 - 以验证集 R@1 为主选择 checkpoint，同时记录方差与错误的相关性。
 
@@ -678,19 +818,20 @@ $$
 
 ### 9.1 全库召回
 
-使用概率均值归一化向量：
+默认使用确定性 DSA 分数 $S_{ij}^{det}$ 作为召回打分器，不进行全库 $K^2$
+原型匹配。
 
-$$
-S_{ij}^{ann}
-=
-\cos
-\left(
-\tilde\mu_{t,i},
-\tilde\mu_{v,j}
-\right).
-$$
+**修订说明（2026-07-28）**：本节原先规定用概率均值余弦
+$\cos(\tilde\mu_{t,i},\tilde\mu_{v,j})$ 召回。实测该分数在 MSR-VTT
+trusted-v1 上 R@1 = 43.8，低于 DSA 头的 46.0；由于精排只能重排召回集内部的
+候选，用弱打分器召回会把整条流水线的上限锁死在 43.8。召回打分器必须不弱于
+精排目标，否则精排改进不可能显现。
 
-该分数用于全库 ANN 或初始 Top-R 召回，不进行全库 $K^2$ 原型匹配。
+概率均值余弦保留为消融项（`--rspr_recall_source mean`），用于量化
+"召回器强度决定流水线上限" 这一结论。
+
+未被精排的尾部候选必须沿用同一召回打分器排序；混用两个打分器会让
+Top-R 头部与尾部处于不同的序关系中。
 
 ### 9.2 Top-R 精排
 
@@ -702,8 +843,28 @@ S_{ij}^{final}
 \frac{S_{ij}^{det}}{T_d}
 +
 \lambda_p
-\frac{S_{ij}^{prob}}{T_p}.
+\,
+c
+\,
+\frac{S_{ij}^{prob}}{T_p},
+\qquad
+c
+=
+\exp
+\left(
+\tau_{clip}
+\right).
 $$
+
+**尺度因子 $c$ 是必需项，不是可调超参**。$S^{det}$ 是乘过 CLIP
+`logit_scale`（训练后 $\exp(\tau_{clip})\approx 100$）的 logits，而
+$S^{prob}$ 是裸余弦。缺少 $c$ 时概率项相对确定性项小 $10^2$ 量级，无论
+$\lambda_p$ 取何值都只能造成 $\sim 10^{-3}$ 名次间隔的扰动——即精排在
+数值上是空操作。`--rspr_rerank_scale none` 保留该缺陷行为作为消融。
+
+注意 $c$ **只作用于推理侧**。训练侧的 `SoftContrastiveMatchLoss` 会先除以
+$T_p = 0.07$，若再乘 $c$ 则 sigmoid 输入达 $\sim 1400\cos$，饱和后梯度归零。
+训练侧的尺度失配只能通过标定 $\lambda$ 解决，见 §7。
 
 启用且验证 Beta evidence 有效后，再加入：
 
@@ -801,7 +962,13 @@ RSPROutput
 - 统一使用 <code>logvar</code>，采样标准差必须是
   <code>exp(0.5 * logvar)</code>；
 - <code>logvar</code> 与指数运算使用 FP32，即使其他路径启用 AMP；
-- 对 <code>logvar</code> 执行范围限制；
+- <code>logvar</code> 范围限制必须使用 §6.2 的 sigmoid 软边界参数化，
+  禁止硬 <code>clip</code>（吸收态）；
+- $L_{prob}$ 的 $\log p$ 与 $\log(1-p)$ 在对数域经
+  <code>logsigmoid + logmeanexp</code> 计算，不得先求概率再取对数；
+- <code>--rspr_grad_diagnostics</code> 开启时记录各损失项对
+  <code>logvar</code> 的未加权梯度范数，用于 $\lambda_a$ 标定与塌缩
+  预警；
 - 随机原型进入余弦相似度前执行 L2 normalize，并保留有限的
   <code>eps</code>；
 - <code>logmeanexp</code> 使用稳定的 max-shift 实现；
@@ -865,6 +1032,8 @@ $O(B_tB_vLFD)$ 的成本。全库推理不运行该复杂度，只对 Top-R 精�
 | A9 | 核心版 + Beta evidence | 可信困难负样本的贡献 |
 | A10 | $K=1/2/4/8$ | 精度、成本与稳定性的关系 |
 | A11 | random / antithetic sampling | 采样方差控制的作用 |
+| A12 | 闭式 CSD 打分替代采样匹配 | 采样式 interaction-level 匹配相对闭式 $\|\mu_t-\mu_v\|^2+\Sigma(\sigma_t^2+\sigma_v^2)$ 的贡献与可扩展性 |
+| A13 | MultiPosCE(InfoNCE) 替代 BCE | 损失形式对方差塌缩与检索性能的影响（复现塌缩对照） |
 
 必须优先展示以下递进关系：
 

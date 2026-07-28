@@ -4,8 +4,79 @@ import torch.nn.functional as F
 
 from modules.stochastic_prototype_ranking import (
     BidirectionalSoftPrototypeMatcher,
+    SoftContrastiveMatchLoss,
     StochasticRankLoss,
 )
+
+
+def test_soft_contrastive_loss_matches_balanced_bce_formula():
+    loss_fn = SoftContrastiveMatchLoss(temperature=0.5)
+    scores = torch.linspace(-0.9, 0.9, 3 * 3 * 2).reshape(3, 3, 2)
+    group_ids = torch.tensor([0, 0, 1])
+
+    output = loss_fn(scores, group_ids)
+
+    probability = torch.sigmoid((scores - loss_fn.match_shift) / 0.5).mean(dim=-1)
+    positive = group_ids[:, None].eq(group_ids[None, :])
+    expected = -0.5 * (
+        probability[positive].log().mean()
+        + (1.0 - probability[~positive]).log().mean()
+    )
+    torch.testing.assert_close(output.loss, expected)
+    torch.testing.assert_close(output.match_probability, probability)
+
+
+def test_soft_contrastive_loss_prefers_correctly_separated_scores():
+    loss_fn = SoftContrastiveMatchLoss(temperature=0.07)
+    group_ids = torch.tensor([0, 1, 2])
+    positive = group_ids[:, None].eq(group_ids[None, :])
+    separated = torch.where(positive, 0.8, -0.8).unsqueeze(-1).expand(3, 3, 4)
+    inverted = -separated
+
+    good = loss_fn(separated, group_ids).loss
+    bad = loss_fn(inverted, group_ids).loss
+
+    assert good < bad
+
+
+def test_soft_contrastive_loss_is_finite_and_backpropagates_under_saturation():
+    loss_fn = SoftContrastiveMatchLoss(temperature=0.001)
+    scores = torch.full((2, 2, 4), 1.0, requires_grad=True)
+    group_ids = torch.tensor([0, 1])
+
+    output = loss_fn(scores, group_ids)
+
+    assert torch.isfinite(output.loss)
+    output.loss.backward()
+    assert scores.grad is not None
+    assert torch.isfinite(scores.grad).all()
+    assert scores.grad.abs().sum() > 0
+    assert loss_fn.match_shift.grad is not None
+    assert torch.isfinite(loss_fn.match_shift.grad).all()
+
+
+def test_soft_contrastive_loss_shift_is_learnable_and_starts_at_zero():
+    loss_fn = SoftContrastiveMatchLoss(temperature=0.07)
+
+    assert isinstance(loss_fn.match_shift, torch.nn.Parameter)
+    assert loss_fn.match_shift.requires_grad
+    torch.testing.assert_close(loss_fn.match_shift, torch.zeros(()))
+
+
+@pytest.mark.parametrize(
+    ("scores", "group_ids", "message"),
+    [
+        (torch.randn(2, 2), torch.tensor([0, 1]), "must have shape"),
+        (torch.randn(2, 3, 4), torch.tensor([0, 1]), "square"),
+        (torch.randn(2, 2, 4), torch.tensor([0.0, 1.0]), "integer dtype"),
+        (torch.randn(2, 2, 4), torch.tensor([0, 0]), "negative pair"),
+    ],
+)
+def test_soft_contrastive_loss_validates_input_contracts(scores, group_ids, message):
+    loss_fn = SoftContrastiveMatchLoss(temperature=0.07)
+
+    with pytest.raises(ValueError, match=message):
+        loss_fn(scores, group_ids)
 
 
 def test_soft_matcher_supports_rectangular_batches():

@@ -38,6 +38,14 @@ class StochasticRankOutput:
 
 
 @dataclass(frozen=True)
+class SoftContrastiveOutput:
+    """Balanced BCE loss and per-pair match probabilities."""
+
+    loss: torch.Tensor
+    match_probability: torch.Tensor
+
+
+@dataclass(frozen=True)
 class RSPROutput:
     """Probability distributions and their stochastic retrieval scores."""
 
@@ -262,6 +270,63 @@ class StochasticRankLoss(nn.Module):
             mining_logits.transpose(0, 1),
         )
         return 0.5 * (text_to_video.loss + video_to_text.loss), text_to_video, video_to_text
+
+
+class SoftContrastiveMatchLoss(nn.Module):
+    """PCME-style balanced BCE over per-sample match probabilities.
+
+    Unlike InfoNCE, whose softmax normalization monotonically rewards
+    shrinking the sampling noise, the per-sample sigmoid saturates on
+    well-separated pairs, so a nonzero variance keeps an interior optimum.
+    """
+
+    def __init__(self, temperature: float = 0.07):
+        super().__init__()
+        self.temperature = _positive_finite(temperature, "temperature")
+        self.match_shift = nn.Parameter(torch.zeros(()))
+
+    @staticmethod
+    def _validate_inputs(stochastic_scores: torch.Tensor, group_ids: torch.Tensor) -> torch.Tensor:
+        if stochastic_scores.ndim != 3:
+            raise ValueError("stochastic_scores must have shape [batch, batch, samples]")
+        batch_size, candidate_count, sample_count = stochastic_scores.shape
+        if batch_size != candidate_count:
+            raise ValueError("stochastic_scores must be square with shape [batch, batch, samples]")
+        if batch_size == 0:
+            raise ValueError("stochastic_scores must have a nonempty batch")
+        if sample_count == 0:
+            raise ValueError("stochastic_scores must have a nonempty samples dimension")
+        if not stochastic_scores.is_floating_point():
+            raise ValueError("stochastic_scores must use a floating-point dtype")
+
+        if group_ids.ndim != 1 or group_ids.size(0) != batch_size:
+            raise ValueError("group_ids must have shape [batch]")
+        if group_ids.dtype == torch.bool or group_ids.is_floating_point() or group_ids.is_complex():
+            raise ValueError("group_ids must use an integer dtype")
+        if stochastic_scores.device != group_ids.device:
+            raise ValueError("stochastic_scores and group_ids must use the same device")
+
+        positive_mask = group_ids[:, None].eq(group_ids[None, :])
+        if positive_mask.all():
+            raise ValueError("the batch must contain at least one negative pair")
+        return positive_mask
+
+    def forward(self, stochastic_scores: torch.Tensor, group_ids: torch.Tensor) -> SoftContrastiveOutput:
+        """Score every pair as match/non-match with class-balanced BCE."""
+
+        positive_mask = self._validate_inputs(stochastic_scores, group_ids)
+        with _fp32_context(stochastic_scores):
+            scaled = (stochastic_scores.float() - self.match_shift) / self.temperature
+            log_sample_count = math.log(scaled.size(-1))
+            # 1 - mean_k sigmoid(x_k) == mean_k sigmoid(-x_k), so both branches
+            # stay in log space via logsigmoid + logmeanexp.
+            log_match = torch.logsumexp(F.logsigmoid(scaled), dim=-1) - log_sample_count
+            log_no_match = torch.logsumexp(F.logsigmoid(-scaled), dim=-1) - log_sample_count
+            loss = -0.5 * (
+                log_match[positive_mask].mean() + log_no_match[~positive_mask].mean()
+            )
+            match_probability = log_match.exp()
+        return SoftContrastiveOutput(loss=loss, match_probability=match_probability)
 
 
 class RSPRCore(nn.Module):

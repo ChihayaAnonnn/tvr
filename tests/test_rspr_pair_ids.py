@@ -80,8 +80,9 @@ def test_train_epoch_forwards_group_ids_and_per_step_warmup_scales(
     assert len(model.calls) == 2
     for (_, kwargs), expected_scale in zip(model.calls, expected_scales):
         torch.testing.assert_close(kwargs["group_ids"], group_ids)
+        assert kwargs["rspr_prob_scale"] == expected_scale
         assert kwargs["rspr_rank_scale"] == expected_scale
-        assert kwargs["rspr_anchor_scale"] == expected_scale
+        assert kwargs["rspr_anchor_scale"] == 1.0
 
 
 def test_gather_group_ids_preserves_rank_major_order_dtype_and_device(monkeypatch):

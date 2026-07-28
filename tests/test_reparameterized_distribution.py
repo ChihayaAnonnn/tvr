@@ -214,6 +214,13 @@ def test_distribution_head_starts_at_deterministic_center_and_anchor_prior():
     )
 
 
+def _raw_logvar_bias(
+    logvar: torch.Tensor, logvar_min: float = -8.0, logvar_max: float = 2.0
+) -> torch.Tensor:
+    fraction = (logvar - logvar_min) / (logvar_max - logvar_min)
+    return torch.log(fraction) - torch.log1p(-fraction)
+
+
 def test_distribution_head_anchor_kl_matches_closed_form_mean_reduction():
     _, ReparameterizedDistributionHead, _ = _distribution_api()
     prior_std = 0.5
@@ -222,7 +229,7 @@ def test_distribution_head_anchor_kl_matches_closed_form_mean_reduction():
     configured_logvar = torch.tensor([-1.0, -2.0])
     with torch.no_grad():
         head.mean_head[-1].bias.copy_(mean_shift)
-        head.logvar_head[-1].bias.copy_(configured_logvar)
+        head.logvar_head[-1].bias.copy_(_raw_logvar_bias(configured_logvar))
 
     output = head(torch.randn(3, 4, 2), torch.ones(3, 4), sample_count=4)
     prior_variance = prior_std**2
@@ -237,6 +244,37 @@ def test_distribution_head_anchor_kl_matches_closed_form_mean_reduction():
     )
 
     torch.testing.assert_close(output.anchor_kl, expected)
+
+
+def test_logvar_soft_bound_keeps_gradient_alive_near_floor():
+    _, ReparameterizedDistributionHead, _ = _distribution_api()
+    head = ReparameterizedDistributionHead(dim=4, hidden_dim=8, prior_std=0.1)
+    with torch.no_grad():
+        head.logvar_head[-1].bias.fill_(-10.0)
+
+    output = head(torch.randn(2, 3, 4), torch.ones(2, 3), sample_count=2)
+
+    assert torch.all(output.logvar > -8.0)
+    output.anchor_kl.backward()
+    bias_gradient = head.logvar_head[-1].bias.grad
+    assert bias_gradient is not None
+    assert torch.isfinite(bias_gradient).all()
+    assert bias_gradient.abs().sum() > 0
+
+
+def test_logvar_soft_bound_stays_strictly_inside_range_at_both_extremes():
+    _, ReparameterizedDistributionHead, _ = _distribution_api()
+    tokens = torch.randn(2, 3, 4)
+    mask = torch.ones(2, 3)
+    for raw_bias in (-10.0, 10.0):
+        head = ReparameterizedDistributionHead(dim=4, hidden_dim=8, prior_std=0.1)
+        with torch.no_grad():
+            head.logvar_head[-1].bias.fill_(raw_bias)
+
+        output = head(tokens, mask, sample_count=2)
+
+        assert torch.all(output.logvar > -8.0)
+        assert torch.all(output.logvar < 2.0)
 
 
 def test_distribution_head_fixed_noise_is_deterministic():
@@ -343,6 +381,7 @@ def test_distribution_head_validates_sampling_contract():
         {"dim": 0},
         {"dim": 8, "hidden_dim": 0},
         {"dim": 8, "prior_std": 0.0},
+        {"dim": 8, "prior_std": math.exp(1.0)},
         {"dim": 8, "logvar_min": 2.0, "logvar_max": -8.0},
         {"dim": 8, "eps": 0.0},
     ],

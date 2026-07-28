@@ -183,10 +183,10 @@ class ReparameterizedDistributionHead(nn.Module):
             raise ValueError("logvar_min must be finite and smaller than logvar_max")
 
         prior_logvar = math.log(self.prior_std**2)
-        if not self.logvar_min <= prior_logvar <= self.logvar_max:
+        if not self.logvar_min < prior_logvar < self.logvar_max:
             raise ValueError(
-                "prior_std implies a log-variance outside the configured bounds: "
-                f"logvar={prior_logvar:.6g} bounds=[{self.logvar_min}, {self.logvar_max}]"
+                "prior_std implies a log-variance outside the open bound interval: "
+                f"logvar={prior_logvar:.6g} bounds=({self.logvar_min}, {self.logvar_max})"
             )
 
         self.pool = MaskedStatPool(dim=self.dim, hidden_dim=self.hidden_dim, eps=self.eps)
@@ -206,7 +206,11 @@ class ReparameterizedDistributionHead(nn.Module):
         nn.init.zeros_(self.mean_head[-1].weight)
         nn.init.zeros_(self.mean_head[-1].bias)
         nn.init.zeros_(self.logvar_head[-1].weight)
-        nn.init.constant_(self.logvar_head[-1].bias, prior_logvar)
+        prior_fraction = (prior_logvar - self.logvar_min) / (self.logvar_max - self.logvar_min)
+        nn.init.constant_(
+            self.logvar_head[-1].bias,
+            math.log(prior_fraction) - math.log1p(-prior_fraction),
+        )
 
     @staticmethod
     def _validate_sample_count(sample_count: int, mean_only: bool) -> None:
@@ -265,8 +269,10 @@ class ReparameterizedDistributionHead(nn.Module):
             mean = center + self.mean_head(mean_features)
 
             logvar_features = self.logvar_norm(torch.cat((center, dispersion, entropy), dim=-1))
-            logvar = self.logvar_head(logvar_features).float()
-            logvar = logvar.clamp(self.logvar_min, self.logvar_max)
+            raw_logvar = self.logvar_head(logvar_features).float()
+            # Sigmoid soft bound: a hard clamp zeroes every gradient once the raw
+            # output crosses the floor, turning logvar_min into an absorbing state.
+            logvar = self.logvar_min + (self.logvar_max - self.logvar_min) * torch.sigmoid(raw_logvar)
 
             variance = logvar.exp()
             prior_variance = self.prior_std**2

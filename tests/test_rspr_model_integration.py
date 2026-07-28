@@ -11,7 +11,7 @@ import modules.modeling as modeling
 from main_task_retrieval import train_epoch
 from modules.modeling import UATVR
 from modules.module_cross import Transformer as TransformerClip
-from modules.stochastic_prototype_ranking import RSPRCore
+from modules.stochastic_prototype_ranking import RSPRCore, SoftContrastiveMatchLoss
 from modules.until_module import KLdivergence, MILNCELoss_BoF, MultiPositiveCrossEn
 from prob_models.pie_model import PIENet
 from prob_models.uncertainty_module import UncertaintyModuleImage
@@ -62,6 +62,10 @@ def test_new_rspr_modes_initialize_only_rspr_probability_path(mode):
     assert model.rspr.matcher.hard_max is True
     assert model.rspr.rank_loss.temperature == pytest.approx(0.3)
     assert model.rspr.rank_loss.hard_negative_count == 2
+    assert isinstance(model.soft_contrastive_loss, SoftContrastiveMatchLoss)
+    assert model.soft_contrastive_loss.temperature == pytest.approx(
+        model.task_config.rspr_prob_temperature
+    )
     assert not hasattr(model, "pie_net_video")
     assert not hasattr(model, "uncertain_net_video")
     assert not hasattr(model, "loss_MIL_fct")
@@ -78,11 +82,15 @@ def test_final_model_initialization_preserves_rspr_specialized_output_heads():
 
     model._initialize_model_weights(embed_dim=4)
 
-    expected_logvar = math.log(model.task_config.rspr_prior_std**2)
+    prior_logvar = math.log(model.task_config.rspr_prior_std**2)
     for distribution in (
         model.rspr.text_distribution,
         model.rspr.video_distribution,
     ):
+        prior_fraction = (prior_logvar - distribution.logvar_min) / (
+            distribution.logvar_max - distribution.logvar_min
+        )
+        expected_raw_bias = math.log(prior_fraction) - math.log1p(-prior_fraction)
         torch.testing.assert_close(
             distribution.mean_head[-1].weight,
             torch.zeros_like(distribution.mean_head[-1].weight),
@@ -97,8 +105,34 @@ def test_final_model_initialization_preserves_rspr_specialized_output_heads():
         )
         torch.testing.assert_close(
             distribution.logvar_head[-1].bias,
-            torch.full_like(distribution.logvar_head[-1].bias, expected_logvar),
+            torch.full_like(distribution.logvar_head[-1].bias, expected_raw_bias),
         )
+
+
+def test_probability_loss_selection_respects_rspr_prob_loss_flag():
+    model = _bare_model("stochastic")
+    model._initialize_probability_path(embed_dim=4)
+    scores = 0.1 * torch.linspace(-1.0, 1.0, 3 * 3 * 4).reshape(3, 3, 4)
+    logits = scores.mean(dim=-1)
+    rspr_output = SimpleNamespace(
+        stochastic_pair_scores=scores, probabilistic_logits=logits
+    )
+    group_ids = torch.tensor([0, 1, 2])
+
+    soft_bce = model._compute_probability_loss(rspr_output, group_ids)
+    expected_soft_bce = model.soft_contrastive_loss(scores, group_ids).loss
+    torch.testing.assert_close(soft_bce, expected_soft_bce)
+
+    model.task_config.rspr_prob_loss = "infonce"
+    infonce = model._compute_probability_loss(rspr_output, group_ids)
+    expected_infonce, _ = model.multi_positive_loss.bidirectional(
+        logits / model.task_config.rspr_prob_temperature, group_ids
+    )
+    torch.testing.assert_close(infonce, expected_infonce)
+
+    model.task_config.rspr_prob_loss = "bogus"
+    with pytest.raises(ValueError, match="rspr_prob_loss"):
+        model._compute_probability_loss(rspr_output, group_ids)
 
 
 def test_legacy_initializes_only_original_probability_path():
@@ -107,6 +141,7 @@ def test_legacy_initializes_only_original_probability_path():
     model._initialize_probability_path(embed_dim=4)
 
     assert model.rspr is None
+    assert not hasattr(model, "soft_contrastive_loss")
     assert isinstance(model.pie_net_video, PIENet)
     assert isinstance(model.uncertain_net_video, UncertaintyModuleImage)
     assert isinstance(model.pie_net_text, PIENet)
@@ -290,11 +325,12 @@ def test_assemble_training_loss_uses_exact_unweighted_components_and_scales():
         probability_loss,
         rank_loss,
         rspr_output,
+        rspr_prob_scale=0.75,
         rspr_rank_scale=0.5,
         rspr_anchor_scale=0.25,
     )
 
-    expected = 1.25 + 0.2 * 2.5 + 0.3 * 0.5 * 3.75 + 0.4 * 0.25 * 4.5
+    expected = 1.25 + 0.2 * 0.75 * 2.5 + 0.3 * 0.5 * 3.75 + 0.4 * 0.25 * 4.5
     torch.testing.assert_close(loss, torch.tensor(expected))
     expected_diagnostics = {
         "dsa": 1.25,
@@ -311,6 +347,40 @@ def test_assemble_training_loss_uses_exact_unweighted_components_and_scales():
         torch.testing.assert_close(
             model.last_loss_diagnostics[name], torch.tensor(expected_value)
         )
+
+
+def test_assemble_training_loss_records_logvar_gradient_norms_when_enabled():
+    model = _bare_model("stochastic", rspr_grad_diagnostics=True)
+    logvar_text = torch.zeros(2, 3, requires_grad=True)
+    logvar_video = torch.zeros(2, 3, requires_grad=True)
+    dsa_loss = torch.tensor(1.0, requires_grad=True)
+    probability_loss = (2.0 * logvar_text).sum()
+    rank_loss = torch.tensor(0.0)
+    rspr_output = SimpleNamespace(
+        anchor_kl=(3.0 * logvar_video).sum(),
+        pair_uncertainty=torch.tensor([[0.2]]),
+        text_distribution=SimpleNamespace(logvar=logvar_text),
+        video_distribution=SimpleNamespace(logvar=logvar_video),
+    )
+
+    loss = model._assemble_training_loss(
+        dsa_loss, probability_loss, rank_loss, rspr_output
+    )
+
+    diagnostics = model.last_loss_diagnostics
+    torch.testing.assert_close(
+        diagnostics["grad_prob_logvar"], torch.tensor(2.0 * math.sqrt(6.0))
+    )
+    torch.testing.assert_close(diagnostics["grad_rank_logvar"], torch.tensor(0.0))
+    torch.testing.assert_close(
+        diagnostics["grad_anchor_logvar"], torch.tensor(3.0 * math.sqrt(6.0))
+    )
+    for name in ("grad_prob_logvar", "grad_rank_logvar", "grad_anchor_logvar"):
+        assert diagnostics[name].requires_grad is False
+
+    loss.backward()
+    assert logvar_text.grad is not None
+    assert logvar_video.grad is not None
 
 
 class _RecordingRSPRCore(RSPRCore):
@@ -340,6 +410,9 @@ def _forward_rspr_harness(mode):
     model.loose_type = True
     model.loss_fct = modeling.CrossEn()
     model.multi_positive_loss = MultiPositiveCrossEn()
+    model.soft_contrastive_loss = SoftContrastiveMatchLoss(
+        temperature=model.task_config.rspr_prob_temperature
+    )
     model.rspr = _RecordingRSPRCore(
         dim=4,
         sample_count=sample_count,
@@ -417,6 +490,7 @@ def test_forward_rspr_modes_use_core_terms_without_legacy_losses(monkeypatch, mo
     loss = model(
         *_forward_inputs(),
         group_ids=group_ids,
+        rspr_prob_scale=0.5,
         rspr_rank_scale=0.6,
         rspr_anchor_scale=0.4,
     )
@@ -424,7 +498,7 @@ def test_forward_rspr_modes_use_core_terms_without_legacy_losses(monkeypatch, mo
     diagnostics = model.last_loss_diagnostics
     expected = (
         diagnostics["dsa"]
-        + model.task_config.rspr_prob_weight * diagnostics["prob"]
+        + model.task_config.rspr_prob_weight * 0.5 * diagnostics["prob"]
         + model.task_config.rspr_rank_weight * 0.6 * diagnostics["rank"]
         + model.task_config.rspr_anchor_weight * 0.4 * diagnostics["anchor"]
     )
@@ -638,6 +712,70 @@ class _DiagnosticTrainModel(nn.Module):
         return self.weight.square()
 
 
+class _GradDiagnosticTrainModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.weight = nn.Parameter(torch.tensor(1.0))
+        self.clip = nn.Module()
+        self.clip.logit_scale = nn.Parameter(torch.tensor(0.0))
+
+    def forward(self, *args, **kwargs):
+        del args, kwargs
+        self.last_loss_diagnostics = {
+            "dsa": torch.tensor(1.0),
+            "prob": torch.tensor(2.0),
+            "rank": torch.tensor(3.0),
+            "anchor": torch.tensor(4.0),
+            "pair_uncertainty_mean": torch.tensor(5.0),
+            "text_variance_mean": torch.tensor(6.0),
+            "video_variance_mean": torch.tensor(7.0),
+            "grad_prob_logvar": torch.tensor(8.0),
+            "grad_rank_logvar": torch.tensor(0.0),
+            "grad_anchor_logvar": torch.tensor(4e-4),
+        }
+        return self.weight.square()
+
+
+def test_train_log_appends_logvar_gradient_norms_when_present(monkeypatch, caplog):
+    logger = logging.getLogger("test.rspr.train.grad.logging")
+    monkeypatch.setattr(main_task_retrieval, "logger", logger, raising=False)
+    caplog.set_level(logging.INFO, logger=logger.name)
+    model = _GradDiagnosticTrainModel()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    batch = tuple(torch.zeros(2, dtype=torch.long) for _ in range(5))
+    args = SimpleNamespace(
+        n_display=1,
+        gradient_accumulation_steps=1,
+        epochs=1,
+        rspr_warmup_epochs=1.0,
+    )
+
+    train_epoch(
+        0,
+        args,
+        model,
+        [batch],
+        torch.device("cpu"),
+        1,
+        optimizer,
+        None,
+        0,
+    )
+
+    step_logs = [
+        record.getMessage()
+        for record in caplog.records
+        if "| lr=" in record.getMessage()
+    ]
+    assert len(step_logs) == 1
+    for fragment in (
+        "grad_prob_logvar=8.000e+00",
+        "grad_rank_logvar=0.000e+00",
+        "grad_anchor_logvar=4.000e-04",
+    ):
+        assert fragment in step_logs[0]
+
+
 def test_train_log_appends_unweighted_rspr_diagnostics(monkeypatch, caplog):
     logger = logging.getLogger("test.rspr.train.logging")
     monkeypatch.setattr(main_task_retrieval, "logger", logger, raising=False)
@@ -667,7 +805,7 @@ def test_train_log_appends_unweighted_rspr_diagnostics(monkeypatch, caplog):
     step_logs = [
         record.getMessage()
         for record in caplog.records
-        if "LR clip=" in record.getMessage()
+        if "| lr=" in record.getMessage()
     ]
     assert len(step_logs) == 1
     for fragment in (
@@ -675,7 +813,8 @@ def test_train_log_appends_unweighted_rspr_diagnostics(monkeypatch, caplog):
         "prob=2.0000",
         "rank=3.0000",
         "anchor=4.0000",
-        "text_var=6.0000",
-        "video_var=7.0000",
+        "u_pair=5.0000",
+        "variance_t=6.0000",
+        "variance_v=7.0000",
     ):
         assert fragment in step_logs[0]

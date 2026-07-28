@@ -9,7 +9,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from modules.module_clip import CLIP, convert_weights
 from modules.module_cross import CrossConfig, CrossModel
 from modules.module_cross import Transformer as TransformerClip
-from modules.stochastic_prototype_ranking import RSPRCore
+from modules.stochastic_prototype_ranking import RSPRCore, SoftContrastiveMatchLoss
 from modules.until_module import (
     AllGather,
     CrossEn,
@@ -364,6 +364,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 hard_max=self.task_config.rspr_match_mode == "hard",
                 eval_seed=self.task_config.rspr_eval_seed,
             )
+            self.soft_contrastive_loss = SoftContrastiveMatchLoss(
+                temperature=self.task_config.rspr_prob_temperature
+            )
         else:
             self.rspr = None
 
@@ -389,6 +392,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video,
         video_mask=None,
         group_ids=None,
+        rspr_prob_scale=1.0,
         rspr_rank_scale=1.0,
         rspr_anchor_scale=1.0,
     ):
@@ -464,10 +468,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 mean_only=self.rspr_mode == "mean",
                 detach_samples=self.task_config.rspr_detach_samples,
             )
-            probability_loss, _ = self.multi_positive_loss.bidirectional(
-                rspr_output.probabilistic_logits
-                / self.task_config.rspr_prob_temperature,
-                global_group_ids,
+            probability_loss = self._compute_probability_loss(
+                rspr_output, global_group_ids
             )
             rank_loss = probability_loss.new_zeros(())
             if self.rspr_mode == "stochastic":
@@ -481,11 +483,41 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 probability_loss,
                 rank_loss,
                 rspr_output,
+                rspr_prob_scale=rspr_prob_scale,
                 rspr_rank_scale=rspr_rank_scale,
                 rspr_anchor_scale=rspr_anchor_scale,
             )
         else:  # for inference
             return None
+
+    @staticmethod
+    def _logvar_gradient_norm(loss, logvars):
+        logvars = [logvar for logvar in logvars if logvar.requires_grad]
+        if not torch.is_tensor(loss) or not loss.requires_grad or not logvars:
+            return torch.zeros(())
+        gradients = torch.autograd.grad(
+            loss, logvars, retain_graph=True, allow_unused=True
+        )
+        total = loss.new_zeros(())
+        for gradient in gradients:
+            if gradient is not None:
+                total = total + gradient.square().sum()
+        return total.sqrt()
+
+    def _compute_probability_loss(self, rspr_output, group_ids):
+        prob_loss_kind = getattr(self.task_config, "rspr_prob_loss", "soft_bce")
+        if prob_loss_kind == "soft_bce":
+            return self.soft_contrastive_loss(
+                rspr_output.stochastic_pair_scores, group_ids
+            ).loss
+        if prob_loss_kind == "infonce":
+            probability_loss, _ = self.multi_positive_loss.bidirectional(
+                rspr_output.probabilistic_logits
+                / self.task_config.rspr_prob_temperature,
+                group_ids,
+            )
+            return probability_loss
+        raise ValueError(f"unsupported rspr_prob_loss={prob_loss_kind}")
 
     def _assemble_training_loss(
         self,
@@ -494,6 +526,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         rank_loss,
         rspr_output,
         *,
+        rspr_prob_scale=1.0,
         rspr_rank_scale=1.0,
         rspr_anchor_scale=1.0,
     ):
@@ -510,9 +543,27 @@ class UATVR(CLIP4ClipPreTrainedModel):
             .mean()
             .detach(),
         }
+        if getattr(self.task_config, "rspr_grad_diagnostics", False):
+            logvars = [
+                rspr_output.text_distribution.logvar,
+                rspr_output.video_distribution.logvar,
+            ]
+            self.last_loss_diagnostics.update(
+                {
+                    "grad_prob_logvar": self._logvar_gradient_norm(
+                        probability_loss, logvars
+                    ).detach(),
+                    "grad_rank_logvar": self._logvar_gradient_norm(
+                        rank_loss, logvars
+                    ).detach(),
+                    "grad_anchor_logvar": self._logvar_gradient_norm(
+                        rspr_output.anchor_kl, logvars
+                    ).detach(),
+                }
+            )
         return (
             dsa_loss
-            + self.task_config.rspr_prob_weight * probability_loss
+            + self.task_config.rspr_prob_weight * rspr_prob_scale * probability_loss
             + self.task_config.rspr_rank_weight * rspr_rank_scale * rank_loss
             + self.task_config.rspr_anchor_weight
             * rspr_anchor_scale
@@ -718,6 +769,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 "RSPR distributions require mean or stochastic mode"
             )
 
+        mask = mask.reshape(-1, mask.shape[-1])
         original_length = tokens.size(1)
         if modality == "text":
             distribution = self.rspr.text_distribution
