@@ -167,6 +167,55 @@ def test_effective_parameter_log_has_explicit_rspr_group(
         assert f"{name}={value}" in rspr_lines[0]
 
 
+def _trusted_args(**overrides):
+    values = {
+        "experiment_profile": "parity",
+        "datatype": "msrvtt",
+        "do_train": True,
+        "do_eval": False,
+        "init_model": "",
+        "eval_split": "val",
+        "expand_msrvtt_sentences": True,
+        "run_final_test": False,
+        "batch_size": 512,
+        "gradient_accumulation_steps": 1,
+        "freeze_layer_num": 0,
+        "max_frames": 12,
+        "slice_framepos": 2,
+        "lr": 5e-5,
+        "coef_lr": 1e-3,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def test_validate_trusted_cli_accepts_the_official_parity_recipe():
+    main_task_retrieval.validate_trusted_cli(_trusted_args())
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    (
+        # Accumulation restores the optimizer batch but not the contrastive
+        # one, so 256x2 trains a 256-way InfoNCE and is not parity.
+        ({"batch_size": 256, "gradient_accumulation_steps": 2}, "batch_size=512"),
+        ({"gradient_accumulation_steps": 2}, "gradient_accumulation_steps=1"),
+        ({"freeze_layer_num": 8}, "freeze_layer_num=0"),
+        ({"max_frames": 8}, "max_frames=12"),
+        ({"slice_framepos": 3}, "slice_framepos=2"),
+    ),
+)
+def test_validate_trusted_cli_rejects_parity_that_is_not_parity(overrides, message):
+    """A 'parity' run that quietly differs is worse than no parity run at all.
+
+    The point of the profile is to make one number comparable to a published
+    one, so every knob the comparison rests on is checked rather than assumed.
+    """
+
+    with pytest.raises(ValueError, match=message):
+        main_task_retrieval.validate_trusted_cli(_trusted_args(**overrides))
+
+
 def test_effective_parameter_log_shows_how_much_of_the_backbone_trains(
     monkeypatch, caplog, tmp_path
 ):

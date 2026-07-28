@@ -82,18 +82,38 @@ run_worker() {
     EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-hygiene}
     CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION:-fp16}
     CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING:-1}
-    CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS:-4}
     A800_THROUGHPUT_COMPARISON=${A800_THROUGHPUT_COMPARISON:-0}
     TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS:-8}
     TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR:-2}
-    TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
-    TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS:-1}
-    FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-8}
-    COEF_LR=${COEF_LR:-1e-3}
-    if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
-        echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
+    if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" && "${EXPERIMENT_PROFILE}" != "parity" ]]; then
+        echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default, hygiene, or parity" >&2
         exit 2
     fi
+
+    # The optimization recipe. parity reproduces research_refs/UATVR_official
+    # exactly; the local default trains only the top four resblocks at a trunk
+    # rate of lr*coef_lr = 1e-7 and lands about three R@1 below the published
+    # TI+DSA number, which swamps anything RSPR does on top of it.
+    if [[ "${EXPERIMENT_PROFILE}" == "parity" ]]; then
+        TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-512}
+        FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-0}
+        TRAIN_LR=${TRAIN_LR:-5e-5}
+        TRAIN_MAX_FRAMES=${TRAIN_MAX_FRAMES:-12}
+        TRAIN_SLICE_FRAMEPOS=${TRAIN_SLICE_FRAMEPOS:-2}
+        # 128 clips of 12 frames per rank with nothing frozen; every visual
+        # layer is recomputed rather than stored.
+        CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS:-12}
+    else
+        TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
+        FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-8}
+        TRAIN_LR=${TRAIN_LR:-1e-4}
+        TRAIN_MAX_FRAMES=${TRAIN_MAX_FRAMES:-8}
+        TRAIN_SLICE_FRAMEPOS=${TRAIN_SLICE_FRAMEPOS:-3}
+        CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS:-4}
+    fi
+    TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS:-1}
+    TRAIN_MAX_WORDS=${TRAIN_MAX_WORDS:-32}
+    COEF_LR=${COEF_LR:-1e-3}
     if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
         _PROTECTED_HYGIENE_OPTIONS=(
             --batch_size
@@ -167,8 +187,17 @@ run_worker() {
     IFS=',' read -ra _GPUS <<< "${CUDA_VISIBLE_DEVICES}"
     NPROC="${NPROC:-${#_GPUS[@]}}"
 
-    if [[ "${EXPERIMENT_PROFILE}" == "hygiene" ]]; then
-        _BATCH_PROFILE_LABEL="hygiene baseline"
+    if [[ "${EXPERIMENT_PROFILE}" == "hygiene" || "${EXPERIMENT_PROFILE}" == "parity" ]]; then
+        if [[ "${EXPERIMENT_PROFILE}" == "parity" ]]; then
+            _BATCH_PROFILE_LABEL="parity baseline"
+            # Eight ranks of 64 in the official script; four of 128 here. The
+            # contrastive batch is the forward batch, so accumulation cannot
+            # stand in for it.
+            _REQUIRED_BATCH_SIZE=512
+        else
+            _BATCH_PROFILE_LABEL="hygiene baseline"
+            _REQUIRED_BATCH_SIZE=256
+        fi
         if [[ "${#_GPUS[@]}" -ne 4 ]]; then
             echo "${_BATCH_PROFILE_LABEL} requires exactly 4 GPUs; got CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}" >&2
             exit 2
@@ -185,8 +214,8 @@ run_worker() {
             echo "NPROC=${NPROC} does not match ${#_GPUS[@]} visible GPUs" >&2
             exit 2
         fi
-        if [[ "${TRAIN_BATCH_SIZE}" != "256" ]]; then
-            echo "${_BATCH_PROFILE_LABEL} requires TRAIN_BATCH_SIZE=256; got ${TRAIN_BATCH_SIZE}" >&2
+        if [[ "${TRAIN_BATCH_SIZE}" != "${_REQUIRED_BATCH_SIZE}" ]]; then
+            echo "${_BATCH_PROFILE_LABEL} requires TRAIN_BATCH_SIZE=${_REQUIRED_BATCH_SIZE}; got ${TRAIN_BATCH_SIZE}" >&2
             exit 2
         fi
         if [[ "${TRAIN_GRADIENT_ACCUMULATION_STEPS}" != "1" ]]; then
@@ -212,7 +241,20 @@ run_worker() {
     fi
     echo "[run_train_msrvtt_bg:worker] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} NPROC=${NPROC} TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS} TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR} TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE} TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS} TQFS_CACHE_DIR=${TQFS_CACHE_DIR} CLIP_CACHE_DIR=${CLIP_CACHE_DIR}"
     echo "[run_train_msrvtt_bg:worker] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION} CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING} CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS}"
-    echo "[run_train_msrvtt_bg:worker] COEF_LR=${COEF_LR} FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM}"
+    echo "[run_train_msrvtt_bg:worker] COEF_LR=${COEF_LR} FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM} TRAIN_LR=${TRAIN_LR} TRAIN_MAX_FRAMES=${TRAIN_MAX_FRAMES} TRAIN_MAX_WORDS=${TRAIN_MAX_WORDS} TRAIN_SLICE_FRAMEPOS=${TRAIN_SLICE_FRAMEPOS}"
+
+    # parity trains on all 9k videos and evaluates on JSFUSION every epoch,
+    # exactly as the official script does. The trusted split's held-out 500
+    # videos are the reason a local run is not comparable to a published
+    # number, and checkpoint selection therefore happens on the reported set:
+    # parity numbers are for comparison with the literature, not for claims.
+    TRAIN_CSV="${GENERATED_SPLIT_DIR}/train.csv"
+    VAL_CSV="${GENERATED_SPLIT_DIR}/val.csv"
+    if [[ "${EXPERIMENT_PROFILE}" == "parity" ]]; then
+        TRAIN_CSV="${SOURCE_TRAIN_CSV}"
+        VAL_CSV="${TEST_CSV}"
+        echo "[run_train_msrvtt_bg:worker] parity: training on the full 9k split and selecting on JSFUSION test"
+    fi
     echo "[Runtime] python=${TVR_PYTHON} torchrun=${TVR_TORCHRUN}"
     rspr_log_effective_config "run_train_msrvtt_bg:worker"
 
@@ -224,8 +266,8 @@ run_worker() {
         --batch_size "${TRAIN_BATCH_SIZE}" \
         --gradient_accumulation_steps "${TRAIN_GRADIENT_ACCUMULATION_STEPS}" \
         --n_display=20 \
-        --train_csv "${GENERATED_SPLIT_DIR}/train.csv" \
-        --val_csv "${GENERATED_SPLIT_DIR}/val.csv" \
+        --train_csv "${TRAIN_CSV}" \
+        --val_csv "${VAL_CSV}" \
         --source_train_csv "${SOURCE_TRAIN_CSV}" \
         --test_csv "${TEST_CSV}" \
         --split_manifest "${SPLIT_MANIFEST}" \
@@ -234,10 +276,12 @@ run_worker() {
         --features_path "${DATA_PATH}/videos/compressed_videos/msrvtt_224_12fps/" \
         --tqfs_cache_dir "${TQFS_CACHE_DIR}" \
         --output_dir "${OUTPUT_DIR}" \
-        --lr 1e-4 --max_words 32 --max_frames 8 --batch_size_val 16 \
+        --lr "${TRAIN_LR}" --max_words "${TRAIN_MAX_WORDS}" \
+        --max_frames "${TRAIN_MAX_FRAMES}" --batch_size_val 16 \
         --datatype msrvtt --expand_msrvtt_sentences \
         --feature_framerate 1 --coef_lr "${COEF_LR}" \
-        --freeze_layer_num "${FREEZE_LAYER_NUM}" --slice_framepos 3 \
+        --freeze_layer_num "${FREEZE_LAYER_NUM}" \
+        --slice_framepos "${TRAIN_SLICE_FRAMEPOS}" \
         --linear_patch 2d --sim_header seqTransf \
         --pretrained_clip_name ViT-B/16 \
         --clip_layer_norm_precision "${CLIP_LAYER_NORM_PRECISION}" \

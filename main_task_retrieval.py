@@ -42,9 +42,9 @@ logger = logging.getLogger(__name__)
 
 def validate_trusted_cli(args):
     """Validate the strict MSRVTT trusted-v1 command-line contract."""
-    if args.experiment_profile not in {"default", "hygiene"}:
+    if args.experiment_profile not in {"default", "hygiene", "parity"}:
         raise ValueError(
-            "unsupported experiment_profile; expected default or hygiene"
+            "unsupported experiment_profile; expected default, hygiene, or parity"
         )
 
     if args.datatype != "msrvtt":
@@ -68,6 +68,22 @@ def validate_trusted_cli(args):
             raise ValueError(
                 "hygiene requires --gradient_accumulation_steps=1"
             )
+
+    if args.do_train and args.experiment_profile == "parity":
+        # research_refs/UATVR_official/train.sh. A 'parity' run whose recipe
+        # quietly differs is worse than no parity run: it produces a number
+        # that looks comparable to the published one and is not. Accumulation
+        # is pinned because it restores the optimizer batch, not the
+        # contrastive one, so 256x2 is a 256-way InfoNCE.
+        for name, expected in (
+            ("batch_size", 512),
+            ("gradient_accumulation_steps", 1),
+            ("freeze_layer_num", 0),
+            ("max_frames", 12),
+            ("slice_framepos", 2),
+        ):
+            if getattr(args, name) != expected:
+                raise ValueError(f"parity requires --{name}={expected}")
 
 
 def validate_rspr_cli(args):
@@ -449,11 +465,12 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         "--experiment_profile",
         default="default",
         type=str,
-        choices=["default", "hygiene"],
+        choices=["default", "hygiene", "parity"],
         help=(
             "Experiment profile. hygiene selects the clean WTI baseline and "
             "forbids hard-negative diagnostic paths; default permits "
-            "independent diagnostics."
+            "independent diagnostics; parity pins the official UATVR recipe "
+            "so one number is comparable to the published one."
         ),
     )
     args = parser.parse_args()

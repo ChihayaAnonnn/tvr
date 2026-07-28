@@ -720,9 +720,143 @@ def test_worker_runs_split_builder_and_torchrun_without_recursing(
     ]
 
 
+def _launch_arguments(tmp_path: Path, environment_update: dict[str, str]) -> list[str]:
+    script = _copy_script(tmp_path)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    torchrun_arguments = tmp_path / "torchrun.args"
+    _write_executable(fake_bin / "python3", "exit 0\n")
+    _write_executable(
+        fake_bin / "torchrun",
+        'printf "%s\\0" "$@" > "$TORCHRUN_ARGUMENTS"\n',
+    )
+    environment = _environment(tmp_path, fake_bin)
+    environment.update(
+        {
+            "RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER": "1",
+            "TORCHRUN_ARGUMENTS": str(torchrun_arguments),
+        }
+    )
+    environment.update(environment_update)
+
+    subprocess.run(
+        ["bash", str(script)],
+        cwd=tmp_path,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return _read_nul_arguments(torchrun_arguments)
+
+
+def _option(arguments: list[str], name: str) -> str:
+    assert arguments.count(name) == 1, f"{name} appears {arguments.count(name)} times"
+    return arguments[arguments.index(name) + 1]
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    (
+        # The published TI+DSA number is 49.6 R@1 and the local baseline sits at
+        # 46.4. Every one of these differed from research_refs/UATVR_official,
+        # and freeze_layer_num=8 alone left only the top four resblocks trainable
+        # at a trunk rate of lr*coef_lr = 1e-7.
+        ("--lr", "5e-5"),
+        ("--coef_lr", "1e-3"),
+        ("--freeze_layer_num", "0"),
+        ("--max_frames", "12"),
+        ("--max_words", "32"),
+        ("--slice_framepos", "2"),
+        ("--batch_size", "512"),
+        ("--gradient_accumulation_steps", "1"),
+        ("--feature_framerate", "1"),
+        ("--extra_video_cls_num", "2"),
+        ("--extra_text_cls_num", "2"),
+        ("--pretrained_clip_name", "ViT-B/16"),
+    ),
+)
+def test_parity_profile_reproduces_the_official_training_recipe(
+    tmp_path, option, value
+):
+    arguments = _launch_arguments(
+        tmp_path,
+        {
+            "EXPERIMENT_PROFILE": "parity",
+            "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+            "NPROC": "4",
+        },
+    )
+
+    assert _option(arguments, option) == value
+
+
+def test_parity_profile_trains_on_the_full_9k_split_and_evaluates_on_jsfusion(
+    tmp_path,
+):
+    """Parity means the official data protocol too, held-out val set aside.
+
+    The trusted split holds out 500 training videos, so a run against it is
+    not comparable to a published number no matter what the optimizer does.
+    """
+
+    arguments = _launch_arguments(
+        tmp_path,
+        {
+            "EXPERIMENT_PROFILE": "parity",
+            "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+            "NPROC": "4",
+        },
+    )
+
+    assert _option(arguments, "--train_csv") == "/dataset/csv/MSRVTT_train.9k.csv"
+    assert _option(arguments, "--val_csv") == "/dataset/csv/MSRVTT_JSFUSION_test.csv"
+    assert _option(arguments, "--eval_split") == "val"
+    assert "--expand_msrvtt_sentences" in arguments
+
+
+def test_parity_profile_checkpoints_every_visual_layer(tmp_path):
+    """128 clips of 12 frames per rank with nothing frozen needs the memory."""
+
+    arguments = _launch_arguments(
+        tmp_path,
+        {
+            "EXPERIMENT_PROFILE": "parity",
+            "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+            "NPROC": "4",
+        },
+    )
+
+    assert "--clip_gradient_checkpointing" in arguments
+    assert _option(arguments, "--clip_visual_checkpoint_layers") == "12"
+
+
 @pytest.mark.parametrize(
     ("environment_update", "arguments", "message"),
     (
+        (
+            {
+                "EXPERIMENT_PROFILE": "parity",
+                "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+                "NPROC": "4",
+                "TRAIN_BATCH_SIZE": "256",
+                "TRAIN_GRADIENT_ACCUMULATION_STEPS": "2",
+            },
+            (),
+            # Accumulation restores the optimizer batch but not the contrastive
+            # one, so 256x2 is a 256-way InfoNCE, not the official 512-way.
+            "parity baseline requires TRAIN_BATCH_SIZE=512",
+        ),
+        (
+            {
+                "EXPERIMENT_PROFILE": "parity",
+                "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+                "NPROC": "4",
+                "TRAIN_GRADIENT_ACCUMULATION_STEPS": "2",
+            },
+            (),
+            "parity baseline requires TRAIN_GRADIENT_ACCUMULATION_STEPS=1",
+        ),
         (
             {"EXPERIMENT_PROFILE": "default", "CUDA_VISIBLE_DEVICES": "gpu0"},
             (),
