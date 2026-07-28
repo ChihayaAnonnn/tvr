@@ -79,13 +79,26 @@ request — but both had to be answered before parity could run at all.
 | val loader shape | val loader takes test-set semantics when there is no held-out val | `4fe418c` |
 | dead checkpointing flag | restored the wiring; the layer count is now logged | `8da91e3` |
 
-## The parity profile
+## The recipe, and what a profile now chooses
 
-`scripts/run_baseline_parity_seed0.sh`. Reproduces
-`research_refs/UATVR_official/train.sh`: `lr 5e-5`, `coef_lr 1e-3`,
-`freeze_layer_num 0`, `max_frames 12`, `max_words 32`, `slice_framepos 2`,
-batch 512, no accumulation, 5 epochs, ViT-B/16, full 9k train split,
-JSFUSION test for selection.
+The recipe is `research_refs/UATVR_official/train.sh` and it is the same in
+every profile: `lr 5e-5`, `coef_lr 1e-3`, `freeze_layer_num 0`,
+`max_frames 12`, `max_words 32`, `slice_framepos 2`, batch 512, no
+accumulation, 5 epochs, ViT-B/16, all 12 visual layers checkpointed.
+
+A profile chooses the *data protocol*, nothing else (commit `7a93b9c`):
+
+| | train videos | selects on | comparable to |
+| --- | --- | --- | --- |
+| `parity` | 9000 (`--fold_val_into_train`) | JSFUSION test | the literature |
+| `hygiene` / `default` | 8500 | held-out 500 | our own arms |
+
+Keeping a separate local recipe was what allowed the drift in the first
+place, and it had no defender once measured. Both the launcher and
+`validate_trusted_cli` pin the five-tuple for `hygiene` and `parity` alike,
+so an RSPR arm and its baseline can differ only in RSPR. The eight arm
+launchers under `scripts/` had `FREEZE_LAYER_NUM=8` pinned inline, which
+would have overridden the shared recipe silently; those pins are gone.
 
 Two deliberate deviations from the official script, both forced by hardware:
 
@@ -161,11 +174,17 @@ the best epoch against 47.3 at the last, i.e. up to 1.6 points. So
 
 Single seed. Two hardware deviations as described above.
 
+## The own-protocol baseline
+
+`scripts/run_baseline_hygiene_seed0.sh`, run id `hygiene_a0_seed0`. Same
+recipe, trusted split, val selection, test touched once. Launched
+2026-07-28 18:27; 332 steps per epoch, 26 GB per rank, ~33 min per epoch.
+Log `logs/20260728/hygiene_a0_seed0_182753_train_msrvtt.log`.
+
+_Result pending._ This number, not 48.9, is what every RSPR arm must beat.
+
 ## Next
 
-1. Port the fixed recipe (`freeze_layer_num 0`, 12 frames, batch 512,
-   `slice_framepos 2`, `lr 5e-5`) into the `hygiene` profile and re-run A0
-   on the trusted split with val selection. That, not the parity number, is
-   the baseline every RSPR arm must beat.
-2. Re-run the RSPR arms on top of it. Every existing RSPR result was
-   measured against the crippled baseline; none of them carry over.
+1. Re-run the RSPR arms on top of the own-protocol baseline. Every existing
+   RSPR result was measured against the crippled baseline; none of them
+   carry over.
