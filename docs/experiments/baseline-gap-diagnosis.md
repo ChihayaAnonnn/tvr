@@ -372,21 +372,83 @@ exemption that existed only to keep its dead branch off the F821 gate),
 stay. Whether the variance channel can be made to carry information is still
 open, and that script is how it gets measured.
 
+## 2026-07-29: A4 ran, and UATVR's own DUA is a null here too
+
+`hygiene_a4_seed0`, `--rspr_mode legacy`, seed 0, five epochs, 02:21–06:08.
+Manifest diff against `hygiene_a0_seed0` is `rspr_mode: off → legacy` and
+nothing else behavioral. Both runs select epoch 2 on held-out val.
+
+| test, T2V-selected ckpt | A0 (`off`) | A4 (`legacy`) | Δ | McNemar p |
+| --- | --- | --- | --- | --- |
+| T2V R@1 | 46.3 | 46.5 | +0.2 | 0.885 |
+| T2V R@5 | 75.4 | 75.7 | +0.3 | 0.749 |
+| T2V R@10 | 84.0 | 83.7 | −0.3 | 0.678 |
+| T2V MnR | 13.12 | 13.27 | −0.15 | — |
+| V2T R@1 | 47.0 | 47.9 | +0.9 | 0.306 |
+| V2T R@5 | 75.7 | 75.9 | +0.2 | 0.871 |
+| V2T R@10 | 84.4 | 84.8 | +0.4 | 0.572 |
+
+Per-epoch val T2V R@1, A0 vs A4: 57.8/58.0, 59.0/58.8, 58.0/58.4, 57.8/57.8,
+57.5/57.7. The two curves track within 0.4 at every epoch.
+
+### The ruler is finer than the ±1.1 floor suggested, and the effect is still zero
+
+Two checks change how the +0.2 should be read.
+
+**Eval is deterministic, so the 1.1 floor is entirely a training-side
+quantity.** Re-scoring `hygiene_a0_seed0`'s saved checkpoints under the
+current post-deletion code reproduces all eight test numbers to the decimal
+(46.3/75.4/84.0/13.1, 47.0/75.7/84.4/8.4, and both V2T-selected numbers).
+That also proves the A+B deletions are eval-neutral, so A0 and A4 are
+comparable despite running on different commits.
+
+**A0 and A4 are the same two models on the same 1000 queries, so the
+comparison is paired and does not need the cross-run floor.** Exact McNemar
+on T2V R@1: 23 queries A0 gets and A4 misses, 25 the other way, p = 0.885.
+Not one of the six paired tests reaches p < 0.3. The two models assign the
+ground-truth video an *identical* rank on 651/1000 queries; mean |Δrank| is
+2.52. This is not an effect the instrument failed to resolve — it is the
+absence of an effect, measured tightly.
+
+### The heads did train
+
+Not a dead branch. A4's checkpoint carries 24 tensors A0's does not
+(`pie_net_{text,video}`, `uncertain_net_{text,video}`), the optimizer's head
+group goes 58 → 82 params at lr 5e-5, and over epochs 2–5 the uncertainty
+nets drift 30–42 % in relative weight norm with biases moving ~2×. Training
+loss sits ~0.6–0.8 above A0's throughout (2.68→1.36 vs 1.89→0.78), which is
+the MILNCE + KL terms being optimized. They are optimized; they just do not
+move retrieval.
+
+### What this settles
+
+The launcher's decision rule offered two outcomes: DUA clears +0.5 (ruler is
+fine, RSPR's design is at fault) or DUA lands inside ±1 (ruler cannot resolve
+this scale). The answer is a third one. The ruler is fine — better than
+assumed, once you stop comparing across retrainings — and **the published
+component is a null under this protocol.**
+
+So the seven RSPR arms were not failing to reproduce a working baseline
+component. There is no working baseline component here to reproduce. Their
+null results were correct measurements of a real null, and the thing that now
+needs explaining is the paper's +1.2, not our +0.2.
+
 ## Next
 
-1. **Run A4 (`--rspr_mode legacy`) once.** `ckpts/` contains no legacy run:
-   UATVR's own DUA — `PIENet` + `UncertaintyModuleImage` + `MILNCE_BoF` +
-   `KLdivergence`, the published +0.5-to-+1.2 — has never been measured under
-   this protocol, while seven replacements for it have. It is the calibration
-   the whole ablation was missing. If DUA also lands within ±1, the finding is
-   that the apparatus cannot resolve effects of this size, which is a result
-   about the experimental design and can be written as one. If it clears +0.5
-   cleanly, the apparatus is fine and the RSPR design is what needs to change.
-   One training run, ~3 hours, and it decides whether the core four
-   components stay.
+1. **Run A4 under the `parity` profile.** This is the one run that separates
+   "the DUA does nothing" from "the DUA does nothing *once you stop selecting
+   the checkpoint on the test split*". `parity_a0_seed0` = 48.9 already
+   exists, so one 3-hour run completes a 2×2: hygiene (8500 train, held-out
+   selection) gave 46.3 → 46.5; parity (9000 train, JSFUSION-test selection,
+   i.e. the paper's own protocol) would give 48.9 → ?. If parity recovers
+   something near +1.2 while hygiene gives +0.2, the paper's headline
+   probabilistic gain is substantially a selection artifact, and that is a
+   publishable finding that costs one run. If parity also gives ≈0, the
+   component is simply inert and the DUA family — theirs and ours — can be
+   dropped from the story outright.
 2. **Do not re-run the seven arms.** They buy comparability, not
    significance, and post-deletion they would be measuring something the
    originals did not measure anyway.
-3. If the 46.3 → 48.9 decomposition matters for the writeup, five test evals
-   of the existing `hygiene_a0_seed0` checkpoints settle it. Diagnostic
-   only; it must not become a selection.
+3. Report paired McNemar, not cross-run deltas, for any two arms sharing a
+   test split. The per-query ranks are already in each run's
+   `final_test.json` under `selections.t2v.test_metrics.{t2v,v2t}.cols`.
