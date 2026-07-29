@@ -23,6 +23,9 @@ CKPT_DIR="${CKPT_DIR:?set CKPT_DIR to the checkpoint directory of the run}"
 GPU_ID="${GPU_ID:-0}"
 RSPR_MODE="${RSPR_MODE:-off}"
 EXPERIMENT_PROFILE="${EXPERIMENT_PROFILE:-hygiene}"
+# Set DUMP_SIM_MATRIX to a directory to also write the scored similarity
+# matrices. Empty means the flag is passed as "" and nothing is written.
+DUMP_SIM_MATRIX="${DUMP_SIM_MATRIX:-}"
 
 SNAPSHOT="${CKPT_DIR}/best_validation_checkpoints.json"
 if [[ ! -f "${SNAPSHOT}" ]]; then
@@ -76,4 +79,5 @@ OMP_NUM_THREADS=1 \
     --experiment_profile "${EXPERIMENT_PROFILE}" \
     --experiment_desc "final test from the val selection in ${CKPT_DIR}" \
     --rspr_mode "${RSPR_MODE}" \
+    --dump_sim_matrix "${DUMP_SIM_MATRIX}" \
     2>&1 | tee "${LOG_FILE}"

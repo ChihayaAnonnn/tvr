@@ -487,6 +487,102 @@ probabilistic head to TI+DSA" measured in this repository is a null. That is
 now a finding with a real denominator behind it rather than a failure to get
 a method working.
 
+## 2026-07-30: FIRE's judgments land on our exact test grid, and the labels are worse than the noise
+
+FIRE (Rodriguez et al., EACL 2023, arXiv:2210.05038) had humans judge
+caption-video pairs pooled from CLIP4CLIP, SSB and CE, and released them. The
+release is not linked from the arXiv landing page; the address is in a first-page
+footnote, `pedro.ai/multimodal-retrieval-evaluation`, pointing at the archived
+`facebookresearch/mm-retrieval-evaluation` (Git LFS, CC BY-NC-SA 4.0 in the repo
+LICENSE but CC BY-NC 2.0 in the JSON metadata — the two disagree).
+
+The MSR-VTT half lands on **exactly the JSFUSION 1K test grid we score on**:
+999/1000 videos, 995/995 captions, zero judgments outside the grid. No feature
+re-extraction, no split surgery, no retraining. 24,167 judgments, mean 24.5
+videos judged per caption.
+
+What the judgments say about the benchmark:
+
+| | |
+| --- | --- |
+| genuinely new positives | 2,147 (2,855 relevant judgments, 708 merely confirm the original pair) |
+| captions with ≥1 extra correct video | 887 / 995 |
+| mean positives per caption | 1.00 → 3.18 |
+| **original ground-truth pairs judged irrelevant** | **219 of the 927 judged = 23.6%** |
+
+That last row is not FIRE's headline and is worth separating from it. The
+false-negative problem is that the benchmark calls correct answers wrong. This
+is the converse: on roughly a quarter of captions an annotator says the video
+the benchmark *demands* does not match. We keep those relevant anyway — deleting
+ground truth would change what the benchmark is rather than how it is scored —
+so none of the correction below is driven by it.
+
+### Re-scoring our four checkpoints
+
+`--dump_sim_matrix` was added to `eval_epoch`, writing the same matrix that is
+handed to `compute_metrics`, so an offline recompute has to reproduce the logged
+number. All four did, to the decimal: 48.9 / 49.3 / 46.3 / 46.5. Scored with
+`scripts/fire_corrected_metrics.py`:
+
+| run | orig R@1 | FIRE R@1 | condensed R@1 | nDCG@10 | mAP | bpref | judged@10 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| parity A0 | 48.9 | 70.1 | 74.5 | 70.9 | 65.0 | 66.3 | 55.9% |
+| parity A4 | 49.3 | 69.7 | 74.8 | 70.8 | 64.9 | 65.9 | 56.0% |
+| hygiene A0 | 46.3 | 67.3 | 71.8 | 70.8 | 64.5 | 64.7 | 57.4% |
+| hygiene A4 | 46.5 | 68.2 | 72.6 | 71.0 | 64.6 | 64.5 | 57.1% |
+
+**The correction is +21 R@1.** FIRE reported up to +25 for 2022-era models;
+ours sits just under that, which is what a stronger model on the same pool
+should look like. FIRE R@10 is 94–95 and condensed R@10 is 99.4–99.7: at rank 10
+this benchmark is saturated, exactly as FIRE said in 2023.
+
+### The pooling caveat, measured rather than asserted
+
+FIRE judged ~24 of 1000 videos per caption, pooled from three 2022 models. Our
+backbone is stronger than all three, so pairs we rank highly that they missed
+are unjudged, not known-irrelevant, and scoring unjudged as irrelevant biases
+against us. Depth of coverage over *our* ranking:
+
+    judged@1  90–92%     judged@5  71–73%     judged@10  56–57%
+
+So the pool is trustworthy at rank 1 and half-blind by rank 10. FIRE R@10 is a
+lower bound, condensed R@10 an upper bound, and the truth is between. Since R@1
+is what the literature competes on, this is usable where it matters.
+
+### The DUA null survives the correction
+
+The obvious hypothesis was that bad labels were hiding the effect: with 89% of
+captions having an extra correct answer, a model putting an unlabelled-correct
+video first is scored wrong. Paired McNemar on per-query hits:
+
+| | original R@1 | FIRE R@1 | condensed R@1 |
+| --- | --- | --- | --- |
+| parity A0→A4 | +0.40 (p=0.712) | **−0.40** (p=0.744) | +0.30 (p=0.795) |
+| hygiene A0→A4 | +0.20 (p=0.885) | +0.90 (p=0.306) | +0.80 (p=0.322) |
+
+Nothing reaches p<0.3 under any labelling, and the two protocols disagree in
+sign once the labels are corrected. The DUA was not being masked by bad ground
+truth. It is absent.
+
+### What this changes
+
+Three error sources are now measured on the same test split, and each is larger
+than the effects the literature reports (+0.5 to +1.5 R@1):
+
+| source | size |
+| --- | --- |
+| label error (original vs FIRE R@1) | **21 points** |
+| max-over-epochs selection on the reported set | ~1.4 |
+| same-config retraining floor | 1.1 |
+
+The first is 14–40× the effect sizes being competed over. Switching to another
+TVR benchmark does not help: MSVD, VATEX, DiDeMo and ActivityNet are all
+repurposed captioning datasets with the identical one-positive construction, and
+none of them has human relevance judgments. MSR-VTT + FIRE is now the most
+trustworthy TVR test set available, precisely because somebody did the
+annotation. The move is to stay on this grid and change the labels and the
+metrics, not the dataset.
+
 ## Next
 
 1. **Drop the DUA family from the contribution.** Theirs and ours. Eight
@@ -506,3 +602,16 @@ a method working.
    1.1 retraining floor nor the epoch-selection premium touches it. Note the
    prior result that `u_pair`'s residual AUC came in below chance — that has
    to be re-derived before anything is built on it.
+5. **Score everything under FIRE labels from now on, alongside the original.**
+   The judgments are on this exact grid and cost nothing to apply. Report
+   original R@k for comparability with the literature, FIRE R@k and
+   condensed R@k as the bracket the true value lies in, and judged@k so the
+   pool depth is visible rather than assumed. Under corrected labels R@1 also
+   stops being the natural statistic — with 3.18 positives per caption,
+   nDCG@10 and mAP use the whole ranking instead of one threshold.
+6. Two things to check before building on FIRE. Whether the 23.6%
+   original-pair rejection rate is annotator noise or real caption error —
+   the release carries only 16 disagreement records, so it is mostly
+   single-annotator and cannot be settled from the file alone. And whether
+   the MSVD half (158MB, the bulk of the 683K) covers a split we can use as a
+   second test bed.

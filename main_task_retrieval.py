@@ -276,6 +276,16 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         action="store_true",
         help="若设置，在每次评估时将每条查询的 MUS（映射不确定性）写入 logs/mus_scores/ 下的 TSV 文件。",
     )
+    parser.add_argument(
+        "--dump_sim_matrix",
+        type=str,
+        default="",
+        help=(
+            "若设置，把用于计算指标的 t2v 相似度矩阵存到该目录（.npy，rank0 only）。"
+            "只读一份中间量，不改任何指标路径 —— 存下来的矩阵重算 compute_metrics 必须"
+            "复现日志里的 R@1。给 FIRE 修正标签重新打分用。"
+        ),
+    )
     parser.add_argument("--video_dim", type=int, default=1024, help="video feature dimension")
     parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument("--max_words", type=int, default=20, help="")
@@ -1013,6 +1023,9 @@ def run_final_test(args, model, tokenizer, device, n_gpu, selection_payload):
                 checkpoint = torch.load(checkpoint_path, map_location="cpu")
                 model_to_evaluate.load_state_dict(checkpoint)
                 model_to_evaluate.to(device)
+                # 只在 --dump_sim_matrix 下有意义：告诉 eval_epoch 这一轮打的是哪个
+                # checkpoint，否则两个方向选中不同 epoch 时落盘会互相覆盖。
+                args._dump_sim_tag = os.path.basename(checkpoint_path)
                 test_metrics_by_checkpoint[checkpoint_path] = eval_epoch(
                     args, model_to_evaluate, test_dataloader, device, n_gpu
                 )
@@ -1365,6 +1378,23 @@ def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
     )
 
 
+def _dump_sim_matrix(args, t2v_matrix: "np.ndarray", v2t_matrix: "np.ndarray"):
+    """把喂给指标函数的相似度矩阵存下来（rank0 only）。
+
+    文件名带上正在打分的 checkpoint —— run_final_test 里 t2v 和 v2t 可能选中
+    不同的 epoch，那样 eval_epoch 会被调用两次，不带标签就会互相覆盖。
+    """
+    out_dir = args.dump_sim_matrix
+    os.makedirs(out_dir, exist_ok=True)
+    tag = getattr(args, "_dump_sim_tag", "") or "eval"
+    out_file = os.path.join(out_dir, f"sim_{args.eval_split}_{tag}.npz")
+    np.savez(out_file, t2v=t2v_matrix, v2t=v2t_matrix)
+    logger.info(
+        "dumped sim matrices | t2v=%s v2t=%s -> %s",
+        t2v_matrix.shape, v2t_matrix.shape, out_file,
+    )
+
+
 def _run_on_single_gpu(
     model,
     args,
@@ -1664,6 +1694,10 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu):
 
     metric_t2v_matrix = sim_matrix
     metric_v2t_matrix = v2t_directional_matrix
+
+    # 落盘的就是喂给 compute_metrics 的那一份，所以离线重算能对上日志里的数字。
+    if getattr(args, "dump_sim_matrix", ""):
+        _dump_sim_matrix(args, metric_t2v_matrix, metric_v2t_matrix)
 
     if multi_sentence_:
         logger.info("before reshape, sim matrix size: {} x {}".format(sim_matrix.shape[0], sim_matrix.shape[1]))
