@@ -433,22 +433,76 @@ component. There is no working baseline component here to reproduce. Their
 null results were correct measurements of a real null, and the thing that now
 needs explaining is the paper's +1.2, not our +0.2.
 
+## 2026-07-29: the 2×2 closes — the DUA is inert under the paper's protocol too
+
+`parity_a4_seed0`, 09:13–12:16, five epochs, no resume and no OOM. Manifest
+diff against `parity_a0_seed0` is `rspr_mode: off → legacy` and nothing else
+behavioral. Both select epoch 3.
+
+**Test T2V R@1, MSR-VTT JSFUSION 1000×1000:**
+
+| | `off` | `legacy` (DUA) | Δ | McNemar p |
+| --- | --- | --- | --- | --- |
+| **hygiene** — 8500 train, held-out-500 selection | 46.3 | 46.5 | +0.2 | 0.885 |
+| **parity** — 9000 train, JSFUSION-test selection | 48.9 | 49.3 | +0.4 | 0.712 |
+
+Parity does not recover the published +1.2. Of the six paired tests in the
+parity row, none reaches p < 0.32 and three are exactly p = 1.000 (T2V R@5
+26 vs 27 discordant, T2V R@10 16 vs 16, V2T R@1 41 vs 40). The two models
+give the ground truth an identical rank on 605/1000 queries.
+
+So the answer is the second branch: **the component is inert under both
+protocols.** We reproduce UATVR's baseline — 48.9 against the published
+TI+DSA 49.6 — and then fail to reproduce its probabilistic gain, +0.4 where
+the paper reports +1.2.
+
+### What selection-on-test is worth, measured directly
+
+Parity scores every epoch on the reported set, so the premium is visible:
+
+| | epoch-by-epoch test T2V R@1 | mean | reported (max) | premium |
+| --- | --- | --- | --- | --- |
+| parity A0 | 46.6 47.7 **48.9** 47.3 47.3 | 47.56 | 48.9 | +1.34 |
+| parity A4 | 46.6 46.6 **49.3** 48.3 47.9 | 47.74 | 49.3 | +1.56 |
+
+Taking the best of five epochs on the test set is worth about +1.4 — more
+than the +1.2 the paper credits to its entire probabilistic apparatus. And
+the DUA's own effect shrinks from +0.40 (max-over-epochs, as reported) to
++0.18 (epoch mean), which is the hygiene number to two decimals.
+
+State this carefully: max-minus-mean overstates the premium, because the max
+of five draws exceeds their mean by construction even with no selection
+effect, and the epochs are a learning curve rather than iid draws. It is not
+a clean estimate of "how much cheating buys you." What it does establish is
+that epoch-to-epoch spread on the reported set is of the same order as the
+published effect — so a protocol that picks the best epoch on that set cannot
+separate the two. The paired A0-vs-A4 comparison is unaffected by any of
+this, and it is flat.
+
+### Where this leaves the story
+
+Four cells, two protocols, one component, and the largest effect anywhere is
++0.4 at p = 0.71. Combined with the seven RSPR arms, every version of "add a
+probabilistic head to TI+DSA" measured in this repository is a null. That is
+now a finding with a real denominator behind it rather than a failure to get
+a method working.
+
 ## Next
 
-1. **Run A4 under the `parity` profile.** This is the one run that separates
-   "the DUA does nothing" from "the DUA does nothing *once you stop selecting
-   the checkpoint on the test split*". `parity_a0_seed0` = 48.9 already
-   exists, so one 3-hour run completes a 2×2: hygiene (8500 train, held-out
-   selection) gave 46.3 → 46.5; parity (9000 train, JSFUSION-test selection,
-   i.e. the paper's own protocol) would give 48.9 → ?. If parity recovers
-   something near +1.2 while hygiene gives +0.2, the paper's headline
-   probabilistic gain is substantially a selection artifact, and that is a
-   publishable finding that costs one run. If parity also gives ≈0, the
-   component is simply inert and the DUA family — theirs and ours — can be
-   dropped from the story outright.
+1. **Drop the DUA family from the contribution.** Theirs and ours. Eight
+   arms across two protocols with nothing above +0.4 is not a tuning
+   problem, and the core four components (two distribution heads, the
+   matcher, the two losses) have no measured value to defend.
 2. **Do not re-run the seven arms.** They buy comparability, not
    significance, and post-deletion they would be measuring something the
    originals did not measure anyway.
 3. Report paired McNemar, not cross-run deltas, for any two arms sharing a
-   test split. The per-query ranks are already in each run's
-   `final_test.json` under `selections.t2v.test_metrics.{t2v,v2t}.cols`.
+   test split. The per-query ranks are in each run's `final_test.json` under
+   `selections.t2v.test_metrics.{t2v,v2t}.cols`.
+4. The remaining live direction is the one that does not need a cross-run
+   delta at all: **selective retrieval / risk–coverage**, where uncertainty
+   is scored by whether it can rank a single model's own predictions by
+   reliability. That comparison lives inside one checkpoint, so neither the
+   1.1 retraining floor nor the epoch-selection premium touches it. Note the
+   prior result that `u_pair`'s residual AUC came in below chance — that has
+   to be re-derived before anything is built on it.
