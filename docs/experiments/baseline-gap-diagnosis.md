@@ -583,6 +583,106 @@ trustworthy TVR test set available, precisely because somebody did the
 annotation. The move is to stay on this grid and change the labels and the
 metrics, not the dataset.
 
+## 2026-07-31: one conformal threshold does not fit every query, and the free margin cannot tell which
+
+Motivated by DAB (arXiv:2607.20984, ECCV 2026). Reading its §4.4 corrects
+something recorded earlier here: DAB *does* do selective prediction. It reports
+a risk–coverage curve and AURC 0.429 → 0.256 for R@1, using the top1–top2
+**KL margin** as the confidence signal. Two things about that are worth
+testing rather than asserting.
+
+First, the confidence signal is a margin over the ranked list, not the learned
+variance — the paper says so itself ("emerges from the bridge-induced
+distributional gap rather than from text variance alone"). Any deterministic
+model has a top1–top2 margin for free. Second, the comparison is against
+*random ordering*, which any non-zero signal beats, and the risk is defined
+against MSR-VTT's single positive, which we now know is wrong 21 points of the
+time.
+
+`scripts/conformal_coverage_probe.py`, run on the four already-dumped
+similarity matrices with FIRE's judgments. Split conformal, α=0.1, 200 random
+calibration/test halves. Two set constructions: an **adaptive margin set**
+`{v : s_top1 − s_v ≤ λ}`, whose size varies per query, and a **fixed top-k
+set**, whose size does not. Two coverage targets: `any` (the set holds at least
+one relevant video) and `all` (it holds every judged relevant video); they fail
+in opposite directions, so a claim that only holds for one is an artefact of
+the target.
+
+**The adaptive margin set is worth nothing over a constant k.** At a matched
+90% target:
+
+| run | adaptive mean size | fixed-k size | adaptive vs fixed-k |
+| --- | --- | --- | --- |
+| parity A0 | 5.4 | 5.4 | +0.8% |
+| parity A4 | 5.4 | 5.5 | +2.2% |
+| hygiene A0 | 5.7 | 5.5 | −3.7% |
+| hygiene A4 | 5.8 | 5.4 | −6.3% |
+
+Two of four are *larger* than always returning the same number of videos. The
+comparison is if anything generous to the adaptive set: rank discreteness makes
+fixed-k land at 90.6–90.9% coverage against the adaptive set's 89.8%, so
+fixed-k is buying that size at a full point more coverage. The free margin
+carries some global ranking signal (see AURC below) but not enough per-query
+information to size a set.
+
+**One global threshold gives 90% coverage on average and misses badly
+everywhere.** Coverage by the true number of relevant videos (parity A0;
+all four runs agree to ~1pt):
+
+| |Rel| | 1 | 2 | 3 | 4–5 | 6+ | spread |
+| --- | --- | --- | --- | --- | --- | --- |
+| `any` coverage | 83.3% | 88.4% | 92.8% | 95.5% | 98.3% | **15.0 pt** |
+| `all` coverage | 98.6% | 83.7% | 81.4% | 84.4% | 88.9% | **17.2 pt** |
+| `any`, oracle Mondrian | 90.1% | 90.3% | 90.2% | 90.4% | 90.7% | 0.7 pt |
+
+Marginal validity holds exactly as the theory says (89.8% at α=0.1) and is
+uninformative: the queries with one correct answer — the ones a user is most
+likely to have a specific target for — are covered 83% of the time, seven
+points under the advertised rate, while the ambiguous ones are over-covered to
+98%. `all` breaks the other way, which rules out the target being the cause.
+
+**The problem is fixable in principle and not fixable with what is free.**
+Calibrating one threshold per *oracle* ambiguity stratum collapses the spread
+to 0.4–0.8 pt across all four runs, and gives slightly smaller sets (5.2 vs
+5.4). But the oracle conditions on the label it is supposed to be robust to.
+The deployable version buckets by a label-free ambiguity score — quintiles of
+(top1–top2 gap rank + caption-length rank), boundaries from the calibration
+half only:
+
+| run | global spread | predicted-stratum Mondrian | oracle Mondrian |
+| --- | --- | --- | --- |
+| parity A0 | 15.0 pt | 13.3 pt | 0.7 pt |
+| parity A4 | 15.1 pt | 13.2 pt | 0.4 pt |
+| hygiene A0 | 14.2 pt | 13.5 pt | 0.8 pt |
+| hygiene A4 | 16.4 pt | 14.6 pt | 0.5 pt |
+
+Ambiguity *is* predictable in the weak statistical sense — Spearman ρ against
+|Rel| is −0.41 for the top1–top2 gap, −0.38 for caption length, −0.22 for the
+top-1 score, all far past significance, all pointing the same way (a flat,
+low-scoring, short query is the ambiguous one). It is nowhere near predictable
+enough to matter: ρ=0.41 closes about 11% of the gap. **The distance between
+13.3 pt and 0.7 pt is the open problem**, and it is the first place in this
+project where a learned uncertainty head has a target that is measurable, has
+ground truth, and is not R@1.
+
+**The label correction moves the absolute risk a lot and DAB's claim not at
+all.** Recomputing DAB's own curve with our free margin:
+
+| labels | AURC | random ordering | reduction |
+| --- | --- | --- | --- |
+| original | 0.279 | 0.511 | 45.4% |
+| FIRE | 0.162 | 0.299 | 45.7% |
+
+Absolute risk nearly halves, the relative reduction does not budge. So the
+hypothesis that label error corrupts risk–coverage conclusions is **not**
+supported — worth recording, because it was the third motivation and it failed.
+What survives is the comparison DAB skipped: a raw cosine top1–top2 gap, with
+no probabilistic machinery anywhere, cuts AURC 45–47% against random, versus
+the 40% DAB reports for its bridge-induced KL margin. Different backbones and
+different R@1 (52.6 vs our 48.9), so this is not a like-for-like win — but it
+does mean DAB has not shown its distributional apparatus beats the free signal,
+because it never ran that arm.
+
 ## Next
 
 1. **Drop the DUA family from the contribution.** Theirs and ours. Eight
@@ -615,3 +715,26 @@ metrics, not the dataset.
    single-annotator and cannot be settled from the file alone. And whether
    the MSVD half (158MB, the bulk of the 683K) covers a split we can use as a
    second test bed.
+7. **The live direction is now item 4 made concrete: predict query ambiguity
+   well enough to restore conditional coverage.** The gate passed — the
+   conditional coverage failure is 15 points, an oracle fixes it to 0.7, and
+   the free margin only reaches 13.3. Order of work: (a) dump per-query σ from
+   the RSPR heads, which the current `--dump_sim_matrix` does not write, and
+   test σ as a *stratifier* rather than a re-ranker — a much weaker
+   requirement than the re-ranking test it already failed, and one it has
+   never been given; (b) train a supervised ambiguity regressor on |Rel| from
+   FIRE with a held-out split, since the target is now labelled; (c) report
+   average set size at fixed *conditional* coverage as the headline, with R@1
+   alongside for comparability. Note the pool caveat carries into this: `any`
+   coverage is a lower bound because an unjudged relevant video in the set is
+   not counted.
+8. Venue note. This has no R@1 SOTA table and its headline statistic is set
+   size at guaranteed coverage, which reads as a non-contribution to a CVPR or
+   ECCV reviewer. SIGIR, EMNLP or TMLR fit the claim better. Also check
+   novelty against the near neighbours before committing: CLARA (2606.18992)
+   uses conformal set size as an ambiguity measure for composed image
+   retrieval, SAFEVPR (2605.28048) uses Mondrian conformal for visual place
+   recognition, and VQPP (2602.17814, code released) is already the first
+   text-to-video query performance prediction benchmark. What is not taken is
+   conditional coverage under ambiguity heterogeneity, with multi-positive
+   human judgments to define it against.
