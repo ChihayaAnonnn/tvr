@@ -56,6 +56,54 @@ def _describe(name: str, values: np.ndarray) -> None:
     )
 
 
+def _legacy_report(args, model, device, deterministic,
+                   text_token, input_mask, visual_output, video_mask) -> None:
+    """Report and dump UATVR's own per-sample log-variance.
+
+    Chunked one modality at a time. Note the heads are fed the *refined* tokens
+    from a single chunk, and _refine_{video,text}_tokens is per-sample, so
+    chunking changes nothing -- unlike the logit matrix, which is inherently
+    cross-chunk.
+    """
+    n_text, n_video = text_token.size(0), visual_output.size(0)
+    chunk = 64
+    t_ls, v_ls = [], []
+    with torch.no_grad():
+        for start in range(0, max(n_text, n_video), chunk):
+            t_end, v_end = min(start + chunk, n_text), min(start + chunk, n_video)
+            if start >= n_text or start >= n_video:
+                raise RuntimeError("legacy probe assumes #text == #video on this split")
+            tl, vl = model.get_legacy_logsigma(
+                text_token[start:t_end], input_mask[start:t_end],
+                visual_output[start:v_end], video_mask[start:v_end],
+            )
+            t_ls.append(tl.float().cpu())
+            v_ls.append(vl.float().cpu())
+    text_var = torch.cat(t_ls).exp().mean(dim=-1).numpy()
+    video_var = torch.cat(v_ls).exp().mean(dim=-1).numpy()
+
+    det = deterministic.numpy()
+    n = min(n_text, n_video)
+    top1 = det.argmax(axis=1)
+    correct = (top1 == np.arange(n)).astype(int)
+    order = np.sort(det, axis=1)
+    gap12 = order[:, -1] - order[:, -2]
+
+    print("\n=== legacy (UATVR DUA) per-sample variance ===")
+    print(f"  deterministic Top-1 accuracy {correct.mean():.4f} over {n} queries")
+    for name, sig in (("text sigma^2", text_var), ("video sigma^2", video_var),
+                      ("-(top1-top2) gap", -gap12)):
+        _describe(name, sig)
+        print(f"    -> AUROC(predicting a WRONG top-1) = {_auroc(sig, 1 - correct):.4f}")
+
+    dump = getattr(args, "dump_uncertainty", "")
+    if dump:
+        os.makedirs(os.path.dirname(dump) or ".", exist_ok=True)
+        np.savez(dump, text_sigma2=text_var, video_sigma2=video_var,
+                 gap12=gap12, det_sim=det, det_top1=top1, mode="legacy")
+        print(f"\n[probe] dumped per-query uncertainty -> {dump}")
+
+
 def main() -> None:
     args = mtr.get_args()
     args.local_rank = 0
@@ -136,6 +184,16 @@ def main() -> None:
             deterministic_rows.append(torch.cat(row, dim=1))
         deterministic = torch.cat(deterministic_rows)
 
+    if args.rspr_mode == "legacy":
+        # A4 was trained with UATVR's own DUA, which has no RSPR matcher and so
+        # no U_pair -- the only per-query uncertainty it defines is the
+        # per-sample log-variance of the two probabilistic heads. Everything
+        # below this branch is about the RSPR heads and does not apply.
+        _legacy_report(args, model, device, deterministic,
+                       text_token, input_mask, visual_output, video_mask)
+        return
+
+    with torch.no_grad():
         text_means, text_logvars, text_samples = [], [], []
         for start in range(0, n_text, chunk):
             end = min(start + chunk, n_text)
@@ -228,6 +286,28 @@ def main() -> None:
         print(f"  {label:<22} R@1={r1:5.1f}  R@5={r5:5.1f}  R@10={r10:5.1f}")
     agree = (top1_by_mean[:n] == top1_by_det[:n]).float().mean().item()
     print(f"  top-1 agreement (mean vs deterministic) = {agree:.4f}")
+
+    dump = getattr(args, "dump_uncertainty", "")
+    if dump:
+        # Everything is per-query and in dataloader order, which is csv-row
+        # order, which is the row order of the dumped similarity matrix. The
+        # deterministic matrix goes in too so the consumer can assert that
+        # alignment instead of trusting it -- if these rows did not line up
+        # with the eval_epoch dump, every stratifier computed from them would
+        # be silently shuffled.
+        os.makedirs(os.path.dirname(dump) or ".", exist_ok=True)
+        np.savez(
+            dump,
+            text_sigma2=text_variance.mean(dim=-1).numpy(),
+            video_sigma2=video_variance.mean(dim=-1).numpy(),
+            u_pair_gt=unc_gt,
+            u_pair_top1=unc_top1,
+            prob_gt=prob_gt,
+            prob_top1=prob_top1,
+            det_sim=det_np,
+            det_top1=top1_by_det.numpy(),
+        )
+        print(f"\n[probe] dumped per-query uncertainty -> {dump}")
 
 
 if __name__ == "__main__":

@@ -615,15 +615,19 @@ the target.
 | --- | --- | --- | --- |
 | parity A0 | 5.4 | 5.4 | +0.8% |
 | parity A4 | 5.4 | 5.5 | +2.2% |
-| hygiene A0 | 5.7 | 5.5 | −3.7% |
-| hygiene A4 | 5.8 | 5.4 | −6.3% |
+| hygiene A0 | 5.0 | 5.0 | +0.5% |
+| hygiene A4 | 5.1 | 4.8 | −5.5% |
 
-Two of four are *larger* than always returning the same number of videos. The
-comparison is if anything generous to the adaptive set: rank discreteness makes
-fixed-k land at 90.6–90.9% coverage against the adaptive set's 89.8%, so
-fixed-k is buying that size at a full point more coverage. The free margin
-carries some global ranking signal (see AURC below) but not enough per-query
-information to size a set.
+Three of four are the same size or *larger* than always returning the same
+number of videos. The comparison is if anything generous to the adaptive set:
+rank discreteness makes fixed-k land at 90.6–91.1% coverage against the
+adaptive set's 89.6–89.8%, so fixed-k is buying that size at a full point more
+coverage. The free margin carries some global ranking signal (see AURC below)
+but not enough per-query information to size a set.
+
+(Checkpoint note: the hygiene runs selected different epochs for the two
+directions, bin.1 for t2v and bin.2 for v2t, so everything here reads the
+t2v-selected bin.1. Parity selected bin.2 for both.)
 
 **One global threshold gives 90% coverage on average and misses badly
 everywhere.** Coverage by the true number of relevant videos (parity A0;
@@ -643,8 +647,8 @@ points under the advertised rate, while the ambiguous ones are over-covered to
 
 **The problem is fixable in principle and not fixable with what is free.**
 Calibrating one threshold per *oracle* ambiguity stratum collapses the spread
-to 0.4–0.8 pt across all four runs, and gives slightly smaller sets (5.2 vs
-5.4). But the oracle conditions on the label it is supposed to be robust to.
+to 0.4–1.2 pt across all four runs, at no cost in set size. But the oracle
+conditions on the label it is supposed to be robust to.
 The deployable version buckets by a label-free ambiguity score — quintiles of
 (top1–top2 gap rank + caption-length rank), boundaries from the calibration
 half only:
@@ -653,14 +657,14 @@ half only:
 | --- | --- | --- | --- |
 | parity A0 | 15.0 pt | 13.3 pt | 0.7 pt |
 | parity A4 | 15.1 pt | 13.2 pt | 0.4 pt |
-| hygiene A0 | 14.2 pt | 13.5 pt | 0.8 pt |
-| hygiene A4 | 16.4 pt | 14.6 pt | 0.5 pt |
+| hygiene A0 | 16.0 pt | 14.1 pt | 1.2 pt |
+| hygiene A4 | 15.7 pt | 14.8 pt | 1.2 pt |
 
 Ambiguity *is* predictable in the weak statistical sense — Spearman ρ against
 |Rel| is −0.41 for the top1–top2 gap, −0.38 for caption length, −0.22 for the
 top-1 score, all far past significance, all pointing the same way (a flat,
 low-scoring, short query is the ambiguous one). It is nowhere near predictable
-enough to matter: ρ=0.41 closes about 11% of the gap. **The distance between
+enough to matter: ρ=0.41 closes 6–13% of the gap. **The distance between
 13.3 pt and 0.7 pt is the open problem**, and it is the first place in this
 project where a learned uncertainty head has a target that is measurable, has
 ground truth, and is not R@1.
@@ -677,11 +681,105 @@ Absolute risk nearly halves, the relative reduction does not budge. So the
 hypothesis that label error corrupts risk–coverage conclusions is **not**
 supported — worth recording, because it was the third motivation and it failed.
 What survives is the comparison DAB skipped: a raw cosine top1–top2 gap, with
-no probabilistic machinery anywhere, cuts AURC 45–47% against random, versus
+no probabilistic machinery anywhere, cuts AURC 45–49% against random, versus
 the 40% DAB reports for its bridge-induced KL margin. Different backbones and
 different R@1 (52.6 vs our 48.9), so this is not a like-for-like win — but it
 does mean DAB has not shown its distributional apparatus beats the free signal,
 because it never ran that arm.
+
+## 2026-07-31: σ knows something about ambiguity, and it does not help
+
+The gate above left one hypothesis alive and it was the only one that could
+have redeemed the DUA work: σ failed as a *re-ranker*, but stratification is a
+much weaker requirement, so maybe σ works as a *stratifier*. A4 was trained
+with UATVR's own DUA, whose only per-query uncertainty is the two probabilistic
+heads' log-variance, and nothing exposed it — `_loose_similarity` computes it
+on every eval call and throws it away. `Model.get_legacy_logsigma` plus
+`scripts/dump_rspr_uncertainty.sh` now dump it per query.
+
+Alignment with the similarity matrices is proven rather than assumed: the
+probe's own deterministic matrix matches the eval dump to 1.3e-5 with argmax
+and diagonal-rank agreement 1.0, and the resulting Top-1 reproduces the logged
+49.3 / 46.5 exactly.
+
+**σ is the single strongest ambiguity feature, and its sign is backwards.**
+
+| feature | ρ vs \|Rel\|, parity A4 | ρ, hygiene A4 |
+| --- | --- | --- |
+| text σ² | **−0.506** | **−0.485** |
+| top1–top2 gap | −0.407 | −0.391 |
+| caption length | −0.376 | −0.376 |
+| top-1 score | −0.191 | −0.202 |
+| video σ² | −0.010 (p=0.75) | +0.019 (p=0.56) |
+
+Every free feature says "flat, low-scoring, short query → many relevant
+videos". Text σ² says the opposite: **larger variance goes with *fewer* correct
+answers**. Whatever the head learned, it is not the ambiguity the word
+"uncertainty" is meant to name. Video σ² is pure noise. So the head that this
+project spent months on has one informative output out of two, pointed the
+wrong way.
+
+Because a rank-sum assumes every feature agrees on which direction is
+"confident", it cancels: `sigma only` 16.0 pt and `gap+len+sigma` 15.5 pt,
+both worse than `gap+len`'s 13.2 pt and worse than doing nothing. The fair
+test is to let the data set the weights and the signs, which is what the
+method would do anyway — it already assumes FIRE labels on a calibration
+portion. A least-squares fit of the features onto |Rel| on the calibration
+half of each of the 200 splits, bucketed by quintiles of the prediction:
+
+| predictor (parity A4) | ρ vs \|Rel\| | spread | mean size | Δ spread vs `sup gap+len` |
+| --- | --- | --- | --- | --- |
+| `sup gap+len` | −0.487 | **13.0 pt** | 4.9 | — |
+| `sup sigma only` | −0.505 | 15.0 pt | 6.1 | +1.72 ± 0.16 |
+| `sup gap+len+sigma` | **−0.553** | 13.8 pt | 5.0 | +0.70 ± 0.12 |
+
+hygiene A4 agrees: 14.8 / 15.4 / 15.2 pt, with σ costing +0.36 ± 0.14 pt.
+The Δ column is paired — every predictor sees the same 200 splits — so ±0.12
+is the real error bar and this is one of the few effects in this project that
+clears its noise floor. It clears it in the wrong direction.
+
+**The dissociation is the finding.** Adding σ makes the predictor measurably
+*better* at predicting how many videos are relevant (ρ −0.487 → −0.553, both
+runs) and measurably *worse* at equalising coverage. Predicting |Rel| is
+therefore not the right objective for a stratifier. Refitting on the conformal
+score itself instead of on |Rel| tests that directly and does not rescue it
+either: `mgn gap+len` 13.9 / 14.8 pt, `mgn gap+len+sigma` 13.6 / 15.2 pt.
+
+**σ is dead as a stratifier too.** That closes the last route by which the
+learned-variance work could have been salvaged. Every arm of it is now
+measured: null as a re-ranker, anti-informative as an error predictor
+(AUROC 0.32, below chance), and negative as a stratifier.
+
+### How good would an ambiguity predictor have to be?
+
+Every real predictor lands at 13–15 pt while the oracle sits at 0.3–1.3 pt,
+and neither adding σ nor changing the regression target moves it. That makes
+the useful question quantitative. Corrupting the true |Rel| with increasing
+noise traces spread against predictor quality (5 noise draws per level, all
+four runs):
+
+| ρ vs \|Rel\| | parity A0 | parity A4 | hygiene A0 | hygiene A4 |
+| --- | --- | --- | --- | --- |
+| 1.000 | 0.7 pt | 0.3 pt | 1.3 pt | 1.1 pt |
+| 0.965 | 1.5 | 1.6 | 4.1 | 1.5 |
+| 0.940 | 3.5 | 3.5 | 4.4 | 4.5 |
+| 0.825 | 5.9 | 6.1 | 7.2 | 6.7 |
+| 0.578 | 10.6 | 10.1 | 10.3 | 10.8 |
+| 0.330 | 13.4 | 13.3 | 14.1 | 14.0 |
+
+The curve is steep and the useful region starts late: **ρ ≈ 0.83 to halve the
+gap, ρ ≈ 0.94 to close it to a few points.** The best signal available inside
+a trained TVR model, including its learned variance, reaches ρ = 0.55. This
+is the target number for the direction, and it is a target no published TVR
+uncertainty method is anywhere near.
+
+One caveat that cuts against the real predictors: `sup gap+len+sigma` reaches
+ρ = 0.553 but gives 13.8 pt, while a noised oracle at ρ = 0.578 gives 10.1 pt.
+A real predictor is *worse* than random noise of the same rank correlation,
+so its errors are structured — it is wrong about the same queries the
+threshold is already wrong about. Rank correlation therefore overstates how
+useful a predictor will be, and any future ambiguity model has to be scored
+on spread directly, not on ρ.
 
 ## Next
 
@@ -718,16 +816,18 @@ because it never ran that arm.
 7. **The live direction is now item 4 made concrete: predict query ambiguity
    well enough to restore conditional coverage.** The gate passed — the
    conditional coverage failure is 15 points, an oracle fixes it to 0.7, and
-   the free margin only reaches 13.3. Order of work: (a) dump per-query σ from
-   the RSPR heads, which the current `--dump_sim_matrix` does not write, and
-   test σ as a *stratifier* rather than a re-ranker — a much weaker
-   requirement than the re-ranking test it already failed, and one it has
-   never been given; (b) train a supervised ambiguity regressor on |Rel| from
-   FIRE with a held-out split, since the target is now labelled; (c) report
-   average set size at fixed *conditional* coverage as the headline, with R@1
-   alongside for comparability. Note the pool caveat carries into this: `any`
-   coverage is a lower bound because an unjudged relevant video in the set is
-   not counted.
+   the free margin only reaches 13.3. Steps (a) and (b) are done and are
+   recorded in the 2026-07-31 σ section: σ is negative as a stratifier, and
+   the noised-oracle sweep sets the bar at ρ ≈ 0.83 to halve the gap against
+   the ρ = 0.55 the free features plus σ reach. What remains: (c) a *learned*
+   ambiguity predictor — a text encoder fine-tuned on |Rel| — since the linear
+   fit on four scalar features is not a serious attempt and the target is
+   labelled; (d) report average set size at fixed *conditional* coverage as
+   the headline, with R@1 alongside for comparability; (e) score any predictor
+   on spread directly, never on ρ, because a real predictor at ρ = 0.55 gives
+   13.8 pt where a noised oracle at ρ = 0.58 gives 10.1 pt. Note the pool
+   caveat carries into this: `any` coverage is a lower bound because an
+   unjudged relevant video in the set is not counted.
 8. Venue note. This has no R@1 SOTA table and its headline statistic is set
    size at guaranteed coverage, which reads as a non-contribution to a CVPR or
    ECCV reviewer. SIGIR, EMNLP or TMLR fit the claim better. Also check

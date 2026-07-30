@@ -286,6 +286,17 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
             "复现日志里的 R@1。给 FIRE 修正标签重新打分用。"
         ),
     )
+    parser.add_argument(
+        "--dump_uncertainty",
+        type=str,
+        default="",
+        help=(
+            "只被 scripts/probe_rspr_uncertainty.py 读取：把逐查询的 sigma^2 / U_pair "
+            "存到该 .npz。行序就是 dataloader 序，也就是 test csv 的行序，所以能和 "
+            "--dump_sim_matrix 落下来的矩阵对齐；同时会把确定性矩阵一起存下去，"
+            "让下游能断言这份对齐而不是假设它。给条件覆盖的分层变量实验用。"
+        ),
+    )
     parser.add_argument("--video_dim", type=int, default=1024, help="video feature dimension")
     parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument("--max_words", type=int, default=20, help="")

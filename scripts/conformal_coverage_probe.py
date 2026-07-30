@@ -53,7 +53,7 @@ import os
 import sys
 
 import numpy as np
-from scipy.stats import spearmanr
+from scipy.stats import rankdata, spearmanr
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fire_corrected_metrics import load_fire, load_grid  # noqa: E402
@@ -127,7 +127,8 @@ def set_sizes(sim, lam):
     return (top1 - sim <= lam).sum(axis=1)
 
 
-def run_splits(sc, n_rel, alpha, n_rep, rng, pred_feat=None, qlen=None):
+def run_splits(sc, n_rel, alpha, n_rep, rng, pred_feat=None, sup_feats=None,
+               sup_target="n_rel"):
     """Split conformal, repeated over random calibration/test halves.
 
     Everything is accumulated per repeat and averaged at the end, so the
@@ -143,14 +144,20 @@ def run_splits(sc, n_rel, alpha, n_rep, rng, pred_feat=None, qlen=None):
         "cov_any_by_s": [[] for _ in STRATA], "cov_mond_by_s": [[] for _ in STRATA],
         "size_mond": [], "cov_all_by_s": [[] for _ in STRATA],
         "cov_pred_by_s": [[] for _ in STRATA], "size_pred": [],
+        "sup_rho": [], "spread_pred": [],
     }
 
-    # Label-free ambiguity score. Both features are computed from the query and
-    # the ranking only, never from a judgment, so using all 1000 to form the
-    # score leaks nothing; only the bucket boundaries come from calibration.
-    if pred_feat is not None:
-        from scipy.stats import rankdata
-        amb = rankdata(-pred_feat) + rankdata(-qlen.astype(float))
+    # Two ways to get an ambiguity score, both feeding the same bucketing block
+    # below. pred_feat is a fixed label-free combination chosen by the caller.
+    # sup_feats is a design matrix regressed onto |Rel| on the calibration half
+    # of each split, which is what the proposed method would actually do: FIRE
+    # labels exist for a calibration portion, so learning the weights -- and,
+    # more to the point, the *signs* -- from them is the method, not leakage.
+    # The test half is never used to fit anything. Features are rank-normalised
+    # so one heavy-tailed column cannot dominate the least-squares fit.
+    sup = None if sup_feats is None else np.column_stack(
+        [rankdata(f) / n for f in sup_feats] + [np.ones(n)]
+    )
 
     for _ in range(n_rep):
         perm = rng.permutation(n)
@@ -197,7 +204,25 @@ def run_splits(sc, n_rel, alpha, n_rep, rng, pred_feat=None, qlen=None):
         acc["size_mond"].append(mond_size.mean())
 
         # --- Mondrian on predicted ambiguity, the deployable version ---
-        if pred_feat is not None:
+        amb = pred_feat
+        if sup is not None:
+            # Two regression targets. "n_rel" predicts how many videos are
+            # relevant, the intuitive notion of query ambiguity. "margin"
+            # predicts the conformal score itself, which is the quantity the
+            # per-bucket threshold is a quantile of -- buckets homogeneous in
+            # it are exactly the buckets one threshold fits. They are not the
+            # same objective and, as it turns out, not the same ranking.
+            # Both targets are read off the calibration half only -- the margin
+            # is a function of the labels, so ranking it over all 1000 queries
+            # would let the test half's judgments set the scale.
+            y = (n_rel[cal].astype(float) if sup_target == "n_rel"
+                 else rankdata(sc["margin_any"][cal]) / len(cal))
+            w = np.linalg.lstsq(sup[cal], y, rcond=None)[0]
+            # Negated so the supervised score keeps the same orientation as the
+            # label-free ones: larger = predicted fewer relevant videos.
+            amb = -(sup @ w)
+            acc["sup_rho"].append(spearmanr(amb[tst], n_rel[tst]).statistic)
+        if amb is not None:
             edges = np.quantile(amb[cal], [0.2, 0.4, 0.6, 0.8])
             pb = np.digitize(amb, edges)
             pcov, psize = np.zeros(len(tst), bool), np.zeros(len(tst))
@@ -210,10 +235,17 @@ def run_splits(sc, n_rel, alpha, n_rep, rng, pred_feat=None, qlen=None):
                 pcov[mt] = sc["margin_any"][tst[mt]] <= lam_b
                 psize[mt] = set_sizes(sc["sim"][tst[mt]], lam_b)
             acc["size_pred"].append(psize.mean())
+            per_s = []
             for s in range(len(STRATA)):
                 m = strat[tst] == s
                 if m.any():
                     acc["cov_pred_by_s"][s].append(pcov[m].mean())
+                    per_s.append(pcov[m].mean())
+            # Spread recomputed inside each split, not from the averaged
+            # columns, so two predictors can be compared paired on the same
+            # splits. It sits above the spread-of-averages by construction
+            # (a max minus a min is convex), so only differences are readable.
+            acc["spread_pred"].append(max(per_s) - min(per_s))
 
     out = {}
     for k_, v in acc.items():
@@ -222,7 +254,28 @@ def run_splits(sc, n_rel, alpha, n_rep, rng, pred_feat=None, qlen=None):
         else:
             # size_pred / cov_pred_* stay empty when no predictor was passed.
             out[k_] = float(np.mean(v)) if len(v) else float("nan")
+    out["spread_pred_raw"] = np.array(acc["spread_pred"])
     return out
+
+
+def report_pred(cname, pred_r, base=None):
+    """One row of the predicted-stratum Mondrian table.
+
+    base, when given, is the reference predictor's per-split spreads. The
+    splits are identical across predictors (same seed), so the difference is
+    paired and its standard error is over the 200 splits, which is the only way
+    to tell a real improvement from split noise at this effect size.
+    """
+    v = np.array(pred_r["cov_pred_by_s"]) * 100
+    fin = v[np.isfinite(v)]
+    rho = pred_r["sup_rho"]
+    delta = ""
+    if base is not None:
+        d = (pred_r["spread_pred_raw"] - base) * 100
+        delta = f"  {d.mean():+5.2f} +- {d.std(ddof=1)/np.sqrt(len(d)):.2f}"
+    print(f"      {cname:<14s} " + "".join(f"{x:7.1f}%" for x in v)
+          + f"   {fin.max()-fin.min():6.1f} pt  {pred_r['size_pred']:5.1f}"
+          + ("      -" if np.isnan(rho) else f"  {rho:+.3f}") + delta)
 
 
 def risk_coverage(conf, correct):
@@ -238,10 +291,18 @@ def main():
     p.add_argument("--fire", required=True)
     p.add_argument("--test-csv", required=True)
     p.add_argument("--run", action="append", required=True, help="name=path.npz")
+    p.add_argument("--unc", action="append", default=[],
+                   help="name=path.npz from scripts/dump_rspr_uncertainty.sh")
     p.add_argument("--alpha", type=float, default=0.1)
     p.add_argument("--reps", type=int, default=200)
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
+
+    unc = {}
+    for spec in a.unc:
+        nm, path = spec.split("=", 1)
+        z = np.load(path)
+        unc[nm] = {k: z[k] for k in ("text_sigma2", "video_sigma2", "det_sim")}
 
     queries, videos = load_grid(a.test_csv)
     relevant, judged, outside, gt_bad = load_fire(a.fire, queries, videos)
@@ -284,26 +345,104 @@ def main():
         print(f"      Mondrian mean set size {r['size_mond']:.1f} "
               f"(global {r['size_any']:.1f})\n")
 
+        # Every feature is oriented a priori as "larger = more confident = the
+        # query should get fewer answers": a bigger top1-top2 gap, a longer and
+        # so more specific caption, a smaller variance. Whether that orientation
+        # is right is exactly what the Spearman column below tests, and it is
+        # why the rank-sum combinations are not the last word -- rank-summing
+        # two features that disagree about which way is "confident" cancels
+        # them. The supervised variants below do not assume any orientation.
+        feats = {"top1-top2 gap": sc["gap12"], "top1 score": sc["top1"],
+                 "caption length": qlen.astype(float)}
+        if name in unc:
+            u = unc[name]
+            feats["text sigma^2"] = -u["text_sigma2"]
+            feats["video sigma^2"] = -u["video_sigma2"]
+
         print("  [3] can ambiguity be predicted without labels? (Spearman vs |Rel|)")
-        for fname, fv in (("top1-top2 gap", sc["gap12"]), ("top1 score", sc["top1"]),
-                          ("caption length", qlen.astype(float))):
+        for fname, fv in feats.items():
             rho, pv = spearmanr(fv, n_rel)
             print(f"      {fname:<16s} rho {rho:+.3f}  p={pv:.2e}")
-        print("      (negative rho = more positives, so all three point the same way:"
-              " a flat, low-scoring, short query is the ambiguous one)")
+        print("      (all features oriented larger = more confident, so negative"
+              " rho = the feature sees the ambiguity)")
 
         # The oracle Mondrian above conditions on the label it is trying to be
-        # robust to, so it is an upper bound, not a method. This is the
-        # deployable version: bucket by a label-free predictor of ambiguity,
+        # robust to, so it is an upper bound, not a method. These are the
+        # deployable versions: bucket by a label-free predictor of ambiguity,
         # calibrate per bucket, then re-measure coverage in the TRUE strata.
-        rng2 = np.random.RandomState(a.seed)
-        pred_r = run_splits(sc, n_rel, a.alpha, a.reps, rng2,
-                            pred_feat=sc["gap12"], qlen=qlen)
-        v = np.array(pred_r["cov_pred_by_s"]) * 100
-        fin = v[np.isfinite(v)]
-        print("\n      predicted-stratum Mondrian (label-free), coverage by TRUE |Rel|")
-        print("      " + "".join(f"{x:7.1f}%" for x in v)
-              + f"   {fin.max()-fin.min():6.1f} pt   mean size {pred_r['size_pred']:.1f}\n")
+        combos = [("gap+len", ["top1-top2 gap", "caption length"])]
+        if name in unc:
+            combos += [
+                ("sigma only", ["text sigma^2", "video sigma^2"]),
+                ("gap+len+sigma", ["top1-top2 gap", "caption length",
+                                   "text sigma^2", "video sigma^2"]),
+            ]
+        # The supervised variants fit the same features against |Rel| on each
+        # calibration half. Rank-summing assumes every feature points the same
+        # way; regression does not, which matters here because text sigma^2
+        # turns out to point the opposite way to the label-free features. The
+        # comparison that decides whether sigma is worth anything as a
+        # stratifier is supervised gap+len against supervised gap+len+sigma.
+        sup_combos = [("sup gap+len", ["top1-top2 gap", "caption length"], "n_rel")]
+        if name in unc:
+            sup_combos += [
+                ("sup sigma only", ["text sigma^2", "video sigma^2"], "n_rel"),
+                ("sup gap+len+sig", ["top1-top2 gap", "caption length",
+                                     "text sigma^2", "video sigma^2"], "n_rel"),
+            ]
+        sup_combos += [("mgn gap+len", ["top1-top2 gap", "caption length"], "margin")]
+        if name in unc:
+            sup_combos += [("mgn gap+len+sig", ["top1-top2 gap", "caption length",
+                                                "text sigma^2", "video sigma^2"],
+                            "margin")]
+
+        print("\n      predicted-stratum Mondrian, coverage by TRUE |Rel|")
+        print("      predictor        " + "".join(f"{nm:>8s}" for nm in STRATA_NAMES)
+              + "     spread   size    rho   vs sup gap+len")
+        base = None
+        for cname, keys in combos:
+            score = sum(rankdata(feats[k]) for k in keys)
+            pred_r = run_splits(sc, n_rel, a.alpha, a.reps,
+                                np.random.RandomState(a.seed), pred_feat=score)
+            report_pred(cname, pred_r)
+        for cname, keys, target in sup_combos:
+            pred_r = run_splits(sc, n_rel, a.alpha, a.reps,
+                                np.random.RandomState(a.seed),
+                                sup_feats=[feats[k] for k in keys],
+                                sup_target=target)
+            report_pred(cname, pred_r, base)
+            if base is None:
+                base = pred_r["spread_pred_raw"]
+        print()
+
+        # Every real predictor above sits near 13-15 pt while the oracle sits
+        # near 1 pt, and neither adding sigma nor changing the regression target
+        # moves it. That makes the useful question quantitative: how accurate
+        # would an ambiguity predictor have to be? Corrupting the true |Rel|
+        # with increasing noise traces spread against predictor quality, so a
+        # future predictor can be judged by the rho it would need rather than
+        # by whether it beats the free features.
+        print("      how good does the predictor need to be? (noised oracle)")
+        print("      rho vs |Rel|    spread   size")
+        nrng = np.random.RandomState(a.seed + 1)
+        base_rank = rankdata(n_rel) / len(n_rel)
+        for noise in (0.0, 0.05, 0.1, 0.2, 0.4, 0.8):
+            # Averaged over several noise draws: a single draw makes the curve
+            # non-monotone, because which queries get scrambled matters as much
+            # as how many.
+            rhos, spreads, sizes = [], [], []
+            for _ in range(1 if noise == 0 else 5):
+                z = base_rank + nrng.normal(0, noise, len(n_rel))
+                nr = run_splits(sc, n_rel, a.alpha, a.reps,
+                                np.random.RandomState(a.seed), pred_feat=-z)
+                v = np.array(nr["cov_pred_by_s"]) * 100
+                fin = v[np.isfinite(v)]
+                rhos.append(spearmanr(z, n_rel).statistic)
+                spreads.append(fin.max() - fin.min())
+                sizes.append(nr["size_pred"])
+            print(f"        {np.mean(rhos):+.3f}      "
+                  f"{np.mean(spreads):6.1f} pt  {np.mean(sizes):5.1f}")
+        print()
 
         # DAB's own confidence signal is the top1-top2 margin, scored against
         # the single annotated positive. Under random ordering the risk at every
