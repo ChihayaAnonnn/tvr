@@ -900,6 +900,72 @@ class UATVR(CLIP4ClipPreTrainedModel):
             modality="video",
         )
 
+    def _normalize_and_pool_video(self, visual_output, video_mask, frame_num):
+        """Row-normalise the frame tokens and mean-pool them into one vector.
+
+        Extracted from _loose_similarity so get_legacy_logsigma can reach the
+        same pooled inputs the probabilistic heads see, without recomputing the
+        full text-by-video logit matrix to get there.
+        """
+        visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
+        visual_pooled = self._mean_pooling_for_similarity_visual(
+            visual_output[:, 0:frame_num, :].contiguous(),
+            video_mask[:, 0:frame_num].contiguous(),
+        )
+        return visual_output, visual_pooled / visual_pooled.norm(dim=-1, keepdim=True)
+
+    def _normalize_and_pool_text(self, text_token, attention_mask, word_num):
+        """Text-side counterpart of _normalize_and_pool_video."""
+        text_token = text_token / text_token.norm(dim=-1, keepdim=True)
+        text_pooled = self._mean_pooling_for_similarity_sequence(
+            text_token[:, 0:word_num, :].contiguous(),
+            attention_mask[:, 0:word_num].contiguous(),
+        )
+        return text_token, text_pooled / text_pooled.norm(dim=-1, keepdim=True)
+
+    def get_legacy_logsigma(
+        self, text_token, attention_mask, visual_output, video_mask
+    ):
+        """Per-sample log-variance from UATVR's own probabilistic heads.
+
+        _loose_similarity already computes these on every eval call and then
+        discards them, because the legacy branch only consumes them in the two
+        training losses. Nothing else exposes them, so the stratifier
+        experiment had no sigma to test. Each modality is independent here, so
+        this deliberately does not go through _loose_similarity: that would
+        recompute the whole logit matrix once per chunk to read off a per-row
+        quantity.
+
+        Returns (text_logsigma [B, D], video_logsigma [B, D]).
+        """
+        if self.rspr_mode != "legacy":
+            raise RuntimeError("legacy logsigma requires rspr_mode=legacy")
+        # Same flattening get_similarity_logits does for shaped=False: the
+        # dataloader hands out masks with a leading sentence axis.
+        attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
+        video_mask = video_mask.view(-1, video_mask.shape[-1])
+        frame_num, word_num = visual_output.size(1), text_token.size(1)
+        if self.sim_header == "seqTransf":
+            visual_output, video_mask = self._refine_video_tokens(
+                visual_output, video_mask
+            )
+            text_token, attention_mask = self._refine_text_tokens(
+                text_token, attention_mask
+            )
+        visual_output, visual_pooled = self._normalize_and_pool_video(
+            visual_output, video_mask, frame_num
+        )
+        text_token, text_pooled = self._normalize_and_pool_text(
+            text_token, attention_mask, word_num
+        )
+        prob_video = self.probabilistic_video(
+            visual_pooled, visual_output[:, 0:frame_num, :].contiguous()
+        )
+        prob_text = self.probabilistic_text(
+            text_pooled, text_token[:, 0:word_num, :].contiguous()
+        )
+        return prob_text["logsigma"], prob_video["logsigma"]
+
     def _loose_similarity(
         self,
         sequence_output,
@@ -948,19 +1014,15 @@ class UATVR(CLIP4ClipPreTrainedModel):
             attention_mask = allgather(attention_mask, self.task_config)
             torch.distributed.barrier()
 
-        visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
-        visual_pooled = self._mean_pooling_for_similarity_visual(
-            visual_output[:, 0:frame_num, :].contiguous(), video_mask[:, 0:frame_num].contiguous()
+        visual_output, visual_pooled = self._normalize_and_pool_video(
+            visual_output, video_mask, frame_num
         )
-        visual_pooled = visual_pooled / visual_pooled.norm(dim=-1, keepdim=True)
 
         sequence_output = sequence_output.squeeze(1)
         sequence_output = sequence_output / sequence_output.norm(dim=-1, keepdim=True)
-        text_token = text_token / text_token.norm(dim=-1, keepdim=True)
-        text_pooled = self._mean_pooling_for_similarity_sequence(
-            text_token[:, 0:word_num, :].contiguous(), attention_mask[:, 0:word_num].contiguous()
+        text_token, text_pooled = self._normalize_and_pool_text(
+            text_token, attention_mask, word_num
         )
-        text_pooled = text_pooled / text_pooled.norm(dim=-1, keepdim=True)
 
         # ti_logits = self.token_wise_interaction(text_token=text_token, frame_token=visual_output, attention_mask=attention_mask, video_mask=video_mask)
         wti_logits = self.weighted_token_wise_intersection(text_token, visual_output, attention_mask, video_mask)

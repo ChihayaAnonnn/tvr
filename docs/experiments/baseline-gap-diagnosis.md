@@ -583,6 +583,608 @@ trustworthy TVR test set available, precisely because somebody did the
 annotation. The move is to stay on this grid and change the labels and the
 metrics, not the dataset.
 
+## 2026-07-31: one conformal threshold does not fit every query, and the free margin cannot tell which
+
+Motivated by DAB (arXiv:2607.20984, ECCV 2026). Reading its §4.4 corrects
+something recorded earlier here: DAB *does* do selective prediction. It reports
+a risk–coverage curve and AURC 0.429 → 0.256 for R@1, using the top1–top2
+**KL margin** as the confidence signal. Two things about that are worth
+testing rather than asserting.
+
+First, the confidence signal is a margin over the ranked list, not the learned
+variance — the paper says so itself ("emerges from the bridge-induced
+distributional gap rather than from text variance alone"). Any deterministic
+model has a top1–top2 margin for free. Second, the comparison is against
+*random ordering*, which any non-zero signal beats, and the risk is defined
+against MSR-VTT's single positive, which we now know is wrong 21 points of the
+time.
+
+`scripts/conformal_coverage_probe.py`, run on the four already-dumped
+similarity matrices with FIRE's judgments. Split conformal, α=0.1, 200 random
+calibration/test halves. Two set constructions: an **adaptive margin set**
+`{v : s_top1 − s_v ≤ λ}`, whose size varies per query, and a **fixed top-k
+set**, whose size does not. Two coverage targets: `any` (the set holds at least
+one relevant video) and `all` (it holds every judged relevant video); they fail
+in opposite directions, so a claim that only holds for one is an artefact of
+the target.
+
+**The adaptive margin set is worth nothing over a constant k.** At a matched
+90% target:
+
+| run | adaptive mean size | fixed-k size | adaptive vs fixed-k |
+| --- | --- | --- | --- |
+| parity A0 | 5.4 | 5.4 | +0.8% |
+| parity A4 | 5.4 | 5.5 | +2.2% |
+| hygiene A0 | 5.0 | 5.0 | +0.5% |
+| hygiene A4 | 5.1 | 4.8 | −5.5% |
+
+Three of four are the same size or *larger* than always returning the same
+number of videos. The comparison is if anything generous to the adaptive set:
+rank discreteness makes fixed-k land at 90.6–91.1% coverage against the
+adaptive set's 89.6–89.8%, so fixed-k is buying that size at a full point more
+coverage. The free margin carries some global ranking signal (see AURC below)
+but not enough per-query information to size a set.
+
+(Checkpoint note: the hygiene runs selected different epochs for the two
+directions, bin.1 for t2v and bin.2 for v2t, so everything here reads the
+t2v-selected bin.1. Parity selected bin.2 for both.)
+
+**One global threshold gives 90% coverage on average and misses badly
+everywhere.** Coverage by the true number of relevant videos (parity A0;
+all four runs agree to ~1pt):
+
+| |Rel| | 1 | 2 | 3 | 4–5 | 6+ | spread |
+| --- | --- | --- | --- | --- | --- | --- |
+| `any` coverage | 83.3% | 88.4% | 92.8% | 95.5% | 98.3% | **15.0 pt** |
+| `all` coverage | 98.6% | 83.7% | 81.4% | 84.4% | 88.9% | **17.2 pt** |
+| `any`, oracle Mondrian | 90.1% | 90.3% | 90.2% | 90.4% | 90.7% | 0.7 pt |
+
+Marginal validity holds exactly as the theory says (89.8% at α=0.1) and is
+uninformative: the queries with one correct answer — the ones a user is most
+likely to have a specific target for — are covered 83% of the time, seven
+points under the advertised rate, while the ambiguous ones are over-covered to
+98%. `all` breaks the other way, which rules out the target being the cause.
+
+**The problem is fixable in principle and not fixable with what is free.**
+Calibrating one threshold per *oracle* ambiguity stratum collapses the spread
+to 0.4–1.2 pt across all four runs, at no cost in set size. But the oracle
+conditions on the label it is supposed to be robust to.
+The deployable version buckets by a label-free ambiguity score — quintiles of
+(top1–top2 gap rank + caption-length rank), boundaries from the calibration
+half only:
+
+| run | global spread | predicted-stratum Mondrian | oracle Mondrian |
+| --- | --- | --- | --- |
+| parity A0 | 15.0 pt | 13.3 pt | 0.7 pt |
+| parity A4 | 15.1 pt | 13.2 pt | 0.4 pt |
+| hygiene A0 | 16.0 pt | 14.1 pt | 1.2 pt |
+| hygiene A4 | 15.7 pt | 14.8 pt | 1.2 pt |
+
+Ambiguity *is* predictable in the weak statistical sense — Spearman ρ against
+|Rel| is −0.41 for the top1–top2 gap, −0.38 for caption length, −0.22 for the
+top-1 score, all far past significance, all pointing the same way (a flat,
+low-scoring, short query is the ambiguous one). It is nowhere near predictable
+enough to matter: ρ=0.41 closes 6–13% of the gap. **The distance between
+13.3 pt and 0.7 pt is the open problem**, and it is the first place in this
+project where a learned uncertainty head has a target that is measurable, has
+ground truth, and is not R@1.
+
+**The label correction moves the absolute risk a lot and DAB's claim not at
+all.** Recomputing DAB's own curve with our free margin:
+
+| labels | AURC | random ordering | reduction |
+| --- | --- | --- | --- |
+| original | 0.279 | 0.511 | 45.4% |
+| FIRE | 0.162 | 0.299 | 45.7% |
+
+Absolute risk nearly halves, the relative reduction does not budge. So the
+hypothesis that label error corrupts risk–coverage conclusions is **not**
+supported — worth recording, because it was the third motivation and it failed.
+What survives is the comparison DAB skipped: a raw cosine top1–top2 gap, with
+no probabilistic machinery anywhere, cuts AURC 45–49% against random, versus
+the 40% DAB reports for its bridge-induced KL margin. Different backbones and
+different R@1 (52.6 vs our 48.9), so this is not a like-for-like win — but it
+does mean DAB has not shown its distributional apparatus beats the free signal,
+because it never ran that arm.
+
+## 2026-07-31: σ knows something about ambiguity, and it does not help
+
+The gate above left one hypothesis alive and it was the only one that could
+have redeemed the DUA work: σ failed as a *re-ranker*, but stratification is a
+much weaker requirement, so maybe σ works as a *stratifier*. A4 was trained
+with UATVR's own DUA, whose only per-query uncertainty is the two probabilistic
+heads' log-variance, and nothing exposed it — `_loose_similarity` computes it
+on every eval call and throws it away. `Model.get_legacy_logsigma` plus
+`scripts/dump_rspr_uncertainty.sh` now dump it per query.
+
+Alignment with the similarity matrices is proven rather than assumed: the
+probe's own deterministic matrix matches the eval dump to 1.3e-5 with argmax
+and diagonal-rank agreement 1.0, and the resulting Top-1 reproduces the logged
+49.3 / 46.5 exactly.
+
+**σ is the single strongest ambiguity feature, and its sign is backwards.**
+
+| feature | ρ vs \|Rel\|, parity A4 | ρ, hygiene A4 |
+| --- | --- | --- |
+| text σ² | **−0.506** | **−0.485** |
+| top1–top2 gap | −0.407 | −0.391 |
+| caption length | −0.376 | −0.376 |
+| top-1 score | −0.191 | −0.202 |
+| video σ² | −0.010 (p=0.75) | +0.019 (p=0.56) |
+
+Every free feature says "flat, low-scoring, short query → many relevant
+videos". Text σ² says the opposite: **larger variance goes with *fewer* correct
+answers**. Whatever the head learned, it is not the ambiguity the word
+"uncertainty" is meant to name. Video σ² is pure noise. So the head that this
+project spent months on has one informative output out of two, pointed the
+wrong way.
+
+Because a rank-sum assumes every feature agrees on which direction is
+"confident", it cancels: `sigma only` 16.0 pt and `gap+len+sigma` 15.5 pt,
+both worse than `gap+len`'s 13.2 pt and worse than doing nothing. The fair
+test is to let the data set the weights and the signs, which is what the
+method would do anyway — it already assumes FIRE labels on a calibration
+portion. A least-squares fit of the features onto |Rel| on the calibration
+half of each of the 200 splits, bucketed by quintiles of the prediction:
+
+| predictor (parity A4) | ρ vs \|Rel\| | spread | mean size | Δ spread vs `sup gap+len` |
+| --- | --- | --- | --- | --- |
+| `sup gap+len` | −0.487 | **13.0 pt** | 4.9 | — |
+| `sup sigma only` | −0.505 | 15.0 pt | 6.1 | +1.72 ± 0.16 |
+| `sup gap+len+sigma` | **−0.553** | 13.8 pt | 5.0 | +0.70 ± 0.12 |
+
+hygiene A4 agrees: 14.8 / 15.4 / 15.2 pt, with σ costing +0.36 ± 0.14 pt.
+The Δ column is paired — every predictor sees the same 200 splits — so ±0.12
+is the real error bar and this is one of the few effects in this project that
+clears its noise floor. It clears it in the wrong direction.
+
+**The dissociation is the finding.** Adding σ makes the predictor measurably
+*better* at predicting how many videos are relevant (ρ −0.487 → −0.553, both
+runs) and measurably *worse* at equalising coverage. Predicting |Rel| is
+therefore not the right objective for a stratifier. Refitting on the conformal
+score itself instead of on |Rel| tests that directly and does not rescue it
+either: `mgn gap+len` 13.9 / 14.8 pt, `mgn gap+len+sigma` 13.6 / 15.2 pt.
+
+**σ is dead as a stratifier too.** That closes the last route by which the
+learned-variance work could have been salvaged. Every arm of it is now
+measured: null as a re-ranker, anti-informative as an error predictor
+(AUROC 0.32, below chance), and negative as a stratifier.
+
+### How good would an ambiguity predictor have to be?
+
+Every real predictor lands at 13–15 pt while the oracle sits at 0.3–1.3 pt,
+and neither adding σ nor changing the regression target moves it. That makes
+the useful question quantitative. Corrupting the true |Rel| with increasing
+noise traces spread against predictor quality (5 noise draws per level, all
+four runs):
+
+| ρ vs \|Rel\| | parity A0 | parity A4 | hygiene A0 | hygiene A4 |
+| --- | --- | --- | --- | --- |
+| 1.000 | 0.7 pt | 0.3 pt | 1.3 pt | 1.1 pt |
+| 0.965 | 1.5 | 1.6 | 4.1 | 1.5 |
+| 0.940 | 3.5 | 3.5 | 4.4 | 4.5 |
+| 0.825 | 5.9 | 6.1 | 7.2 | 6.7 |
+| 0.578 | 10.6 | 10.1 | 10.3 | 10.8 |
+| 0.330 | 13.4 | 13.3 | 14.1 | 14.0 |
+
+The curve is steep and the useful region starts late: **ρ ≈ 0.83 to halve the
+gap, ρ ≈ 0.94 to close it to a few points.** The best signal available inside
+a trained TVR model, including its learned variance, reaches ρ = 0.55. This
+is the target number for the direction, and it is a target no published TVR
+uncertainty method is anywhere near.
+
+One caveat that cuts against the real predictors: `sup gap+len+sigma` reaches
+ρ = 0.553 but gives 13.8 pt, while a noised oracle at ρ = 0.578 gives 10.1 pt.
+A real predictor is *worse* than random noise of the same rank correlation,
+so its errors are structured — it is wrong about the same queries the
+threshold is already wrong about. Rank correlation therefore overstates how
+useful a predictor will be, and any future ambiguity model has to be scored
+on spread directly, not on ρ.
+
+## 2026-07-31: the objective was wrong, but fixing it buys 2.5 points, not 7
+
+Two things changed at once against the bucketed baseline, and the 2×2 says
+which one paid. The objective: instead of predicting |Rel| and cutting the
+prediction into quintile buckets, regress the conditional quantile of the
+conformal score directly and conformalize the residual (CQR — Romano,
+Patterson & Candès, NeurIPS 2019), which needs no |Rel| label at all. The
+features: instead of the top of the ranking (gap12, caption length, σ²), read
+the whole score row — gaps from rank 1 to ranks 2/3/5/10/50/100/500, near-tie
+counts within a quarter/half/one standard deviation of the top, softmax
+entropy at two gallery-scaled temperatures, row mean and standard deviation,
+and the top-1 z-score. Seventeen columns, nineteen with σ².
+`scripts/conditional_conformal_probe.py`, 200 splits, α = 0.1.
+
+A note on which "spread" is being quoted, because two different numbers have
+gone by that name. Averaging the five per-stratum coverages over splits and
+subtracting afterwards gives the number the gate experiment reports (13.8,
+oracle 0.7). Taking max-minus-min inside each split and averaging that gives
+something far larger, because a max of five noisy estimates is biased upward —
+the oracle's true 0.7 comes out near 9. That bias is a floor both methods sit
+on, so it compresses differences: the real 13.1-point baseline-to-oracle gap
+reads as 4.1. The within-split version was used earlier only because it had an
+obvious standard error. The table below puts the error bar on the right scale
+instead, by resampling the 200 splits with replacement using the same
+resampled indices for every method.
+
+parity_a0 (the other three runs agree; full table in `.scratch/cqr_probe.txt`):
+
+| method | 1 | 2 | 3 | 4-5 | 6+ | spread | size | med | p90 | Δ spread |
+|---|---|---|---|---|---|---|---|---|---|---|
+| global | 83.3 | 88.4 | 92.8 | 95.5 | 98.3 | 15.0 | 5.4 | 2.9 | 12.1 | +1.20 ± 0.12 |
+| bucket gap+len | 83.7 | 89.4 | 94.1 | 94.8 | 97.5 | 13.8 | 5.5 | 3.0 | 12.5 | — |
+| bucket rich | 83.9 | 89.4 | 93.6 | 94.1 | 96.8 | 12.9 | 4.8 | 3.2 | 10.6 | −0.88 ± 0.14 |
+| CQR gap+len | 83.0 | 89.3 | 93.5 | 95.6 | 98.2 | 15.2 | 6.1 | 3.0 | 14.2 | +1.37 ± 0.18 |
+| CQR rich | 83.8 | 90.7 | 95.3 | 95.1 | 93.8 | 11.5 | 7.9 | 3.2 | 17.3 | −2.26 ± 0.26 |
+| CQR gbr rich | 83.1 | 88.7 | 94.2 | 95.1 | 98.3 | 15.1 | 7.2 | 2.8 | 15.7 | +1.35 ± 0.16 |
+| oracle \|Rel\| | 90.1 | 90.3 | 90.2 | 90.4 | 90.7 | 0.7 | 5.5 | 2.6 | 12.7 | −12.85 ± 0.32 |
+
+Δ spread across the four runs — CQR rich: −2.26, −2.34, −2.65, −2.71. bucket
+rich: −0.88, −1.01, −2.03, −1.51. CQR gap+len: +1.37, +1.43, +0.75, +1.17.
+Marginal coverage is 89.8–90.1% for every method, as it must be.
+
+Reading the 2×2: the new objective **on its own makes things worse**. A
+two-feature linear quantile regression is beaten by five buckets, which can
+express a monotone nonlinearity that two coefficients cannot. The new features
+on their own help a little. Together they are more than the sum, which is the
+signature of a linear fit that only becomes worth having once it has enough
+columns to work with. Gradient boosting at the same objective is bad
+everywhere: 250 fitting rows is not enough for 100 trees, and it degenerates
+to roughly the global threshold.
+
+The pre-registered criterion was ≤ −2.0 pt paired on at least three of four
+runs, with a rider that a spread reduction bought at more than 1.5× the mean
+set size does not count. CQR rich meets the first on 4/4 and fails the second
+on 3/4: mean size ratios 1.44, 1.51, 1.51, 1.56. The p90 confirms this is not
+a handful of pathological queries — the whole upper tail is 40–50% fatter
+(17.3 vs 12.5 on parity_a0). The median barely moves (3.2 vs 3.0), so a
+typical user would not notice, but the average over a corpus is the honest
+statistic and it went up. **Verdict: the hypothesis is half right and the
+direction is not rescued.** Halving the 13-point gap needs ≈7 pt; the best
+label-free method buys 2.5 and charges for it.
+
+The one method that is strictly better than the baseline on both axes is
+`bucket rich`: −0.88 to −2.03 spread and *smaller* sets everywhere (mean 4.7–4.8
+vs 5.3–5.7, p90 10.0–10.7 vs 11.5–13.1). It is the new baseline to beat.
+
+### What the strata actually ask for, and why it is backwards
+
+Fitting one threshold per true stratum on all 1000 queries of parity_a0:
+
+| \|Rel\| | n | oracle λ | mean set | median set |
+|---|---|---|---|---|
+| 1 | 363 | 4.035 | 8.2 | 3 |
+| 2 | 206 | 2.585 | 4.5 | 2 |
+| 3 | 124 | 1.716 | 2.9 | 2 |
+| 4-5 | 126 | 1.521 | 3.4 | 3 |
+| 6+ | 181 | 0.943 | 3.5 | 3 |
+
+The required threshold falls monotonically and steeply as |Rel| rises, and the
+sets that conditional coverage demands are **largest for the most specific
+queries**. This is not a quirk; it follows from the target. `any` coverage asks
+for one relevant video in the set, and a query with six right answers gets that
+from the top few almost for free, while a query with exactly one right answer
+needs a wide net. So the intuitive story — "return more results when the query
+is vague" — is the wrong way round under `any`. It is the right way round under
+`all` (cover every judged relevant video), which fails in the opposite
+direction. Any writeup has to pick a target and say which, or report both and
+own the tension; describing the method as "bigger sets for ambiguous queries"
+without saying which target is simply false half the time.
+
+This also explains why every deployable method above is stuck. All of them
+improve the 6+ end (97.5 → 93.8) and none of them move the |Rel|=1 end (83.7 →
+83.8, against the oracle's 90.1). They are trimming over-coverage where it is
+cheap, not fixing under-coverage where it hurts.
+
+### There is signal in the bottom stratum; nothing is using it
+
+Spearman of each feature against the conformal score, over all 1000 queries
+versus inside the 363 |Rel|=1 queries only (parity_a0):
+
+| feature | all | \|Rel\|=1 |
+|---|---|---|
+| entropy T=0.25 | +0.293 | +0.476 |
+| gap 1-100 | −0.359 | −0.476 |
+| gap 1-50 | −0.355 | −0.476 |
+| gap 1-10 | −0.313 | −0.475 |
+| top1 z | −0.346 | −0.462 |
+| n within 1.0sd | +0.273 | +0.445 |
+| gap 1-2 | −0.249 | −0.441 |
+| caption words | −0.008 | −0.146 |
+
+Every feature is *more* informative about the conformal score inside the
+|Rel|=1 stratum than it is overall — the free signals are strongest exactly
+where all the unclosed gap lives. What they are predicting there is not
+ambiguity, since |Rel| is fixed at 1 across the whole subset; it is whether
+this particular model is about to fail on this particular query. That is
+selective prediction, and a single global monotone λ(x) cannot serve it and
+ambiguity at the same time, because the two effects want different things from
+the same features.
+
+Note also that `margin_any` has a large point mass at zero — it is zero for
+every query whose top-1 is already relevant — which is why the median set size
+sits near 3 while the mean is 5 to 8. Any regression on this target is fitting
+a spike plus a tail, and a linear quantile regression is a poor shape for that.
+
+## 2026-07-31: the same feature needs opposite signs within and between strata
+
+The paragraph above ends on an inference — that the two effects "want different
+things from the same features" — drawn from two correlations. It is the only
+justification for fitting the difficulty head separately inside each group
+rather than pooling everything into one regression, so it is worth measuring
+rather than asserting. `scripts/within_between_probe.py` measures it at the
+quantile that actually sets the threshold.
+
+For each feature, standardised over all 1000 queries, three slopes of the
+τ = 0.9 quantile of the conformal score:
+
+- **β_within** — a quantile regression fitted inside each stratum, averaged
+  over the five with stratum sizes as weights.
+- **β_between** — the five per-stratum oracle thresholds (4.04 / 2.58 / 1.72 /
+  1.52 / 0.94) regressed on the five per-stratum mean feature values. Using the
+  thresholds rather than mean scores keeps both slopes on λ's scale.
+- **β_pool** — one quantile regression over all 1000 queries, no strata.
+
+parity_a0, bootstrap over queries, 95% CI in brackets:
+
+| feature | β_within | β_between | β_pool | per-stratum β |
+|---|---|---|---|---|
+| entropy T=0.25 | **+0.592** [+0.05, +1.10] | **−2.261** [−2.87, −1.44] | −0.070 | +0.75 +0.03 +1.02 +0.93 +0.39 |
+| gap 1-100 | **−0.880** [−0.99, −0.60] | **+4.109** [+2.44, +5.45] | −0.747 | −1.20 −1.01 −0.78 −0.64 −0.32 |
+| top1 z | **−0.798** [−0.92, −0.54] | **+3.784** [+2.35, +5.24] | −0.634 | −1.13 −0.87 −0.71 −0.65 −0.34 |
+
+The sign flips for **every feature in every one of the four runs**, with the
+within CI clear of zero each time, and the per-stratum betas agree with each
+other rather than one stratum dragging the average.
+
+The two slopes sit on different variance scales — the stratum means are much
+less spread than individual queries, sd(x̄_s) / sd_within = 0.55 / 0.30 / 0.33 —
+so the raw magnitudes are not comparable. Converted to the λ shift per one SD of
+the relevant variation: entropy −1.09 between against +0.52 within, gap 1-100
++1.16 against −0.84, top1 z +1.18 against −0.77. **Same order of magnitude,
+opposite direction.** Neither effect is a rounding error on the other, which is
+what makes a single monotone λ(x) genuinely unable to serve both.
+
+The mechanism is the one the CQR section guessed at. Between strata, a flat
+score row means many near-ties, which means |Rel| is large, which means the
+threshold should be *small*. Within a stratum |Rel| is pinned, so a flat row can
+only mean this query is hard and the threshold should be *large*.
+
+**The pre-registered attenuation rider asked the wrong question for two of the
+three features.** It required |β_pool| < 0.5·|β_within|, on the theory that the
+two effects cancel in the pooled fit. Entropy behaves that way in 3 of 4 runs
+(+0.59 within → −0.07 pooled). gap 1-100 and top1 z fail it in all four,
+because their stratum means barely differ (sd(x̄_s) ≈ 0.3) so the pooled fit is
+dominated by within-stratum variation and simply recovers β_within. That is
+worse than cancellation, not better: the pooled model **learns the within-stratum
+slope and then applies it between strata, where the required sign is opposite**.
+It does not merely fail to help across strata, it moves λ the wrong way.
+
+### The oracle is a ceiling on one axis only
+
+Part B pins |Rel| = 1 and asks whether anything is left. Difficulty is a
+least-squares prediction of the conformal score fitted on the calibration half
+only, so the quintiles are out of sample; `random` replaces it with noise and is
+the floor for a spread read off ~36-query cells.
+
+parity_a0, 400 splits inside the 363 |Rel|=1 queries:
+
+| threshold | easy | 2 | 3 | 4 | hard | spread | size | marginal |
+|---|---|---|---|---|---|---|---|---|
+| single | 96.2% | 93.9% | 89.9% | 86.4% | 83.1% | **13.1 pt** | 8.0 | 89.8% |
+| random | 89.7% | 89.8% | 89.5% | 90.1% | 89.9% | 0.6 pt | 8.0 | 89.8% |
+| CQR within | 87.1% | 91.3% | 90.2% | 90.2% | 91.9% | 4.8 pt | 32.9 | 90.1% |
+
+Paired single − random across the four runs: **+12.28 / +13.86 / +8.18 /
++10.17 ± 0.4 pt**, against a pre-registered bar of ≥ 5.0 pt in ≥ 3 of 4.
+
+So there is a **second conditional-coverage gap of the same size as the first,
+orthogonal to it**. Oracle Mondrian closes the |Rel| axis to 0.7 pt and leaves
+this one untouched — inside the single stratum it is still 96.2% against 83.1%.
+Every earlier statement of the form "the oracle closes the gap to 0.7, so 13
+points is what is on the table" was measuring one axis and calling it the total.
+The problem is two-dimensional: how many answers exist, and whether this model
+will find one.
+
+Third reading, and a constraint on the design: **CQR inside the stratum buys its
+uniformity with set size again, and worse than before** — 13.1 → 4.8 pt at four
+times the set (8.0 → 32.9 videos), against 1.5× for the global version. 90
+fitting rows against 17 columns overfits, and the conformal correction can only
+compensate by enlarging every set. A difficulty head is justified by Part B, but
+not this recipe: it needs far fewer features, or a much stronger signal than the
+score row can supply.
+
+## 2026-07-31: the two axes have opposite diagnoses
+
+Everything so far has hand-rolled its calibration layer — Mondrian buckets, then
+CQR. Both are pre-2020 and both sit inside a single family. Gibbs, Cherian &
+Candès (arXiv 2305.12616, number unverified — no network from this machine)
+give the general form: for a finite-dimensional class F = span{φ_1 … φ_d},
+fitting the pinball loss at τ = 1 − α has as its first-order condition
+
+    E[ φ(X) ( 1{S ≤ φ(X)ᵀβ} − (1 − α) ) ] = 0,
+
+so coverage holds along every direction in F. A global threshold is φ = 1;
+Mondrian is φ = group indicators. The design question is therefore not which
+algorithm but which F, and the two-axis finding above says what to put in it:
+
+    φ(x) = [ 1{b(x)=k} ]ₖ ⊕ [ 1{b(x)=k} · d(x) ]ₖ
+
+with b the predicted-|Rel| quintile and d a single within-bucket-centred
+difficulty scalar. `scripts/gcc_conditional_probe.py` implements the pinball LP
+directly so the +∞-imputation variant — which only perturbs the objective by
+−τ·φ(x) — reuses the same constraint block.
+
+Both axes are read off every method: `sprd_rel` over the true |Rel| strata,
+`sprd_dif` over difficulty quintiles taken *within* each true stratum, so all
+500 test queries contribute to the second reading rather than only the 363 with
+|Rel| = 1.
+
+parity_a0, 200 splits, paired bootstrap against `bucket rich`:
+
+| method | sprd_rel | sprd_dif | size | marg | Δ rel | Δ dif |
+|---|---|---|---|---|---|---|
+| global | 15.0 | 15.0 | 5.4 | 89.8% | +2.42 ± 0.27 | +1.03 ± 0.48 |
+| bucket rich | 12.6 | 14.0 | 5.1 | 90.2% | — | — |
+| GCC buckets | 13.1 | 15.7 | 4.8 | 89.0% | +0.55 ± 0.37 | +1.71 ± 0.53 |
+| **GCC +diff** | 11.6 | **5.1** | 6.1 | 88.9% | −0.94 ± 0.39 | **−8.86 ± 0.51** |
+| GCC +inter | 12.8 | 5.9 | 6.6 | 88.1% | +0.19 ± 0.37 | −8.02 ± 0.48 |
+| GCC +inter (imp, 20 splits) | 11.7 | 4.8 | 12.6 | 90.8% | −0.95 | −9.10 |
+| oracle \|Rel\| | **0.7** | 15.2 | 5.5 | 90.3% | −11.63 ± 0.37 | +1.22 ± 0.46 |
+| oracle 2-axis | 2.4 | 2.5 | 12.7 | 91.7% | −10.13 ± 0.39 | −11.29 ± 0.49 |
+
+`GCC buckets` lands within 1 pt of `bucket rich` on `sprd_rel` in all four runs
+(+0.55 / +0.75 / +0.00 / +0.78), which was the pre-registered correctness check:
+quantile regression on group indicators is Mondrian, so anything else would have
+meant the LP was wrong. The small positive sign is the handicap built into the
+comparison — GCC fits its basis on one calibration quarter and calibrates on the
+other, so it sees half the data `bucket rich` does.
+
+### Axis two is a calibration-layer problem, and one basis function closes it
+
+Adding a single centred difficulty scalar takes `sprd_dif` from 14.0 to 5.1
+(and to 4.5 / 3.3 / 3.2 in the other three runs) at 1.2× the set size, using
+only free score-row statistics. The two-axis oracle reaches 2.5, so most of the
+available range is gone. The 13-point second gap found in step-002 was largely a
+consequence of nobody having put difficulty in the conditioning set.
+
+### Axis one is a signal problem, and the calibration layer is exhausted
+
+Every calibration variant sits at 11.4–14.6 on `sprd_rel` while the oracle needs
+0.4–0.8. Enriching F does not help, and it cannot: no choice of directions
+manufactures |Rel| information that b(x) does not contain. The pre-registered
+diagnostic threshold was ≤ 5.0 pt for "calibration layer" and > 8.0 pt for
+"signal layer"; the observed 11.6–14.6 is unambiguous. The half-data handicap is
+0.5–0.8 pt and does not move this.
+
+### Perfecting axis one transfers nothing to axis two
+
+`oracle |Rel|` closes its own axis to 0.7 and leaves `sprd_dif` at 15.2 — where
+the plain global threshold left it (15.0), and slightly worse than the
+deployable bucketing (14.0). The paired delta is positive in all four runs
+(+1.22 / +2.36 / +2.34 / +2.67). A perfect ambiguity estimator would not improve
+difficulty-conditional coverage at all. "Estimate |Rel| better and the problem
+goes away" is false.
+
+### The interaction was over-extrapolated from step-002
+
+The pre-registered expectation was that per-bucket slopes are required, since
+step-002 showed the required slope differs in sign between strata. They are not:
+`GCC +inter` is worse than the shared-slope `GCC +diff` on **both** axes in
+**all four** runs (Δ rel 1.1–1.7 pt worse, Δ dif 0.9–1.1 pt worse) and costs
+8–14% more set size. 250 calibration rows split five ways is 50 points per
+bucket, which at the 90th percentile is about five points of tail each.
+
+The step-002 finding is not overturned — what it demanded was that difficulty
+enter as a *within*-bucket slope, and that is exactly what `+diff` does via the
+centring, and it is worth 10 points on axis two against `GCC buckets`. What
+fails is the stronger reading, that each bucket needs its own slope. **The
+effect is real at n = 1000 and not estimable at n = 250.** Worth stating
+explicitly rather than quietly dropping the interaction.
+
+### Two costs to record
+
+Finite-sample conditional validity is expensive here: the +∞ imputation improves
+both spreads slightly but runs 2.3–2.8× the set size and over-covers to
+90.7–91.0%. The asymptotic version belongs in the main results and this in an
+appendix. It was run on 20 splits rather than 200 — that is a cost cap, not a
+silent one.
+
+And the two-axis oracle does not reach 0.7 on either axis (2.0–2.5 / 2.5–3.1) at
+2.5× the set size, because 25 cells over a 500-query calibration half is about
+20 points each. **The true two-axis ceiling is not measurable on a 1000-query
+grid.** That is a sample-size limit, not a method limit, and belongs in the
+limitations.
+
+## 2026-08-01: an external judge moves axis one, by two points
+
+step-003 left axis one with a specific, testable diagnosis: the score row does
+not carry |Rel|, so no calibration layer can recover it, and the only remaining
+move is a model that is *asked* whether a retrieved video is correct rather than
+how highly it scores. A dual encoder cannot be asked that — it emits one scalar
+per pair and the question "is this one right" is never posed. A generative VLM
+can be, once per pair, and the count of yes answers estimates |Rel|.
+
+Three numbers were computed before the falsification criterion was written, to
+establish that the pipeline is well-posed rather than to preview the answer.
+Spearman(|judged pool|, |Rel|) is 0.059, so a judge with a constant yes-rate
+cannot manufacture a correlation by tracking pool size. 96% of FIRE's relevant
+videos sit inside our top-50, and a perfect judge restricted to top-50 scores
+0.972. And a pure dual-encoder margin count over top-50 scores 0.225 with its
+threshold tuned on the whole test set; the fitted 17-feature predictor scores
+0.55, which is the number a judge has to beat.
+
+Qwen2.5-VL-7B-Instruct judged 64,433 (caption, video) pairs — 995 distinct
+captions against top-50 ∪ judged-pool, eight frames each, one forward pass per
+pair reading P(yes) off the first answer position rather than generating.
+
+### The judge estimates |Rel| better than free features and worse than required
+
+| estimator | rho vs \|Rel\| |
+|---|---|
+| soft count sum P(yes), K=50 | 0.653 |
+| soft count, K=30 (best K; 10–50 spans only 0.65–0.69) | 0.670 |
+| hard count at 0.5 | 0.585 |
+| cross-fitted calibration + fusion with the retrieval score | 0.713 |
+| same fusion, judge removed | 0.549 |
+| perfect judge on the same pool | 0.972 |
+
+The pre-registered gate was 0.75, chosen loose: halving the coverage gap needs
+0.83 on the noised-oracle curve. **It fails.** The gate's stated reasoning was
+that with a pool ceiling of 0.972 the shortfall could only be blamed on the
+judge, and three measurements now confirm exactly that rather than merely allow
+it. Per-pair agreement with FIRE over 24,237 judged pairs is AUC 0.924 —
+the judge *ranks* well — but TPR at the 0.5 threshold is 0.505, so it misses
+half of what humans call relevant. The decomposition criterion authorised one
+calibration round on the strength of that AUC; the round was run, and isotonic
+plus logistic fusion bought 0.670 → 0.713 and stopped. And replacing the judge
+with the human label on the 29% of top-30 that FIRE happened to judge, leaving
+the VLM on the rest, lifts rho from 0.690 to **0.878** [0.834, 0.910]. The pool
+is not the constraint, the coverage of the pool is not the constraint, and the
+calibration layer is not the constraint. **Judge capacity is.**
+
+### On the metric that matters it is worth two points
+
+The project's standing rule is to score any ambiguity predictor by spread and
+never by rho, because a real predictor at rho = 0.55 gave 13.8 pt where a noised
+oracle at rho = 0.58 gave 10.1. So the judge's count was appended to
+`fit_axes` as an eighteenth feature — nothing else changed, so the delta between
+each arm and its twin is the judge and only the judge.
+
+| arm | sprd_rel (4 seeds) | sprd_dif | size |
+|---|---|---|---|
+| global | 15.0 / 15.1 / 14.7 / 14.6 | 15.0 | 5.4 |
+| bucket rich | 12.6 / 12.8 / 12.1 / 12.0 | 14.0 | 5.1 |
+| GCC +diff | 11.6 / 11.9 / 11.7 / 11.0 | 5.1 | 6.1 |
+| **GCC +diff VLM** | **9.6 / 9.8 / 9.7 / 9.4** | 5.6 | 6.3 |
+| oracle \|Rel\| | 0.7 / 1.3 / 0.8 / 1.0 | 15.2 | 5.5 |
+
+Paired bootstrap against `GCC +diff`: Δsprd_rel −2.07 / −2.06 / −1.99 / −1.64
+± 0.42, significant in all four seeds, with Δsprd_dif between +0.11 and +0.58
+and a size ratio of 0.99–1.03. **The judge buys two points on axis one and
+costs nothing in set size.** A Mondrian-only variant reaches the same 9.5–10.5
+but gives back all of axis two, so the function-class arm is the one to keep.
+
+Two points is real and small. The residual gap is 11.6 against an oracle at 0.7,
+so this closes 19% of it. Against the noised-oracle curve the real judge at
+rho = 0.67 gives 9.6 where interpolation predicts about 9.0 — **a real predictor
+under-delivers relative to a noised oracle at matched rho for the second time**,
+which is the strongest evidence yet that rho is a screen and not a forecast.
+
+### The cost is the problem, not the effect
+
+Those two points cost fifty 7B forward passes per query. As a *test-time*
+module that is not a defensible system, and the paper should say so before a
+reviewer does. Escalating judge capacity to 32B or 72B is the variable the
+attribution points at, but it makes the cost objection worse, not better, even
+if it works.
+
+The alternative the attribution also permits is to move the judge to training
+time: label the training set offline, distil a cheap ambiguity head from the
+pseudo-labels, and pay nothing at test time. That path now has a measured
+ceiling rather than a hope — a perfect distillation of this judge is rho 0.67,
+which is 9.6 pt.
+
 ## Next
 
 1. **Drop the DUA family from the contribution.** Theirs and ours. Eight
@@ -615,3 +1217,49 @@ metrics, not the dataset.
    single-annotator and cannot be settled from the file alone. And whether
    the MSVD half (158MB, the bulk of the 683K) covers a split we can use as a
    second test bed.
+7. **The live direction is now item 4 made concrete: predict query ambiguity
+   well enough to restore conditional coverage.** The gate passed — the
+   conditional coverage failure is 15 points, an oracle fixes it to 0.7, and
+   the free margin only reaches 13.3. Steps (a) and (b) are done and are
+   recorded in the 2026-07-31 σ section: σ is negative as a stratifier, and
+   the noised-oracle sweep sets the bar at ρ ≈ 0.83 to halve the gap against
+   the ρ = 0.55 the free features plus σ reach. What remains: (c) a *learned*
+   ambiguity predictor — a text encoder fine-tuned on |Rel| — since the linear
+   fit on four scalar features is not a serious attempt and the target is
+   labelled; (d) report average set size at fixed *conditional* coverage as
+   the headline, with R@1 alongside for comparability; (e) score any predictor
+   on spread directly, never on ρ, because a real predictor at ρ = 0.55 gives
+   13.8 pt where a noised oracle at ρ = 0.58 gives 10.1 pt. Note the pool
+   caveat carries into this: `any` coverage is a lower bound because an
+   unjudged relevant video in the set is not counted.
+
+   The 2026-07-31 CQR section revises this. (e) is now measured properly: the
+   paired bootstrap over splits, not the within-split max-minus-min, which
+   compresses a 13.1-point difference to 4.1. The best label-free method
+   (CQR on 17 gallery features) buys 2.5 pt and pays 1.5× mean set size; the
+   best method that is free on both axes is quintile bucketing on those same
+   features. Neither is close to the ≈7 pt that halves the gap.
+
+   Three things now come before (c). **First, pick the coverage target and
+   say so.** Under `any`, conditional coverage demands the *largest* sets for
+   the *most specific* queries (oracle λ 4.04 at |Rel|=1 against 0.94 at 6+),
+   which is the opposite of the story the proposal has been telling. Under
+   `all` it runs the intuitive way. **Second, the unclosed gap is entirely at
+   |Rel|=1** — every deployable method trims over-coverage at 6+ and none of
+   them moves 83.7% at the bottom, against an oracle 90.1%. **Third, that
+   bottom stratum is not an ambiguity problem at all**: with |Rel| held at 1,
+   the free features still correlate 0.44–0.48 with the conformal score, so
+   what is unexploited there is failure prediction, not ambiguity prediction.
+   A single monotone λ(x) has to serve both and cannot. The natural next
+   design is two signals rather than one — a |Rel| estimate for the stratum
+   and a failure estimate within it — before spending GPU on (c).
+8. Venue note. This has no R@1 SOTA table and its headline statistic is set
+   size at guaranteed coverage, which reads as a non-contribution to a CVPR or
+   ECCV reviewer. SIGIR, EMNLP or TMLR fit the claim better. Also check
+   novelty against the near neighbours before committing: CLARA (2606.18992)
+   uses conformal set size as an ambiguity measure for composed image
+   retrieval, SAFEVPR (2605.28048) uses Mondrian conformal for visual place
+   recognition, and VQPP (2602.17814, code released) is already the first
+   text-to-video query performance prediction benchmark. What is not taken is
+   conditional coverage under ambiguity heterogeneity, with multi-positive
+   human judgments to define it against.
