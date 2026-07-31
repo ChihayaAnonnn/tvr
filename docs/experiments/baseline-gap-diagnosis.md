@@ -994,6 +994,108 @@ compensate by enlarging every set. A difficulty head is justified by Part B, but
 not this recipe: it needs far fewer features, or a much stronger signal than the
 score row can supply.
 
+## 2026-07-31: the two axes have opposite diagnoses
+
+Everything so far has hand-rolled its calibration layer — Mondrian buckets, then
+CQR. Both are pre-2020 and both sit inside a single family. Gibbs, Cherian &
+Candès (arXiv 2305.12616, number unverified — no network from this machine)
+give the general form: for a finite-dimensional class F = span{φ_1 … φ_d},
+fitting the pinball loss at τ = 1 − α has as its first-order condition
+
+    E[ φ(X) ( 1{S ≤ φ(X)ᵀβ} − (1 − α) ) ] = 0,
+
+so coverage holds along every direction in F. A global threshold is φ = 1;
+Mondrian is φ = group indicators. The design question is therefore not which
+algorithm but which F, and the two-axis finding above says what to put in it:
+
+    φ(x) = [ 1{b(x)=k} ]ₖ ⊕ [ 1{b(x)=k} · d(x) ]ₖ
+
+with b the predicted-|Rel| quintile and d a single within-bucket-centred
+difficulty scalar. `scripts/gcc_conditional_probe.py` implements the pinball LP
+directly so the +∞-imputation variant — which only perturbs the objective by
+−τ·φ(x) — reuses the same constraint block.
+
+Both axes are read off every method: `sprd_rel` over the true |Rel| strata,
+`sprd_dif` over difficulty quintiles taken *within* each true stratum, so all
+500 test queries contribute to the second reading rather than only the 363 with
+|Rel| = 1.
+
+parity_a0, 200 splits, paired bootstrap against `bucket rich`:
+
+| method | sprd_rel | sprd_dif | size | marg | Δ rel | Δ dif |
+|---|---|---|---|---|---|---|
+| global | 15.0 | 15.0 | 5.4 | 89.8% | +2.42 ± 0.27 | +1.03 ± 0.48 |
+| bucket rich | 12.6 | 14.0 | 5.1 | 90.2% | — | — |
+| GCC buckets | 13.1 | 15.7 | 4.8 | 89.0% | +0.55 ± 0.37 | +1.71 ± 0.53 |
+| **GCC +diff** | 11.6 | **5.1** | 6.1 | 88.9% | −0.94 ± 0.39 | **−8.86 ± 0.51** |
+| GCC +inter | 12.8 | 5.9 | 6.6 | 88.1% | +0.19 ± 0.37 | −8.02 ± 0.48 |
+| GCC +inter (imp, 20 splits) | 11.7 | 4.8 | 12.6 | 90.8% | −0.95 | −9.10 |
+| oracle \|Rel\| | **0.7** | 15.2 | 5.5 | 90.3% | −11.63 ± 0.37 | +1.22 ± 0.46 |
+| oracle 2-axis | 2.4 | 2.5 | 12.7 | 91.7% | −10.13 ± 0.39 | −11.29 ± 0.49 |
+
+`GCC buckets` lands within 1 pt of `bucket rich` on `sprd_rel` in all four runs
+(+0.55 / +0.75 / +0.00 / +0.78), which was the pre-registered correctness check:
+quantile regression on group indicators is Mondrian, so anything else would have
+meant the LP was wrong. The small positive sign is the handicap built into the
+comparison — GCC fits its basis on one calibration quarter and calibrates on the
+other, so it sees half the data `bucket rich` does.
+
+### Axis two is a calibration-layer problem, and one basis function closes it
+
+Adding a single centred difficulty scalar takes `sprd_dif` from 14.0 to 5.1
+(and to 4.5 / 3.3 / 3.2 in the other three runs) at 1.2× the set size, using
+only free score-row statistics. The two-axis oracle reaches 2.5, so most of the
+available range is gone. The 13-point second gap found in step-002 was largely a
+consequence of nobody having put difficulty in the conditioning set.
+
+### Axis one is a signal problem, and the calibration layer is exhausted
+
+Every calibration variant sits at 11.4–14.6 on `sprd_rel` while the oracle needs
+0.4–0.8. Enriching F does not help, and it cannot: no choice of directions
+manufactures |Rel| information that b(x) does not contain. The pre-registered
+diagnostic threshold was ≤ 5.0 pt for "calibration layer" and > 8.0 pt for
+"signal layer"; the observed 11.6–14.6 is unambiguous. The half-data handicap is
+0.5–0.8 pt and does not move this.
+
+### Perfecting axis one transfers nothing to axis two
+
+`oracle |Rel|` closes its own axis to 0.7 and leaves `sprd_dif` at 15.2 — where
+the plain global threshold left it (15.0), and slightly worse than the
+deployable bucketing (14.0). The paired delta is positive in all four runs
+(+1.22 / +2.36 / +2.34 / +2.67). A perfect ambiguity estimator would not improve
+difficulty-conditional coverage at all. "Estimate |Rel| better and the problem
+goes away" is false.
+
+### The interaction was over-extrapolated from step-002
+
+The pre-registered expectation was that per-bucket slopes are required, since
+step-002 showed the required slope differs in sign between strata. They are not:
+`GCC +inter` is worse than the shared-slope `GCC +diff` on **both** axes in
+**all four** runs (Δ rel 1.1–1.7 pt worse, Δ dif 0.9–1.1 pt worse) and costs
+8–14% more set size. 250 calibration rows split five ways is 50 points per
+bucket, which at the 90th percentile is about five points of tail each.
+
+The step-002 finding is not overturned — what it demanded was that difficulty
+enter as a *within*-bucket slope, and that is exactly what `+diff` does via the
+centring, and it is worth 10 points on axis two against `GCC buckets`. What
+fails is the stronger reading, that each bucket needs its own slope. **The
+effect is real at n = 1000 and not estimable at n = 250.** Worth stating
+explicitly rather than quietly dropping the interaction.
+
+### Two costs to record
+
+Finite-sample conditional validity is expensive here: the +∞ imputation improves
+both spreads slightly but runs 2.3–2.8× the set size and over-covers to
+90.7–91.0%. The asymptotic version belongs in the main results and this in an
+appendix. It was run on 20 splits rather than 200 — that is a cost cap, not a
+silent one.
+
+And the two-axis oracle does not reach 0.7 on either axis (2.0–2.5 / 2.5–3.1) at
+2.5× the set size, because 25 cells over a 500-query calibration half is about
+20 points each. **The true two-axis ceiling is not measurable on a 1000-query
+grid.** That is a sample-size limit, not a method limit, and belongs in the
+limitations.
+
 ## Next
 
 1. **Drop the DUA family from the contribution.** Theirs and ours. Eight
