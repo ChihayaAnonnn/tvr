@@ -49,6 +49,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -57,6 +58,7 @@ import warnings
 import numpy as np
 from scipy import sparse
 from scipy.optimize import linprog
+from scipy.stats import spearmanr
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from conditional_conformal_probe import gallery_features, set_sizes_var  # noqa: E402
@@ -104,6 +106,25 @@ def pinball_solve(A, bounds, n, d, y, tau, lin=None):
 # --------------------------------------------------------------------------
 # the two axes
 # --------------------------------------------------------------------------
+
+def vlm_counts(cache_dir, sim, topk):
+    """Soft count sum_j P(yes | caption, video j) over the top-k retrieved.
+
+    No fitting, so this column carries no leakage: it is a raw model output.
+    Queries the judge never saw come back as nan.
+    """
+    cache = {}
+    for f in sorted(os.listdir(cache_dir)):
+        if f.startswith("pyes_") and f.endswith(".json"):
+            cache.update(json.load(open(os.path.join(cache_dir, f))))
+    order = np.argsort(-sim, axis=1)
+    out = np.full(len(sim), np.nan)
+    for i in range(len(sim)):
+        ps = [cache.get(f"{i}:{j}") for j in order[i, :topk]]
+        if all(p is not None for p in ps):
+            out[i] = float(np.sum(ps))
+    return out
+
 
 def fit_axes(X, y, n_rel, fit_idx):
     """Learn b(.) and d(.) on one calibration quarter only.
@@ -198,7 +219,13 @@ def gcc(y, Phi, cal, tst, alpha, imputed):
 # evaluation
 # --------------------------------------------------------------------------
 
-def evaluate(sc, X, n_rel, alpha, n_rep, seed, imputed_reps):
+def evaluate(sc, X, n_rel, alpha, n_rep, seed, imputed_reps, Xv=None):
+    """Xv is X with the external judge's count appended as one extra column.
+
+    Everything about the two VLM arms is identical to `bucket rich` and
+    `GCC +diff` except that column, so the delta between the pairs is what the
+    judge buys and nothing else.
+    """
     y, sim = sc["margin_any"], sc["sim"]
     n = len(n_rel)
     strat = np.array([stratum_of(r) for r in n_rel])
@@ -206,6 +233,8 @@ def evaluate(sc, X, n_rel, alpha, n_rep, seed, imputed_reps):
 
     methods = ["global", "bucket rich", "GCC buckets", "GCC +diff", "GCC +inter",
                "GCC +inter (imp)", "oracle |Rel|", "oracle 2-axis"]
+    if Xv is not None:
+        methods = methods[:2] + ["bucket VLM", "GCC +diff VLM"] + methods[2:]
     acc = {m: {"rel": [[] for _ in STRATA], "dif": [[] for _ in QUINT_NAMES],
                "size": [], "med": [], "p90": [], "marg": [], "n": 0}
            for m in methods}
@@ -241,6 +270,11 @@ def evaluate(sc, X, n_rel, alpha, n_rep, seed, imputed_reps):
             "oracle |Rel|": mondrian(y, cal, tst, alpha, strat, lam_g, len(STRATA)),
             "oracle 2-axis": oracle_2axis(y, cal, tst, alpha, strat, quint, lam_g),
         }
+        if Xv is not None:
+            bv, dv = fit_axes(Xv, y, n_rel, fit)
+            lams["bucket VLM"] = mondrian(y, cal, tst, alpha, bv, lam_g, N_BUCKET)
+            lams["GCC +diff VLM"] = gcc(y, basis(bv, dv, "diff"), cal2, tst,
+                                        alpha, False)
         if rep < imputed_reps:
             lams["GCC +inter (imp)"] = gcc(y, P["inter"], cal2, tst, alpha, True)
 
@@ -281,6 +315,25 @@ def boot(acc, methods, key, seed, n_boot=2000):
         means = np.nanmean(C[idx], axis=1)
         out[m] = (means.max(axis=1) - means.min(axis=1)) * 100
     return out
+
+
+def deltas(methods, acc, seed, base):
+    br = boot(acc, methods, "rel", seed)
+    bd = boot(acc, methods, "dif", seed)
+    print(f"\n      paired vs `{base}`     d(sprd_rel)        d(sprd_dif)"
+          f"          size ratio")
+    for m in methods:
+        if m == base or not acc[m]["n"]:
+            continue
+        sz = np.mean(acc[m]["size"]) / np.mean(acc[base]["size"])
+        if len(br.get(m, [])) and acc[m]["n"] == acc[base]["n"]:
+            dr, dd = br[m] - br[base], bd[m] - bd[base]
+            print(f"      {m:<18s} {dr.mean():+7.2f} +- {dr.std():.2f}"
+                  f"   {dd.mean():+7.2f} +- {dd.std():.2f}      {sz:5.2f}x")
+        else:
+            print(f"      {m:<18s} {br[m].mean() - br[base].mean():+7.2f} (unpaired)"
+                  f"   {bd[m].mean() - bd[base].mean():+7.2f} (unpaired)"
+                  f"      {sz:5.2f}x")
 
 
 def report(methods, acc, seed, base="bucket rich"):
@@ -327,6 +380,9 @@ def main():
     p.add_argument("--reps", type=int, default=200)
     p.add_argument("--imputed-reps", type=int, default=20)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--vlm", help="dir of scripts/vlm_ambiguity_probe.py caches; "
+                                 "adds the judge's soft count as one feature")
+    p.add_argument("--vlm-topk", type=int, default=30)
     a = p.parse_args()
 
     queries, videos = load_grid(a.test_csv)
@@ -343,11 +399,22 @@ def main():
         sim = np.load(path)["t2v"].astype(np.float64)
         sc = build_scores(sim, relevant)
         X, _ = gallery_features(sim, qlen)
+        Xv = None
+        if a.vlm:
+            v = vlm_counts(a.vlm, sim, a.vlm_topk)
+            print(f"judge covers {np.isfinite(v).mean():.0%} of queries, "
+                  f"spearman(count, |Rel|) = "
+                  f"{spearmanr(v[np.isfinite(v)], n_rel[np.isfinite(v)]).statistic:.3f}")
+            Xv = np.column_stack([X, np.nan_to_num(v, nan=np.nanmean(v))])
         t0 = time.time()
         methods, acc = evaluate(sc, X, n_rel, a.alpha, a.reps, a.seed,
-                                a.imputed_reps)
+                                a.imputed_reps, Xv)
         print(f"=== {name} ===  ({time.time() - t0:.0f}s)")
         report(methods, acc, a.seed)
+        if Xv is not None:
+            # The judge only earns its cost against the best free-feature arm,
+            # not against the arm it replaces one column of.
+            deltas(methods, acc, a.seed, "GCC +diff")
         print()
 
 

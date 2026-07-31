@@ -1096,6 +1096,95 @@ And the two-axis oracle does not reach 0.7 on either axis (2.0–2.5 / 2.5–3.1
 grid.** That is a sample-size limit, not a method limit, and belongs in the
 limitations.
 
+## 2026-08-01: an external judge moves axis one, by two points
+
+step-003 left axis one with a specific, testable diagnosis: the score row does
+not carry |Rel|, so no calibration layer can recover it, and the only remaining
+move is a model that is *asked* whether a retrieved video is correct rather than
+how highly it scores. A dual encoder cannot be asked that — it emits one scalar
+per pair and the question "is this one right" is never posed. A generative VLM
+can be, once per pair, and the count of yes answers estimates |Rel|.
+
+Three numbers were computed before the falsification criterion was written, to
+establish that the pipeline is well-posed rather than to preview the answer.
+Spearman(|judged pool|, |Rel|) is 0.059, so a judge with a constant yes-rate
+cannot manufacture a correlation by tracking pool size. 96% of FIRE's relevant
+videos sit inside our top-50, and a perfect judge restricted to top-50 scores
+0.972. And a pure dual-encoder margin count over top-50 scores 0.225 with its
+threshold tuned on the whole test set; the fitted 17-feature predictor scores
+0.55, which is the number a judge has to beat.
+
+Qwen2.5-VL-7B-Instruct judged 64,433 (caption, video) pairs — 995 distinct
+captions against top-50 ∪ judged-pool, eight frames each, one forward pass per
+pair reading P(yes) off the first answer position rather than generating.
+
+### The judge estimates |Rel| better than free features and worse than required
+
+| estimator | rho vs \|Rel\| |
+|---|---|
+| soft count sum P(yes), K=50 | 0.653 |
+| soft count, K=30 (best K; 10–50 spans only 0.65–0.69) | 0.670 |
+| hard count at 0.5 | 0.585 |
+| cross-fitted calibration + fusion with the retrieval score | 0.713 |
+| same fusion, judge removed | 0.549 |
+| perfect judge on the same pool | 0.972 |
+
+The pre-registered gate was 0.75, chosen loose: halving the coverage gap needs
+0.83 on the noised-oracle curve. **It fails.** The gate's stated reasoning was
+that with a pool ceiling of 0.972 the shortfall could only be blamed on the
+judge, and three measurements now confirm exactly that rather than merely allow
+it. Per-pair agreement with FIRE over 24,237 judged pairs is AUC 0.924 —
+the judge *ranks* well — but TPR at the 0.5 threshold is 0.505, so it misses
+half of what humans call relevant. The decomposition criterion authorised one
+calibration round on the strength of that AUC; the round was run, and isotonic
+plus logistic fusion bought 0.670 → 0.713 and stopped. And replacing the judge
+with the human label on the 29% of top-30 that FIRE happened to judge, leaving
+the VLM on the rest, lifts rho from 0.690 to **0.878** [0.834, 0.910]. The pool
+is not the constraint, the coverage of the pool is not the constraint, and the
+calibration layer is not the constraint. **Judge capacity is.**
+
+### On the metric that matters it is worth two points
+
+The project's standing rule is to score any ambiguity predictor by spread and
+never by rho, because a real predictor at rho = 0.55 gave 13.8 pt where a noised
+oracle at rho = 0.58 gave 10.1. So the judge's count was appended to
+`fit_axes` as an eighteenth feature — nothing else changed, so the delta between
+each arm and its twin is the judge and only the judge.
+
+| arm | sprd_rel (4 seeds) | sprd_dif | size |
+|---|---|---|---|
+| global | 15.0 / 15.1 / 14.7 / 14.6 | 15.0 | 5.4 |
+| bucket rich | 12.6 / 12.8 / 12.1 / 12.0 | 14.0 | 5.1 |
+| GCC +diff | 11.6 / 11.9 / 11.7 / 11.0 | 5.1 | 6.1 |
+| **GCC +diff VLM** | **9.6 / 9.8 / 9.7 / 9.4** | 5.6 | 6.3 |
+| oracle \|Rel\| | 0.7 / 1.3 / 0.8 / 1.0 | 15.2 | 5.5 |
+
+Paired bootstrap against `GCC +diff`: Δsprd_rel −2.07 / −2.06 / −1.99 / −1.64
+± 0.42, significant in all four seeds, with Δsprd_dif between +0.11 and +0.58
+and a size ratio of 0.99–1.03. **The judge buys two points on axis one and
+costs nothing in set size.** A Mondrian-only variant reaches the same 9.5–10.5
+but gives back all of axis two, so the function-class arm is the one to keep.
+
+Two points is real and small. The residual gap is 11.6 against an oracle at 0.7,
+so this closes 19% of it. Against the noised-oracle curve the real judge at
+rho = 0.67 gives 9.6 where interpolation predicts about 9.0 — **a real predictor
+under-delivers relative to a noised oracle at matched rho for the second time**,
+which is the strongest evidence yet that rho is a screen and not a forecast.
+
+### The cost is the problem, not the effect
+
+Those two points cost fifty 7B forward passes per query. As a *test-time*
+module that is not a defensible system, and the paper should say so before a
+reviewer does. Escalating judge capacity to 32B or 72B is the variable the
+attribution points at, but it makes the cost objection worse, not better, even
+if it works.
+
+The alternative the attribution also permits is to move the judge to training
+time: label the training set offline, distil a cheap ambiguity head from the
+pseudo-labels, and pay nothing at test time. That path now has a measured
+ceiling rather than a hope — a perfect distillation of this judge is rho 0.67,
+which is 9.6 pt.
+
 ## Next
 
 1. **Drop the DUA family from the contribution.** Theirs and ours. Eight
