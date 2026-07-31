@@ -906,6 +906,94 @@ every query whose top-1 is already relevant — which is why the median set size
 sits near 3 while the mean is 5 to 8. Any regression on this target is fitting
 a spike plus a tail, and a linear quantile regression is a poor shape for that.
 
+## 2026-07-31: the same feature needs opposite signs within and between strata
+
+The paragraph above ends on an inference — that the two effects "want different
+things from the same features" — drawn from two correlations. It is the only
+justification for fitting the difficulty head separately inside each group
+rather than pooling everything into one regression, so it is worth measuring
+rather than asserting. `scripts/within_between_probe.py` measures it at the
+quantile that actually sets the threshold.
+
+For each feature, standardised over all 1000 queries, three slopes of the
+τ = 0.9 quantile of the conformal score:
+
+- **β_within** — a quantile regression fitted inside each stratum, averaged
+  over the five with stratum sizes as weights.
+- **β_between** — the five per-stratum oracle thresholds (4.04 / 2.58 / 1.72 /
+  1.52 / 0.94) regressed on the five per-stratum mean feature values. Using the
+  thresholds rather than mean scores keeps both slopes on λ's scale.
+- **β_pool** — one quantile regression over all 1000 queries, no strata.
+
+parity_a0, bootstrap over queries, 95% CI in brackets:
+
+| feature | β_within | β_between | β_pool | per-stratum β |
+|---|---|---|---|---|
+| entropy T=0.25 | **+0.592** [+0.05, +1.10] | **−2.261** [−2.87, −1.44] | −0.070 | +0.75 +0.03 +1.02 +0.93 +0.39 |
+| gap 1-100 | **−0.880** [−0.99, −0.60] | **+4.109** [+2.44, +5.45] | −0.747 | −1.20 −1.01 −0.78 −0.64 −0.32 |
+| top1 z | **−0.798** [−0.92, −0.54] | **+3.784** [+2.35, +5.24] | −0.634 | −1.13 −0.87 −0.71 −0.65 −0.34 |
+
+The sign flips for **every feature in every one of the four runs**, with the
+within CI clear of zero each time, and the per-stratum betas agree with each
+other rather than one stratum dragging the average.
+
+The two slopes sit on different variance scales — the stratum means are much
+less spread than individual queries, sd(x̄_s) / sd_within = 0.55 / 0.30 / 0.33 —
+so the raw magnitudes are not comparable. Converted to the λ shift per one SD of
+the relevant variation: entropy −1.09 between against +0.52 within, gap 1-100
++1.16 against −0.84, top1 z +1.18 against −0.77. **Same order of magnitude,
+opposite direction.** Neither effect is a rounding error on the other, which is
+what makes a single monotone λ(x) genuinely unable to serve both.
+
+The mechanism is the one the CQR section guessed at. Between strata, a flat
+score row means many near-ties, which means |Rel| is large, which means the
+threshold should be *small*. Within a stratum |Rel| is pinned, so a flat row can
+only mean this query is hard and the threshold should be *large*.
+
+**The pre-registered attenuation rider asked the wrong question for two of the
+three features.** It required |β_pool| < 0.5·|β_within|, on the theory that the
+two effects cancel in the pooled fit. Entropy behaves that way in 3 of 4 runs
+(+0.59 within → −0.07 pooled). gap 1-100 and top1 z fail it in all four,
+because their stratum means barely differ (sd(x̄_s) ≈ 0.3) so the pooled fit is
+dominated by within-stratum variation and simply recovers β_within. That is
+worse than cancellation, not better: the pooled model **learns the within-stratum
+slope and then applies it between strata, where the required sign is opposite**.
+It does not merely fail to help across strata, it moves λ the wrong way.
+
+### The oracle is a ceiling on one axis only
+
+Part B pins |Rel| = 1 and asks whether anything is left. Difficulty is a
+least-squares prediction of the conformal score fitted on the calibration half
+only, so the quintiles are out of sample; `random` replaces it with noise and is
+the floor for a spread read off ~36-query cells.
+
+parity_a0, 400 splits inside the 363 |Rel|=1 queries:
+
+| threshold | easy | 2 | 3 | 4 | hard | spread | size | marginal |
+|---|---|---|---|---|---|---|---|---|
+| single | 96.2% | 93.9% | 89.9% | 86.4% | 83.1% | **13.1 pt** | 8.0 | 89.8% |
+| random | 89.7% | 89.8% | 89.5% | 90.1% | 89.9% | 0.6 pt | 8.0 | 89.8% |
+| CQR within | 87.1% | 91.3% | 90.2% | 90.2% | 91.9% | 4.8 pt | 32.9 | 90.1% |
+
+Paired single − random across the four runs: **+12.28 / +13.86 / +8.18 /
++10.17 ± 0.4 pt**, against a pre-registered bar of ≥ 5.0 pt in ≥ 3 of 4.
+
+So there is a **second conditional-coverage gap of the same size as the first,
+orthogonal to it**. Oracle Mondrian closes the |Rel| axis to 0.7 pt and leaves
+this one untouched — inside the single stratum it is still 96.2% against 83.1%.
+Every earlier statement of the form "the oracle closes the gap to 0.7, so 13
+points is what is on the table" was measuring one axis and calling it the total.
+The problem is two-dimensional: how many answers exist, and whether this model
+will find one.
+
+Third reading, and a constraint on the design: **CQR inside the stratum buys its
+uniformity with set size again, and worse than before** — 13.1 → 4.8 pt at four
+times the set (8.0 → 32.9 videos), against 1.5× for the global version. 90
+fitting rows against 17 columns overfits, and the conformal correction can only
+compensate by enlarging every set. A difficulty head is justified by Part B, but
+not this recipe: it needs far fewer features, or a much stronger signal than the
+score row can supply.
+
 ## Next
 
 1. **Drop the DUA family from the contribution.** Theirs and ours. Eight
