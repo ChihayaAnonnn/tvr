@@ -781,6 +781,131 @@ threshold is already wrong about. Rank correlation therefore overstates how
 useful a predictor will be, and any future ambiguity model has to be scored
 on spread directly, not on ρ.
 
+## 2026-07-31: the objective was wrong, but fixing it buys 2.5 points, not 7
+
+Two things changed at once against the bucketed baseline, and the 2×2 says
+which one paid. The objective: instead of predicting |Rel| and cutting the
+prediction into quintile buckets, regress the conditional quantile of the
+conformal score directly and conformalize the residual (CQR — Romano,
+Patterson & Candès, NeurIPS 2019), which needs no |Rel| label at all. The
+features: instead of the top of the ranking (gap12, caption length, σ²), read
+the whole score row — gaps from rank 1 to ranks 2/3/5/10/50/100/500, near-tie
+counts within a quarter/half/one standard deviation of the top, softmax
+entropy at two gallery-scaled temperatures, row mean and standard deviation,
+and the top-1 z-score. Seventeen columns, nineteen with σ².
+`scripts/conditional_conformal_probe.py`, 200 splits, α = 0.1.
+
+A note on which "spread" is being quoted, because two different numbers have
+gone by that name. Averaging the five per-stratum coverages over splits and
+subtracting afterwards gives the number the gate experiment reports (13.8,
+oracle 0.7). Taking max-minus-min inside each split and averaging that gives
+something far larger, because a max of five noisy estimates is biased upward —
+the oracle's true 0.7 comes out near 9. That bias is a floor both methods sit
+on, so it compresses differences: the real 13.1-point baseline-to-oracle gap
+reads as 4.1. The within-split version was used earlier only because it had an
+obvious standard error. The table below puts the error bar on the right scale
+instead, by resampling the 200 splits with replacement using the same
+resampled indices for every method.
+
+parity_a0 (the other three runs agree; full table in `.scratch/cqr_probe.txt`):
+
+| method | 1 | 2 | 3 | 4-5 | 6+ | spread | size | med | p90 | Δ spread |
+|---|---|---|---|---|---|---|---|---|---|---|
+| global | 83.3 | 88.4 | 92.8 | 95.5 | 98.3 | 15.0 | 5.4 | 2.9 | 12.1 | +1.20 ± 0.12 |
+| bucket gap+len | 83.7 | 89.4 | 94.1 | 94.8 | 97.5 | 13.8 | 5.5 | 3.0 | 12.5 | — |
+| bucket rich | 83.9 | 89.4 | 93.6 | 94.1 | 96.8 | 12.9 | 4.8 | 3.2 | 10.6 | −0.88 ± 0.14 |
+| CQR gap+len | 83.0 | 89.3 | 93.5 | 95.6 | 98.2 | 15.2 | 6.1 | 3.0 | 14.2 | +1.37 ± 0.18 |
+| CQR rich | 83.8 | 90.7 | 95.3 | 95.1 | 93.8 | 11.5 | 7.9 | 3.2 | 17.3 | −2.26 ± 0.26 |
+| CQR gbr rich | 83.1 | 88.7 | 94.2 | 95.1 | 98.3 | 15.1 | 7.2 | 2.8 | 15.7 | +1.35 ± 0.16 |
+| oracle \|Rel\| | 90.1 | 90.3 | 90.2 | 90.4 | 90.7 | 0.7 | 5.5 | 2.6 | 12.7 | −12.85 ± 0.32 |
+
+Δ spread across the four runs — CQR rich: −2.26, −2.34, −2.65, −2.71. bucket
+rich: −0.88, −1.01, −2.03, −1.51. CQR gap+len: +1.37, +1.43, +0.75, +1.17.
+Marginal coverage is 89.8–90.1% for every method, as it must be.
+
+Reading the 2×2: the new objective **on its own makes things worse**. A
+two-feature linear quantile regression is beaten by five buckets, which can
+express a monotone nonlinearity that two coefficients cannot. The new features
+on their own help a little. Together they are more than the sum, which is the
+signature of a linear fit that only becomes worth having once it has enough
+columns to work with. Gradient boosting at the same objective is bad
+everywhere: 250 fitting rows is not enough for 100 trees, and it degenerates
+to roughly the global threshold.
+
+The pre-registered criterion was ≤ −2.0 pt paired on at least three of four
+runs, with a rider that a spread reduction bought at more than 1.5× the mean
+set size does not count. CQR rich meets the first on 4/4 and fails the second
+on 3/4: mean size ratios 1.44, 1.51, 1.51, 1.56. The p90 confirms this is not
+a handful of pathological queries — the whole upper tail is 40–50% fatter
+(17.3 vs 12.5 on parity_a0). The median barely moves (3.2 vs 3.0), so a
+typical user would not notice, but the average over a corpus is the honest
+statistic and it went up. **Verdict: the hypothesis is half right and the
+direction is not rescued.** Halving the 13-point gap needs ≈7 pt; the best
+label-free method buys 2.5 and charges for it.
+
+The one method that is strictly better than the baseline on both axes is
+`bucket rich`: −0.88 to −2.03 spread and *smaller* sets everywhere (mean 4.7–4.8
+vs 5.3–5.7, p90 10.0–10.7 vs 11.5–13.1). It is the new baseline to beat.
+
+### What the strata actually ask for, and why it is backwards
+
+Fitting one threshold per true stratum on all 1000 queries of parity_a0:
+
+| \|Rel\| | n | oracle λ | mean set | median set |
+|---|---|---|---|---|
+| 1 | 363 | 4.035 | 8.2 | 3 |
+| 2 | 206 | 2.585 | 4.5 | 2 |
+| 3 | 124 | 1.716 | 2.9 | 2 |
+| 4-5 | 126 | 1.521 | 3.4 | 3 |
+| 6+ | 181 | 0.943 | 3.5 | 3 |
+
+The required threshold falls monotonically and steeply as |Rel| rises, and the
+sets that conditional coverage demands are **largest for the most specific
+queries**. This is not a quirk; it follows from the target. `any` coverage asks
+for one relevant video in the set, and a query with six right answers gets that
+from the top few almost for free, while a query with exactly one right answer
+needs a wide net. So the intuitive story — "return more results when the query
+is vague" — is the wrong way round under `any`. It is the right way round under
+`all` (cover every judged relevant video), which fails in the opposite
+direction. Any writeup has to pick a target and say which, or report both and
+own the tension; describing the method as "bigger sets for ambiguous queries"
+without saying which target is simply false half the time.
+
+This also explains why every deployable method above is stuck. All of them
+improve the 6+ end (97.5 → 93.8) and none of them move the |Rel|=1 end (83.7 →
+83.8, against the oracle's 90.1). They are trimming over-coverage where it is
+cheap, not fixing under-coverage where it hurts.
+
+### There is signal in the bottom stratum; nothing is using it
+
+Spearman of each feature against the conformal score, over all 1000 queries
+versus inside the 363 |Rel|=1 queries only (parity_a0):
+
+| feature | all | \|Rel\|=1 |
+|---|---|---|
+| entropy T=0.25 | +0.293 | +0.476 |
+| gap 1-100 | −0.359 | −0.476 |
+| gap 1-50 | −0.355 | −0.476 |
+| gap 1-10 | −0.313 | −0.475 |
+| top1 z | −0.346 | −0.462 |
+| n within 1.0sd | +0.273 | +0.445 |
+| gap 1-2 | −0.249 | −0.441 |
+| caption words | −0.008 | −0.146 |
+
+Every feature is *more* informative about the conformal score inside the
+|Rel|=1 stratum than it is overall — the free signals are strongest exactly
+where all the unclosed gap lives. What they are predicting there is not
+ambiguity, since |Rel| is fixed at 1 across the whole subset; it is whether
+this particular model is about to fail on this particular query. That is
+selective prediction, and a single global monotone λ(x) cannot serve it and
+ambiguity at the same time, because the two effects want different things from
+the same features.
+
+Note also that `margin_any` has a large point mass at zero — it is zero for
+every query whose top-1 is already relevant — which is why the median set size
+sits near 3 while the mean is 5 to 8. Any regression on this target is fitting
+a spike plus a tail, and a linear quantile regression is a poor shape for that.
+
 ## Next
 
 1. **Drop the DUA family from the contribution.** Theirs and ours. Eight
@@ -828,6 +953,27 @@ on spread directly, not on ρ.
    13.8 pt where a noised oracle at ρ = 0.58 gives 10.1 pt. Note the pool
    caveat carries into this: `any` coverage is a lower bound because an
    unjudged relevant video in the set is not counted.
+
+   The 2026-07-31 CQR section revises this. (e) is now measured properly: the
+   paired bootstrap over splits, not the within-split max-minus-min, which
+   compresses a 13.1-point difference to 4.1. The best label-free method
+   (CQR on 17 gallery features) buys 2.5 pt and pays 1.5× mean set size; the
+   best method that is free on both axes is quintile bucketing on those same
+   features. Neither is close to the ≈7 pt that halves the gap.
+
+   Three things now come before (c). **First, pick the coverage target and
+   say so.** Under `any`, conditional coverage demands the *largest* sets for
+   the *most specific* queries (oracle λ 4.04 at |Rel|=1 against 0.94 at 6+),
+   which is the opposite of the story the proposal has been telling. Under
+   `all` it runs the intuitive way. **Second, the unclosed gap is entirely at
+   |Rel|=1** — every deployable method trims over-coverage at 6+ and none of
+   them moves 83.7% at the bottom, against an oracle 90.1%. **Third, that
+   bottom stratum is not an ambiguity problem at all**: with |Rel| held at 1,
+   the free features still correlate 0.44–0.48 with the conformal score, so
+   what is unexploited there is failure prediction, not ambiguity prediction.
+   A single monotone λ(x) has to serve both and cannot. The natural next
+   design is two signals rather than one — a |Rel| estimate for the stratum
+   and a failure estimate within it — before spending GPU on (c).
 8. Venue note. This has no R@1 SOTA table and its headline statistic is set
    size at guaranteed coverage, which reads as a non-contribution to a CVPR or
    ECCV reviewer. SIGIR, EMNLP or TMLR fit the claim better. Also check
