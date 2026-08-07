@@ -26,6 +26,13 @@ scikit-learn==1.3.2
 pytest==7.1.2
 ruff==0.6.9
 
+# Optional: decord video reader.
+# Enables the `TVR_VIDEO_BACKEND=decord` fast path in dataloaders/rawvideo_util.py.
+# On MSRVTT-style short clips the optimized OpenCV backend is faster; decord
+# tends to win on longer videos where batched GOP-aware decode dominates the
+# per-open indexing cost. Kept optional so it can be enabled without a rebuild.
+decord==0.6.0
+
 # Intentionally not installed by default:
 # - mamba-ssm: required only by inactive legacy Mamba modules; it needs a
 #   CUDA/compiler build matching the installed PyTorch version.
