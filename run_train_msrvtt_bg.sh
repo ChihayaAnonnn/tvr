@@ -6,10 +6,8 @@ SCRIPT_PATH="${ROOT_DIR}/run_train_msrvtt_bg.sh"
 TVR_PYTHON=${TVR_PYTHON:-/home/xujie/.conda/envs/tvr/bin/python}
 TVR_TORCHRUN=${TVR_TORCHRUN:-/home/xujie/.conda/envs/tvr/bin/torchrun}
 cd "${ROOT_DIR}"
-source "${ROOT_DIR}/scripts/rspr_shell_config.sh"
 
 run_controller() {
-    rspr_load_effective_config "$@" || return $?
     mkdir -p logs
 
     RUN_DATE="${RUN_DATE:-$(date +%Y%m%d)}"
@@ -50,7 +48,6 @@ run_controller() {
 
 run_worker() {
     unset RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER
-    rspr_load_effective_config "$@" || return $?
 
     # 抑制 DDP 多卡重复警告（Grad strides do not match 等）
     export TORCH_WARN_ONCE=1
@@ -113,7 +110,7 @@ run_worker() {
             --data_path
             --features_path
         )
-        for _ARG in "${RSPR_TRAILING_ARGS[@]}"; do
+        for _ARG in "$@"; do
             _FLAG="${_ARG%%=*}"
             for _PROTECTED in "${_PROTECTED_HYGIENE_OPTIONS[@]}"; do
                 if [[ "${_FLAG}" == "${_PROTECTED}" || "${_PROTECTED}" == "${_FLAG}"* ]]; then
@@ -211,7 +208,6 @@ run_worker() {
     echo "[run_train_msrvtt_bg:worker] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} NPROC=${NPROC} TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS} TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR} TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE} TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS} TQFS_CACHE_DIR=${TQFS_CACHE_DIR} CLIP_CACHE_DIR=${CLIP_CACHE_DIR}"
     echo "[run_train_msrvtt_bg:worker] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION} CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING} CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS}"
     echo "[Runtime] python=${TVR_PYTHON} torchrun=${TVR_TORCHRUN}"
-    rspr_log_effective_config "run_train_msrvtt_bg:worker"
 
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
         "${TVR_TORCHRUN}" --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29547 \
@@ -243,8 +239,7 @@ run_worker() {
         --extra_text_cls_num 2 \
         --experiment_profile "${EXPERIMENT_PROFILE}" \
         --experiment_desc "${EXPERIMENT_DESC:-}" \
-        "${RSPR_CLI_ARGS[@]}" \
-        "${RSPR_TRAILING_ARGS[@]}"
+        "$@"
 }
 
 
