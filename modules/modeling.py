@@ -9,7 +9,6 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from modules.module_clip import CLIP, convert_weights
 from modules.module_cross import CrossConfig, CrossModel
 from modules.module_cross import Transformer as TransformerClip
-from modules.stochastic_prototype_ranking import RSPRCore
 from modules.until_module import (
     AllGather,
     CrossEn,
@@ -18,7 +17,6 @@ from modules.until_module import (
     MultiPositiveCrossEn,
     PreTrainedModel,
 )
-from prob_models.reparameterized_distribution import DistributionOutput
 
 try:
     from prob_models.pie_model import PIENet
@@ -33,7 +31,7 @@ allgather = AllGather.apply
 
 def gather_group_ids(group_ids, task_config):
     if group_ids is None:
-        raise ValueError("RSPR training requires explicit group_ids")
+        raise ValueError("multi-positive training requires explicit group_ids")
     ids = torch.as_tensor(group_ids)
     if ids.dtype not in MultiPositiveCrossEn._INTEGER_DTYPES:
         raise ValueError("group_ids must use an integer dtype")
@@ -315,11 +313,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         # loss function
         self.loss_fct = CrossEn()
-        self.rspr_mode = getattr(self.task_config, "rspr_mode", "legacy")
         self.multi_positive_loss = MultiPositiveCrossEn()
-        self.rspr = None
-        if self.rspr_mode not in {"mean", "stochastic"}:
-            self._initialize_probability_path(embed_dim)
+        self._initialize_probability_path(embed_dim)
 
         # extra class token num
         self.extra_cls_frame_num = self.task_config.extra_video_cls_num
@@ -328,58 +323,37 @@ class UATVR(CLIP4ClipPreTrainedModel):
         show_log(task_config, "CLIP UATVR Model ......")
         show_log(task_config, "\t Extra video Class token number: {}".format(self.extra_cls_frame_num))
         show_log(task_config, "\t Extra text Class token number: {}".format(self.extra_cls_text_num))
-        if self.rspr_mode == "legacy":
-            show_log(
-                task_config,
-                "\t Number of video sampling probabilistic embeddings: {}".format(
-                    self.n_video_samples
-                ),
-            )
-            show_log(
-                task_config,
-                "\t Number of text sampling probabilistic embeddings: {}".format(
-                    self.n_text_samples
-                ),
-            )
+        show_log(
+            task_config,
+            "\t Number of video sampling probabilistic embeddings: {}".format(
+                self.n_video_samples
+            ),
+        )
+        show_log(
+            task_config,
+            "\t Number of text sampling probabilistic embeddings: {}".format(
+                self.n_text_samples
+            ),
+        )
 
         self._initialize_model_weights(embed_dim)
 
     def _initialize_model_weights(self, embed_dim):
         self.apply(self.init_weights)
-        if self.rspr_mode in {"mean", "stochastic"}:
-            self._initialize_probability_path(embed_dim)
 
     def _initialize_probability_path(self, embed_dim):
-        self.rspr_mode = getattr(self.task_config, "rspr_mode", "legacy")
-        self.multi_positive_loss = MultiPositiveCrossEn()
-        if self.rspr_mode in {"mean", "stochastic"}:
-            self.rspr = RSPRCore(
-                dim=embed_dim,
-                sample_count=self.task_config.rspr_sample_count,
-                eval_sample_count=self.task_config.rspr_eval_sample_count,
-                match_temperature=self.task_config.rspr_match_temperature,
-                rank_temperature=self.task_config.rspr_rank_temperature,
-                hard_negative_count=self.task_config.rspr_hard_negatives,
-                prior_std=self.task_config.rspr_prior_std,
-                hard_max=self.task_config.rspr_match_mode == "hard",
-                eval_seed=self.task_config.rspr_eval_seed,
-            )
-        else:
-            self.rspr = None
-
-        if self.rspr_mode == "legacy":
-            self.pie_net_video = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
-            self.uncertain_net_video = UncertaintyModuleImage(
-                embed_dim, embed_dim, embed_dim // 2
-            )
-            self.pie_net_text = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
-            self.uncertain_net_text = UncertaintyModuleImage(
-                embed_dim, embed_dim, embed_dim // 2
-            )
-            self.n_video_samples = self.task_config.n_video_embeddings
-            self.n_text_samples = self.task_config.n_text_embeddings
-            self.loss_MIL_fct = MILNCELoss_BoF()
-            self.vib_loss = KLdivergence()
+        self.pie_net_video = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
+        self.uncertain_net_video = UncertaintyModuleImage(
+            embed_dim, embed_dim, embed_dim // 2
+        )
+        self.pie_net_text = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
+        self.uncertain_net_text = UncertaintyModuleImage(
+            embed_dim, embed_dim, embed_dim // 2
+        )
+        self.n_video_samples = self.task_config.n_video_embeddings
+        self.n_text_samples = self.task_config.n_text_embeddings
+        self.loss_MIL_fct = MILNCELoss_BoF()
+        self.vib_loss = KLdivergence()
 
     def forward(
         self,
@@ -389,8 +363,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video,
         video_mask=None,
         group_ids=None,
-        rspr_rank_scale=1.0,
-        rspr_anchor_scale=1.0,
     ):
         # (B 1 32)  (B 1 132) (B 1 32)
         input_ids = input_ids.view(-1, input_ids.shape[-1])
@@ -405,17 +377,14 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_frame = bs * ts
 
         global_group_ids = None
-        if self.training:
-            rspr_mode = getattr(self.task_config, "rspr_mode", "legacy")
-            requires_group_ids = rspr_mode in {"off", "mean", "stochastic"}
-            if group_ids is not None or requires_group_ids:
-                global_group_ids = gather_group_ids(group_ids, self.task_config)
+        if self.training and group_ids is not None:
+            global_group_ids = gather_group_ids(group_ids, self.task_config)
 
         sequence_output, text_token = self.get_sequence_output(input_ids, token_type_ids, attention_mask, shaped=True)
         visual_output = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_frame)
 
         if self.training:
-            similarity_output = self.get_similarity_logits(
+            sim_matrix, legacy_mil_loss, legacy_kl_loss = self.get_similarity_logits(
                 sequence_output,
                 text_token,
                 visual_output,
@@ -423,9 +392,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 video_mask,
                 shaped=True,
                 loose_type=self.loose_type,
-                return_refined=rspr_mode in {"mean", "stochastic"},
             )
-            sim_matrix, legacy_mil_loss, legacy_kl_loss = similarity_output[:3]
 
             if global_group_ids is None:
                 dsa_loss = 0.5 * (
@@ -435,89 +402,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 dsa_loss, _positive_mask = self.multi_positive_loss.bidirectional(
                     sim_matrix, global_group_ids
                 )
-            if rspr_mode == "legacy":
-                return dsa_loss + legacy_mil_loss + legacy_kl_loss
-            if rspr_mode == "off":
-                return dsa_loss
-
-            if len(similarity_output) != 10:
-                raise RuntimeError("RSPR similarity path did not return refined tokens")
-            (
-                refined_text,
-                refined_attention_mask,
-                refined_video,
-                refined_video_mask,
-                word_num,
-                frame_num,
-                wti_logits,
-            ) = similarity_output[3:]
-            rspr_output = self.rspr(
-                refined_text[:, :word_num],
-                refined_attention_mask[:, :word_num],
-                refined_video[:, :frame_num],
-                refined_video_mask[:, :frame_num],
-                sample_count=(
-                    1
-                    if self.rspr_mode == "mean"
-                    else self.task_config.rspr_sample_count
-                ),
-                mean_only=self.rspr_mode == "mean",
-                detach_samples=self.task_config.rspr_detach_samples,
-            )
-            probability_loss, _ = self.multi_positive_loss.bidirectional(
-                rspr_output.probabilistic_logits
-                / self.task_config.rspr_prob_temperature,
-                global_group_ids,
-            )
-            rank_loss = probability_loss.new_zeros(())
-            if self.rspr_mode == "stochastic":
-                rank_loss, _, _ = self.rspr.rank_loss.bidirectional(
-                    rspr_output.stochastic_pair_scores,
-                    global_group_ids,
-                    wti_logits.detach(),
-                )
-            return self._assemble_training_loss(
-                dsa_loss,
-                probability_loss,
-                rank_loss,
-                rspr_output,
-                rspr_rank_scale=rspr_rank_scale,
-                rspr_anchor_scale=rspr_anchor_scale,
-            )
+            return dsa_loss + legacy_mil_loss + legacy_kl_loss
         else:  # for inference
             return None
-
-    def _assemble_training_loss(
-        self,
-        dsa_loss,
-        probability_loss,
-        rank_loss,
-        rspr_output,
-        *,
-        rspr_rank_scale=1.0,
-        rspr_anchor_scale=1.0,
-    ):
-        self.last_loss_diagnostics = {
-            "dsa": dsa_loss.detach(),
-            "prob": probability_loss.detach(),
-            "rank": rank_loss.detach(),
-            "anchor": rspr_output.anchor_kl.detach(),
-            "pair_uncertainty_mean": rspr_output.pair_uncertainty.mean().detach(),
-            "text_variance_mean": rspr_output.text_distribution.logvar.exp()
-            .mean()
-            .detach(),
-            "video_variance_mean": rspr_output.video_distribution.logvar.exp()
-            .mean()
-            .detach(),
-        }
-        return (
-            dsa_loss
-            + self.task_config.rspr_prob_weight * probability_loss
-            + self.task_config.rspr_rank_weight * rspr_rank_scale * rank_loss
-            + self.task_config.rspr_anchor_weight
-            * rspr_anchor_scale
-            * rspr_output.anchor_kl
-        )
 
     def forward_eval(self, input_ids, token_type_ids, attention_mask, video, video_mask=None):
         # (B 1 32)  (B 1 132) (B 1 32)
@@ -706,81 +593,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         text_token[:, : text_original.size(1), :] += text_original
         return text_token, tempo_mask
 
-    def _get_rspr_distribution(
-        self,
-        tokens: torch.Tensor,
-        mask: torch.Tensor,
-        *,
-        modality: str,
-    ) -> DistributionOutput:
-        if self.rspr is None or self.rspr_mode not in {"mean", "stochastic"}:
-            raise RuntimeError(
-                "RSPR distributions require mean or stochastic mode"
-            )
-
-        original_length = tokens.size(1)
-        if modality == "text":
-            distribution = self.rspr.text_distribution
-            fixed_noise = self.rspr.fixed_text_noise
-        else:
-            distribution = self.rspr.video_distribution
-            fixed_noise = self.rspr.fixed_video_noise
-
-        if getattr(self, "sim_header", "seqTransf") == "seqTransf":
-            if modality == "text":
-                refined, refined_mask = self._refine_text_tokens(tokens, mask)
-            else:
-                refined, refined_mask = self._refine_video_tokens(tokens, mask)
-        else:
-            refined, refined_mask = tokens, mask
-
-        mean_only = self.rspr_mode == "mean"
-        sample_count = (
-            1
-            if mean_only
-            else (
-                self.rspr.sample_count
-                if self.training
-                else self.rspr.eval_sample_count
-            )
-        )
-        noise = None
-        if not self.training and not mean_only:
-            noise = self.rspr._evaluation_noise(
-                fixed_noise,
-                batch_size=tokens.size(0),
-                sample_count=sample_count,
-            )
-        return distribution(
-            refined[:, :original_length],
-            refined_mask[:, :original_length],
-            sample_count=sample_count,
-            noise=noise,
-            mean_only=mean_only,
-        )
-
-    def get_rspr_text_distribution(
-        self, text_token: torch.Tensor, attention_mask: torch.Tensor
-    ) -> DistributionOutput:
-        """Encode one text batch with refinement and the text RSPR head."""
-
-        return self._get_rspr_distribution(
-            text_token,
-            attention_mask,
-            modality="text",
-        )
-
-    def get_rspr_video_distribution(
-        self, visual_output: torch.Tensor, video_mask: torch.Tensor
-    ) -> DistributionOutput:
-        """Encode one video batch with refinement and the video RSPR head."""
-
-        return self._get_rspr_distribution(
-            visual_output,
-            video_mask,
-            modality="video",
-        )
-
     def _loose_similarity(
         self,
         sequence_output,
@@ -789,7 +601,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         attention_mask,
         video_mask,
         sim_header="seqTransf",
-        return_refined=False,
     ):
         sequence_output, visual_output = sequence_output.contiguous(), visual_output.contiguous()
         frame_num = visual_output.size(1)  # 12 / 64
@@ -843,27 +654,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
         )
         text_pooled = text_pooled / text_pooled.norm(dim=-1, keepdim=True)
 
-        # ti_logits = self.token_wise_interaction(text_token=text_token, frame_token=visual_output, attention_mask=attention_mask, video_mask=video_mask)
         wti_logits = self.weighted_token_wise_intersection(text_token, visual_output, attention_mask, video_mask)
         logit_scale = self.clip.logit_scale.exp()
         retrieve_logits = logit_scale * wti_logits
-
-        if self.rspr_mode != "legacy":
-            zero = retrieve_logits.new_zeros(())
-            if self.training:
-                output = (retrieve_logits, zero, zero)
-                if return_refined:
-                    output += (
-                        text_token,
-                        attention_mask,
-                        visual_output,
-                        video_mask,
-                        word_num,
-                        frame_num,
-                        wti_logits,
-                    )
-                return output
-            return retrieve_logits
 
         ####################################################################
         ############### probabilistic embedding modeling part ##############
@@ -1005,7 +798,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_mask,
         shaped=False,
         loose_type=False,
-        return_refined=False,
     ):
         if shaped is False:
             attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
@@ -1019,7 +811,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 attention_mask,
                 video_mask,
                 sim_header=self.sim_header,
-                return_refined=return_refined,
             )
         else:
             retrieve_logits = self._loose_similarity(
