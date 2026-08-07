@@ -36,7 +36,6 @@ run_train_msrvtt_bg.sh -> train_msrvtt.sh -> torchrun -> main_task_retrieval.py
 
 本次不负责：
 
-- 新增或调整 RSPR 环境变量；该工作仍属于 RSPR 实施计划的 Task 8；
 - 修改 Python 训练、数据加载或 checkpoint 逻辑；
 - 修改训练超参数、GPU 拓扑或日志目录约定；
 - 启动真实训练作为自动化测试。
@@ -143,7 +142,7 @@ Worker 不负责日志文件创建和 `tail`，也不得再次调用控制器。
 
 - 删除 `train_msrvtt.sh`，`run_train_msrvtt_bg.sh` 成为唯一受支持的 MSR-VTT 训练入口；
 - `run_train_bg.sh` 保持现有弃用跳转，仍指向 `run_train_msrvtt_bg.sh`；
-- 更新仍在使用的脚本说明、诊断文档字符串和当前 RSPR Task 8 计划，使其指向新入口；
+- 更新仍在使用的脚本说明和诊断文档字符串，使其指向新入口；
 - 历史归档计划和已经完成的设计文档不做批量改写；
 - 实现提交不得包含其他工作树修改。
 
@@ -174,7 +173,7 @@ Worker 不负责日志文件创建和 `tail`，也不得再次调用控制器。
 
 - Worker 不调用 `setsid` 或 `tail`，不会递归；
 - trusted split 构建命令参数保持不变；
-- `torchrun` 接收正确 GPU 进程数、Python 入口、固定训练参数和尾随 RSPR CLI；
+- `torchrun` 接收正确 GPU 进程数、Python 入口、固定训练参数和尾随 CLI；
 - 当前 `seed0` manifest 与 `--run_final_test` 行为被保留；
 - 非法 GPU、hygiene 或受保护参数仍以状态 2 失败。
 
@@ -189,4 +188,4 @@ Worker 不负责日志文件创建和 `tail`，也不得再次调用控制器。
 5. 尾随 CLI 参数能无损到达 `main_task_retrieval.py`；
 6. 用户当前对 `train_msrvtt.sh` 的工作树修改已迁移，没有丢失；
 7. shell 语法检查和相关项目测试通过；
-8. 没有启动真实训练、修改模型功能或提前实现 Task 8 的 RSPR shell 配置。
+8. 没有启动真实训练或修改模型功能。

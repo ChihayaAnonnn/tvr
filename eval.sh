@@ -22,7 +22,6 @@ RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TVR_PYTHON=${TVR_PYTHON:-/home/xujie/.conda/envs/tvr/bin/python}
 TVR_TORCHRUN=${TVR_TORCHRUN:-/home/xujie/.conda/envs/tvr/bin/torchrun}
-source "${ROOT_DIR}/scripts/rspr_shell_config.sh"
 DATATYPE=${DATATYPE:-msrvtt}        # msrvtt | msvd
 USE_ATTRIBUTES=${USE_ATTRIBUTES:-0} # 0 | 1
 ATTR_PATH=${ATTR_PATH:-}
@@ -32,9 +31,8 @@ MAX_WORDS_ATTRS=${MAX_WORDS_ATTRS:-77}
 # 模型结构参数（需与训练配置一致）
 EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE:-hygiene}   # default | hygiene
 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION:-fp16} # fp16 | fp32
-rspr_load_effective_config "$@" || exit $?
-if [[ "${#RSPR_TRAILING_ARGS[@]}" -ne 0 ]]; then
-  echo "Unsupported eval argument ${RSPR_TRAILING_ARGS[0]}; only RSPR overrides are accepted" >&2
+if [[ "$#" -ne 0 ]]; then
+  echo "Unsupported eval argument $1; eval.sh takes no positional args" >&2
   exit 2
 fi
 if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
@@ -88,7 +86,6 @@ EXTRA_ARGS=()
 EXTRA_ARGS+=(--experiment_profile "${EXPERIMENT_PROFILE}")
 EXTRA_ARGS+=(--eval_split "${EVAL_SPLIT}")
 EXTRA_ARGS+=(--clip_layer_norm_precision "${CLIP_LAYER_NORM_PRECISION}")
-EXTRA_ARGS+=("${RSPR_CLI_ARGS[@]}")
 if [[ "${DATATYPE}" == "msrvtt" ]]; then
   EXTRA_ARGS+=(--source_train_csv "${SOURCE_TRAIN_CSV}")
   EXTRA_ARGS+=(--test_csv "${TEST_CSV}")
@@ -128,7 +125,6 @@ echo "[eval.sh] RUN_ID=${RUN_ID}"
 echo "[eval.sh] DATATYPE=${DATATYPE} EVAL_SPLIT=${EVAL_SPLIT} USE_ATTRIBUTES=${USE_ATTRIBUTES} EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}"
 echo "[eval.sh] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION}"
 echo "[Runtime] python=${TVR_PYTHON} torchrun=${TVR_TORCHRUN}"
-rspr_log_effective_config "eval.sh"
 echo "[eval.sh] INIT_MODEL=${INIT_MODEL}"
 echo "[eval.sh] OUTPUT_DIR=${OUTPUT_DIR}"
 if [[ "${USE_ATTRIBUTES}" == "1" ]]; then

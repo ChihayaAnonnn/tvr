@@ -1,5 +1,7 @@
 # Directional Final Evaluation Implementation Plan
 
+> **Historical note:** This plan was executed and merged as commit `b00272c feat: support directional final retrieval evaluation`. Some `Run:` lines below invoke `tests/test_rspr_rerank.py`, which was removed when the RSPR module was retired. Those specific test invocations no longer apply; the underlying directional-metrics behavior remains covered by the code paths in `main_task_retrieval.py`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make final test evaluation compute, log, return, and persist only the retrieval direction that selected each checkpoint.
