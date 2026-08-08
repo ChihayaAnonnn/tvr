@@ -137,7 +137,6 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "test_csv": getattr(args, "test_csv", ""),
         "annotation_json": getattr(args, "data_path", ""),
         "split_manifest": getattr(args, "split_manifest", ""),
-        "tqfs_cache_dir": getattr(args, "tqfs_cache_dir", ""),
     }
     workers = int(getattr(args, "num_thread_reader", 0))
     runtime = {

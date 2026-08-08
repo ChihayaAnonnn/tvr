@@ -564,7 +564,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
             sequence_output = allgather(sequence_output, self.task_config)  # Bxgpu 1 dim
             text_token = allgather(text_token, self.task_config)  # Bxgpu 32 dim
             attention_mask = allgather(attention_mask, self.task_config)
-            torch.distributed.barrier()
 
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
         visual_pooled = self._mean_pooling_for_similarity_visual(
@@ -651,11 +650,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
     def weighted_token_wise_intersection(self, text_token, frame_token, attention_mask, video_mask):
         text_weight = self.text_weight_fc(text_token).squeeze(2)  # B x N_t x D -> B x N_t
-        text_weight.masked_fill_(torch.tensor((1 - attention_mask), dtype=torch.bool), float("-inf"))
+        text_weight.masked_fill_(attention_mask == 0, float("-inf"))
         text_weight = torch.softmax(text_weight, dim=-1)  # B x N_t
 
         video_weight = self.video_weight_fc(frame_token).squeeze(2)  # B x N_v x D -> B x N_v
-        video_weight.masked_fill_(torch.tensor((1 - video_mask), dtype=torch.bool), float("-inf"))
+        video_weight.masked_fill_(video_mask == 0, float("-inf"))
         video_weight = torch.softmax(video_weight, dim=-1)  # B x N_v
 
         # token-wise interaction

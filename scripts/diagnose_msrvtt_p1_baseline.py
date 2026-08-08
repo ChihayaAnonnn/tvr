@@ -30,9 +30,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 DEFAULT_DATA_ROOT = "/data2/hxj/data/MSRVTT"
-DEFAULT_CACHE_DIR = (
-    PROJECT_ROOT / "cache_dir/tqfs/msrvtt_trusted_v1_f1_m8_r224"
-)
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "cache_dir/p1_diagnostics"
 TOKEN_RE = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)?")
 
@@ -79,7 +76,6 @@ def parse_args(argv=None):
         "--features-path",
         default=f"{DEFAULT_DATA_ROOT}/videos/compressed_videos/msrvtt_224_12fps/",
     )
-    parser.add_argument("--tqfs-cache-dir", default=str(DEFAULT_CACHE_DIR))
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--video-chunk-size", type=int, default=128)
     parser.add_argument("--device", default=None, help="Defaults to cuda when available.")
@@ -275,7 +271,6 @@ def build_task_args(args):
 
     task_args = build(args, args.checkpoint)
     task_args.strategy = 1
-    task_args.tqfs_cache_dir = args.tqfs_cache_dir
     return task_args
 
 
@@ -298,7 +293,6 @@ def compute_similarity_and_video_stats(args, device):
         max_frames=task_args.max_frames,
         frame_order=task_args.eval_frame_order,
         slice_framepos=task_args.slice_framepos,
-        tqfs_cache_dir=args.tqfs_cache_dir,
         multi_sentence_per_video=True,
         expected_captions_per_video=20,
     )
@@ -401,7 +395,6 @@ def write_report(path: Path, args, summaries, elapsed_seconds: float):
         "",
         f"- Checkpoint: `{args.checkpoint}`",
         f"- Split: trusted-v1 internal-val only (`{args.val_csv}`)",
-        f"- TQFS cache: `{args.tqfs_cache_dir}`",
         f"- Elapsed: {elapsed_seconds / 60:.1f} min",
         "",
     ]

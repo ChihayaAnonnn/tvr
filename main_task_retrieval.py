@@ -25,7 +25,6 @@ from experiment_tracking import (
 from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_to_text_sim
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modules.modeling import UATVR
-from modules.optimization import BertAdam
 from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
 from util import get_logger, parallel_apply
 
@@ -96,15 +95,6 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
     parser.add_argument("--data_path", type=str, default="data/caption.pickle", help="data pickle file path")
     parser.add_argument("--features_path", type=str, default="data/videos_feature.pickle", help="feature path")
-    parser.add_argument(
-        "--tqfs_cache_dir",
-        type=str,
-        default="",
-        help=(
-            "Optional shared cache of preprocessed TQFS frames keyed by video_id. "
-            "Cache misses are populated atomically."
-        ),
-    )
 
     # =========================
     # System-2 (attributes) text
@@ -393,8 +383,12 @@ def set_seed_logger(args):
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)  # if you are using multi-GPU.
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
+    # A800: 打开 cuDNN autotune + TF32，让固定 shape 的 conv/matmul 走 Tensor Core。
+    # deterministic 关掉，让 autotune 生效；如果日后要复现严格基线，把这两项翻回来即可。
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
     world_size = torch.distributed.get_world_size()
     if torch.cuda.is_available():
@@ -450,7 +444,6 @@ def set_seed_logger(args):
                 "source_train_csv",
                 "test_csv",
                 "split_manifest",
-                "tqfs_cache_dir",
                 "experiment_profile",
             ],
         }
@@ -581,22 +574,43 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
             args.lr,
         )
 
-    scheduler = None
-    optimizer = BertAdam(
+    # 用 fused AdamW（Ampere+ 上的融合 kernel）替换纯 Python 的 BertAdam。
+    # 学习率调度用 LambdaLR 复现 BertAdam 的 warmup_cosine 语义：
+    #   x = step / t_total；x<warmup 线性升到 1，之后走 0.5*(1+cos(pi*x)) 衰减到 0。
+    # 与 BertAdam 的差异：AdamW 做 bias correction（BertAdam 没做），bf16 训练下这是更稳的选择。
+    warmup_frac = args.warmup_proportion
+    t_total = max(1, num_train_optimization_steps)
+
+    def _warmup_cosine_lambda(step):
+        x = step / t_total
+        if warmup_frac > 0 and x < warmup_frac:
+            return x / warmup_frac
+        return 0.5 * (1.0 + math.cos(math.pi * x))
+
+    optimizer = torch.optim.AdamW(
         optimizer_grouped_parameters,
         lr=args.lr,
-        warmup=args.warmup_proportion,
-        schedule="warmup_cosine",
-        b1=0.9,
-        b2=0.98,
-        e=1e-6,
-        t_total=num_train_optimization_steps,
+        betas=(0.9, 0.98),
+        eps=1e-6,
         weight_decay=weight_decay,
-        max_grad_norm=1.0,
+        fused=True,
+    )
+    scheduler = torch.optim.lr_scheduler.LambdaLR(
+        optimizer, lr_lambda=_warmup_cosine_lambda
     )
 
+    # DDP 三开关：
+    #   - gradient_as_bucket_view=True：省显存 + 减一次拷贝
+    #   - static_graph=True：DDP 缓存 reducer 计划，配合 grad checkpointing 提速
+    #   - broadcast_buffers=False：模型无 BN，广播 buffer 是纯浪费
     model = torch.nn.parallel.DistributedDataParallel(
-        model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False
+        model,
+        device_ids=[local_rank],
+        output_device=local_rank,
+        find_unused_parameters=False,
+        gradient_as_bucket_view=True,
+        static_graph=True,
+        broadcast_buffers=False,
     )
 
     return optimizer, scheduler, model
@@ -708,13 +722,15 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
         input_ids, input_mask, segment_ids, video, video_mask, _group_ids = (
             _unpack_train_batch(batch)
         )
-        loss = model(
-            input_ids,
-            segment_ids,
-            input_mask,
-            video,
-            video_mask,
-        )
+        # A800 原生支持 bf16；autocast 内部激活走 bf16，master 参数仍 fp32，无需 GradScaler。
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            loss = model(
+                input_ids,
+                segment_ids,
+                input_mask,
+                video,
+                video_mask,
+            )
 
         if n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu.
@@ -728,16 +744,11 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
         if (step + 1) % args.gradient_accumulation_steps == 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
-            if scheduler is not None:
-                scheduler.step()  # Update learning rate schedule
-
-            if hasattr(optimizer, "get_group_lrs"):
-                scheduled_group_lrs = optimizer.get_group_lrs()
-            else:
-                scheduled_group_lrs = [
-                    group["lr"] for group in optimizer.param_groups
-                ]
+            # 先记录本次 step 将要应用的 LR，再 step。
+            scheduled_group_lrs = [group["lr"] for group in optimizer.param_groups]
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()  # 推进到下一步的 LR
             optimizer.zero_grad()
 
             # https://github.com/openai/CLIP/issues/46
@@ -872,7 +883,8 @@ def _run_on_single_gpu(
             )
             row_logits.append(logits)
 
-        b1_all_v_logits = torch.cat(row_logits, dim=1).cpu()
+        # bf16 张量不能直接 .numpy()，必须先转 fp32。
+        b1_all_v_logits = torch.cat(row_logits, dim=1).float().cpu()
         sim_matrix.append(b1_all_v_logits.detach().numpy())
 
     return sim_matrix
@@ -997,7 +1009,7 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
         logger.warning("sentence num: {}, video num: {}".format(sentence_num_, video_num_))
 
     model.eval()
-    with torch.no_grad():
+    with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
         batch_list_t = []
         batch_list_v = []
         batch_sequence_output_list, batch_visual_output_list = [], []

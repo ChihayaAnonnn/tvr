@@ -14,7 +14,6 @@ sys.path.append('..')
 from dataloaders.msrvtt_protocol import load_trusted_manifest
 from dataloaders.rawframes_util import RawFramesExtractor
 from dataloaders.rawvideo_util import RawVideoExtractor
-from dataloaders.tqfs_cache import TQFSFrameCache
 
 
 def _validate_tqfs_dependency(slice_framepos):
@@ -23,38 +22,6 @@ def _validate_tqfs_dependency(slice_framepos):
             "slice_framepos=3 requires scikit-learn for deterministic TQFS; "
             "install the pinned project requirements instead of silently falling back"
         )
-
-
-def _build_tqfs_cache(
-    cache_dir,
-    slice_framepos,
-    features_path,
-    feature_framerate,
-    max_frames,
-    image_resolution,
-):
-    if slice_framepos != 3 or not cache_dir:
-        return None
-    return TQFSFrameCache(
-        cache_dir,
-        features_path=features_path,
-        feature_framerate=feature_framerate,
-        max_frames=max_frames,
-        image_resolution=image_resolution,
-    )
-
-
-def _get_tqfs_video_data(extractor, cache, video_id, video_path, max_frames):
-    if cache is not None:
-        cached = cache.load(video_id)
-        if cached is not None:
-            return {"video": cached}
-
-    result = extractor.get_tqfs_video_data(video_path, max_frames)
-    video = result["video"]
-    if cache is not None and getattr(video, "ndim", 0) == 4:
-        cache.store(video_id, video)
-    return result
 
 
 def _split_attr_into_blocks(text: str, num_blocks: int = 4):
@@ -272,7 +239,6 @@ class MSRVTT_DataLoader(Dataset):
             use_attributes=False,
             attributes_path="",
             attr_num_blocks=4,
-            tqfs_cache_dir="",
             multi_sentence_per_video=False,
             expected_captions_per_video=None,
     ):
@@ -328,14 +294,6 @@ class MSRVTT_DataLoader(Dataset):
         self.rawVideoExtractor = RawVideoExtractor(framerate=feature_framerate, size=image_resolution)
         self.rawFramesExtractor = RawFramesExtractor(
             num_segments=max_frames, size=image_resolution, random_shift=True, strategy=self.strategy)
-        self.tqfs_cache = _build_tqfs_cache(
-            tqfs_cache_dir,
-            self.slice_framepos,
-            features_path,
-            feature_framerate,
-            max_frames,
-            image_resolution,
-        )
 
         self.SPECIAL_TOKEN = {"CLS_TOKEN": "<|startoftext|>", "SEP_TOKEN": "<|endoftext|>",
                               "MASK_TOKEN": "[MASK]", "UNK_TOKEN": "[UNK]", "PAD_TOKEN": "[PAD]"}
@@ -437,12 +395,8 @@ class MSRVTT_DataLoader(Dataset):
                 video_path = video_path.replace(".mp4", ".webm")
 
             if self.slice_framepos == 3:
-                raw_video_data = _get_tqfs_video_data(
-                    self.rawVideoExtractor,
-                    self.tqfs_cache,
-                    video_id,
-                    video_path,
-                    self.max_frames,
+                raw_video_data = self.rawVideoExtractor.get_tqfs_video_data(
+                    video_path, self.max_frames
                 )
             else:
                 raw_video_data = self.rawVideoExtractor.get_video_data(video_path)
@@ -569,7 +523,6 @@ class MSRVTT_TrainDataLoader(Dataset):
             attributes_path="",
             attr_num_blocks=4,
             split_manifest_path=None,
-            tqfs_cache_dir="",
             expected_captions_per_video=20,
     ):
         self.unfold_sentences = bool(unfold_sentences)
@@ -650,14 +603,6 @@ class MSRVTT_TrainDataLoader(Dataset):
         self.rawVideoExtractor = RawVideoExtractor(framerate=feature_framerate, size=image_resolution)
         self.rawFramesExtractor = RawFramesExtractor(
             num_segments=max_frames, size=image_resolution, random_shift=True, strategy=self.strategy)
-        self.tqfs_cache = _build_tqfs_cache(
-            tqfs_cache_dir,
-            self.slice_framepos,
-            features_path,
-            feature_framerate,
-            max_frames,
-            image_resolution,
-        )
         self.SPECIAL_TOKEN = {"CLS_TOKEN": "<|startoftext|>", "SEP_TOKEN": "<|endoftext|>",
                               "MASK_TOKEN": "[MASK]", "UNK_TOKEN": "[UNK]", "PAD_TOKEN": "[PAD]"}
 
@@ -765,12 +710,8 @@ class MSRVTT_TrainDataLoader(Dataset):
                 video_path = video_path.replace(".mp4", ".webm")
 
             if self.slice_framepos == 3:
-                raw_video_data = _get_tqfs_video_data(
-                    self.rawVideoExtractor,
-                    self.tqfs_cache,
-                    video_id,
-                    video_path,
-                    self.max_frames,
+                raw_video_data = self.rawVideoExtractor.get_tqfs_video_data(
+                    video_path, self.max_frames
                 )
             else:
                 raw_video_data = self.rawVideoExtractor.get_video_data(video_path)

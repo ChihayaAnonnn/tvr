@@ -48,7 +48,6 @@ def dataloader_msrvtt_train(args, tokenizer):
         attributes_path=getattr(args, "msrvtt_attributes_path", ""),
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
         split_manifest_path=args.split_manifest,
-        tqfs_cache_dir=getattr(args, "tqfs_cache_dir", ""),
     )
 
     local_batch_size = args.batch_size // args.n_gpu
@@ -88,7 +87,6 @@ def dataloader_msrvtt_val(args, tokenizer, subset="val"):
         use_attributes=getattr(args, "use_attributes", False),
         attributes_path=getattr(args, "msrvtt_attributes_path", ""),
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
-        tqfs_cache_dir=getattr(args, "tqfs_cache_dir", ""),
         multi_sentence_per_video=True,
         expected_captions_per_video=20,
     )
@@ -109,7 +107,6 @@ def dataloader_msrvtt_test(args, tokenizer, subset="test"):
         use_attributes=getattr(args, "use_attributes", False),
         attributes_path=getattr(args, "msrvtt_attributes_path", ""),
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
-        tqfs_cache_dir=getattr(args, "tqfs_cache_dir", ""),
         multi_sentence_per_video=False,
     )
     return _build_msrvtt_eval_loader(msrvtt_testset, args), len(msrvtt_testset)

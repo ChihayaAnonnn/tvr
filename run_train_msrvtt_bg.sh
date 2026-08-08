@@ -56,13 +56,17 @@ run_worker() {
     export OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-1}
     export NUMEXPR_NUM_THREADS=${NUMEXPR_NUM_THREADS:-1}
 
+    # NCCL：允许 GPU2↔GPU4 走 NVLink(NV8) P2P，禁 IB 探测（本机无 IB）
+    export NCCL_P2P_LEVEL=${NCCL_P2P_LEVEL:-NVL}
+    export NCCL_IB_DISABLE=${NCCL_IB_DISABLE:-1}
+    export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
+
     DATA_PATH=${DATA_PATH:-/data2/hxj/data/MSRVTT}
     SOURCE_TRAIN_CSV="${DATA_PATH}/csv/MSRVTT_train.9k.csv"
     TEST_CSV="${DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv"
     ANNOTATION_JSON="${DATA_PATH}/annotation/MSRVTT_v2.json"
     SPLIT_MANIFEST="${ROOT_DIR}/dataloaders/splits/msrvtt_trusted_v1_seed0.json"
     GENERATED_SPLIT_DIR="${ROOT_DIR}/data/generated/msrvtt_trusted_v1"
-    TQFS_CACHE_DIR=${TQFS_CACHE_DIR:-/home/xujie/.cache/uatvr/tqfs/msrvtt_trusted_v1_f1_m8_r224}
     export CLIP_CACHE_DIR=${CLIP_CACHE_DIR:-${ROOT_DIR}/.cache}
 
     "${TVR_PYTHON}" "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
@@ -80,11 +84,15 @@ run_worker() {
     CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING:-1}
     CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS:-4}
     A800_THROUGHPUT_COMPARISON=${A800_THROUGHPUT_COMPARISON:-0}
-    TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS:-8}
-    TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR:-2}
+    # 4 rank × 12 = 48 worker，配 4 主进程 + pin thread + NCCL 大概占 60 逻辑核，
+    # 给 64 核 EPYC 7282 留出余量，同时吃到部分 HT。prefetch=4 让每 worker 缓 4 batch，
+    # 192 batch buffer × ~46MB ≈ 9GB，对 1TB RAM 无压力。
+    TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS:-12}
+    TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR:-4}
     TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-256}
     TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS:-1}
-    FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:-8}
+    # -1 = 完全不冻结 CLIP；0 反而会冻全部 12 层，见 main_task_retrieval.py:1240
+    FREEZE_LAYER_NUM=${FREEZE_LAYER_NUM:--1}
     if [[ "${EXPERIMENT_PROFILE}" != "default" && "${EXPERIMENT_PROFILE}" != "hygiene" ]]; then
         echo "Unsupported EXPERIMENT_PROFILE=${EXPERIMENT_PROFILE}; expected default or hygiene" >&2
         exit 2
@@ -101,7 +109,6 @@ run_worker() {
             --clip_layer_norm_precision
             --clip_gradient_checkpointing
             --clip_visual_checkpoint_layers
-            --tqfs_cache_dir
             --train_csv
             --val_csv
             --source_train_csv
@@ -153,8 +160,9 @@ run_worker() {
     fi
 
     # hygiene baseline 固定 batch 256 + accum 1，有效 batch = 256；4 卡时每卡 micro-batch 64。
-    # 当前主机可见 GPU 为 0–3；0/1 位于 NUMA 0，2/3 位于 NUMA 1。
-    CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
+    # 本机共 5 张 A800：GPU0/1 在 NUMA0，GPU2/3/4 在 NUMA1；GPU2↔GPU4 为 NV8 NVLink，其余全 PCIe。
+    # 默认选 0,2,3,4：NUMA1 集中 3 张 + 吃到 GPU2-4 的 NVLink，跨 NUMA 边最少。
+    CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,2,3,4}"
     if ! [[ "${CUDA_VISIBLE_DEVICES}" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
         echo "malformed CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}; expected comma-separated integer GPU IDs" >&2
         exit 2
@@ -205,7 +213,7 @@ run_worker() {
         fi
         echo "[run_train_msrvtt_bg:worker] A800 throughput comparison: activation checkpointing disabled"
     fi
-    echo "[run_train_msrvtt_bg:worker] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} NPROC=${NPROC} TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS} TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR} TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE} TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS} TQFS_CACHE_DIR=${TQFS_CACHE_DIR} CLIP_CACHE_DIR=${CLIP_CACHE_DIR}"
+    echo "[run_train_msrvtt_bg:worker] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} NPROC=${NPROC} TRAIN_NUM_WORKERS=${TRAIN_NUM_WORKERS} TRAIN_PREFETCH_FACTOR=${TRAIN_PREFETCH_FACTOR} TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE} TRAIN_GRADIENT_ACCUMULATION_STEPS=${TRAIN_GRADIENT_ACCUMULATION_STEPS} CLIP_CACHE_DIR=${CLIP_CACHE_DIR}"
     echo "[run_train_msrvtt_bg:worker] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=${CLIP_LAYER_NORM_PRECISION} CLIP_GRADIENT_CHECKPOINTING=${CLIP_GRADIENT_CHECKPOINTING} CLIP_VISUAL_CHECKPOINT_LAYERS=${CLIP_VISUAL_CHECKPOINT_LAYERS}"
     echo "[Runtime] python=${TVR_PYTHON} torchrun=${TVR_TORCHRUN}"
 
@@ -225,7 +233,6 @@ run_worker() {
         --eval_split val \
         --data_path "${ANNOTATION_JSON}" \
         --features_path "${DATA_PATH}/videos/compressed_videos/msrvtt_224_12fps/" \
-        --tqfs_cache_dir "${TQFS_CACHE_DIR}" \
         --output_dir "${OUTPUT_DIR}" \
         --lr 1e-4 --max_words 32 --max_frames 8 --batch_size_val 16 \
         --datatype msrvtt --expand_msrvtt_sentences \
