@@ -1,6 +1,7 @@
 import pytest
 import torch
 
+import uncertainty_modules
 from uncertainty_modules.aleatoric import AleatoricUncertaintyModule
 from uncertainty_modules.types import AleatoricOutput, ProbabilisticEmbedding
 
@@ -136,3 +137,24 @@ def test_rejects_empty_batch_or_sequence(shape):
 
     with pytest.raises(ValueError, match="non-empty"):
         module(torch.empty(shape))
+
+
+def test_video_and_text_instances_are_independent():
+    video_module = AleatoricUncertaintyModule(4, 8)
+    text_module = AleatoricUncertaintyModule(4, 8)
+
+    assert next(video_module.parameters()) is not next(text_module.parameters())
+    assert video_module(torch.randn(2, 5, 4)).embedding.mean.shape == (2, 4)
+    assert text_module(torch.randn(2, 7, 4)).embedding.mean.shape == (2, 4)
+
+
+def test_package_exports_aleatoric_public_api():
+    assert (
+        uncertainty_modules.AleatoricUncertaintyModule
+        is AleatoricUncertaintyModule
+    )
+    assert uncertainty_modules.AleatoricOutput is AleatoricOutput
+    assert uncertainty_modules.ProbabilisticEmbedding is ProbabilisticEmbedding
+    assert callable(uncertainty_modules.uncertainty_ranking_loss)
+    assert callable(uncertainty_modules.semantic_consistency_loss)
+    assert callable(uncertainty_modules.variance_prior_loss)
