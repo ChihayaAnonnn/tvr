@@ -297,6 +297,17 @@ def test_combine_rejects_calibration_that_changes_score_shape(
         )
 
 
+def test_combine_scalarizes_single_value_calibration_tensors():
+    output = EpistemicUncertaintyModule().combine(
+        {"ensemble": torch.tensor([1.0, 2.0])},
+        {"ensemble": 1.0},
+        {"ensemble": (torch.zeros(1, 1), torch.ones(1, 1))},
+    )
+
+    assert output.uncertainty_score.shape == (2,)
+    assert torch.equal(output.uncertainty_score, torch.tensor([1.0, 2.0]))
+
+
 @pytest.mark.parametrize("threshold", [float("nan"), float("inf")])
 def test_combine_rejects_nonfinite_ood_threshold(threshold):
     with pytest.raises(ValueError, match="threshold must be finite"):

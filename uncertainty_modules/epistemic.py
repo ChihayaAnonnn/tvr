@@ -169,6 +169,8 @@ class EpistemicUncertaintyModule(nn.Module):
                 raise ValueError(
                     "each calibration mean and standard deviation must contain a single value"
                 )
+            mean_tensor = mean_tensor.reshape(())
+            standard_deviation_tensor = standard_deviation_tensor.reshape(())
             if (
                 not torch.isfinite(mean_tensor).all()
                 or not torch.isfinite(standard_deviation_tensor).all()
