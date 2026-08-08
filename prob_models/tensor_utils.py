@@ -35,9 +35,6 @@ def l2_normalize(tensor, axis=-1):
 def sample_gaussian_tensors(mu, logsigma, num_samples):
     eps = torch.randn(mu.size(0), num_samples, mu.size(1), dtype=mu.dtype, device=mu.device)
 
-    # NOTE:
-    # - We treat `logsigma` as log-variance (logvar = log(sigma^2)) for consistency with KL divergence terms.
-    # - Therefore std = exp(0.5 * logvar).
-    std = torch.exp(0.5 * logsigma.unsqueeze(1))
-    samples = eps.mul(std).add_(mu.unsqueeze(1))
-    return samples # [B, num_samples, D]
+    samples = eps.mul(torch.exp(logsigma.unsqueeze(1))).add_(
+        mu.unsqueeze(1))
+    return samples

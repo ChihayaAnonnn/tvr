@@ -705,7 +705,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     for step, batch in enumerate(train_dataloader):
         batch = tuple(t.to(device=device, non_blocking=True) for t in batch)
 
-        input_ids, input_mask, segment_ids, video, video_mask, group_ids = (
+        input_ids, input_mask, segment_ids, video, video_mask, _group_ids = (
             _unpack_train_batch(batch)
         )
         loss = model(
@@ -714,7 +714,6 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             input_mask,
             video,
             video_mask,
-            group_ids=group_ids,
         )
 
         if n_gpu > 1:
