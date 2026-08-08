@@ -90,7 +90,8 @@ class EpistemicUncertaintyModule(nn.Module):
             )
             distances = 1.0 - similarities.clamp(min=-1.0, max=1.0)
         elif metric == "squared_euclidean":
-            distances = torch.cdist(features, prototypes).square()
+            differences = features.unsqueeze(1) - prototypes.unsqueeze(0)
+            distances = differences.square().sum(dim=-1)
         else:
             raise ValueError(
                 "metric must be 'cosine' or 'squared_euclidean'"
@@ -164,6 +165,10 @@ class EpistemicUncertaintyModule(nn.Module):
                 dtype=score.dtype,
                 device=score.device,
             )
+            if mean_tensor.numel() != 1 or standard_deviation_tensor.numel() != 1:
+                raise ValueError(
+                    "each calibration mean and standard deviation must contain a single value"
+                )
             if (
                 not torch.isfinite(mean_tensor).all()
                 or not torch.isfinite(standard_deviation_tensor).all()

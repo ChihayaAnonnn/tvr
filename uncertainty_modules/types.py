@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 import torch
 
@@ -28,3 +29,10 @@ class EpistemicOutput:
     nearest_prototype_distance: torch.Tensor | None = None
     nearest_prototype_index: torch.Tensor | None = None
     is_ood: torch.Tensor | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "component_scores",
+            MappingProxyType(dict(self.component_scores)),
+        )

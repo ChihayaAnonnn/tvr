@@ -25,6 +25,14 @@ def test_identical_ensemble_samples_have_zero_disagreement():
     assert output.component_scores["ensemble"] is output.uncertainty_score
 
 
+def test_epistemic_component_scores_are_read_only():
+    samples = torch.randn(3, 2, 4)
+    output = EpistemicUncertaintyModule().from_ensemble(samples)
+
+    with pytest.raises(TypeError):
+        output.component_scores["ensemble"] = torch.zeros(2)
+
+
 def test_mc_dropout_disagreement_increases_with_spread():
     module = EpistemicUncertaintyModule()
     base = torch.zeros(3, 2, 4)
@@ -93,6 +101,68 @@ def test_squared_euclidean_prototype_distance():
 
     assert output.nearest_prototype_distance.item() == pytest.approx(1.0)
     assert output.nearest_prototype_index.item() == 1
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_squared_euclidean_supports_low_precision_cpu_and_autograd(dtype):
+    features = torch.tensor(
+        [[2.0, 0.0]],
+        dtype=dtype,
+        requires_grad=True,
+    )
+    prototypes = torch.tensor([[0.0, 0.0], [1.0, 0.0]], dtype=dtype)
+
+    output = EpistemicUncertaintyModule().from_prototypes(
+        features,
+        prototypes,
+        metric="squared_euclidean",
+    )
+    output.uncertainty_score.sum().backward()
+
+    assert output.uncertainty_score.dtype == dtype
+    assert torch.isfinite(output.uncertainty_score).all()
+    assert features.grad is not None
+    assert torch.isfinite(features.grad).all()
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available(),
+    reason="CUDA is not available",
+)
+def test_squared_euclidean_supports_cuda_float16_and_autograd():
+    features = torch.tensor(
+        [[2.0, 0.0]],
+        device="cuda",
+        dtype=torch.float16,
+        requires_grad=True,
+    )
+    prototypes = torch.tensor(
+        [[0.0, 0.0], [1.0, 0.0]],
+        device="cuda",
+        dtype=torch.float16,
+    )
+
+    output = EpistemicUncertaintyModule().from_prototypes(
+        features,
+        prototypes,
+        metric="squared_euclidean",
+    )
+    output.uncertainty_score.sum().backward()
+
+    assert output.uncertainty_score.device == features.device
+    assert output.uncertainty_score.dtype == features.dtype
+    assert torch.isfinite(output.uncertainty_score).all()
+    assert torch.isfinite(features.grad).all()
+
+
+def test_zero_vector_cosine_distance_is_finite():
+    output = EpistemicUncertaintyModule().from_prototypes(
+        torch.zeros(1, 4),
+        torch.zeros(2, 4),
+    )
+
+    assert output.uncertainty_score.item() == pytest.approx(1.0)
+    assert torch.isfinite(output.uncertainty_score).all()
 
 
 def test_prototype_distance_rejects_empty_or_mismatched_prototypes():
@@ -209,6 +279,21 @@ def test_combine_rejects_empty_or_incompatible_scores():
             {"ensemble": torch.tensor([1.0, float("inf")])},
             {"ensemble": 1.0},
             {"ensemble": (0.0, 1.0)},
+        )
+
+
+@pytest.mark.parametrize(
+    "calibration_statistic",
+    [torch.zeros(2, 1), torch.zeros(1, 2)],
+)
+def test_combine_rejects_calibration_that_changes_score_shape(
+    calibration_statistic,
+):
+    with pytest.raises(ValueError, match="single value"):
+        EpistemicUncertaintyModule().combine(
+            {"ensemble": torch.ones(2)},
+            {"ensemble": 1.0},
+            {"ensemble": (calibration_statistic, 1.0)},
         )
 
 
