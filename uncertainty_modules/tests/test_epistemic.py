@@ -120,3 +120,94 @@ def test_prototype_distance_rejects_device_mismatch():
             torch.randn(2, 4, device="cuda"),
             torch.randn(3, 4),
         )
+
+
+def test_combine_calibrates_weights_and_applies_ood_threshold():
+    scores = {
+        "ensemble": torch.tensor([1.0, 3.0]),
+        "prototype": torch.tensor([2.0, 6.0]),
+    }
+    calibration = {
+        "ensemble": (1.0, 2.0),
+        "prototype": (2.0, 4.0),
+    }
+
+    output = EpistemicUncertaintyModule().combine(
+        scores,
+        {"ensemble": 1.0, "prototype": 3.0},
+        calibration,
+        threshold=0.5,
+    )
+
+    assert torch.allclose(output.uncertainty_score, torch.tensor([0.0, 1.0]))
+    assert output.component_scores == scores
+    assert torch.equal(output.is_ood, torch.tensor([False, True]))
+
+
+def test_combine_without_threshold_omits_ood_decision():
+    output = EpistemicUncertaintyModule().combine(
+        {"ensemble": torch.tensor([1.0, 2.0])},
+        {"ensemble": 1.0},
+        {"ensemble": (0.0, 1.0)},
+    )
+
+    assert output.is_ood is None
+
+
+@pytest.mark.parametrize(
+    ("weights", "calibration", "message"),
+    [
+        ({"ensemble": -1.0}, {"ensemble": (0.0, 1.0)}, "nonnegative"),
+        ({"ensemble": float("nan")}, {"ensemble": (0.0, 1.0)}, "finite"),
+        ({"ensemble": 0.0}, {"ensemble": (0.0, 1.0)}, "positive"),
+        ({"ensemble": 1.0}, {}, "identical keys"),
+        ({"ensemble": 1.0}, {"ensemble": (0.0, 0.0)}, "positive"),
+        ({"ensemble": 1.0}, {"ensemble": (float("nan"), 1.0)}, "finite"),
+    ],
+)
+def test_combine_rejects_invalid_configuration(
+    weights,
+    calibration,
+    message,
+):
+    with pytest.raises(ValueError, match=message):
+        EpistemicUncertaintyModule().combine(
+            {"ensemble": torch.ones(2)},
+            weights,
+            calibration,
+        )
+
+
+def test_combine_rejects_empty_or_incompatible_scores():
+    module = EpistemicUncertaintyModule()
+    with pytest.raises(ValueError, match="must not be empty"):
+        module.combine({}, {}, {})
+    with pytest.raises(ValueError, match=r"floating-point \[B\]"):
+        module.combine(
+            {"ensemble": torch.ones(2, 1)},
+            {"ensemble": 1.0},
+            {"ensemble": (0.0, 1.0)},
+        )
+    with pytest.raises(ValueError, match="share shape"):
+        module.combine(
+            {"ensemble": torch.ones(2), "prototype": torch.ones(3)},
+            {"ensemble": 1.0, "prototype": 1.0},
+            {"ensemble": (0.0, 1.0), "prototype": (0.0, 1.0)},
+        )
+    with pytest.raises(ValueError, match="finite"):
+        module.combine(
+            {"ensemble": torch.tensor([1.0, float("inf")])},
+            {"ensemble": 1.0},
+            {"ensemble": (0.0, 1.0)},
+        )
+
+
+@pytest.mark.parametrize("threshold", [float("nan"), float("inf")])
+def test_combine_rejects_nonfinite_ood_threshold(threshold):
+    with pytest.raises(ValueError, match="threshold must be finite"):
+        EpistemicUncertaintyModule().combine(
+            {"ensemble": torch.ones(2)},
+            {"ensemble": 1.0},
+            {"ensemble": (0.0, 1.0)},
+            threshold=threshold,
+        )
