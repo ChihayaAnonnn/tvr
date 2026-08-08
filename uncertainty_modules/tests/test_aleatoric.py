@@ -6,6 +6,12 @@ from uncertainty_modules.aleatoric import AleatoricUncertaintyModule
 from uncertainty_modules.types import AleatoricOutput, ProbabilisticEmbedding
 
 
+def test_module_has_no_runtime_input_validator():
+    module = AleatoricUncertaintyModule(4, 8)
+
+    assert not hasattr(module, "_validate")
+
+
 def test_forward_returns_documented_shapes():
     module = AleatoricUncertaintyModule(
         4,
@@ -159,19 +165,6 @@ def test_reliability_does_not_send_mean_loss_gradient_to_uncertainty_head():
     )
 
 
-def test_rejects_all_empty_mask():
-    module = AleatoricUncertaintyModule(4, 8)
-    mask = torch.tensor(
-        [
-            [True, False, False],
-            [False, False, False],
-        ]
-    )
-
-    with pytest.raises(ValueError, match="at least one valid"):
-        module(torch.randn(2, 3, 4), mask)
-
-
 def test_preserves_float64_dtype():
     module = AleatoricUncertaintyModule(4, 8).double()
 
@@ -206,23 +199,6 @@ def test_cuda_float16_outputs_remain_on_device_and_finite():
     )
     assert all(tensor.device == features.device for tensor in tensors)
     assert all(torch.isfinite(tensor).all() for tensor in tensors)
-
-
-def test_rejects_nonfinite_features():
-    module = AleatoricUncertaintyModule(4, 8)
-    features = torch.randn(2, 3, 4)
-    features[0, 0, 0] = torch.nan
-
-    with pytest.raises(ValueError, match="finite"):
-        module(features)
-
-
-@pytest.mark.parametrize("shape", [(0, 3, 4), (2, 0, 4)])
-def test_rejects_empty_batch_or_sequence(shape):
-    module = AleatoricUncertaintyModule(4, 8)
-
-    with pytest.raises(ValueError, match="non-empty"):
-        module(torch.empty(shape))
 
 
 def test_video_and_text_instances_are_independent():

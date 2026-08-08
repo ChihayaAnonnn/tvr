@@ -61,51 +61,17 @@ class AleatoricUncertaintyModule(nn.Module):
             self.max_variance - self.min_variance
         ) * unit_interval
 
-    def _validate(
-        self,
-        features: torch.Tensor,
-        mask: torch.Tensor | None,
-    ) -> torch.Tensor:
-        if (
-            features.ndim != 3
-            or features.shape[-1] != self.input_dim
-            or not features.is_floating_point()
-        ):
-            raise ValueError(
-                "features must be floating point with shape [B, N, input_dim]"
-            )
-        if features.shape[0] == 0 or features.shape[1] == 0:
-            raise ValueError(
-                "features must contain a non-empty batch and sequence"
-            )
-        if not torch.isfinite(features).all():
-            raise ValueError("features must contain only finite values")
-
-        if mask is None:
-            return torch.ones(
-                features.shape[:2],
-                dtype=torch.bool,
-                device=features.device,
-            )
-
-        if (
-            mask.dtype is not torch.bool
-            or mask.shape != features.shape[:2]
-            or mask.device != features.device
-        ):
-            raise ValueError(
-                "mask must be boolean [B, N] on the features device"
-            )
-        if not torch.all(mask.any(dim=1)):
-            raise ValueError("every sample must contain at least one valid element")
-        return mask
-
     def forward(
         self,
         features: torch.Tensor,
         mask: torch.Tensor | None = None,
     ) -> AleatoricOutput:
-        mask = self._validate(features, mask)
+        if mask is None:
+            mask = torch.ones(
+                features.shape[:2],
+                dtype=torch.bool,
+                device=features.device,
+            )
 
         relevance_logits = self.relevance_head(features).squeeze(-1)
         relevance_logits = relevance_logits.masked_fill(~mask, -torch.inf)

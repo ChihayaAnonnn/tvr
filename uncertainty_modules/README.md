@@ -9,6 +9,8 @@
 - `features`：浮点张量 `[B, N, D]`；`N` 可以表示视频帧或文本 token。
 - `mask`：可选布尔张量 `[B, N]`；`True` 表示有效元素。
 
+`forward` 信任固定训练链路提供的输入，不执行 shape、有限值或显式 mask 校验；调用方需要保证输入满足上述约定。只有在 `mask=None` 时，模块才会创建全有效 mask。
+
 返回 `AleatoricOutput`：
 
 - `embedding.mean [B,D]`：不确定性感知聚合后的语义表示。
