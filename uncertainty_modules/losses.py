@@ -1,3 +1,5 @@
+import math
+
 import torch
 from torch.nn import functional as F
 
@@ -17,9 +19,12 @@ def uncertainty_ranking_loss(
     margin: float = 0.1,
 ) -> torch.Tensor:
     _require_same_shape(clean, degraded, "clean and degraded")
+    margin = float(margin)
+    if not math.isfinite(margin):
+        raise ValueError("margin must be finite")
     if margin < 0:
         raise ValueError("margin must be nonnegative")
-    return F.relu(float(margin) + clean - degraded).mean()
+    return F.relu(margin + clean - degraded).mean()
 
 
 def semantic_consistency_loss(
@@ -45,4 +50,6 @@ def variance_prior_loss(
         dtype=variance.dtype,
         device=variance.device,
     )
+    if not torch.isfinite(target).all():
+        raise ValueError("target_log_variance must be finite")
     return torch.mean((torch.log(variance) - target).square())

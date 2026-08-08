@@ -1,3 +1,5 @@
+import math
+
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -16,6 +18,10 @@ class AleatoricUncertaintyModule(nn.Module):
         super().__init__()
         if input_dim <= 0 or hidden_dim <= 0:
             raise ValueError("input_dim and hidden_dim must be positive")
+        min_variance = float(min_variance)
+        max_variance = float(max_variance)
+        if not math.isfinite(min_variance) or not math.isfinite(max_variance):
+            raise ValueError("variance bounds must be finite")
         if min_variance <= 0 or max_variance <= min_variance:
             raise ValueError(
                 "variance bounds must satisfy 0 < min_variance < max_variance"
@@ -47,7 +53,10 @@ class AleatoricUncertaintyModule(nn.Module):
 
     def _bounded_variance(self, raw: torch.Tensor) -> torch.Tensor:
         positive = F.softplus(raw)
-        unit_interval = positive / (1.0 + positive)
+        return self._bound_positive(positive)
+
+    def _bound_positive(self, positive: torch.Tensor) -> torch.Tensor:
+        unit_interval = 1.0 - torch.reciprocal(1.0 + positive)
         return self.min_variance + (
             self.max_variance - self.min_variance
         ) * unit_interval
@@ -106,12 +115,10 @@ class AleatoricUncertaintyModule(nn.Module):
             self.uncertainty_head(features)
         )
         local_uncertainty = token_variance.mean(dim=-1)
-        reliability = torch.exp(-local_uncertainty.detach())
-        reliability = reliability * mask.to(features.dtype)
-        aggregation_weights = relevance_weights * reliability
-        aggregation_weights = aggregation_weights / aggregation_weights.sum(
+        aggregation_logits = relevance_logits - local_uncertainty.detach()
+        aggregation_weights = torch.softmax(
+            aggregation_logits,
             dim=1,
-            keepdim=True,
         )
 
         mean = torch.sum(
@@ -126,9 +133,7 @@ class AleatoricUncertaintyModule(nn.Module):
             dim=1,
         )
         total_positive = propagated_variance + global_variance
-        total_variance = self.min_variance + (
-            self.max_variance - self.min_variance
-        ) * total_positive / (1.0 + total_positive)
+        total_variance = self._bound_positive(total_positive)
 
         embedding = ProbabilisticEmbedding(
             mean=mean,

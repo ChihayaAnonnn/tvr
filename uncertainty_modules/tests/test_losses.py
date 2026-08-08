@@ -29,6 +29,12 @@ def test_ranking_loss_rejects_invalid_shape_or_margin():
         uncertainty_ranking_loss(torch.ones(2), torch.ones(3))
     with pytest.raises(ValueError, match="nonnegative"):
         uncertainty_ranking_loss(torch.ones(2), torch.ones(2), margin=-0.1)
+    with pytest.raises(ValueError, match="finite"):
+        uncertainty_ranking_loss(
+            torch.ones(2),
+            torch.ones(2),
+            margin=float("nan"),
+        )
 
 
 def test_semantic_consistency_is_zero_for_identical_embeddings():
@@ -58,3 +64,8 @@ def test_variance_prior_is_zero_at_target():
 def test_variance_prior_rejects_nonpositive_variance():
     with pytest.raises(ValueError, match="positive"):
         variance_prior_loss(torch.tensor([0.0]), 0.0)
+
+
+def test_variance_prior_rejects_nonfinite_target():
+    with pytest.raises(ValueError, match="target_log_variance"):
+        variance_prior_loss(torch.ones(2), float("nan"))
