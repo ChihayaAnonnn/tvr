@@ -65,6 +65,12 @@ class AleatoricUncertaintyModule(nn.Module):
             raise ValueError(
                 "features must be floating point with shape [B, N, input_dim]"
             )
+        if features.shape[0] == 0 or features.shape[1] == 0:
+            raise ValueError(
+                "features must contain a non-empty batch and sequence"
+            )
+        if not torch.isfinite(features).all():
+            raise ValueError("features must contain only finite values")
 
         if mask is None:
             return torch.ones(
