@@ -1,0 +1,150 @@
+trusted-v1 validated: train=8500 val=500 test=1000
+[train_msrvtt.sh] CUDA_VISIBLE_DEVICES=0,1,2,4 NPROC=4 TRAIN_NUM_WORKERS=8 TRAIN_PREFETCH_FACTOR=2 TRAIN_BATCH_SIZE=256 TRAIN_GRADIENT_ACCUMULATION_STEPS=1 TQFS_CACHE_DIR=/home/xujie/.cache/uatvr/tqfs/msrvtt_trusted_v1_f1_m8_r224
+[train_msrvtt.sh] BACKBONE_TYPE=openai_clip BACKBONE_NAME=EVA02-CLIP-B-16 BACKBONE_PATH=/data2/hxj/project/UATVR/research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt EVA_CLIP_USE_XATTN=0 CLIP_LAYER_NORM_PRECISION=fp16 CLIP_GRADIENT_CHECKPOINTING=1 CLIP_VISUAL_CHECKPOINT_LAYERS=4
+07/12/2026 10:30:59 - INFO -   Effective parameters:
+07/12/2026 10:30:59 - INFO -     [Training] epochs=5 | batch_size=256 | lr=0.0001 | coef_lr=0.001 | gradient_accumulation_steps=1 | fp16=False | max_frames=8 | max_words=32 | seed=42
+07/12/2026 10:30:59 - INFO -     [Model] pretrained_clip_name=ViT-B/16 | backbone_type=openai_clip | clip_layer_norm_precision=fp16 | clip_gradient_checkpointing=True | clip_visual_checkpoint_layers=4 | backbone_name=EVA02-CLIP-B-16 | backbone_path=/data2/hxj/project/UATVR/research_refs/model_weights/eva_clip/EVA02_CLIP_B_psz16_s8B.pt | eva_clip_root=/data2/hxj/project/UATVR/research_refs/EVA/EVA-CLIP/rei | eva_clip_use_xattn=False | sim_header=seqTransf | linear_patch=2d | extra_video_cls_num=2 | extra_text_cls_num=2 | use_attributes=False | max_words_attrs=None | attr_num_blocks=4
+07/12/2026 10:30:59 - INFO -     [HardNeg] use_hard_negative_packing=False | use_explicit_hard_negative_loss=False | hard_negative_path=cache_dir/hard_negatives/msrvtt_train_hardneg_clean.json | hard_negative_pack_seed=42 | w_hard_negative=0.05
+07/12/2026 10:30:59 - INFO -     [Protocol] datatype=msrvtt | do_train=True | do_eval=False | eval_split=val | expand_msrvtt_sentences=True | source_train_csv=/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv | test_csv=/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv | split_manifest=/data2/hxj/project/UATVR/dataloaders/splits/msrvtt_trusted_v1_seed42.json | tqfs_cache_dir=/home/xujie/.cache/uatvr/tqfs/msrvtt_trusted_v1_f1_m8_r224 | experiment_profile=hygiene
+07/12/2026 10:30:59 - INFO -     [Other] DSL=False | batch_size_val=16 | cache_dir= | cross_model=cross-base | cross_num_hidden_layers=4 | data_path=/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json | do_lower_case=False | do_pretrain=False | eval_frame_order=0 | eval_vid_chunk_size=128 | experiment_desc= | feature_framerate=1 | features_path=/data2/hxj/data/MSRVTT/videos/compressed_videos/msrvtt_224_12fps/ | fp16_opt_level=O1 | freeze_layer_num=0 | hard_negative_rate=0.5 | init_model=None | local_rank=0 | log_mus_scores=False | loose_type=True | lr_decay=0.9 | margin=0.1 | msrvtt_attributes_path= | msvd_attributes_path= | n_display=20 | n_gpu=1 | n_pair=1 | negative_weighting=1 | num_thread_reader=8 | output_dir=ckpts/ckpt_msrvtt_p0_hygiene_seed42 | prefetch_factor=2 | rank=0 | requested_effective_batch_size=256 | resume_model=None | slice_framepos=3 | strategy=1 | task_type=retrieval | text_num_hidden_layers=12 | train_csv=/data2/hxj/project/UATVR/data/generated/msrvtt_trusted_v1/train.csv | train_frame_order=0 | val_csv=/data2/hxj/project/UATVR/data/generated/msrvtt_trusted_v1/val.csv | video_dim=1024 | visual_num_hidden_layers=12 | warmup_proportion=0.1 | world_size=4
+07/12/2026 10:30:59 - INFO -   device: cuda:0 n_gpu: 4
+07/12/2026 10:31:00 - INFO -   loading archive file /data2/hxj/project/UATVR/modules/cross-base
+07/12/2026 10:31:00 - INFO -   Model config {
+  "attention_probs_dropout_prob": 0.1,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.1,
+  "hidden_size": 512,
+  "initializer_range": 0.02,
+  "intermediate_size": 2048,
+  "max_position_embeddings": 128,
+  "num_attention_heads": 8,
+  "num_hidden_layers": 4,
+  "type_vocab_size": 2,
+  "vocab_size": 512
+}
+
+07/12/2026 10:31:00 - WARNING -   Test retrieval by loose type.
+07/12/2026 10:31:00 - WARNING -   	 embed_dim: 512
+07/12/2026 10:31:00 - WARNING -   	 image_resolution: 224
+07/12/2026 10:31:00 - WARNING -   	 vision_layers: 12
+07/12/2026 10:31:00 - WARNING -   	 vision_width: 768
+07/12/2026 10:31:00 - WARNING -   	 vision_patch_size: 16
+07/12/2026 10:31:00 - WARNING -   	 context_length: 77
+07/12/2026 10:31:00 - WARNING -   	 vocab_size: 49408
+07/12/2026 10:31:00 - WARNING -   	 transformer_width: 512
+07/12/2026 10:31:00 - WARNING -   	 transformer_heads: 8
+07/12/2026 10:31:00 - WARNING -   	 transformer_layers: 12
+07/12/2026 10:31:00 - WARNING -   		 linear_patch: 2d
+07/12/2026 10:31:00 - WARNING -   	 cut_top_layer: 0
+07/12/2026 10:31:01 - WARNING -   	 OpenAI CLIP LayerNorm precision: fp16 (modules=51)
+07/12/2026 10:31:01 - WARNING -   	 OpenAI CLIP gradient checkpointing: True (visual_layers=4, transformers=1)
+07/12/2026 10:31:01 - WARNING -   	 sim_header: seqTransf
+07/12/2026 10:31:01 - WARNING -   CLIP UATVR Model ......
+07/12/2026 10:31:01 - WARNING -   	 Extra video Class token number: 2
+07/12/2026 10:31:01 - WARNING -   	 Extra text Class token number: 2
+07/12/2026 10:31:11 - INFO -   UATVR: 9 个参数为新增模块，将随机初始化 (text_weight_fc×4, video_weight_fc×4, word_position_embeddings×1)
+07/12/2026 10:31:11 - INFO -   UATVR: 3 个 pretrained 参数在当前模型中未使用（通常为 config 元数据），已忽略
+07/12/2026 10:31:12 - INFO -     Batch semantics | requested_effective_batch=256
+07/12/2026 10:31:12 - INFO -     Batch semantics | forward_global_contrastive_batch=256
+07/12/2026 10:31:12 - INFO -     Batch semantics | per_rank_micro_batch=64
+07/12/2026 10:31:12 - INFO -     Batch semantics | gradient_accumulation_steps=1
+07/12/2026 10:31:12 - INFO -     Batch semantics | optimizer_effective_batch=256
+07/12/2026 10:31:12 - INFO -     Batch semantics | forward_steps_per_epoch=664
+07/12/2026 10:31:12 - INFO -     Batch semantics | optimizer_steps_per_epoch=664
+07/12/2026 10:31:12 - INFO -     Batch semantics | total_optimizer_steps=3320
+07/12/2026 10:31:12 - INFO -     Batch semantics | world_size=4
+07/12/2026 10:31:12 - INFO -   ***** Running val evaluation *****
+07/12/2026 10:31:12 - INFO -     Split: val | Samples: 10000 | Steps: 625 | Batch: 16 | Frame order: sequential
+07/12/2026 10:31:12 - INFO -   [Optimizer] CLIP: 295 params (lr=1.00e-07) | Other: 58 params (lr=1.00e-04)
+07/12/2026 10:31:14 - INFO -   ***** Running training *****
+07/12/2026 10:31:14 - INFO -     Samples: 170000 | Batch: 64 x 4 GPUs x 1 accum = 256 eff | Steps/epoch: 664 | Total opt steps: 3320
+07/12/2026 10:31:14 - INFO -   ============================================================
+Traceback (most recent call last):
+  File "/data2/hxj/project/UATVR/main_task_retrieval.py", line 1491, in <module>
+    main()
+  File "/data2/hxj/project/UATVR/main_task_retrieval.py", line 1438, in main
+    tr_loss, global_step = train_epoch(
+  File "/data2/hxj/project/UATVR/main_task_retrieval.py", line 829, in train_epoch
+    loss_dict = model(
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 1519, in forward
+    else self._run_ddp_forward(*inputs, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 1355, in _run_ddp_forward
+    return self.module(*inputs, **kwargs)  # type: ignore[index]
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/data2/hxj/project/UATVR/modules/modeling_mulit.py", line 680, in forward
+    visual_cls = self.get_visual_output(
+  File "/data2/hxj/project/UATVR/modules/modeling_mulit.py", line 774, in get_visual_output
+    encoded = self.clip.encode_image(
+  File "/data2/hxj/project/UATVR/modules/module_clip.py", line 563, in encode_image
+    hidden = self.visual(image.type(self.dtype), video_frame=video_frame) # vit
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/data2/hxj/project/UATVR/modules/module_clip.py", line 405, in forward
+    x = self.transformer(x, video_frame=video_frame)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/data2/hxj/project/UATVR/modules/module_clip.py", line 348, in forward
+    x = block((x, video_frame))[0]
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/data2/hxj/project/UATVR/modules/module_clip.py", line 328, in forward
+    x = x + self.mlp(self.ln_2(x))
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/container.py", line 215, in forward
+    input = module(input)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/data2/hxj/project/UATVR/modules/module_clip.py", line 300, in forward
+    return x * torch.sigmoid(1.702 * x)
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 592.00 MiB. GPU 2 has a total capacty of 79.25 GiB of which 518.12 MiB is free. Process 1228963 has 46.10 GiB memory in use. Process 1700735 has 14.71 GiB memory in use. Including non-PyTorch memory, this process has 17.89 GiB memory in use. Of the allocated memory 16.83 GiB is allocated by PyTorch, and 292.33 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF
+[2026-07-12 10:32:10,718] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 2316542 closing signal SIGTERM
+[2026-07-12 10:32:10,718] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 2316543 closing signal SIGTERM
+[2026-07-12 10:32:10,719] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 2316545 closing signal SIGTERM
+[2026-07-12 10:32:12,401] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: 1) local_rank: 2 (pid: 2316544) of binary: /home/xujie/miniconda3/envs/ret/bin/python
+Traceback (most recent call last):
+  File "/home/xujie/miniconda3/envs/ret/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+/data2/hxj/project/UATVR/main_task_retrieval.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-07-12_10:32:10
+  host      : node199
+  rank      : 2 (local_rank: 2)
+  exitcode  : 1 (pid: 2316544)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
