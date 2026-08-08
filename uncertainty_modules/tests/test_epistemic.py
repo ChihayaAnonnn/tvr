@@ -1,7 +1,17 @@
 import pytest
 import torch
 
+import uncertainty_modules
 from uncertainty_modules.epistemic import EpistemicUncertaintyModule
+from uncertainty_modules.types import EpistemicOutput
+
+
+def test_package_exports_epistemic_public_api():
+    assert (
+        uncertainty_modules.EpistemicUncertaintyModule
+        is EpistemicUncertaintyModule
+    )
+    assert uncertainty_modules.EpistemicOutput is EpistemicOutput
 
 
 def test_identical_ensemble_samples_have_zero_disagreement():
