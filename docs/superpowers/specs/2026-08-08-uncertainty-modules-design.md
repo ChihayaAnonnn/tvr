@@ -62,7 +62,7 @@ uncertainty_modules/
 
 `AleatoricUncertaintyModule(input_dim, hidden_dim, min_variance, max_variance)` 接收 `features: [B, N, D]` 和可选的布尔张量 `mask: [B, N]`，其中 `True` 表示有效元素。
 
-构造函数拒绝非正的维度以及非法的方差范围。`forward` 方法拒绝不兼容的张量秩或形状；若某个 batch 样本的 mask 中不存在任何有效元素，则直接报错。
+构造函数拒绝非正的维度以及非法的方差范围。训练链路负责保证 `features` 与显式传入的 `mask` 满足上述接口约定；`forward` 不执行运行时输入校验。若 `mask=None`，`forward` 创建形状为 `[B, N]` 的全有效布尔 mask。
 
 ### 分离的双分支
 
@@ -122,14 +122,14 @@ uncertainty_modules/
 - 正方差先使用稳定、平滑的变换，再进行有限范围约束。
 - 余弦距离使用带 epsilon 的安全归一化。
 - Ensemble 和 MC 方差使用总体方差，避免小样本下出现 NaN。
-- 公共方法在 API 边界附近校验张量秩、batch、特征维度、mask、采样次数和 prototype 数量。
+- Aleatoric `forward` 信任固定训练链路的输入契约，不校验张量秩、batch、特征维度或显式 mask；Epistemic 公共方法仍校验采样次数、张量形状和 prototype 数量。
 - 输出保持输入的 device 和浮点 dtype。
 
 ## 测试策略
 
 实现遵循 red-green-refactor，并按以下顺序推进：
 
-1. 通用结果容器和 Aleatoric 输入校验；
+1. 通用结果容器和 Aleatoric 前向接口；
 2. Aleatoric relevance、uncertainty、mask、聚合与梯度行为；
 3. Aleatoric 损失；
 4. Ensemble 和 MC Dropout 的 Epistemic 估计；
@@ -137,7 +137,7 @@ uncertainty_modules/
 6. 校准后的组合分数与 OOD 判定；
 7. 使用文档和完整的包级验证。
 
-Aleatoric 测试覆盖：输出形状、有限且为正的有界方差、mask 位置权重为零、有效位置权重归一化、全空 mask 报错、单 token 和变长序列、dtype/device 保持以及 autograd。
+Aleatoric 测试覆盖：输出形状、有限且为正的有界方差、默认全有效 mask、显式 mask 位置权重为零、有效位置权重归一化、单 token 和变长序列、dtype/device 保持以及 autograd。测试不再要求非法输入提前报错。
 
 分支隔离测试验证：当损失只作用于 mean 时，relevance 参数能够得到梯度，而 uncertainty 参数不会通过 reliability pooling 路径接收梯度。
 
