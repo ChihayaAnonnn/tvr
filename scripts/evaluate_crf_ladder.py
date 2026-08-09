@@ -29,8 +29,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Iterable, Optional
-
+from typing import Iterable, Optional
 
 # ---------------------------------------------------------------------------
 # Checkpoint selection (Task 9 core; used by training loop)

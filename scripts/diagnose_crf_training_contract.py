@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-
 APPENDIX_C_KEYS: tuple[str, ...] = (
     "retrieval_gradient_isolation",
     "ranking_gradient_isolation",

@@ -32,7 +32,6 @@ import numpy as np
 import torch
 from torch.utils.data.sampler import Sampler
 
-
 RANK_TO_CRF: dict[int, int] = {1: 30, 2: 38, 3: 46}
 
 
@@ -211,7 +210,6 @@ def crf_train_collate(samples: list[dict]) -> CRFTrainBatch:
     ``order_batch_indices`` maps each order slot back to its batch position.
     """
 
-    B = len(samples)
     input_ids = torch.stack([_as_tensor(s["input_ids"], torch.long) for s in samples])
     input_mask = torch.stack([_as_tensor(s["input_mask"], torch.long) for s in samples])
     segment_ids = torch.stack([_as_tensor(s["segment_ids"], torch.long) for s in samples])

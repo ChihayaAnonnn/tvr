@@ -10,11 +10,10 @@ from modules.crf_head import CRFTrainingHead, paired_visual_forward
 from modules.module_clip import CLIP, convert_weights
 from modules.module_cross import CrossConfig, CrossModel
 from modules.module_cross import Transformer as TransformerClip
-from modules.until_module import AllGather, CrossEn, KLdivergence, MILNCELoss, MILNCELoss_BoF, PreTrainedModel
+from modules.until_module import AllGather, CrossEn, KLdivergence, MILNCELoss_BoF, PreTrainedModel
 
 try:
     from prob_models.pie_model import PIENet
-    from prob_models.probemb import MCSoftContrastiveLoss
     from prob_models.tensor_utils import l2_normalize, sample_gaussian_tensors
     from prob_models.uncertainty_module import UncertaintyModuleImage
 except:
@@ -210,7 +209,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         transformer_width = clip_state_dict["ln_final.weight"].shape[0]
         transformer_heads = transformer_width // 64
         transformer_layers = len(
-            set(k.split(".")[2] for k in clip_state_dict if k.startswith(f"transformer.resblocks"))
+            set(k.split(".")[2] for k in clip_state_dict if k.startswith("transformer.resblocks"))
         )
 
         show_log(task_config, "\t embed_dim: {}".format(embed_dim))

@@ -138,3 +138,34 @@ combined = epistemic.combine(
 - 所有分量必须具有相同的 `[B]` shape、device 和 dtype。
 
 当前独立包不负责校准集选择、阈值拟合、检索重排序或主流程接线。
+
+## CRF Degradation Ladder（`u_frame` / `u_video`）
+
+`AleatoricUncertaintyModule` 的输出还被 CRF 退化阶梯（见 [`docs/superpowers/plans/2026-08-09-crf-degradation-ladder.md`](../docs/superpowers/plans/2026-08-09-crf-degradation-ladder.md)) 直接消费。术语约定：
+
+- **`u_frame ≡ local_uncertainty`**：每帧的 aleatoric 不确定性 `[B, T]`。
+- **`u_video ≡ Σ_t relevance_weights_t × local_uncertainty_t`**：按 relevance 加权的样本级 aleatoric 分数 `[B]`。CRF 训练/评估**只**监督这两个量。
+
+其他张量在 CRF 计划下的语义：
+
+- `embedding.variance` 仍然是模型输出的概率方差，本计划**不**监督它。任何"probabilistic variance 已校准"的声明都超出本计划的证据范围。
+- `global_uncertainty`：由 `global_uncertainty_head` 计算；CRF 训练**冻结**这个 head（`.requires_grad_(False)`），使其不进入优化器。
+- `propagated_variance`：从 aggregation weights 传播的方差；同样**不**由本计划监督。
+
+### 训练契约
+
+- 使用 `AleatoricUncertaintyModule(..., pooling_temperature=0.0)`。`pooling_temperature=0` 走 Python `if` 短路 `aggregation_logits = relevance_logits`，避免 `0 * -inf = NaN`。
+- 排序损失见 `uncertainty_modules.losses.crf_ranking_loss`：clean vs. primary + 可选 order pair，四项 (`cf`, `cv`, `of`, `ov`)。`base_margin=0.05` 是启发式的单调间隙——**不是** CRF 损伤线性可分的声明。
+- CRF 视频对由 `dataloaders/crf_pairing.py::CRFDistributedBatchSampler` 保证：每个本地 batch 的 order-pair 数固定，全局 batch 内 rank 计数最多相差 1。
+- 视频编码路径按当前 CLIP 视觉编码器 + 冻结的 x264 recipe（见 plan Appendix A）范围内成立；换 encoder 或改 x264 参数都需要重新证伪。
+
+### 推理契约
+
+- `modules.crf_head.CRFTrainingHead.score_features(features, mask) -> (u_frame, u_video, relevance)` 和顶层 `UATVR.score_video_risk(video, video_mask)` 是唯一被诊断/评估 CLI（`scripts/evaluate_crf_ladder.py`、`scripts/diagnose_crf_training_contract.py`）调用的 CRF 推理入口。
+- 标准检索评估**不**接收成对参数；`get_similarity_logits(...)` 的返回契约不变。
+
+### 可接受阈值（预注册）
+
+- CRF-audit `u_video` 三对准确率 ≥ 0.90；CRF50 vs CRF42 ≥ 0.80；否则报告用 plan `§`"extrapolation unreadable" 措辞而不是"blur detector"或"true image quality"。
+- 挑战对 `(34,36)` 与 `(42,44)` 的 `(u − Laplacian)` 视频 bootstrap 95% CI low > 0，否则整体证伪。
+- MSVD 三对准确率 ≥ 0.80，95% CI low > 0.5 才计为 cross-domain 成立；否则收窄为"in-domain 成立；cross-domain 未验证"。

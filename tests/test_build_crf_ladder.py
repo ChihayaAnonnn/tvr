@@ -15,10 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from crf_ladder import EVAL_CRFS, TRAIN_CRFS, codec, crf_output_path
+from crf_ladder import EVAL_CRFS, TRAIN_CRFS, codec
 from scripts import build_msrvtt_crf_ladder, build_msvd_crf_ladder
-from scripts.build_msrvtt_crf_ladder import BuildJob, build_jobs
-
+from scripts.build_msrvtt_crf_ladder import build_jobs
 
 mp.set_start_method("fork", force=True)
 
