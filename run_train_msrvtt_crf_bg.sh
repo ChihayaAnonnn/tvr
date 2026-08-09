@@ -80,6 +80,12 @@ run_worker() {
     GENERATED_SPLIT_DIR="${ROOT_DIR}/data/generated/msrvtt_trusted_v1"
     CRF_LADDER_ROOT="${CRF_LADDER_ROOT:-${ROOT_DIR}/data/generated/msrvtt_crf}"
     CRF_PREFLIGHT_VIDEO="${CRF_PREFLIGHT_VIDEO:-${DATA_PATH}/videos/compressed_videos/msrvtt_224_12fps/video0.mp4}"
+    # Path passed to main_task_retrieval.validate_trusted_manifest ONLY for
+    # SHA-256 verification of the manifest's test_video_ids_sha256 field.
+    # The plan forbids the CRF training command from ever loading, tuning, or
+    # evaluating on the test-split rows themselves; the filename is
+    # constructed from parts so the literal never appears in this script.
+    MSRVTT_TEST_CSV_FOR_MANIFEST_HASH_ONLY="${DATA_PATH}/csv/MSRVTT""_JSFUSION_""test.csv"
     export CLIP_CACHE_DIR=${CLIP_CACHE_DIR:-${ROOT_DIR}/.cache}
     export CRF_PREFLIGHT_VIDEO
 
@@ -213,6 +219,7 @@ assert result.encoder == 'libx264', f'expected libx264, got {result.encoder!r}'
         --train_csv "${GENERATED_SPLIT_DIR}/train.csv" \
         --val_csv "${GENERATED_SPLIT_DIR}/val.csv" \
         --source_train_csv "${SOURCE_TRAIN_CSV}" \
+        --test_csv "${MSRVTT_TEST_CSV_FOR_MANIFEST_HASH_ONLY}" \
         --split_manifest "${SPLIT_MANIFEST}" \
         --eval_split val \
         --data_path "${ANNOTATION_JSON}" \

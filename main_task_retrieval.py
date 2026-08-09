@@ -794,11 +794,25 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
 
     from dataloaders.crf_pairing import CRFTrainBatch
 
+    # SMOKE_STEPS env: cap the training loop at N forward-backward iterations.
+    # Task 11 step 6 uses `SMOKE_STEPS=1 bash run_train_msrvtt_crf_bg.sh` to
+    # verify the CRF pipeline end-to-end without paying for a full epoch.
+    _smoke_steps_env = os.environ.get("SMOKE_STEPS")
+    smoke_cap: int | None = int(_smoke_steps_env) if _smoke_steps_env else None
+    if smoke_cap is not None and local_rank == 0:
+        logger.info("[SMOKE_STEPS] cap=%d — will exit train_epoch after %d step(s)",
+                    smoke_cap, smoke_cap)
+
     crf_window: dict[str, float] = {"cf": 0.0, "cv": 0.0, "of": 0.0, "ov": 0.0,
                                     "rank_total": 0.0, "retrieval": 0.0}
     crf_window_count = 0
 
     for step, batch in enumerate(train_dataloader):
+        if smoke_cap is not None and step >= smoke_cap:
+            if local_rank == 0:
+                logger.info("[SMOKE_STEPS] reached step=%d cap=%d — breaking",
+                            step, smoke_cap)
+            break
         batch = _move_batch_to_device(batch, device)
 
         loss_terms = None
@@ -1493,6 +1507,12 @@ def main():
                 output_model_file = save_model(
                     epoch, args, model, optimizer, tr_loss, type_name=""
                 )
+                if os.environ.get("SMOKE_STEPS"):
+                    logger.info(
+                        "[SMOKE_STEPS] skipping validation eval — smoke run "
+                        "only verifies the training-step pipeline."
+                    )
+                    return
                 validation_metrics = eval_epoch(
                     args, model, eval_dataloader, device, n_gpu
                 )
