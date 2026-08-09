@@ -33,6 +33,11 @@ ruff==0.6.9
 # per-open indexing cost. Kept optional so it can be enabled without a rebuild.
 decord==0.6.0
 
+# PyAV: required by the CRF degradation ladder codec + builder pipeline
+# (crf_ladder/codec.py, scripts/build_msrvtt_crf_ladder.py). Pins the FFmpeg /
+# libx264 ABI that Appendix A of the CRF plan is validated against.
+av==17.1.0
+
 # Intentionally not installed by default:
 # - mamba-ssm: required only by inactive legacy Mamba modules; it needs a
 #   CUDA/compiler build matching the installed PyTorch version.
