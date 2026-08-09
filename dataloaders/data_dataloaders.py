@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 
+from dataloaders.crf_pairing import CRFDistributedBatchSampler, crf_train_collate
 from dataloaders.dataloader_msrvtt_retrieval import MSRVTT_DataLoader, MSRVTT_TrainDataLoader
 from dataloaders.dataloader_msvd_retrieval import MSVD_DataLoader
 
@@ -62,6 +63,53 @@ def dataloader_msrvtt_train(args, tokenizer):
     )
 
     return dataloader, len(msrvtt_dataset), train_sampler
+
+def dataloader_msrvtt_crf_train(args, tokenizer):
+    """CRF training dataloader.
+
+    Uses :class:`CRFDistributedBatchSampler` so every local batch carries a
+    fixed number of order pairs, and returns :class:`CRFTrainBatch` objects
+    via :func:`crf_train_collate`. NOTE: ``batch_sampler`` is mutually
+    exclusive with ``batch_size`` / ``sampler`` / ``shuffle`` / ``drop_last``
+    — we intentionally pass none of those on this path.
+    """
+    msrvtt_dataset = MSRVTT_TrainDataLoader(
+        csv_path=args.train_csv,
+        json_path=args.data_path,
+        features_path=args.features_path,
+        max_words=args.max_words,
+        max_words_attrs=getattr(args, "max_words_attrs", None),
+        feature_framerate=args.feature_framerate,
+        tokenizer=tokenizer,
+        max_frames=args.max_frames,
+        unfold_sentences=args.expand_msrvtt_sentences,
+        frame_order=args.train_frame_order,
+        slice_framepos=args.slice_framepos,
+        strategy=args.strategy,
+        use_attributes=False,  # CRF profile does not co-train attributes
+        split_manifest_path=args.split_manifest,
+        crf_ladder_root=args.crf_ladder_root,
+    )
+    world_size = getattr(args, "world_size", None) or int(args.n_gpu)
+    rank = getattr(args, "local_rank", 0)
+    local_batch_size = args.batch_size // args.n_gpu
+    batch_sampler = CRFDistributedBatchSampler(
+        dataset_size=len(msrvtt_dataset),
+        local_batch_size=local_batch_size,
+        rank=int(rank),
+        world_size=int(world_size),
+        seed=int(getattr(args, "seed", 0)),
+        order_fraction=float(getattr(args, "crf_order_fraction", 0.20)),
+    )
+    loader_kwargs = _video_loader_kwargs(args)
+    dataloader = DataLoader(
+        msrvtt_dataset,
+        batch_sampler=batch_sampler,
+        collate_fn=crf_train_collate,
+        **loader_kwargs,
+    )
+    return dataloader, len(msrvtt_dataset), batch_sampler
+
 
 def _build_msrvtt_eval_loader(dataset, args):
     return DataLoader(
@@ -170,6 +218,7 @@ def dataloader_msvd_test(args, tokenizer, subset="test"):
 DATALOADER_DICT = {}
 DATALOADER_DICT["msrvtt"] = {
     "train": dataloader_msrvtt_train,
+    "crf_train": dataloader_msrvtt_crf_train,
     "val": dataloader_msrvtt_val,
     "test": dataloader_msrvtt_test,
 }

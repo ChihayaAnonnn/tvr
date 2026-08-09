@@ -15,6 +15,14 @@ from dataloaders.msrvtt_protocol import load_trusted_manifest
 from dataloaders.rawframes_util import RawFramesExtractor
 from dataloaders.rawvideo_util import RawVideoExtractor
 
+# Late-imported to avoid dragging torch dependencies into modules that only
+# consume the manifest utilities.
+try:
+    from dataloaders.crf_pairing import CRFBatchIndex, RANK_TO_CRF
+except ImportError:  # pragma: no cover — Task 4 not yet installed
+    CRFBatchIndex = None  # type: ignore
+    RANK_TO_CRF = {1: 30, 2: 38, 3: 46}
+
 
 def _validate_tqfs_dependency(slice_framepos):
     if slice_framepos == 3 and importlib.util.find_spec("sklearn") is None:
@@ -524,7 +532,12 @@ class MSRVTT_TrainDataLoader(Dataset):
             attr_num_blocks=4,
             split_manifest_path=None,
             expected_captions_per_video=20,
+            crf_ladder_root=None,
     ):
+        # `crf_ladder_root` opts the dataset into CRF-mode `__getitem__` when the
+        # batch index is a `CRFBatchIndex`. Non-CRF training passes remain
+        # entirely unchanged.
+        self.crf_ladder_root = crf_ladder_root
         self.unfold_sentences = bool(unfold_sentences)
         if not self.unfold_sentences:
             raise ValueError(
@@ -793,7 +806,117 @@ class MSRVTT_TrainDataLoader(Dataset):
 
         return video, video_mask
 
+    def _decode_video_from_path(self, video_path):
+        """Deterministic single-video decode reusing the training video extractor.
+
+        Returns ``(video, video_mask)`` shaped ``(max_frames, 1, 3, size, size)``
+        / ``(max_frames,)`` — the same shape that :meth:`_get_rawvideo` produces
+        for a single-id list.
+        """
+        video_mask = np.zeros((1, self.max_frames), dtype=np.int64)
+        video = np.zeros(
+            (1, self.max_frames, 1, 3,
+             self.rawVideoExtractor.size, self.rawVideoExtractor.size),
+            dtype=np.float32,
+        )
+        max_video_length = [0]
+        if self.slice_framepos == 3:
+            raw = self.rawVideoExtractor.get_tqfs_video_data(video_path, self.max_frames)
+        else:
+            raw = self.rawVideoExtractor.get_video_data(video_path)
+        raw = raw["video"]
+        if len(raw.shape) <= 3:
+            raise RuntimeError(f"CRF decode: empty frames for {video_path}")
+        slice_ = self.rawVideoExtractor.process_raw_data(raw)
+        if self.max_frames < slice_.shape[0]:
+            if self.slice_framepos == 0:
+                slice_ = slice_[: self.max_frames]
+            elif self.slice_framepos == 1:
+                slice_ = slice_[-self.max_frames:]
+            else:
+                idx = np.linspace(0, slice_.shape[0] - 1, num=self.max_frames, dtype=int)
+                slice_ = slice_[idx]
+        slice_ = self.rawVideoExtractor.process_frame_order(
+            slice_, frame_order=self.frame_order
+        )
+        slen = slice_.shape[0]
+        max_video_length[0] = max(max_video_length[0], slen)
+        video[0, :slen, ...] = slice_
+        for i, v in enumerate(max_video_length):
+            video_mask[i, :v] = 1
+        return video[0], video_mask[0]  # drop the outer "pair" axis for collate
+
+    def _get_crf_paired(self, video_id, primary_rank, secondary_rank):
+        """CRF-mode paired decode: clean + primary + optional secondary.
+
+        Frame indices are guaranteed identical across the three paths because
+        (a) all three MP4s have the same width/height/fps/frame_count (enforced
+        by :func:`crf_ladder.codec.assert_transcode_invariants`), and (b) the
+        video extractor is deterministic for a given path + settings.
+        The plan forbids ``frame_order == 2`` in CRF mode: a random per-call
+        permutation would break the paired-index invariant.
+        """
+        from crf_ladder import crf_output_path
+
+        if self.frame_order == 2:
+            raise RuntimeError(
+                "CRF training requires deterministic frame_order (0 or 1); "
+                "frame_order=2 (random shuffle) breaks the shared-index invariant"
+            )
+        if self.crf_ladder_root is None:
+            raise RuntimeError(
+                "MSRVTT_TrainDataLoader received a CRFBatchIndex but "
+                "crf_ladder_root was not configured on the dataset"
+            )
+        primary_crf = RANK_TO_CRF[int(primary_rank)]
+        clean_path = os.path.join(self.features_path, f"{video_id}.mp4")
+        if not os.path.exists(clean_path):
+            clean_path = clean_path.replace(".mp4", ".webm")
+        primary_path = str(crf_output_path(self.crf_ladder_root, primary_crf, video_id))
+        if not os.path.exists(primary_path):
+            raise RuntimeError(
+                f"CRF primary missing: video_id={video_id} crf={primary_crf} "
+                f"path={primary_path} — refusing to fall back to clean"
+            )
+        clean_video, clean_mask = self._decode_video_from_path(clean_path)
+        primary_video, primary_mask = self._decode_video_from_path(primary_path)
+        if primary_video.shape != clean_video.shape:
+            raise RuntimeError(
+                f"CRF paired decode shape mismatch: video_id={video_id} "
+                f"clean={clean_video.shape} primary={primary_video.shape}"
+            )
+        if not np.array_equal(primary_mask, clean_mask):
+            raise RuntimeError(
+                f"CRF paired decode mask mismatch: video_id={video_id}"
+            )
+        secondary_video = None
+        secondary_out = 0
+        if secondary_rank is not None:
+            secondary_crf = RANK_TO_CRF[int(secondary_rank)]
+            secondary_path = str(
+                crf_output_path(self.crf_ladder_root, secondary_crf, video_id)
+            )
+            if not os.path.exists(secondary_path):
+                raise RuntimeError(
+                    f"CRF secondary missing: video_id={video_id} crf={secondary_crf} "
+                    f"path={secondary_path} — refusing to fall back to clean"
+                )
+            secondary_video, secondary_mask = self._decode_video_from_path(secondary_path)
+            if secondary_video.shape != clean_video.shape:
+                raise RuntimeError(
+                    f"CRF paired decode shape mismatch (secondary): video_id={video_id} "
+                    f"clean={clean_video.shape} secondary={secondary_video.shape}"
+                )
+            if not np.array_equal(secondary_mask, clean_mask):
+                raise RuntimeError(
+                    f"CRF paired decode mask mismatch (secondary): video_id={video_id}"
+                )
+            secondary_out = int(secondary_rank)
+        return clean_video, clean_mask, primary_video, secondary_video, secondary_out
+
     def __getitem__(self, idx):
+        if CRFBatchIndex is not None and isinstance(idx, CRFBatchIndex):
+            return self._getitem_crf(idx)
         if self.unfold_sentences:
             video_id, caption = self.sentences_dict[idx]
         else:
@@ -835,5 +958,34 @@ class MSRVTT_TrainDataLoader(Dataset):
             video_mask,
             video_group_id,
         )
+
+    def _getitem_crf(self, idx):
+        """CRF-mode sample: dict consumed by ``crf_pairing.crf_train_collate``.
+
+        Text comes from the standard sentence path so retrieval loss stays on
+        the same distribution as baseline runs. Videos come from the paired
+        decode: clean is always present; primary is the CRF at
+        ``RANK_TO_CRF[idx.primary_rank]``; secondary is present iff
+        ``idx.secondary_rank`` is not None. All three share frame indices.
+        """
+        video_id, caption = self.sentences_dict[idx.index]
+        pairs_text, pairs_mask, pairs_segment, _ = self._get_text(
+            video_id, caption, max_words=self.max_words
+        )
+        clean_video, video_mask, primary_video, secondary_video, secondary_rank = (
+            self._get_crf_paired(video_id, idx.primary_rank, idx.secondary_rank)
+        )
+        return {
+            "input_ids": pairs_text[0],
+            "input_mask": pairs_mask[0],
+            "segment_ids": pairs_segment[0],
+            "clean_video": clean_video,
+            "video_mask": video_mask,
+            "group_ids": np.int64(self.video_group_ids[video_id]),
+            "degraded_video": primary_video,
+            "primary_rank": np.int64(idx.primary_rank),
+            "secondary_video": secondary_video,
+            "secondary_rank": secondary_rank,
+        }
 
 
