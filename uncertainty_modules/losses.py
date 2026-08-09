@@ -117,7 +117,6 @@ def crf_ranking_loss(
         raise ValueError("primary_rank must have shape (B,)")
 
     dtype = u_clean_frame.dtype
-    device = u_clean_frame.device
     mask_bool = video_mask.to(torch.bool)
 
     primary_rank_t = primary_rank.to(dtype).view(-1, 1)

@@ -6,6 +6,7 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
+from modules.crf_head import CRFTrainingHead, paired_visual_forward
 from modules.module_clip import CLIP, convert_weights
 from modules.module_cross import CrossConfig, CrossModel
 from modules.module_cross import Transformer as TransformerClip
@@ -306,6 +307,20 @@ class UATVR(CLIP4ClipPreTrainedModel):
             nn.Linear(transformer_width, transformer_width), nn.ReLU(inplace=True), nn.Linear(transformer_width, 1)
         )
 
+        # CRF training head: aleatoric risk over CRF-degraded video pairs.
+        # `video_aleatoric.global_uncertainty_head` is frozen inside CRFTrainingHead's
+        # __init__ so the optimizer wiring never has to remember to exclude it.
+        self.crf_head = CRFTrainingHead(
+            input_dim=embed_dim,
+            hidden_dim=max(embed_dim // 2, 32),
+            pooling_temperature=float(
+                getattr(task_config, "aleatoric_pooling_temperature", 0.0)
+            ),
+        )
+        # Convenience alias so the plan's `self.video_aleatoric` references
+        # resolve on the top-level UATVR model as well.
+        self.video_aleatoric = self.crf_head.video_aleatoric
+
         # loss function
         self.loss_fct = CrossEn()
         # self.loss_MIL_fct = MILNCELoss()    # Ex27-2 50.0
@@ -409,6 +424,110 @@ class UATVR(CLIP4ClipPreTrainedModel):
         text_token = text_token.view(bs_pair, -1, text_token.size(-1))
 
         return sequence_output, text_token
+
+    def score_video_risk(self, video, video_mask):
+        """Single-pass aleatoric risk scorer used by CRF diagnostics.
+
+        Returns ``(u_frame, u_video)`` where ``u_frame`` is per-frame local
+        uncertainty (shape ``[B, T]``) and ``u_video`` is the
+        relevance-weighted per-video aggregate (shape ``[B]``). Standard
+        retrieval eval is unchanged; this method is called exclusively by
+        ``scripts/evaluate_crf_ladder.py`` and Task-10 diagnostics.
+        """
+        video = torch.as_tensor(video).float()
+        if video.dim() == 7:  # [B, pair, bs, ts, C, H, W]
+            b, pair, bs, ts, channel, h, w = video.shape
+            video_flat = video.view(b * pair * bs * ts, channel, h, w)
+            video_frame = bs * ts
+        else:
+            b = video.shape[0]
+            video_flat = video.reshape(-1, *video.shape[-3:])
+            video_frame = video_flat.shape[0] // b
+        mask_flat = video_mask.view(-1, video_mask.shape[-1])
+        visual = self.get_visual_output(
+            video_flat, mask_flat, shaped=True, video_frame=video_frame
+        )
+        u_frame, u_video, _ = self.crf_head.score_features(visual, mask_flat)
+        return u_frame, u_video
+
+    def forward_crf_train(
+        self,
+        batch,
+        base_margin: float = 0.05,
+        lambda_cf: float = 1.0,
+        lambda_cv: float = 1.0,
+        lambda_of: float = 1.0,
+        lambda_ov: float = 1.0,
+    ):
+        """CRF training forward: retrieval loss on clean + aleatoric ranking on pairs.
+
+        The retrieval branch runs the standard clean-video forward with
+        gradients. The aleatoric branch consumes DETACHED clean features and
+        no-grad degraded / order features, so retrieval and ranking gradients
+        never mix. Returns ``(total, {retrieval, cf, cv, of, ov, rank_total})``
+        so the training loop can log per-component window means while
+        gradient accumulation only touches ``total``.
+        """
+        input_ids = batch.input_ids.view(-1, batch.input_ids.shape[-1])
+        input_mask = batch.input_mask.view(-1, batch.input_mask.shape[-1])
+        segment_ids = batch.segment_ids.view(-1, batch.segment_ids.shape[-1])
+        clean_video = torch.as_tensor(batch.clean_video).float()
+        video_mask = batch.video_mask.view(-1, batch.video_mask.shape[-1])
+
+        # Retrieval branch (with gradient) reuses the standard training forward
+        # so the retrieval loss definition is byte-identical to the baseline.
+        retrieval_loss = self.forward(
+            input_ids, segment_ids, input_mask, clean_video.unsqueeze(1), video_mask
+        )
+
+        # Aleatoric branch: encode clean+degraded+order with strict grad isolation.
+        def encoder_fn(video_tensor):
+            b, T = video_tensor.shape[0], video_tensor.shape[1]
+            v = video_tensor.reshape(-1, *video_tensor.shape[-3:])
+            return self.get_visual_output(
+                v, torch.ones(b, T, dtype=torch.long, device=video_tensor.device),
+                shaped=True, video_frame=T,
+            )
+
+        clean_flat = clean_video.reshape(clean_video.shape[0], -1, *clean_video.shape[-3:])
+        degraded = batch.degraded_video.reshape(
+            batch.degraded_video.shape[0], -1, *batch.degraded_video.shape[-3:]
+        )
+        if batch.order_video.numel() > 0:
+            order = batch.order_video.reshape(
+                batch.order_video.shape[0], -1, *batch.order_video.shape[-3:]
+            )
+        else:
+            order = batch.order_video.new_zeros((0,) + degraded.shape[1:])
+
+        clean_feat, degraded_feat, order_feat = paired_visual_forward(
+            encoder_fn, clean_flat, degraded, order, training=self.training
+        )
+        clean_feat_detached = clean_feat.detach()
+        rank = self.crf_head.compute_ranking_loss(
+            clean_features=clean_feat_detached,
+            primary_features=degraded_feat,
+            secondary_features=order_feat if order_feat.shape[0] > 0 else None,
+            primary_rank=batch.primary_rank,
+            order_rank=batch.order_rank,
+            order_batch_indices=batch.order_batch_indices,
+            video_mask=video_mask,
+            base_margin=base_margin,
+            lambda_cf=lambda_cf,
+            lambda_cv=lambda_cv,
+            lambda_of=lambda_of,
+            lambda_ov=lambda_ov,
+        )
+        total = retrieval_loss + rank.total
+        loss_terms = {
+            "retrieval": retrieval_loss.detach(),
+            "rank_total": rank.total.detach(),
+            "cf": rank.clean_frame.detach(),
+            "cv": rank.clean_video.detach(),
+            "of": rank.order_frame.detach(),
+            "ov": rank.order_video.detach(),
+        }
+        return total, loss_terms
 
     def get_visual_output(self, video, video_mask, shaped=False, video_frame=-1):
         if shaped is False:

@@ -14,6 +14,7 @@ class AleatoricUncertaintyModule(nn.Module):
         hidden_dim: int,
         min_variance: float = 1e-6,
         max_variance: float = 10.0,
+        pooling_temperature: float = 1.0,
     ) -> None:
         super().__init__()
         if input_dim <= 0 or hidden_dim <= 0:
@@ -26,10 +27,18 @@ class AleatoricUncertaintyModule(nn.Module):
             raise ValueError(
                 "variance bounds must satisfy 0 < min_variance < max_variance"
             )
+        if not math.isfinite(pooling_temperature):
+            raise ValueError("pooling_temperature must be finite")
 
         self.input_dim = input_dim
         self.min_variance = float(min_variance)
         self.max_variance = float(max_variance)
+        # pooling_temperature scales how strongly uncertainty pulls the aggregation
+        # weights away from relevance. `0.0` disables this coupling and short-circuits
+        # to `aggregation_logits = relevance_logits` — implemented as a real Python
+        # `if` because relevance_logits contains -inf on masked positions and
+        # `0 * -inf → NaN` would silently poison the softmax.
+        self.pooling_temperature = float(pooling_temperature)
         self.relevance_head = self._head(input_dim, hidden_dim, 1)
         self.uncertainty_head = self._head(input_dim, hidden_dim, input_dim)
         self.global_uncertainty_head = self._head(
@@ -81,7 +90,12 @@ class AleatoricUncertaintyModule(nn.Module):
             self.uncertainty_head(features)
         )
         local_uncertainty = token_variance.mean(dim=-1)
-        aggregation_logits = relevance_logits - local_uncertainty.detach()
+        if self.pooling_temperature == 0.0:
+            aggregation_logits = relevance_logits
+        else:
+            aggregation_logits = (
+                relevance_logits - self.pooling_temperature * local_uncertainty.detach()
+            )
         aggregation_weights = torch.softmax(
             aggregation_logits,
             dim=1,

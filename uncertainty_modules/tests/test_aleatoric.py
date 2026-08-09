@@ -210,6 +210,45 @@ def test_video_and_text_instances_are_independent():
     assert text_module(torch.randn(2, 7, 4)).embedding.mean.shape == (2, 4)
 
 
+def test_zero_pooling_temperature_short_circuits_uncertainty_values():
+    """With pooling_temperature=0, mutations to uncertainty_head parameters
+    must NOT change the embedding mean — proof that aggregation weights are
+    computed purely from relevance_logits."""
+    module = AleatoricUncertaintyModule(4, 8, pooling_temperature=0.0)
+    features = torch.randn(2, 3, 4)
+    before = module(features).embedding.mean
+    with torch.no_grad():
+        for p in module.uncertainty_head.parameters():
+            p.add_(torch.randn_like(p) * 1000)
+    after = module(features).embedding.mean
+    assert torch.equal(before, after)
+
+
+def test_masked_positions_do_not_produce_nan_when_temperature_is_zero():
+    """When pooling_temperature=0 with a mask, softmax over -inf/finite logits
+    is well-defined. The former `- 0 * local_uncertainty` code path would
+    produce `0 * -inf = NaN` and corrupt every masked-batch forward."""
+    module = AleatoricUncertaintyModule(4, 8, pooling_temperature=0.0)
+    features = torch.randn(2, 4, 4)
+    mask = torch.tensor([[True, True, False, False], [True, False, False, False]])
+    out = module(features, mask)
+    assert not torch.isnan(out.aggregation_weights).any()
+    assert not torch.isnan(out.embedding.mean).any()
+
+
+def test_nonzero_pooling_temperature_still_couples_relevance_and_uncertainty():
+    module = AleatoricUncertaintyModule(4, 8, pooling_temperature=1.0)
+    features = torch.randn(2, 3, 4)
+    before = module(features).embedding.mean
+    with torch.no_grad():
+        for p in module.uncertainty_head.parameters():
+            p.add_(torch.randn_like(p) * 10.0)
+    after = module(features).embedding.mean
+    # With temperature=1.0 the aggregation weights depend on local_uncertainty,
+    # so perturbing uncertainty_head must move the pooled mean.
+    assert not torch.equal(before, after)
+
+
 def test_package_exports_aleatoric_public_api():
     assert (
         uncertainty_modules.AleatoricUncertaintyModule
