@@ -6,6 +6,23 @@ import torch
 
 
 @dataclass(frozen=True)
+class CRFRankingLoss:
+    """Named result of :func:`crf_ranking_loss` (Task 5 of the CRF plan).
+
+    All fields are 0-d :class:`torch.Tensor` scalars in the same dtype/device
+    as the input tensors. ``total`` equals the lambda-weighted sum of the four
+    components; the individual components are exposed so the training loop
+    can log window means separately.
+    """
+
+    total: torch.Tensor
+    clean_frame: torch.Tensor
+    clean_video: torch.Tensor
+    order_frame: torch.Tensor
+    order_video: torch.Tensor
+
+
+@dataclass(frozen=True)
 class ProbabilisticEmbedding:
     mean: torch.Tensor
     variance: torch.Tensor
