@@ -2,6 +2,7 @@ from __future__ import division, print_function, unicode_literals
 
 import argparse
 import datetime
+import json
 import math
 import os
 import random
@@ -746,6 +747,75 @@ def _move_batch_to_device(batch, device):
     raise TypeError(f"Unsupported batch type: {type(batch)!r}")
 
 
+def _crf_dev_evaluate(model, args, device, dev_video_ids):
+    """Score CRF-dev {clean, CRF34, CRF42} per video; return three-pair u_video accuracy.
+
+    Rank-0-only. For each of the 250 CRF-dev videos we decode three
+    variants (clean training-path video, CRF34 degraded, CRF42 degraded)
+    via the same :class:`RawVideoExtractor` the training loop uses, run
+    ``model.score_video_risk`` on each, and count three ordering pairs:
+
+    * (u_clean < u_34)
+    * (u_34   < u_42)
+    * (u_clean < u_42)
+
+    The returned float is the mean over all ``3 * len(dev_video_ids)``
+    comparisons — the same three-pair accuracy the plan uses as the
+    CRF-dev checkpoint-selection metric.
+    """
+    import numpy as np
+
+    from crf_ladder import crf_output_path
+    from dataloaders.rawvideo_util import RawVideoExtractor
+
+    inner = model.module if hasattr(model, "module") else model
+    was_training = inner.training
+    inner.eval()
+
+    extractor = RawVideoExtractor(
+        framerate=args.feature_framerate,
+        size=224,
+    )
+
+    def _decode(path):
+        raw = extractor.get_video_data(str(path))["video"]
+        if len(raw.shape) <= 3:
+            raise RuntimeError(f"CRF-dev decode returned no frames: {path}")
+        proc = extractor.process_raw_data(raw)  # [T_raw, 1, 3, H, W]
+        if args.max_frames < proc.shape[0]:
+            idx = np.linspace(0, proc.shape[0] - 1, num=args.max_frames, dtype=int)
+            proc = proc[idx]
+        return proc  # [T, 1, 3, H, W]
+
+    correct = np.zeros((len(dev_video_ids), 3), dtype=np.float64)
+    with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        for i, vid in enumerate(dev_video_ids):
+            paths = [
+                os.path.join(args.features_path, f"{vid}.mp4"),
+                str(crf_output_path(args.crf_ladder_root, 34, vid)),
+                str(crf_output_path(args.crf_ladder_root, 42, vid)),
+            ]
+            u_scores = []
+            for path in paths:
+                video = _decode(path)  # [T, 1, 3, H, W]
+                video_t = torch.as_tensor(video).unsqueeze(0).unsqueeze(0).float().to(
+                    device, non_blocking=True
+                )
+                # shape: [B=1, pair=1, T, 1, 3, H, W] — 7-dim path in score_video_risk
+                T = video.shape[0]
+                mask = torch.ones(1, T, dtype=torch.long, device=device)
+                _, u_v = inner.score_video_risk(video_t, mask)
+                u_scores.append(float(u_v.item()))
+            u_clean, u_34, u_42 = u_scores
+            correct[i, 0] = float(u_clean < u_34)
+            correct[i, 1] = float(u_34 < u_42)
+            correct[i, 2] = float(u_clean < u_42)
+
+    if was_training:
+        inner.train()
+    return float(correct.mean())
+
+
 def _unpack_train_batch(batch):
     group_ids = None
     if len(batch) == 5:
@@ -1459,6 +1529,17 @@ def main():
         best_t2v_checkpoint = "None"
         best_v2t_score = float("-inf")
         best_v2t_checkpoint = "None"
+
+        # CRF-dev checkpoint selection (plan Task 9 wiring). Populated per epoch
+        # on rank 0; the winner is written atomically to best_crf_checkpoint.json
+        # after every epoch so a crash mid-training still leaves a usable pick.
+        crf_dev_candidates: list[dict] = []
+        crf_dev_video_ids: list[str] = []
+        if bool(getattr(args, "aleatoric_crf_training", False)):
+            _crf_split_path = Path("dataloaders/splits/crf_dev_audit_seed0.json")
+            crf_dev_video_ids = json.loads(_crf_split_path.read_text())[
+                "crf_dev_video_ids"
+            ]
         ## ##############################################################
         # resume optimizer state besides loss to continue train
         ## ##############################################################
@@ -1507,11 +1588,36 @@ def main():
                 output_model_file = save_model(
                     epoch, args, model, optimizer, tr_loss, type_name=""
                 )
+                if bool(getattr(args, "aleatoric_crf_training", False)):
+                    from scripts.evaluate_crf_ladder import (
+                        choose_checkpoint,
+                        write_dev_selection,
+                    )
+                    crf_dev_acc = _crf_dev_evaluate(
+                        model, args, device, crf_dev_video_ids
+                    )
+                    crf_dev_candidates.append({
+                        "epoch": epoch,
+                        "accuracy": crf_dev_acc,
+                        "path": str(output_model_file),
+                    })
+                    winner = choose_checkpoint(crf_dev_candidates)
+                    write_dev_selection(
+                        Path(args.output_dir) / "best_crf_checkpoint.json",
+                        winner,
+                    )
+                    logger.info(
+                        "  [CRF-dev] epoch=%d acc=%.4f | best=epoch %d acc=%.4f (%s)",
+                        epoch, crf_dev_acc, winner["epoch"], winner["accuracy"],
+                        winner["path"],
+                    )
                 if os.environ.get("SMOKE_STEPS"):
                     logger.info(
                         "[SMOKE_STEPS] skipping validation eval — smoke run "
                         "only verifies the training-step pipeline."
                     )
+                    if dist.is_available() and dist.is_initialized():
+                        dist.barrier()
                     return
                 validation_metrics = eval_epoch(
                     args, model, eval_dataloader, device, n_gpu
@@ -1541,6 +1647,13 @@ def main():
                     best_v2t_checkpoint,
                 )
                 logger.info("=" * 60)
+
+            # Barrier so ranks 1..N-1 don't get too far ahead of rank 0's eval
+            # into the next epoch's first forward — the CRF-dev evaluator adds
+            # ~30-60s of rank-0-only work that would otherwise sit inside
+            # allreduce wait time.
+            if dist.is_available() and dist.is_initialized():
+                dist.barrier()
 
         if args.local_rank == 0:
             if best_t2v_checkpoint == "None" or best_v2t_checkpoint == "None":
