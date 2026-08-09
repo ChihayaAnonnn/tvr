@@ -317,6 +317,58 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
             "independent diagnostics."
         ),
     )
+
+    # ==============================================================
+    # CRF degradation ladder training (see docs/superpowers/plans/
+    # 2026-08-09-crf-degradation-ladder.md). All defaults are the frozen
+    # values from the plan's Global Constraints [G8, G10, G11].
+    # ==============================================================
+    parser.add_argument(
+        "--aleatoric_crf_training",
+        action="store_true",
+        help="Enable CRF-ladder training: pull the crf_train dataloader profile "
+             "and switch train_epoch to model.forward_crf_train.",
+    )
+    parser.add_argument(
+        "--crf_ladder_root",
+        type=str,
+        default="data/generated/msrvtt_crf",
+        help="Root directory containing crfNN/videoXXX.mp4 + manifest.jsonl per level.",
+    )
+    parser.add_argument(
+        "--crf_order_fraction",
+        type=float,
+        default=0.20,
+        help="Fraction of a local batch dedicated to order pairs (plan [G8]).",
+    )
+    parser.add_argument(
+        "--aleatoric_base_margin",
+        type=float,
+        default=0.05,
+        help="Base ranking margin; effective margin = base_margin * ordinal_rank.",
+    )
+    parser.add_argument("--aleatoric_lambda_cf", type=float, default=1.0)
+    parser.add_argument("--aleatoric_lambda_cv", type=float, default=1.0)
+    parser.add_argument("--aleatoric_lambda_of", type=float, default=1.0)
+    parser.add_argument("--aleatoric_lambda_ov", type=float, default=1.0)
+    parser.add_argument(
+        "--aleatoric_prior_weight",
+        type=float,
+        default=0.0,
+        help="Weight of variance-prior loss. Plan [G11] fixes this at 0.0 for CRF runs.",
+    )
+    parser.add_argument(
+        "--aleatoric_ranking_weight",
+        type=float,
+        default=1.0,
+        help="Multiplier applied to the total CRF ranking loss.",
+    )
+    parser.add_argument(
+        "--aleatoric_pooling_temperature",
+        type=float,
+        default=0.0,
+        help="Aleatoric aggregation pooling temperature. Plan [G11] fixes this at 0.0.",
+    )
     args = parser.parse_args()
 
     validate_trusted_cli(args)
@@ -353,9 +405,12 @@ def prepare_requested_dataloaders(args, tokenizer):
 
     train_bundle = None
     if args.do_train:
-        train_factory = loaders.get("train")
+        profile = "train"
+        if bool(getattr(args, "aleatoric_crf_training", False)):
+            profile = "crf_train"
+        train_factory = loaders.get(profile)
         if train_factory is None:
-            raise ValueError(f"{args.datatype} has no train dataloader")
+            raise ValueError(f"{args.datatype} has no {profile!r} dataloader")
         train_bundle = train_factory(args, tokenizer)
 
     if args.do_train:
@@ -670,6 +725,27 @@ def _fmt_time(seconds):
     return f"{h}h{m:02d}m{s:02d}s"
 
 
+def _move_batch_to_device(batch, device):
+    """Move a training batch to ``device`` uniformly across shapes.
+
+    Supports the historical tuple batch, the CRF-mode :class:`CRFTrainBatch`
+    dataclass (via its dataclass ``.to`` method), and any object that
+    already exposes a ``.to(device, non_blocking=True)`` method.
+    """
+    from dataloaders.crf_pairing import CRFTrainBatch
+
+    if isinstance(batch, CRFTrainBatch):
+        return batch.to(device, non_blocking=True)
+    if isinstance(batch, (list, tuple)):
+        return tuple(
+            t.to(device=device, non_blocking=True) if hasattr(t, "to") else t
+            for t in batch
+        )
+    if hasattr(batch, "to"):
+        return batch.to(device, non_blocking=True)
+    raise TypeError(f"Unsupported batch type: {type(batch)!r}")
+
+
 def _unpack_train_batch(batch):
     group_ids = None
     if len(batch) == 5:
@@ -716,21 +792,42 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     # 每个 optimizer step 对应 gradient_accumulation_steps 个 dataloader step
     total_opt_steps = num_steps // args.gradient_accumulation_steps
 
-    for step, batch in enumerate(train_dataloader):
-        batch = tuple(t.to(device=device, non_blocking=True) for t in batch)
+    from dataloaders.crf_pairing import CRFTrainBatch
 
-        input_ids, input_mask, segment_ids, video, video_mask, _group_ids = (
-            _unpack_train_batch(batch)
-        )
-        # A800 原生支持 bf16；autocast 内部激活走 bf16，master 参数仍 fp32，无需 GradScaler。
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-            loss = model(
-                input_ids,
-                segment_ids,
-                input_mask,
-                video,
-                video_mask,
+    crf_window: dict[str, float] = {"cf": 0.0, "cv": 0.0, "of": 0.0, "ov": 0.0,
+                                    "rank_total": 0.0, "retrieval": 0.0}
+    crf_window_count = 0
+
+    for step, batch in enumerate(train_dataloader):
+        batch = _move_batch_to_device(batch, device)
+
+        loss_terms = None
+        if isinstance(batch, CRFTrainBatch):
+            # CRF profile: retrieval loss + weighted ranking loss.
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                inner = model.module if hasattr(model, "module") else model
+                total, loss_terms = inner.forward_crf_train(
+                    batch,
+                    base_margin=float(args.aleatoric_base_margin),
+                    lambda_cf=float(args.aleatoric_lambda_cf),
+                    lambda_cv=float(args.aleatoric_lambda_cv),
+                    lambda_of=float(args.aleatoric_lambda_of),
+                    lambda_ov=float(args.aleatoric_lambda_ov),
+                )
+                loss = total * float(args.aleatoric_ranking_weight)
+        else:
+            input_ids, input_mask, segment_ids, video, video_mask, _group_ids = (
+                _unpack_train_batch(batch)
             )
+            # A800 原生支持 bf16；autocast 内部激活走 bf16，master 参数仍 fp32，无需 GradScaler。
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                loss = model(
+                    input_ids,
+                    segment_ids,
+                    input_mask,
+                    video,
+                    video_mask,
+                )
 
         if n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu.
@@ -740,6 +837,10 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
         loss.backward()
 
         total_loss += float(loss)
+        if loss_terms is not None:
+            for name, tensor in loss_terms.items():
+                crf_window[name] = crf_window.get(name, 0.0) + float(tensor)
+            crf_window_count += 1
 
         if (step + 1) % args.gradient_accumulation_steps == 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
@@ -789,6 +890,20 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     time_per_step,
                     _fmt_time(eta),
                 )
+                if crf_window_count > 0 and local_rank == 0:
+                    means = {k: v / crf_window_count for k, v in crf_window.items()}
+                    logger.info(
+                        "  [CRF window] retrieval=%.4f rank=%.4f | "
+                        "cf=%.4f cv=%.4f of=%.4f ov=%.4f",
+                        means.get("retrieval", 0.0),
+                        means.get("rank_total", 0.0),
+                        means.get("cf", 0.0),
+                        means.get("cv", 0.0),
+                        means.get("of", 0.0),
+                        means.get("ov", 0.0),
+                    )
+                    crf_window = {k: 0.0 for k in crf_window}
+                    crf_window_count = 0
 
     total_loss = total_loss / len(train_dataloader)
     epoch_time = time.time() - epoch_start_time

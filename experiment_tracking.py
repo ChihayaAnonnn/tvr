@@ -8,6 +8,7 @@ autograd or optimizer updates.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 import os
@@ -146,7 +147,7 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "pin_memory": bool(getattr(args, "pin_memory", False)),
         "persistent_workers": workers > 0,
     }
-    return {
+    payload = {
         "protocol_version": split.get("protocol_version") if split else None,
         "git": git_state,
         "split": split,
@@ -157,6 +158,59 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "data": data,
         "batch": batch_semantics,
         "runtime": runtime,
+    }
+    if bool(getattr(args, "aleatoric_crf_training", False)):
+        payload["crf"] = _crf_manifest_section(args)
+    return payload
+
+
+def _crf_manifest_section(args) -> dict:
+    """Build the CRF-mode section of the experiment manifest.
+
+    Only invoked when ``--aleatoric_crf_training`` is set. Standard hygiene
+    runs never gain a ``crf`` key so their manifests remain byte-comparable
+    against pre-Task-7 baselines.
+    """
+    from crf_ladder import TRAIN_CRFS, X264_RECIPE
+
+    ladder_root = Path(getattr(args, "crf_ladder_root", ""))
+    ladder_shas: dict[str, str] = {}
+    if ladder_root.exists():
+        for level_dir in sorted(ladder_root.glob("crf*")):
+            manifest_file = level_dir / "manifest.jsonl"
+            if manifest_file.exists():
+                ladder_shas[level_dir.name] = hashlib.sha256(
+                    manifest_file.read_bytes()
+                ).hexdigest()
+
+    return {
+        "training_crfs": list(TRAIN_CRFS),
+        "base_margin": float(getattr(args, "aleatoric_base_margin", 0.05)),
+        "order_fraction": float(getattr(args, "crf_order_fraction", 0.20)),
+        "lambdas": {
+            "cf": float(getattr(args, "aleatoric_lambda_cf", 1.0)),
+            "cv": float(getattr(args, "aleatoric_lambda_cv", 1.0)),
+            "of": float(getattr(args, "aleatoric_lambda_of", 1.0)),
+            "ov": float(getattr(args, "aleatoric_lambda_ov", 1.0)),
+        },
+        "prior_weight": float(getattr(args, "aleatoric_prior_weight", 0.0)),
+        "ranking_weight": float(getattr(args, "aleatoric_ranking_weight", 1.0)),
+        "pooling_temperature": float(getattr(args, "aleatoric_pooling_temperature", 0.0)),
+        "ladder_root": str(ladder_root),
+        "ladder_manifest_sha256_by_level": ladder_shas,
+        "x264_recipe": {
+            "preset": X264_RECIPE.preset,
+            "pixel_format": X264_RECIPE.pixel_format,
+            "color_range": X264_RECIPE.color_range,
+            "color_primaries": X264_RECIPE.color_primaries,
+            "color_trc": X264_RECIPE.color_trc,
+            "colorspace": X264_RECIPE.colorspace,
+            "time_base_policy": X264_RECIPE.time_base_policy,
+            "keyint": X264_RECIPE.keyint,
+            "min_keyint": X264_RECIPE.min_keyint,
+            "scenecut": X264_RECIPE.scenecut,
+            "b_frames": X264_RECIPE.b_frames,
+        },
     }
 
 
