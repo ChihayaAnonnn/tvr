@@ -672,6 +672,26 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
     return optimizer, scheduler, model
 
 
+def _write_training_args_json(args, path):
+    """Persist the training-time args namespace so the audit CLI can rebuild
+    the same UATVR architecture at eval time (Task 9 wiring)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {}
+    for key, value in vars(args).items():
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            payload[key] = value
+        elif isinstance(value, (list, tuple)):
+            try:
+                json.dumps(list(value))
+                payload[key] = list(value)
+            except TypeError:
+                payload[key] = repr(value)
+        else:
+            payload[key] = repr(value)
+    atomic_write_json(path, payload)
+
+
 def save_model(epoch, args, model, optimizer, tr_loss, type_name=""):
     # Only save the model it-self
     model_to_save = model.module if hasattr(model, "module") else model
@@ -1482,6 +1502,7 @@ def main():
                 Path(args.output_dir) / "experiment_manifest.json",
                 tracking_payload,
             )
+            _write_training_args_json(args, Path(args.output_dir) / "training_args.json")
             for key, value in batch_semantics.items():
                 logger.info("  Batch semantics | %s=%s", key, value)
 

@@ -7,6 +7,7 @@ import pytest
 
 from crf_ladder.statistics import (
     BootstrapResult,
+    bootstrap_paired_delta,
     bootstrap_video_accuracy,
     extrapolation_readable,
     laplacian_video_score,
@@ -140,3 +141,48 @@ def test_bootstrap_paired_delta_uses_same_indices_per_replicate():
     # Difference of paired accuracies stays coherent under the same seed.
     delta_point = result_u.point - result_b.point
     assert np.isfinite(delta_point)
+
+
+def test_bootstrap_paired_delta_point_matches_naive_diff():
+    """Paired delta point equals `mean(u) - mean(baseline)` on the raw data."""
+    u = np.array([[1, 1], [1, 0], [0, 0], [1, 1], [0, 1]], dtype=float)
+    baseline = np.array([[0, 0], [1, 0], [0, 0], [1, 0], [1, 1]], dtype=float)
+    result = bootstrap_paired_delta(u, baseline, seed=3, samples=500)
+    expected_point = float(u.mean() - baseline.mean())
+    assert result.point == pytest.approx(expected_point)
+    assert isinstance(result, BootstrapResult)
+    assert result.low <= result.point <= result.high
+
+
+def test_bootstrap_paired_delta_ci_tighter_than_unpaired():
+    """Paired resampling on correlated correctness gives a tighter CI than the
+    interval formed by subtracting independent-quantile endpoints."""
+    rng = np.random.default_rng(0)
+    V, K = 60, 3
+    baseline_hits = rng.binomial(1, 0.5, size=(V, K)).astype(float)
+    # `u` is `baseline + 0.15` in accuracy but perfectly correlated:
+    # a video that got the pair right under baseline also got it under u.
+    u_hits = baseline_hits.copy()
+    boost = rng.random(size=(V, K)) < 0.15
+    u_hits = np.clip(u_hits + boost.astype(float), 0, 1)
+    paired = bootstrap_paired_delta(u_hits, baseline_hits, seed=42, samples=4000)
+    ind_u = bootstrap_video_accuracy(u_hits, seed=42, samples=4000)
+    ind_b = bootstrap_video_accuracy(baseline_hits, seed=17, samples=4000)
+    naive_width = (ind_u.high - ind_b.low) - (ind_u.low - ind_b.high)
+    paired_width = paired.high - paired.low
+    assert paired_width < naive_width
+
+
+def test_bootstrap_paired_delta_rejects_shape_mismatch():
+    u = np.zeros((4, 3), dtype=float)
+    baseline = np.zeros((4, 2), dtype=float)
+    with pytest.raises(ValueError):
+        bootstrap_paired_delta(u, baseline, seed=0, samples=50)
+
+
+def test_bootstrap_paired_delta_reproducible_under_same_seed():
+    u = np.array([[1, 0], [0, 1], [1, 1], [0, 0]], dtype=float)
+    baseline = np.array([[0, 1], [1, 0], [0, 1], [1, 0]], dtype=float)
+    a = bootstrap_paired_delta(u, baseline, seed=99, samples=500)
+    b = bootstrap_paired_delta(u, baseline, seed=99, samples=500)
+    assert (a.point, a.low, a.high) == (b.point, b.low, b.high)

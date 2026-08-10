@@ -110,6 +110,45 @@ def bootstrap_video_accuracy(
     return BootstrapResult(point=point, low=low, high=high)
 
 
+def bootstrap_paired_delta(
+    u_correct: np.ndarray,
+    baseline_correct: np.ndarray,
+    seed: int,
+    samples: int,
+    ci: float = 0.95,
+) -> BootstrapResult:
+    """Video-row bootstrap of ``mean(u) - mean(baseline)`` with SHARED indices.
+
+    Each replicate draws one video-index vector ``idx`` and computes
+    ``u_correct[idx].mean() - baseline_correct[idx].mean()``. Because the same
+    indices flow through both arrays, per-video correlation between the two
+    correctness maps is preserved — the CI reflects the paired-delta
+    distribution, not the difference of two independent CIs.
+    """
+
+    u = np.asarray(u_correct, dtype=float)
+    b = np.asarray(baseline_correct, dtype=float)
+    if u.ndim != 2 or b.ndim != 2:
+        raise ValueError("u_correct and baseline_correct must be 2-D [V, K]")
+    if u.shape != b.shape:
+        raise ValueError(
+            f"u_correct {u.shape} and baseline_correct {b.shape} must match"
+        )
+    if u.size == 0:
+        raise ValueError("u_correct is empty")
+    V = u.shape[0]
+    rng = np.random.default_rng(int(seed))
+    diffs = np.empty(samples, dtype=float)
+    for i in range(samples):
+        idx = rng.integers(0, V, size=V)
+        diffs[i] = u[idx].mean() - b[idx].mean()
+    alpha = (1.0 - float(ci)) / 2.0
+    low = float(np.quantile(diffs, alpha))
+    high = float(np.quantile(diffs, 1.0 - alpha))
+    point = float(u.mean() - b.mean())
+    return BootstrapResult(point=point, low=low, high=high)
+
+
 def saturation_rate(u: np.ndarray) -> float:
     """Fraction of samples within 1% of the min or max of ``u``."""
 
