@@ -1,5 +1,11 @@
 # SAP Retrieval-Grounded Uncertainty Implementation Plan
 
+> **Superseded on 2026-08-11:** Route 1+3 failed the retrieval gate. Do not execute
+> this K-way candidate-EDL plan. The approved replacement is
+> `docs/superpowers/plans/2026-08-11-retrieval-risk-sidecar.md`, which freezes the
+> June retrieval backbone and trains a binary evidential risk sidecar without
+> changing retrieval scores.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make SAP uncertainty measurable from the correct model outputs and align it with text-video retrieval failures while preserving MSRVTT retrieval quality.
