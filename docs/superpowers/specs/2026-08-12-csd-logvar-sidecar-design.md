@@ -1,7 +1,7 @@
 # Independent CSD Log-Variance Sidecar Design
 
 **Date:** 2026-08-12
-**Status:** Pending written-spec review
+**Status:** Approved for implementation planning
 
 ## Decision
 
