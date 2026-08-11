@@ -161,7 +161,30 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
     }
     if bool(getattr(args, "aleatoric_crf_training", False)):
         payload["crf"] = _crf_manifest_section(args)
+    if bool(getattr(args, "use_retrieval_risk_sidecar", False)):
+        payload["retrieval_risk"] = _retrieval_risk_manifest_section(args)
     return payload
+
+
+def _retrieval_risk_manifest_section(args) -> dict:
+    return {
+        "enabled": True,
+        "sidecar_only": bool(
+            getattr(args, "retrieval_risk_sidecar_only", False)
+        ),
+        "weight": float(getattr(args, "w_retrieval_risk", 0.0)),
+        "temperature": float(
+            getattr(args, "retrieval_risk_temperature", 1.0)
+        ),
+        "hidden_dim": int(getattr(args, "retrieval_risk_hidden_dim", 32)),
+        "bootstrap_samples": int(
+            getattr(args, "retrieval_risk_bootstrap_samples", 1000)
+        ),
+        "init_model": getattr(args, "init_model", ""),
+        "dsl": bool(getattr(args, "DSL", False)),
+        "dsl_temperature": float(getattr(args, "dsl_temperature", 1.0)),
+        "score_path": "raw_wti_no_risk_rescaling",
+    }
 
 
 def _crf_manifest_section(args) -> dict:

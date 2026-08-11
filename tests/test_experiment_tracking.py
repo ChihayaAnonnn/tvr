@@ -97,6 +97,41 @@ def test_experiment_manifest_omits_crf_fields_for_hygiene_runs():
     assert "crf" not in payload
 
 
+def test_experiment_manifest_records_retrieval_risk_contract():
+    args = _crf_args_namespace(
+        aleatoric_crf_training=False,
+        use_retrieval_risk_sidecar=True,
+        retrieval_risk_sidecar_only=True,
+        w_retrieval_risk=0.05,
+        retrieval_risk_temperature=1.0,
+        retrieval_risk_hidden_dim=32,
+        retrieval_risk_bootstrap_samples=1000,
+        init_model="/tmp/june-bin.4",
+        DSL=True,
+        dsl_temperature=2.0,
+    )
+
+    payload = build_experiment_manifest(
+        args=args,
+        split_summary={"protocol_version": "trusted-v1"},
+        batch_semantics={"world_size": 4},
+        git_state={"commit": "abc"},
+    )
+
+    assert payload["retrieval_risk"] == {
+        "enabled": True,
+        "sidecar_only": True,
+        "weight": 0.05,
+        "temperature": 1.0,
+        "hidden_dim": 32,
+        "bootstrap_samples": 1000,
+        "init_model": "/tmp/june-bin.4",
+        "dsl": True,
+        "dsl_temperature": 2.0,
+        "score_path": "raw_wti_no_risk_rescaling",
+    }
+
+
 def test_experiment_manifest_records_ladder_manifest_sha_when_present(tmp_path):
     ladder_root = tmp_path / "ladder"
     (ladder_root / "crf30").mkdir(parents=True)

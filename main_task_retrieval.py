@@ -314,6 +314,12 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
     parser.add_argument("--DSL", default=False, type=bool, help="whether using dual softmax in post testing")
     parser.add_argument(
+        "--dsl_temperature",
+        default=1.0,
+        type=float,
+        help="Dual-softmax temperature; 1.0 preserves the previous default.",
+    )
+    parser.add_argument(
         "--eval_vid_chunk_size",
         default=128,
         type=int,
@@ -532,6 +538,8 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         raise ValueError("retrieval_risk_hidden_dim must be positive")
     if args.retrieval_risk_bootstrap_samples < 0:
         raise ValueError("retrieval_risk_bootstrap_samples must be non-negative")
+    if args.dsl_temperature <= 0:
+        raise ValueError("dsl_temperature must be positive")
 
     validate_trusted_cli(args)
 
@@ -752,6 +760,10 @@ def set_retrieval_risk_training_mode(model):
     if not getattr(inner, "retrieval_risk_sidecar_only", False):
         return
     model.eval()
+    # UATVR.forward uses the root training flag to enter its loss path. Restore
+    # only the roots after eval() has put every frozen child in inference mode.
+    model.training = True
+    inner.training = True
     inner.retrieval_risk_sidecar.train()
 
 
@@ -1481,6 +1493,34 @@ def _compute_retrieval_risk_metrics(
     return payload
 
 
+def _apply_dual_softmax(similarity_matrix, temperature=1.0):
+    """Return independent T2V/V2T DSL matrices without mutating the input."""
+
+    if temperature <= 0:
+        raise ValueError("dsl_temperature must be positive")
+    matrix = torch.as_tensor(
+        np.asarray(similarity_matrix, dtype=np.float32)
+    )
+    if matrix.ndim != 2 or not torch.isfinite(matrix).all():
+        raise ValueError("DSL requires a finite 2-D similarity matrix")
+
+    text_to_video = (
+        matrix
+        * F.softmax(matrix / temperature, dim=0)
+        * matrix.size(0)
+    )
+    transposed = matrix.T
+    video_to_text = (
+        transposed
+        * F.softmax(transposed / temperature, dim=0)
+        * transposed.size(0)
+    )
+    return (
+        text_to_video.detach().cpu().numpy(),
+        video_to_text.T.detach().cpu().numpy(),
+    )
+
+
 def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "v2t")):
     directions = _normalize_eval_directions(directions)
 
@@ -1665,17 +1705,13 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
         _log_mus_scores_tsv(args, mus_matrix)
 
     if args.DSL:  # using dual softmax during evaluation
-        logger.info("\t Using Dual Softmax evaluation.")
-        sim_matrix = torch.from_numpy(sim_matrix)
-        v2t_matrix = sim_matrix.T
-
-        sim_matrix = sim_matrix * F.softmax(sim_matrix / 1, dim=0) * len(sim_matrix)
-        sim_matrix = sim_matrix.detach().numpy()
-
-        v2t_matrix = v2t_matrix * F.softmax(v2t_matrix / 1, dim=0) * len(v2t_matrix)
-        v2t_matrix = v2t_matrix.detach().numpy()
-
-        v2t_directional_matrix = v2t_matrix.T
+        logger.info(
+            "\t Using Dual Softmax evaluation (temperature=%.3f).",
+            args.dsl_temperature,
+        )
+        sim_matrix, v2t_directional_matrix = _apply_dual_softmax(
+            sim_matrix, args.dsl_temperature
+        )
     else:
         v2t_directional_matrix = sim_matrix
 

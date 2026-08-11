@@ -41,6 +41,8 @@ def test_old_command_line_keeps_sidecar_disabled(monkeypatch):
     assert args.w_retrieval_risk == 0.0
     assert args.retrieval_risk_temperature == 1.0
     assert args.retrieval_risk_hidden_dim == 32
+    assert args.retrieval_risk_bootstrap_samples == 1000
+    assert args.dsl_temperature == 1.0
 
 
 def test_sidecar_cli_requires_june_model(monkeypatch):
@@ -167,6 +169,25 @@ def test_sidecar_only_training_keeps_frozen_modules_in_eval_mode():
 
     set_retrieval_risk_training_mode(model)
 
-    assert model.training is False
+    # UATVR.forward branches on the root module's training flag, so the root
+    # must remain in training mode even though every frozen child stays in eval.
+    assert model.training is True
     assert model.backbone.training is False
     assert model.retrieval_risk_sidecar.training is True
+
+
+def test_sidecar_state_dict_round_trip_preserves_risk(tmp_path):
+    torch.manual_seed(19)
+    source = RetrievalRiskSidecar(hidden_dim=8)
+    logits = torch.tensor(
+        [[3.0, 1.0, 0.0], [0.0, 2.0, 1.0], [1.0, 0.0, 4.0]]
+    )
+    expected = source(logits, direction="t2v")["failure_risk"]
+    checkpoint = tmp_path / "retrieval-risk-sidecar.pt"
+    torch.save(source.state_dict(), checkpoint)
+
+    restored = RetrievalRiskSidecar(hidden_dim=8)
+    restored.load_state_dict(torch.load(checkpoint, weights_only=True))
+    actual = restored(logits, direction="t2v")["failure_risk"]
+
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)

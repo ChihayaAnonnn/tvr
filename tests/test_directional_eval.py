@@ -2,6 +2,7 @@ import numpy as np
 import torch
 
 from main_task_retrieval import (
+    _apply_dual_softmax,
     _compute_directional_metrics,
     _compute_retrieval_risk_metrics,
 )
@@ -76,3 +77,22 @@ def test_risk_reporting_uses_transposed_v2t_positive_mask():
     )
 
     assert result["v2t"]["num_queries"] == 4
+
+
+def test_dual_softmax_uses_registered_temperature_without_mutating_input():
+    matrix = np.array([[3.0, 1.0], [0.0, 2.0]], dtype=np.float32)
+    before = matrix.copy()
+
+    t2v, v2t_directional = _apply_dual_softmax(matrix, temperature=2.0)
+
+    tensor = torch.from_numpy(before)
+    expected_t2v = tensor * torch.softmax(tensor / 2.0, dim=0) * len(tensor)
+    transposed = tensor.T
+    expected_v2t = (
+        transposed
+        * torch.softmax(transposed / 2.0, dim=0)
+        * len(transposed)
+    ).T
+    np.testing.assert_array_equal(matrix, before)
+    np.testing.assert_allclose(t2v, expected_t2v.numpy())
+    np.testing.assert_allclose(v2t_directional, expected_v2t.numpy())
