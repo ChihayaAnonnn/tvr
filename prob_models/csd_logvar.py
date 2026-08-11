@@ -6,6 +6,12 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from prob_models.retrieval_risk import (
+    _pairwise_uncertainty_ranking_loss,
+    _robust_rank_normalize,
+    retrieval_hardness,
+)
+
 
 def _validate_matrix(name: str, value: torch.Tensor) -> torch.Tensor:
     value = torch.as_tensor(value)
@@ -91,3 +97,53 @@ class CSDLogVarSidecar(nn.Module):
             "match_logits": -scale * distance + self.shift,
             "scale": scale, "shift": self.shift,
         }
+
+
+def gaussian_vib_loss(mean, logvar):
+    mean = _validate_matrix("mean", mean).detach().float()
+    logvar = _validate_matrix("logvar", logvar).float()
+    if mean.shape != logvar.shape:
+        raise ValueError("mean and logvar must have equal shapes")
+    return (-0.5 * (1.0 + logvar - mean.square() - logvar.exp())).mean()
+
+
+def _grounding_terms(uncertainty, scores, positive_mask, temperature):
+    hardness = retrieval_hardness(scores.detach(), positive_mask, temperature)
+    fit = F.smooth_l1_loss(uncertainty, _robust_rank_normalize(hardness))
+    rank = _pairwise_uncertainty_ranking_loss(uncertainty, hardness)
+    return fit + rank, fit, rank, hardness
+
+
+def csd_logvar_objective(sidecar, text_mu, video_mu, wti_logits, positive_mask,
+                         w_csd=1.0, w_grounding=0.05, w_vib=1e-4,
+                         hardness_temperature=1.0):
+    if min(w_csd, w_grounding, w_vib) < 0:
+        raise ValueError("loss weights must be non-negative")
+    if hardness_temperature <= 0:
+        raise ValueError("hardness_temperature must be positive")
+    logits = _validate_matrix("wti_logits", wti_logits).detach().float()
+    mask = torch.as_tensor(positive_mask, device=logits.device, dtype=torch.bool)
+    if mask.shape != logits.shape or not mask.any(1).all() or not mask.any(0).all():
+        raise ValueError("every text and video requires at least one positive")
+    if mask.all(1).any() or mask.all(0).any():
+        raise ValueError("every text and video requires at least one negative")
+    output = sidecar(text_mu.detach(), video_mu.detach())
+    target = mask.to(output["match_logits"].dtype)
+    elements = F.binary_cross_entropy_with_logits(output["match_logits"], target, reduction="none")
+    csd, csd_positive, csd_negative = elements.mean(), elements[mask].mean(), elements[~mask].mean()
+    tg, tf, tr, text_hardness = _grounding_terms(output["u_text"], logits, mask, hardness_temperature)
+    vg, vf, vr, video_hardness = _grounding_terms(output["u_video"], logits.T, mask.T, hardness_temperature)
+    grounding, grounding_fit, grounding_rank = 0.5 * (tg + vg), 0.5 * (tf + vf), 0.5 * (tr + vr)
+    vib = 0.5 * (gaussian_vib_loss(text_mu, output["text_logvar"]) + gaussian_vib_loss(video_mu, output["video_logvar"]))
+    total = w_csd * csd + w_grounding * grounding + w_vib * vib
+    diagnostics = {
+        **output, "csd": csd.detach(), "csd_positive": csd_positive.detach(),
+        "csd_negative": csd_negative.detach(), "grounding": grounding.detach(),
+        "grounding_fit": grounding_fit.detach(), "grounding_rank": grounding_rank.detach(),
+        "vib": vib.detach(), "text_hardness": text_hardness, "video_hardness": video_hardness,
+    }
+    for modality in ("text", "video"):
+        values = output[f"{modality}_logvar"]
+        diagnostics[f"{modality}_clamp_low"] = values.eq(sidecar.logvar_min).float().mean().detach()
+        diagnostics[f"{modality}_clamp_high"] = values.eq(sidecar.logvar_max).float().mean().detach()
+    return total, diagnostics
