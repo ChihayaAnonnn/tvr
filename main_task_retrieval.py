@@ -25,7 +25,23 @@ from experiment_tracking import (
 )
 from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_to_text_sim
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from modules.modeling import UATVR
+from modules.modeling import UATVR as _UATVR_HEAD
+
+
+def _import_uatvr(use_full: bool):
+    """Return the UATVR class matching the requested arch (see --use_uatvr_full).
+
+    HEAD arch (default) is the simplified 2026-08-08 rewrite; June arch
+    (``--use_uatvr_full``) restores ``modules.modeling_mulit.UATVR`` with
+    SAP + spatial_enhancer + ada_norm text. Ckpts are not interchangeable.
+    """
+    if use_full:
+        from modules.modeling_mulit import UATVR as _UATVR_FULL
+        return _UATVR_FULL
+    return _UATVR_HEAD
+
+
+UATVR = _UATVR_HEAD  # module-level default so existing type refs still work
 from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
 from util import get_logger, parallel_apply
 
@@ -370,6 +386,112 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         default=0.0,
         help="Aleatoric aggregation pooling temperature. Plan [G11] fixes this at 0.0.",
     )
+    parser.add_argument(
+        "--use_uatvr_full",
+        action="store_true",
+        help="Use restored June UATVR arch (modules.modeling_mulit.UATVR) with SAP + spatial_enhancer + ada_norm text.",
+    )
+    parser.add_argument(
+        "--use_ada_norm",
+        action="store_true",
+        help="[--use_uatvr_full only] Enable UncertaintyAdaNorm on text side.",
+    )
+    parser.add_argument(
+        "--disable_spatial_enhancer",
+        action="store_true",
+        help="[--use_uatvr_full only] Disable SpatialEnhancer (default is enabled).",
+    )
+    parser.add_argument(
+        "--rope_mode",
+        type=str,
+        default="2d",
+        choices=["2d", "3d"],
+        help="[--use_uatvr_full only] SpatialEnhancer RoPE mode.",
+    )
+    parser.add_argument(
+        "--fusion_mode",
+        type=str,
+        default="prob_mos",
+        help="[--use_uatvr_full only] similarity fusion mode.",
+    )
+    parser.add_argument(
+        "--fusion_temperature",
+        type=float,
+        default=1.5,
+        help="[--use_uatvr_full only] similarity fusion temperature.",
+    )
+    parser.add_argument(
+        "--w_query_sim",
+        type=float,
+        default=0.01,
+        help="[--use_uatvr_full only] weight on query-sim aux loss.",
+    )
+    parser.add_argument(
+        "--w_uncertainty_reg",
+        type=float,
+        default=0.001,
+        help="[--use_uatvr_full only] weight on uncertainty regularization.",
+    )
+    parser.add_argument(
+        "--w_evidential",
+        type=float,
+        default=0.01,
+        help="[--use_uatvr_full only] weight on evidential loss.",
+    )
+    parser.add_argument(
+        "--w_neg_reg",
+        type=float,
+        default=0.01,
+        help="[--use_uatvr_full only] weight on negative regularization.",
+    )
+    parser.add_argument(
+        "--uncertainty_mode",
+        type=str,
+        default="none",
+        help="[--use_uatvr_full only] uncertainty training mode.",
+    )
+    parser.add_argument(
+        "--uncertainty_text_head",
+        type=str,
+        default="text",
+        help="[--use_uatvr_full only] which uncertainty head to use on text.",
+    )
+    parser.add_argument(
+        "--log_sigma_min",
+        type=float,
+        default=-1.5,
+        help="[--use_uatvr_full only] clamp for log-sigma min.",
+    )
+    parser.add_argument(
+        "--log_sigma_max",
+        type=float,
+        default=4.0,
+        help="[--use_uatvr_full only] clamp for log-sigma max.",
+    )
+    parser.add_argument(
+        "--anneal_warmup_epochs",
+        type=int,
+        default=0,
+        help="[--use_uatvr_full only] uncertainty annealing warmup epochs.",
+    )
+    parser.add_argument(
+        "--mamba_lr_ratio",
+        type=float,
+        default=0.1,
+        help="[--use_uatvr_full only] lr ratio for mamba params (if used).",
+    )
+    parser.add_argument(
+        "--w_mil",
+        type=float,
+        default=0.01,
+        help="[--use_uatvr_full only] weight on MIL loss.",
+    )
+    parser.add_argument(
+        "--w_orth",
+        type=float,
+        default=0.1,
+        help="[--use_uatvr_full only] weight on orthogonality loss.",
+    )
     args = parser.parse_args()
 
     validate_trusted_cli(args)
@@ -537,13 +659,24 @@ def init_device(args, local_rank):
 def init_model(args, device, n_gpu, local_rank):
     if args.init_model:
         model_state_dict = torch.load(args.init_model, map_location="cpu")
+        # Older ckpts (e.g. June bin.4) mix fp16 and fp32 params. Fused AdamW
+        # requires uniform dtype across params, so cast everything to fp32.
+        for k, v in list(model_state_dict.items()):
+            if v.dtype in (torch.float16, torch.bfloat16):
+                model_state_dict[k] = v.to(torch.float32)
     else:
         model_state_dict = None
 
     # Prepare model
     cache_dir = args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), "distributed")
 
-    model = UATVR.from_pretrained(args.cross_model, cache_dir=cache_dir, state_dict=model_state_dict, task_config=args)
+    UATVR_cls = _import_uatvr(getattr(args, "use_uatvr_full", False))
+    model = UATVR_cls.from_pretrained(args.cross_model, cache_dir=cache_dir, state_dict=model_state_dict, task_config=args)
+    # Ensure all trainable params are fp32 so fused AdamW gets uniform dtype.
+    # (CLIP's convert_weights may leave visual conv/proj weights in fp16.)
+    for p in model.parameters():
+        if p.dtype in (torch.float16, torch.bfloat16):
+            p.data = p.data.to(torch.float32)
     model.to(device)
 
     return model
@@ -643,13 +776,16 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
             return x / warmup_frac
         return 0.5 * (1.0 + math.cos(math.pi * x))
 
+    # fused=True requires strict dtype uniformity across params; disable when
+    # init_model is set since older ckpts (e.g. June bin.4) mix fp16/fp32.
+    use_fused = not bool(getattr(args, "init_model", None))
     optimizer = torch.optim.AdamW(
         optimizer_grouped_parameters,
         lr=args.lr,
         betas=(0.9, 0.98),
         eps=1e-6,
         weight_decay=weight_decay,
-        fused=True,
+        fused=use_fused,
     )
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, lr_lambda=_warmup_cosine_lambda
@@ -724,7 +860,8 @@ def load_model(epoch, args, n_gpu, device, model_file=None):  # for evaluation a
         cache_dir = (
             args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), "distributed")
         )
-        model = UATVR.from_pretrained(
+        UATVR_cls = _import_uatvr(getattr(args, "use_uatvr_full", False))
+        model = UATVR_cls.from_pretrained(
             args.cross_model, cache_dir=cache_dir, state_dict=model_state_dict, task_config=args
         )
         model.to(device)
@@ -932,6 +1069,11 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     video,
                     video_mask,
                 )
+            # June arch UATVR (--use_uatvr_full) returns a dict; HEAD arch
+            # returns a scalar tensor. Unpack the dict here so downstream
+            # scalar-tensor semantics (mean, /accum, backward) still apply.
+            if isinstance(loss, dict):
+                loss = loss["total"]
 
         if n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu.
@@ -1066,21 +1208,38 @@ def _run_on_single_gpu(
 ):
     # Feature batches are cached on CPU by eval_epoch and moved to the worker
     # device in bounded video chunks for UATVR similarity computation.
-    visual_output_all = torch.cat(batch_visual_output_list, dim=0)
+    # For June arch (--use_uatvr_full) each entry is a (visual_cls, visual_hidden)
+    # tuple; HEAD arch stores a single tensor.
+    is_june = isinstance(batch_visual_output_list[0], tuple)
+    if is_june:
+        visual_cls_all = torch.cat([v[0] for v in batch_visual_output_list], dim=0)
+        visual_hidden_all = torch.cat([v[1] for v in batch_visual_output_list], dim=0)
+    else:
+        visual_output_all = torch.cat(batch_visual_output_list, dim=0)
     video_mask_all = torch.cat([v[0] for v in batch_list_v], dim=0)
 
     device = next(model.parameters()).device
     chunk_size = getattr(args, "eval_vid_chunk_size", 128)
-    n_vid = visual_output_all.size(0)
+    n_vid = visual_cls_all.size(0) if is_june else visual_output_all.size(0)
     video_chunks = []
     for v_start in range(0, n_vid, chunk_size):
         v_end = min(v_start + chunk_size, n_vid)
-        video_chunk = (
-            visual_output_all[v_start:v_end].to(device),
-            video_mask_all[v_start:v_end].to(device),
-        )
+        if is_june:
+            video_chunk = (
+                visual_cls_all[v_start:v_end].to(device),
+                visual_hidden_all[v_start:v_end].to(device),
+                video_mask_all[v_start:v_end].to(device),
+            )
+        else:
+            video_chunk = (
+                visual_output_all[v_start:v_end].to(device),
+                video_mask_all[v_start:v_end].to(device),
+            )
         video_chunks.append(video_chunk)
-    del visual_output_all, video_mask_all
+    if is_june:
+        del visual_cls_all, visual_hidden_all, video_mask_all
+    else:
+        del visual_output_all, video_mask_all
 
     sim_matrix = []
     for idx1, b1 in enumerate(batch_list_t):
@@ -1091,15 +1250,28 @@ def _run_on_single_gpu(
         input_mask = input_mask.to(device)
 
         row_logits = []
-        for visual_output, video_mask in video_chunks:
-            logits, *_tmp = model.get_similarity_logits(
-                sequence_output,
-                text_token,
-                visual_output,
-                input_mask,
-                video_mask,
-                loose_type=model.loose_type,
-            )
+        for chunk in video_chunks:
+            if is_june:
+                visual_output, visual_hidden, video_mask = chunk
+                logits, *_tmp = model.get_similarity_logits(
+                    sequence_output,
+                    text_token,
+                    visual_output,
+                    visual_hidden,
+                    input_mask,
+                    video_mask,
+                    loose_type=model.loose_type,
+                )
+            else:
+                visual_output, video_mask = chunk
+                logits, *_tmp = model.get_similarity_logits(
+                    sequence_output,
+                    text_token,
+                    visual_output,
+                    input_mask,
+                    video_mask,
+                    loose_type=model.loose_type,
+                )
             row_logits.append(logits)
 
         # bf16 张量不能直接 .numpy()，必须先转 fp32。
@@ -1272,26 +1444,38 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
                 if len(filter_inds) > 0:
                     video, video_mask = video[filter_inds, ...], video_mask[filter_inds, ...]
                     visual_output = model.get_visual_output(video, video_mask)
-                    batch_visual_output_list.append(visual_output.cpu())
+                    # June arch (--use_uatvr_full) returns (visual_cls, visual_hidden);
+                    # HEAD returns a single tensor. Preserve both parts for June.
+                    if isinstance(visual_output, tuple):
+                        batch_visual_output_list.append(tuple(t.cpu() for t in visual_output))
+                    else:
+                        batch_visual_output_list.append(visual_output.cpu())
                     batch_list_v.append((video_mask.cpu(),))
                 total_video_num += b
             else:
-                sequence_output, text_token, visual_output = (
-                    model.get_sequence_visual_output(
-                        input_ids,
-                        segment_ids,
-                        input_mask,
-                        video,
-                        video_mask,
-                    )
+                gsvo = model.get_sequence_visual_output(
+                    input_ids,
+                    segment_ids,
+                    input_mask,
+                    video,
+                    video_mask,
                 )
+                # HEAD returns 3-tuple (seq, text_token, visual);
+                # June returns 4-tuple (seq, hidden_word, visual_cls, visual_hidden).
+                if len(gsvo) == 4:
+                    sequence_output, text_token, visual_output, visual_hidden = gsvo
+                    batch_visual_output_list.append(
+                        (visual_output.cpu(), visual_hidden.cpu())
+                    )
+                else:
+                    sequence_output, text_token, visual_output = gsvo
+                    batch_visual_output_list.append(visual_output.cpu())
 
                 # Move to CPU immediately to reduce peak GPU memory during similarity computation
                 batch_sequence_output_list.append(
                     (sequence_output.cpu(), text_token.cpu())
                 )
                 batch_list_t.append((input_mask.cpu(), segment_ids.cpu()))
-                batch_visual_output_list.append(visual_output.cpu())
                 batch_list_v.append((video_mask.cpu(),))
 
         # ----------------------------------

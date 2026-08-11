@@ -218,7 +218,7 @@ run_worker() {
     echo "[Runtime] python=${TVR_PYTHON} torchrun=${TVR_TORCHRUN}"
 
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
-        "${TVR_TORCHRUN}" --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=29547 \
+        "${TVR_TORCHRUN}" --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=${MASTER_PORT:-29547} \
         "${ROOT_DIR}/main_task_retrieval.py" \
         --do_train --run_final_test --num_thread_reader "${TRAIN_NUM_WORKERS}" \
         --prefetch_factor "${TRAIN_PREFETCH_FACTOR}" --epochs=5 \

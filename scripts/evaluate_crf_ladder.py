@@ -552,8 +552,6 @@ def _load_uatvr_for_eval(checkpoint_path: str, cli_args: argparse.Namespace, dev
     """
     import torch
 
-    from modules.modeling import UATVR
-
     ckpt_dir = Path(checkpoint_path).parent
     training_args_path = ckpt_dir / "training_args.json"
     if training_args_path.exists():
@@ -564,6 +562,13 @@ def _load_uatvr_for_eval(checkpoint_path: str, cli_args: argparse.Namespace, dev
             "Either re-run training with the updated main_task_retrieval.py that "
             "writes training_args.json, or hand-craft the file per the runner."
         )
+
+    # Dispatch UATVR class based on training-time --use_uatvr_full (persisted
+    # via _write_training_args_json). Default is HEAD arch for old ckpts.
+    if getattr(task_config, "use_uatvr_full", False):
+        from modules.modeling_mulit import UATVR
+    else:
+        from modules.modeling import UATVR
 
     task_config.init_model = str(checkpoint_path)
     state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
