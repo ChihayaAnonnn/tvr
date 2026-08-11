@@ -137,7 +137,8 @@ def csd_logvar_objective(sidecar, text_mu, video_mu, wti_logits, positive_mask,
     vib = 0.5 * (gaussian_vib_loss(text_mu, output["text_logvar"]) + gaussian_vib_loss(video_mu, output["video_logvar"]))
     total = w_csd * csd + w_grounding * grounding + w_vib * vib
     diagnostics = {
-        **output, "csd": csd.detach(), "csd_positive": csd_positive.detach(),
+        **{name: value.detach() for name, value in output.items()},
+        "csd": csd.detach(), "csd_positive": csd_positive.detach(),
         "csd_negative": csd_negative.detach(), "grounding": grounding.detach(),
         "grounding_fit": grounding_fit.detach(), "grounding_rank": grounding_rank.detach(),
         "vib": vib.detach(), "text_hardness": text_hardness, "video_hardness": video_hardness,

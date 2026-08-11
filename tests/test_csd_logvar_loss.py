@@ -18,6 +18,11 @@ def test_objective_accepts_multi_positives_and_detaches_inputs():
     text_mu, video_mu, logits, mask = _fixture()
     sidecar = CSDLogVarSidecar(embed_dim=4, hidden_dim=3)
     loss, output = csd_logvar_objective(sidecar, text_mu, video_mu, logits, mask)
+    assert all(
+        not value.requires_grad
+        for value in output.values()
+        if isinstance(value, torch.Tensor)
+    )
     loss.backward()
     assert text_mu.grad is None and video_mu.grad is None and logits.grad is None
     assert sum(parameter.grad.abs().sum() for parameter in sidecar.parameters()) > 0
