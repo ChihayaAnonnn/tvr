@@ -492,7 +492,37 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         default=0.1,
         help="[--use_uatvr_full only] weight on orthogonality loss.",
     )
+    parser.add_argument(
+        "--use_retrieval_risk_sidecar",
+        action="store_true",
+        help="Train or evaluate the detached retrieval-risk sidecar.",
+    )
+    parser.add_argument(
+        "--retrieval_risk_sidecar_only",
+        action="store_true",
+        help="Freeze every parameter except retrieval_risk_sidecar.*.",
+    )
+    parser.add_argument("--w_retrieval_risk", type=float, default=0.0)
+    parser.add_argument(
+        "--retrieval_risk_temperature", type=float, default=1.0
+    )
+    parser.add_argument("--retrieval_risk_hidden_dim", type=int, default=32)
     args = parser.parse_args()
+
+    if args.use_retrieval_risk_sidecar and not args.use_uatvr_full:
+        raise ValueError(
+            "use_retrieval_risk_sidecar requires --use_uatvr_full"
+        )
+    if args.retrieval_risk_sidecar_only and not args.use_retrieval_risk_sidecar:
+        raise ValueError(
+            "retrieval_risk_sidecar_only requires --use_retrieval_risk_sidecar"
+        )
+    if args.w_retrieval_risk < 0:
+        raise ValueError("w_retrieval_risk must be non-negative")
+    if args.retrieval_risk_temperature <= 0:
+        raise ValueError("retrieval_risk_temperature must be positive")
+    if args.retrieval_risk_hidden_dim <= 0:
+        raise ValueError("retrieval_risk_hidden_dim must be positive")
 
     validate_trusted_cli(args)
 
@@ -684,6 +714,36 @@ def init_model(args, device, n_gpu, local_rank):
 
 def _trainable_named_parameters(model):
     return [(name, param) for name, param in model.named_parameters() if param.requires_grad]
+
+
+def configure_retrieval_risk_sidecar_training(model, args):
+    """Freeze the model around a retrieval-risk sidecar-only experiment."""
+
+    use_sidecar = bool(getattr(args, "use_retrieval_risk_sidecar", False))
+    sidecar_only = bool(getattr(args, "retrieval_risk_sidecar_only", False))
+    if sidecar_only and not use_sidecar:
+        raise ValueError(
+            "retrieval_risk_sidecar_only requires use_retrieval_risk_sidecar"
+        )
+    if not sidecar_only:
+        return
+    if not hasattr(model, "retrieval_risk_sidecar"):
+        raise ValueError("model does not expose retrieval_risk_sidecar")
+
+    for parameter in model.parameters():
+        parameter.requires_grad = False
+    for parameter in model.retrieval_risk_sidecar.parameters():
+        parameter.requires_grad = True
+
+
+def set_retrieval_risk_training_mode(model):
+    """Keep a frozen backbone deterministic while the sidecar trains."""
+
+    inner = model.module if hasattr(model, "module") else model
+    if not getattr(inner, "retrieval_risk_sidecar_only", False):
+        return
+    model.eval()
+    inner.retrieval_risk_sidecar.train()
 
 
 def _should_keep_clip_parameter_trainable(name, args):
@@ -1011,6 +1071,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     global logger
     torch.cuda.empty_cache()
     model.train()
+    set_retrieval_risk_training_mode(model)
     log_step = args.n_display
     start_time = time.time()
     epoch_start_time = time.time()
@@ -1057,17 +1118,21 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 )
                 loss = total * float(args.aleatoric_ranking_weight)
         else:
-            input_ids, input_mask, segment_ids, video, video_mask, _group_ids = (
+            input_ids, input_mask, segment_ids, video, video_mask, group_ids = (
                 _unpack_train_batch(batch)
             )
             # A800 原生支持 bf16；autocast 内部激活走 bf16，master 参数仍 fp32，无需 GradScaler。
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                risk_kwargs = {}
+                if getattr(args, "use_retrieval_risk_sidecar", False):
+                    risk_kwargs["group_ids"] = group_ids
                 loss = model(
                     input_ids,
                     segment_ids,
                     input_mask,
                     video,
                     video_mask,
+                    **risk_kwargs,
                 )
             # June arch UATVR (--use_uatvr_full) returns a dict; HEAD arch
             # returns a scalar tensor. Unpack the dict here so downstream
@@ -1657,6 +1722,7 @@ def main():
         for name, param in model.clip.named_parameters():
             if not _should_keep_clip_parameter_trainable(name, args):
                 param.requires_grad = False
+    configure_retrieval_risk_sidecar_training(model, args)
 
     ## ####################################
     # dataloader loading

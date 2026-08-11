@@ -11,9 +11,20 @@ from modules.module_clip import CLIP, convert_weights
 from modules.module_cross import CrossConfig
 from modules.module_cross import Transformer as TransformerClip
 from modules.spatial_enhancer import SpatialEnhancer
-from modules.until_module import AllGather, CrossEn, MILNCELoss_BoF, PreTrainedModel
+from modules.until_module import (
+    AllGather,
+    CrossEn,
+    MILNCELoss_BoF,
+    PreTrainedModel,
+    allgather_no_grad,
+)
 from query_models.module_sap import SemanticAnchorProbing
 from modules.crf_head import CRFTrainingHead, paired_visual_forward
+from prob_models.retrieval_risk import (
+    RetrievalRiskSidecar,
+    positive_mask_from_group_ids,
+    retrieval_risk_objective,
+)
 
 try:
     from prob_models.pie_model import PIENet
@@ -342,6 +353,26 @@ class UATVR(CLIP4ClipPreTrainedModel):
         # 不确定性训练模式：nig_mil / none
         self.uncertainty_mode = getattr(self.task_config, "uncertainty_mode", "none")
 
+        self.use_retrieval_risk_sidecar = bool(
+            getattr(self.task_config, "use_retrieval_risk_sidecar", False)
+        )
+        self.retrieval_risk_sidecar_only = bool(
+            getattr(self.task_config, "retrieval_risk_sidecar_only", False)
+        )
+        self.w_retrieval_risk = float(
+            getattr(self.task_config, "w_retrieval_risk", 0.0)
+        )
+        self.retrieval_risk_temperature = float(
+            getattr(self.task_config, "retrieval_risk_temperature", 1.0)
+        )
+        if self.use_retrieval_risk_sidecar:
+            self.retrieval_risk_sidecar = RetrievalRiskSidecar(
+                hidden_dim=int(
+                    getattr(self.task_config, "retrieval_risk_hidden_dim", 32)
+                ),
+                temperature=self.retrieval_risk_temperature,
+            )
+
         # Optional clamp for log-variance to stabilize sampling/KL terms
         self.log_sigma_min = getattr(self.task_config, "log_sigma_min", None)
         self.log_sigma_max = getattr(self.task_config, "log_sigma_max", None)
@@ -375,6 +406,56 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         self.apply(self.init_weights)
 
+    def _select_training_retrieval_logits(
+        self,
+        wti_logits,
+        confidence_weighted_logits,
+    ):
+        if self.use_retrieval_risk_sidecar:
+            return wti_logits
+        return confidence_weighted_logits
+
+    def _retrieval_risk_terms(self, wti_logits, group_ids):
+        if not self.use_retrieval_risk_sidecar:
+            zero = wti_logits.new_zeros(())
+            return {
+                "retrieval_risk_loss": zero,
+                "retrieval_risk_edl": zero,
+                "retrieval_risk_fit": zero,
+                "retrieval_risk_rank": zero,
+            }
+        if group_ids is None:
+            raise ValueError(
+                "group_ids are required when retrieval risk sidecar is enabled"
+            )
+        group_ids = torch.as_tensor(
+            group_ids, device=wti_logits.device
+        ).reshape(-1)
+        expected = (group_ids.numel(), group_ids.numel())
+        if tuple(wti_logits.shape) != expected:
+            raise ValueError(
+                "group_ids must align with square training logits: "
+                f"groups={group_ids.numel()} logits={tuple(wti_logits.shape)}"
+            )
+        positive_mask = positive_mask_from_group_ids(group_ids)
+        risk_loss, risk_output = retrieval_risk_objective(
+            self.retrieval_risk_sidecar,
+            wti_logits,
+            positive_mask,
+            self.retrieval_risk_temperature,
+        )
+        return {
+            "retrieval_risk_loss": self.w_retrieval_risk * risk_loss,
+            "retrieval_risk_edl": risk_output["edl"].detach(),
+            "retrieval_risk_fit": risk_output["fit"].detach(),
+            "retrieval_risk_rank": risk_output["rank"].detach(),
+        }
+
+    def score_retrieval_risk(self, logits, direction):
+        if not self.use_retrieval_risk_sidecar:
+            raise RuntimeError("retrieval risk sidecar is disabled")
+        return self.retrieval_risk_sidecar(logits, direction)
+
     def forward(
         self,
         input_ids,
@@ -382,6 +463,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         attention_mask,
         video,
         video_mask=None,
+        group_ids=None,
     ):
         # (B 1 32)  (B 1 132) (B 1 32)
         input_ids = input_ids.view(-1, input_ids.shape[-1])
@@ -415,17 +497,22 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 video_mask,
                 shaped=True,
                 loose_type=self.loose_type,
+                group_ids=group_ids,
             )
             sim_matrix = res["retrieve_logits"]
-            sim_loss1 = self.loss_fct(sim_matrix)
-            sim_loss2 = self.loss_fct(sim_matrix.T)
-            sim_loss = (sim_loss1 + sim_loss2) / 2
+            if self.retrieval_risk_sidecar_only:
+                sim_loss = sim_matrix.new_zeros(())
+            else:
+                sim_loss1 = self.loss_fct(sim_matrix)
+                sim_loss2 = self.loss_fct(sim_matrix.T)
+                sim_loss = (sim_loss1 + sim_loss2) / 2
 
             loss += sim_loss
             loss += res["MIL_loss"]
             loss += res["evidential_loss"]
             loss += res["neg_reg_loss"]
             loss += res["orth_loss"]
+            loss += res["retrieval_risk_loss"]
 
             loss_dict = {
                 "total": loss,
@@ -434,6 +521,10 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 "evidential_loss": res["evidential_loss"],
                 "neg_reg_loss": res["neg_reg_loss"],
                 "orth_loss": res["orth_loss"],
+                "retrieval_risk_loss": res["retrieval_risk_loss"],
+                "retrieval_risk_edl": res["retrieval_risk_edl"],
+                "retrieval_risk_fit": res["retrieval_risk_fit"],
+                "retrieval_risk_rank": res["retrieval_risk_rank"],
             }
             return loss_dict
         else:  # for inference
@@ -637,6 +728,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         attention_mask,
         video_mask,
         sim_header="seqTransf",
+        group_ids=None,
     ):
         sequence_output, visual_output = (
             sequence_output.contiguous(),
@@ -711,6 +803,14 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         # ===== DDP allgather：只广播紧凑张量，不再广播 visual_output_hidden =====
         if self.training:
+            global_group_ids = None
+            if group_ids is not None:
+                local_group_ids = torch.as_tensor(
+                    group_ids, device=visual_output.device
+                ).reshape(-1)
+                global_group_ids = allgather_no_grad(
+                    local_group_ids.contiguous(), self.task_config
+                )
             mu_video = allgather(mu_video.contiguous(), self.task_config)
             logsigma_video = allgather(logsigma_video.contiguous(), self.task_config)
             epistemic_video = allgather(epistemic_video.contiguous(), self.task_config)
@@ -722,6 +822,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
             sequence_output = allgather(sequence_output.contiguous(), self.task_config)
             text_token = allgather(text_token.contiguous(), self.task_config)
             attention_mask = allgather(attention_mask.contiguous(), self.task_config)
+        else:
+            global_group_ids = None
 
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
 
@@ -733,19 +835,37 @@ class UATVR(CLIP4ClipPreTrainedModel):
         )
         text_pooled = text_pooled / text_pooled.norm(dim=-1, keepdim=True)
 
-        # ===== Evidential 相似度：cosine × epistemic 置信折扣 =====
-        ev_sim = self._evidential_similarity(mu_video, text_pooled, epistemic_video)
-
-        # ===== Text 侧概率建模（保持 Gaussian，非对称设计） =====
-        prob_text = self.probabilistic_text(text_pooled, text_token[:, 0:word_num, :].contiguous())
-        prob_text_embedding = prob_text["embedding"]
-        prob_text_logsigma = prob_text["logsigma"]
-
         # ===== WTI：帧级 token 交互打分 =====
         logit_scale = self.clip.logit_scale.exp()
         wti_logits = self.weighted_token_wise_intersection(
             text_token, visual_output, attention_mask, video_mask
         ) * logit_scale
+
+        if self.training and self.retrieval_risk_sidecar_only:
+            risk_terms = self._retrieval_risk_terms(
+                wti_logits, global_group_ids
+            )
+            zero = wti_logits.new_zeros(())
+            return {
+                "retrieve_logits": wti_logits,
+                "MIL_loss": zero,
+                "evidential_loss": zero,
+                "neg_reg_loss": zero,
+                "orth_loss": zero,
+                **risk_terms,
+            }
+
+        # ===== Evidential 相似度：cosine × epistemic 置信折扣 =====
+        ev_sim = self._evidential_similarity(
+            mu_video, text_pooled, epistemic_video
+        )
+
+        # ===== Text 侧概率建模（保持 Gaussian，非对称设计） =====
+        prob_text = self.probabilistic_text(
+            text_pooled, text_token[:, 0:word_num, :].contiguous()
+        )
+        prob_text_embedding = prob_text["embedding"]
+        prob_text_logsigma = prob_text["logsigma"]
 
         if self.training:
             bs = mu_video.size(0)
@@ -850,12 +970,17 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 orth_loss = ((sim_qq - eye) ** 2).mean()
 
             loss = {}
-            loss["retrieve_logits"] = weighted_logits
+            loss["retrieve_logits"] = self._select_training_retrieval_logits(
+                wti_logits, weighted_logits
+            )
             loss["MIL_loss"] = self.w_mil * MIL_loss
             # 退火系数应用于 evidential_loss 和 neg_reg_loss，避免 Epoch 2 初期梯度崩塌
             loss["evidential_loss"] = self.w_evidential * evidential_loss * anneal_factor
             loss["neg_reg_loss"] = self.w_neg_reg * neg_reg_loss * anneal_factor
             loss["orth_loss"] = self.w_orth * orth_loss
+            loss.update(
+                self._retrieval_risk_terms(wti_logits, global_group_ids)
+            )
             return loss
         else:
             return wti_logits
@@ -1016,6 +1141,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_mask,
         shaped=False,
         loose_type=False,
+        group_ids=None,
     ):
         if shaped is False:
             attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
@@ -1030,6 +1156,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 attention_mask,
                 video_mask,
                 sim_header=self.sim_header,
+                group_ids=group_ids,
             )
             return loss
         else:
