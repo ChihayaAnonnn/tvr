@@ -26,6 +26,10 @@ from experiment_tracking import (
 from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_to_text_sim
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modules.modeling import UATVR as _UATVR_HEAD
+from prob_models.retrieval_risk_metrics import (
+    build_eval_positive_mask,
+    evaluate_retrieval_risk,
+)
 
 
 def _import_uatvr(use_full: bool):
@@ -507,6 +511,9 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         "--retrieval_risk_temperature", type=float, default=1.0
     )
     parser.add_argument("--retrieval_risk_hidden_dim", type=int, default=32)
+    parser.add_argument(
+        "--retrieval_risk_bootstrap_samples", type=int, default=1000
+    )
     args = parser.parse_args()
 
     if args.use_retrieval_risk_sidecar and not args.use_uatvr_full:
@@ -523,6 +530,8 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         raise ValueError("retrieval_risk_temperature must be positive")
     if args.retrieval_risk_hidden_dim <= 0:
         raise ValueError("retrieval_risk_hidden_dim must be positive")
+    if args.retrieval_risk_bootstrap_samples < 0:
+        raise ValueError("retrieval_risk_bootstrap_samples must be non-negative")
 
     validate_trusted_cli(args)
 
@@ -1434,6 +1443,44 @@ def _serialize_retrieval_metrics(metrics):
     }
 
 
+def _compute_retrieval_risk_metrics(
+    *,
+    model,
+    risk_similarity_matrix,
+    metric_t2v_matrix,
+    metric_v2t_matrix,
+    positive_mask,
+    directions,
+    device,
+    bootstrap_samples=1000,
+):
+    """Score the complete candidate matrix without mutating retrieval inputs."""
+
+    directions = _normalize_eval_directions(directions)
+    raw_logits = torch.from_numpy(
+        np.asarray(risk_similarity_matrix, dtype=np.float32)
+    ).to(device)
+    payload = {}
+    with torch.no_grad():
+        for offset, direction in enumerate(directions):
+            output = model.score_retrieval_risk(raw_logits, direction)
+            if direction == "t2v":
+                scores = metric_t2v_matrix
+                mask = positive_mask
+            else:
+                scores = metric_v2t_matrix.T
+                mask = positive_mask.T
+            payload[direction] = evaluate_retrieval_risk(
+                scores,
+                mask,
+                output["failure_risk"].float().cpu().numpy(),
+                output["vacuity"].float().cpu().numpy(),
+                bootstrap_samples=bootstrap_samples,
+                seed=offset,
+            )
+    return payload
+
+
 def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "v2t")):
     directions = _normalize_eval_directions(directions)
 
@@ -1611,6 +1658,8 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
             v2t_directional_matrix = sim_matrix
             mus_matrix = sim_matrix
 
+    risk_similarity_matrix = np.array(sim_matrix, copy=True)
+
     # MUS 诊断日志：在相似度矩阵整合完成后、指标计算前输出
     if getattr(args, "log_mus_scores", False):
         _log_mus_scores_tsv(args, mus_matrix)
@@ -1668,10 +1717,38 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
             metrics["R1"], metrics["R5"], metrics["R10"], metrics["MR"], metrics["MeanR"],
         )
 
-    return {
+    result = {
         direction: _serialize_retrieval_metrics(directional_metrics[direction])
         for direction in directions
     }
+    if getattr(model, "use_retrieval_risk_sidecar", False):
+        positive_mask = build_eval_positive_mask(
+            metric_t2v_matrix.shape[0],
+            metric_t2v_matrix.shape[1],
+            cut_off_points_ if multi_sentence_ else None,
+        )
+        result["retrieval_risk"] = _compute_retrieval_risk_metrics(
+            model=model,
+            risk_similarity_matrix=risk_similarity_matrix,
+            metric_t2v_matrix=metric_t2v_matrix,
+            metric_v2t_matrix=metric_v2t_matrix,
+            positive_mask=positive_mask,
+            directions=directions,
+            device=device,
+            bootstrap_samples=getattr(
+                args, "retrieval_risk_bootstrap_samples", 1000
+            ),
+        )
+        for direction in directions:
+            risk_metrics = result["retrieval_risk"][direction]
+            logger.info(
+                "  %s risk | rho=%+.4f AUROC=%.4f AURC=%.4f",
+                direction.upper(),
+                risk_metrics["spearman_risk_vs_rank"],
+                risk_metrics["failure_auroc"]["value"],
+                risk_metrics["risk_coverage"]["aurc"],
+            )
+    return result
 
 
 def main():
