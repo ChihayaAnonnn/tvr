@@ -132,6 +132,41 @@ def test_experiment_manifest_records_retrieval_risk_contract():
     }
 
 
+def test_experiment_manifest_records_csd_logvar_contract():
+    args = _crf_args_namespace(
+        aleatoric_crf_training=False, use_retrieval_risk_sidecar=True,
+        use_csd_logvar_sidecar=True, csd_logvar_sidecar_only=True,
+        w_csd=1.0, w_csd_grounding=0.05, w_csd_vib=1e-4,
+        csd_logvar_hidden_dim=128, csd_logvar_min=-12.0,
+        csd_logvar_max=4.0, csd_logvar_init=-8.0,
+        csd_initial_scale=5.0, csd_initial_shift=5.0,
+        csd_hardness_temperature=1.0, csd_bootstrap_samples=1000,
+        init_model="/tmp/a1-bin.4",
+    )
+    payload = build_experiment_manifest(
+        args, split_summary={"protocol_version": "trusted-v1"},
+        batch_semantics={"world_size": 4}, git_state={"commit": "abc"},
+    )
+    assert payload["csd_logvar"] == {
+        "enabled": True, "sidecar_only": True,
+        "weights": {"csd": 1.0, "grounding": 0.05, "vib": 1e-4},
+        "hidden_dim": 128, "bounds": [-12.0, 4.0], "init_logvar": -8.0,
+        "initial_scale": 5.0, "initial_shift": 5.0,
+        "hardness_temperature": 1.0, "bootstrap_samples": 1000,
+        "init_model": "/tmp/a1-bin.4",
+        "score_path": "auxiliary_only_raw_wti_unchanged",
+    }
+
+
+def test_experiment_manifest_omits_csd_logvar_when_disabled():
+    payload = build_experiment_manifest(
+        _crf_args_namespace(aleatoric_crf_training=False),
+        split_summary={"protocol_version": "trusted-v1"},
+        batch_semantics={"world_size": 1}, git_state={"commit": "abc"},
+    )
+    assert "csd_logvar" not in payload
+
+
 def test_experiment_manifest_records_ladder_manifest_sha_when_present(tmp_path):
     ladder_root = tmp_path / "ladder"
     (ladder_root / "crf30").mkdir(parents=True)

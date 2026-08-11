@@ -163,6 +163,8 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         payload["crf"] = _crf_manifest_section(args)
     if bool(getattr(args, "use_retrieval_risk_sidecar", False)):
         payload["retrieval_risk"] = _retrieval_risk_manifest_section(args)
+    if bool(getattr(args, "use_csd_logvar_sidecar", False)):
+        payload["csd_logvar"] = _csd_logvar_manifest_section(args)
     return payload
 
 
@@ -184,6 +186,32 @@ def _retrieval_risk_manifest_section(args) -> dict:
         "dsl": bool(getattr(args, "DSL", False)),
         "dsl_temperature": float(getattr(args, "dsl_temperature", 1.0)),
         "score_path": "raw_wti_no_risk_rescaling",
+    }
+
+
+def _csd_logvar_manifest_section(args) -> dict:
+    return {
+        "enabled": True,
+        "sidecar_only": bool(getattr(args, "csd_logvar_sidecar_only", False)),
+        "weights": {
+            "csd": float(getattr(args, "w_csd", 1.0)),
+            "grounding": float(getattr(args, "w_csd_grounding", 0.05)),
+            "vib": float(getattr(args, "w_csd_vib", 1e-4)),
+        },
+        "hidden_dim": int(getattr(args, "csd_logvar_hidden_dim", 128)),
+        "bounds": [
+            float(getattr(args, "csd_logvar_min", -12.0)),
+            float(getattr(args, "csd_logvar_max", 4.0)),
+        ],
+        "init_logvar": float(getattr(args, "csd_logvar_init", -8.0)),
+        "initial_scale": float(getattr(args, "csd_initial_scale", 5.0)),
+        "initial_shift": float(getattr(args, "csd_initial_shift", 5.0)),
+        "hardness_temperature": float(
+            getattr(args, "csd_hardness_temperature", 1.0)
+        ),
+        "bootstrap_samples": int(getattr(args, "csd_bootstrap_samples", 1000)),
+        "init_model": getattr(args, "init_model", ""),
+        "score_path": "auxiliary_only_raw_wti_unchanged",
     }
 
 

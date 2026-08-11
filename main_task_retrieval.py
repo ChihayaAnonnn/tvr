@@ -520,6 +520,19 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument(
         "--retrieval_risk_bootstrap_samples", type=int, default=1000
     )
+    parser.add_argument("--use_csd_logvar_sidecar", action="store_true")
+    parser.add_argument("--csd_logvar_sidecar_only", action="store_true")
+    parser.add_argument("--w_csd", type=float, default=1.0)
+    parser.add_argument("--w_csd_grounding", type=float, default=0.05)
+    parser.add_argument("--w_csd_vib", type=float, default=1e-4)
+    parser.add_argument("--csd_logvar_hidden_dim", type=int, default=128)
+    parser.add_argument("--csd_logvar_min", type=float, default=-12.0)
+    parser.add_argument("--csd_logvar_max", type=float, default=4.0)
+    parser.add_argument("--csd_logvar_init", type=float, default=-8.0)
+    parser.add_argument("--csd_initial_scale", type=float, default=5.0)
+    parser.add_argument("--csd_initial_shift", type=float, default=5.0)
+    parser.add_argument("--csd_hardness_temperature", type=float, default=1.0)
+    parser.add_argument("--csd_bootstrap_samples", type=int, default=1000)
     args = parser.parse_args()
 
     if args.use_retrieval_risk_sidecar and not args.use_uatvr_full:
@@ -538,6 +551,28 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         raise ValueError("retrieval_risk_hidden_dim must be positive")
     if args.retrieval_risk_bootstrap_samples < 0:
         raise ValueError("retrieval_risk_bootstrap_samples must be non-negative")
+    if args.use_csd_logvar_sidecar and not args.use_uatvr_full:
+        raise ValueError("use_csd_logvar_sidecar requires --use_uatvr_full")
+    if args.csd_logvar_sidecar_only and not args.use_csd_logvar_sidecar:
+        raise ValueError("csd_logvar_sidecar_only requires --use_csd_logvar_sidecar")
+    if args.csd_logvar_sidecar_only and not args.use_retrieval_risk_sidecar:
+        raise ValueError(
+            "csd_logvar_sidecar_only requires --use_retrieval_risk_sidecar"
+        )
+    if min(args.w_csd, args.w_csd_grounding, args.w_csd_vib) < 0:
+        raise ValueError("CSD loss weights must be non-negative")
+    if args.use_csd_logvar_sidecar and args.w_csd == 0 and args.w_csd_grounding == 0:
+        raise ValueError("CSD or grounding weight must be positive")
+    if args.csd_logvar_hidden_dim <= 0:
+        raise ValueError("csd_logvar_hidden_dim must be positive")
+    if not args.csd_logvar_min < args.csd_logvar_max:
+        raise ValueError("csd_logvar_min must be smaller than csd_logvar_max")
+    if not args.csd_logvar_min <= args.csd_logvar_init <= args.csd_logvar_max:
+        raise ValueError("csd_logvar_init must lie inside the clamp bounds")
+    if args.csd_initial_scale <= 0 or args.csd_hardness_temperature <= 0:
+        raise ValueError("CSD scales and temperatures must be positive")
+    if args.csd_bootstrap_samples < 0:
+        raise ValueError("csd_bootstrap_samples must be non-negative")
     if args.dsl_temperature <= 0:
         raise ValueError("dsl_temperature must be positive")
 

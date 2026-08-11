@@ -1,0 +1,32 @@
+import sys
+
+import pytest
+
+from main_task_retrieval import get_args
+
+
+def _parse(monkeypatch, extra):
+    monkeypatch.setattr(sys, "argv", [
+        "main_task_retrieval.py", "--do_train", "--expand_msrvtt_sentences",
+        "--output_dir", "/tmp/csd-logvar-config-test", *extra,
+    ])
+    return get_args()
+
+
+def test_old_cli_keeps_csd_logvar_disabled(monkeypatch):
+    args = _parse(monkeypatch, [])
+    assert args.use_csd_logvar_sidecar is False
+    assert args.csd_logvar_sidecar_only is False
+    assert (args.w_csd, args.w_csd_grounding, args.w_csd_vib) == (1.0, 0.05, 1e-4)
+    assert (args.csd_logvar_min, args.csd_logvar_max, args.csd_logvar_init) == (-12.0, 4.0, -8.0)
+
+
+@pytest.mark.parametrize("extra", [
+    ["--csd_logvar_sidecar_only"],
+    ["--use_csd_logvar_sidecar", "--csd_logvar_sidecar_only", "--use_uatvr_full"],
+    ["--use_csd_logvar_sidecar", "--use_uatvr_full", "--w_csd", "-1"],
+    ["--use_csd_logvar_sidecar", "--use_uatvr_full", "--csd_logvar_min", "4", "--csd_logvar_max", "-12"],
+])
+def test_invalid_csd_cli_contracts_fail(monkeypatch, extra):
+    with pytest.raises(ValueError):
+        _parse(monkeypatch, extra)
