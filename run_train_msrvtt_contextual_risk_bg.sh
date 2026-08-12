@@ -43,6 +43,18 @@ reject_registered_environment_overrides() {
     done
 }
 
+reject_registered_accelerator_prefix_overrides() {
+    local name
+    while IFS= read -r name; do
+        case "${name}" in
+            NCCL_*|CUDA_*|CUBLAS_*|NVIDIA_TF32_OVERRIDE|TORCH_ALLOW_TF32_CUBLAS_OVERRIDE)
+                echo "registered A3 environment ${name} cannot be inherited" >&2
+                exit 2
+                ;;
+        esac
+    done < <(compgen -e)
+}
+
 reject_registered_argument_overrides() {
     if [[ "$#" -ne 0 ]]; then
         echo "registered A3 launcher does not accept trailing arguments" >&2
@@ -51,6 +63,7 @@ reject_registered_argument_overrides() {
 }
 
 validate_test_seams
+reject_registered_accelerator_prefix_overrides
 reject_registered_environment_overrides
 reject_registered_argument_overrides "$@"
 
@@ -150,6 +163,7 @@ TRAIN_PID_FILE="${HANDOFF_PID_FILE}" \
 TVR_PYTHON=/home/xujie/.conda/envs/tvr/bin/python \
 TVR_TORCHRUN=/home/xujie/.conda/envs/tvr/bin/torchrun \
 CUDA_VISIBLE_DEVICES="0,2,3,4" \
+CUDA_MODULE_LOADING=LAZY \
 NPROC=4 \
 TRAIN_BATCH_SIZE=256 \
 TRAIN_GRADIENT_ACCUMULATION_STEPS=1 \

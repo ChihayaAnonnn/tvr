@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import subprocess
 from pathlib import Path
@@ -355,16 +356,26 @@ def test_registered_a3_python_contract_rejects_manifest_material_mismatch(
         retrieval._assert_registered_a3_contract(args, batch)
 
 
-def test_registered_a3_initial_environment_is_checked_before_seed_normalization(
-    monkeypatch,
-):
-    args = SimpleNamespace(contextual_risk_sidecar_only=True)
-    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+def _set_registered_a3_initial_environment(monkeypatch):
     expected_environment = retrieval._registered_a3_expected_environment()
+    for name in list(os.environ):
+        if name.startswith(("NCCL_", "CUDA_", "CUBLAS_")) or name in {
+            "NVIDIA_TF32_OVERRIDE",
+            "TORCH_ALLOW_TF32_CUBLAS_OVERRIDE",
+        }:
+            monkeypatch.delenv(name)
     for name, value in expected_environment.items():
         monkeypatch.setenv(name, value)
     for name in ("RANK", "LOCAL_RANK", "ROLE_RANK"):
         monkeypatch.setenv(name, "0")
+    return expected_environment
+
+
+def test_registered_a3_initial_environment_is_checked_before_seed_normalization(
+    monkeypatch,
+):
+    args = SimpleNamespace(contextual_risk_sidecar_only=True)
+    _set_registered_a3_initial_environment(monkeypatch)
     retrieval._assert_registered_a3_initial_environment(args)
 
     monkeypatch.setenv("PYTHONHASHSEED", "9")
@@ -387,14 +398,54 @@ def test_registered_a3_initial_environment_rejects_missing_material_value(
     monkeypatch, name
 ):
     args = SimpleNamespace(contextual_risk_sidecar_only=True)
-    for env_name, value in retrieval._registered_a3_expected_environment().items():
-        monkeypatch.setenv(env_name, value)
-    for env_name in ("RANK", "LOCAL_RANK", "ROLE_RANK"):
-        monkeypatch.setenv(env_name, "0")
+    _set_registered_a3_initial_environment(monkeypatch)
     monkeypatch.delenv(name)
 
     with pytest.raises(ValueError, match="initial environment"):
         retrieval._assert_registered_a3_initial_environment(args)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "NCCL_ALGO",
+        "NCCL_PROTO",
+        "NCCL_P2P_DISABLE",
+        "NVIDIA_TF32_OVERRIDE",
+        "TORCH_ALLOW_TF32_CUBLAS_OVERRIDE",
+        "CUBLAS_LOGINFO_DBG",
+        "CUDA_LAUNCH_BLOCKING",
+    ],
+)
+def test_registered_a3_initial_environment_rejects_extra_accelerator_override(
+    monkeypatch, name
+):
+    args = SimpleNamespace(contextual_risk_sidecar_only=True)
+    _set_registered_a3_initial_environment(monkeypatch)
+    monkeypatch.setenv(name, "1")
+
+    with pytest.raises(ValueError, match=rf"initial environment.*{name}"):
+        retrieval._assert_registered_a3_initial_environment(args)
+
+
+def test_registered_a3_accelerator_environment_exact_whitelist_passes(monkeypatch):
+    args = SimpleNamespace(contextual_risk_sidecar_only=True)
+    expected = _set_registered_a3_initial_environment(monkeypatch)
+    material_names = {
+        name
+        for name in expected
+        if name.startswith(("NCCL_", "CUDA_", "CUBLAS_"))
+    }
+
+    assert material_names == {
+        "NCCL_P2P_LEVEL",
+        "NCCL_IB_DISABLE",
+        "NCCL_DEBUG",
+        "CUDA_VISIBLE_DEVICES",
+        "CUDA_MODULE_LOADING",
+        "CUBLAS_WORKSPACE_CONFIG",
+    }
+    retrieval._assert_registered_a3_initial_environment(args)
 
 
 def test_registered_clip_asset_preflight_rejects_path_hash_and_cache_drift(

@@ -1093,6 +1093,7 @@ def _registered_a3_expected_environment():
 
     return {
         "CUDA_VISIBLE_DEVICES": "0,2,3,4",
+        "CUDA_MODULE_LOADING": "LAZY",
         "PYTHONHASHSEED": "0",
         "CLIP_CACHE_DIR": str(REGISTERED_A3_CLIP_CACHE_DIR),
         "REGISTERED_CLIP_ASSET_PATH": str(REGISTERED_A3_CLIP_ASSET_PATH),
@@ -1279,6 +1280,31 @@ def _assert_registered_a3_initial_environment(args):
         f"{name} is forbidden in a registered A3 worker"
         for name in forbidden
         if name in os.environ
+    )
+    allowed_accelerator_environment = {
+        "NCCL_P2P_LEVEL",
+        "NCCL_IB_DISABLE",
+        "NCCL_DEBUG",
+        "CUDA_VISIBLE_DEVICES",
+        "CUDA_MODULE_LOADING",
+        "CUBLAS_WORKSPACE_CONFIG",
+    }
+    accelerator_override_names = sorted(
+        name
+        for name in os.environ
+        if (
+            name.startswith(("NCCL_", "CUDA_", "CUBLAS_"))
+            or name
+            in {
+                "NVIDIA_TF32_OVERRIDE",
+                "TORCH_ALLOW_TF32_CUBLAS_OVERRIDE",
+            }
+        )
+        and name not in allowed_accelerator_environment
+    )
+    mismatches.extend(
+        f"{name} is not allowed in the registered A3 accelerator environment"
+        for name in accelerator_override_names
     )
     dynamic_ranks = {}
     for name in ("RANK", "LOCAL_RANK", "ROLE_RANK"):

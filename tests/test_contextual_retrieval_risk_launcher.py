@@ -38,6 +38,12 @@ sleep 0.2
 
 def _launcher_env(controller, marker, *, output_dir=None):
     env = os.environ.copy()
+    for name in list(env):
+        if name.startswith(("NCCL_", "CUDA_", "CUBLAS_")) or name in {
+            "NVIDIA_TF32_OVERRIDE",
+            "TORCH_ALLOW_TF32_CUBLAS_OVERRIDE",
+        }:
+            env.pop(name)
     env.update({
         "A3_LAUNCHER_TEST_MODE": "1",
         "A3_BG_CONTROLLER": str(controller),
@@ -84,6 +90,7 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
     assert '5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f' in text
     for binding in (
         'CUBLAS_WORKSPACE_CONFIG=":4096:8"',
+        'CUDA_MODULE_LOADING=LAZY',
         'OMP_NUM_THREADS=1', 'MKL_NUM_THREADS=1',
         'OPENBLAS_NUM_THREADS=1', 'NUMEXPR_NUM_THREADS=1',
         'NCCL_P2P_LEVEL=NVL', 'NCCL_IB_DISABLE=1', 'NCCL_DEBUG=WARN',
@@ -246,13 +253,21 @@ def test_registered_a3_launcher_retains_reservation_when_worker_exits_before_out
         ("SMOKE_STEPS", "1"),
         ("PYTHONHASHSEED", "9"),
         ("REGISTERED_CLIP_ASSET_SHA256", "0" * 64),
+        ("NCCL_ALGO", "Ring"),
+        ("NCCL_PROTO", "Simple"),
+        ("NCCL_P2P_DISABLE", "1"),
+        ("NVIDIA_TF32_OVERRIDE", "1"),
+        ("TORCH_ALLOW_TF32_CUBLAS_OVERRIDE", "1"),
+        ("CUBLAS_LOGINFO_DBG", "1"),
+        ("CUDA_LAUNCH_BLOCKING", "1"),
     ],
 )
 def test_registered_a3_launcher_rejects_inherited_controller_execution_overrides(
     tmp_path, name, value
 ):
     controller, marker, _ = _fake_controller(tmp_path)
-    env = _launcher_env(controller, marker)
+    output_dir = tmp_path / "override-output"
+    env = _launcher_env(controller, marker, output_dir=output_dir)
     env[name] = value
 
     result = subprocess.run(
@@ -266,6 +281,7 @@ def test_registered_a3_launcher_rejects_inherited_controller_execution_overrides
     assert result.returncode == 2
     assert f"environment {name}" in result.stderr
     assert not marker.exists()
+    assert not Path(f"{output_dir}.reserve").exists()
 
 
 @pytest.mark.parametrize("seam", ["A3_BG_CONTROLLER", "A3_TEST_OUTPUT_DIR"])
