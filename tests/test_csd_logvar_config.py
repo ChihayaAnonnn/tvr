@@ -1,8 +1,16 @@
 import sys
+from pathlib import Path
 
 import pytest
 
 from main_task_retrieval import get_args
+
+
+REPOSITORY = Path(__file__).resolve().parents[1]
+CANONICAL_A1 = (
+    REPOSITORY
+    / "ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
+)
 
 
 def _parse(monkeypatch, extra):
@@ -30,3 +38,40 @@ def test_old_cli_keeps_csd_logvar_disabled(monkeypatch):
 def test_invalid_csd_cli_contracts_fail(monkeypatch, extra):
     with pytest.raises(ValueError):
         _parse(monkeypatch, extra)
+
+
+def _a2_only(extra):
+    return [
+        "--use_uatvr_full", "--use_retrieval_risk_sidecar",
+        "--use_csd_logvar_sidecar", "--csd_logvar_sidecar_only", *extra,
+    ]
+
+
+@pytest.mark.parametrize("extra", [
+    [],
+    ["--init_model", "/tmp/not-the-canonical-a1.bin"],
+])
+def test_fresh_a2_only_requires_canonical_a1_checkpoint(monkeypatch, extra):
+    with pytest.raises(ValueError):
+        _parse(monkeypatch, _a2_only(extra))
+
+
+@pytest.mark.parametrize("init_model", [
+    "ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4",
+    str(CANONICAL_A1),
+])
+def test_fresh_a2_only_accepts_resolved_canonical_a1_checkpoint(
+    monkeypatch, init_model
+):
+    monkeypatch.chdir(REPOSITORY)
+    args = _parse(monkeypatch, _a2_only(["--init_model", init_model]))
+    assert Path(args.init_model).resolve() == CANONICAL_A1.resolve()
+
+
+def test_a2_only_continuation_accepts_noncanonical_init_checkpoint(monkeypatch):
+    args = _parse(monkeypatch, _a2_only([
+        "--init_model", "/tmp/a2-bin.2",
+        "--resume_model", "/tmp/a2-optimizer-bin.2",
+    ]))
+    assert args.init_model == "/tmp/a2-bin.2"
+    assert args.resume_model == "/tmp/a2-optimizer-bin.2"

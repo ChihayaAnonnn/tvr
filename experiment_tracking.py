@@ -17,6 +17,11 @@ import tempfile
 from numbers import Integral
 from pathlib import Path
 
+CSD_LOGVAR_CANONICAL_A1_CHECKPOINT = (
+    Path(__file__).resolve().parent
+    / "ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
+).resolve()
+
 _BATCH_STATS = (
     "unique_video_count",
     "duplicate_sample_count",
@@ -210,7 +215,12 @@ def _csd_logvar_manifest_section(args) -> dict:
             getattr(args, "csd_hardness_temperature", 1.0)
         ),
         "bootstrap_samples": int(getattr(args, "csd_bootstrap_samples", 1000)),
+        "run_mode": (
+            "resume" if bool(getattr(args, "resume_model", "")) else "fresh"
+        ),
+        "canonical_a1_checkpoint": str(CSD_LOGVAR_CANONICAL_A1_CHECKPOINT),
         "init_model": getattr(args, "init_model", ""),
+        "resume_model": getattr(args, "resume_model", ""),
         "score_path": "auxiliary_only_raw_wti_unchanged",
     }
 

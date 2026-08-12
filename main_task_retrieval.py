@@ -17,6 +17,7 @@ from tqdm import tqdm
 from dataloaders.data_dataloaders import DATALOADER_DICT
 from dataloaders.msrvtt_protocol import load_trusted_manifest, validate_trusted_manifest
 from experiment_tracking import (
+    CSD_LOGVAR_CANONICAL_A1_CHECKPOINT,
     atomic_write_json,
     build_experiment_manifest,
     collect_git_state,
@@ -559,6 +560,19 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         raise ValueError(
             "csd_logvar_sidecar_only requires --use_retrieval_risk_sidecar"
         )
+    if args.csd_logvar_sidecar_only:
+        if args.resume_model:
+            if not args.init_model:
+                raise ValueError(
+                    "A2 continuation requires both --init_model and --resume_model"
+                )
+        elif not args.init_model or Path(args.init_model).resolve() != (
+            CSD_LOGVAR_CANONICAL_A1_CHECKPOINT
+        ):
+            raise ValueError(
+                "fresh A2-only runs require --init_model to resolve to "
+                f"{CSD_LOGVAR_CANONICAL_A1_CHECKPOINT}"
+            )
     if min(args.w_csd, args.w_csd_grounding, args.w_csd_vib) < 0:
         raise ValueError("CSD loss weights must be non-negative")
     if args.use_csd_logvar_sidecar and args.w_csd == 0 and args.w_csd_grounding == 0:

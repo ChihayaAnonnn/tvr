@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from crf_ladder import TRAIN_CRFS, X264_RECIPE
@@ -141,7 +142,7 @@ def test_experiment_manifest_records_csd_logvar_contract():
         csd_logvar_max=4.0, csd_logvar_init=-8.0,
         csd_initial_scale=5.0, csd_initial_shift=5.0,
         csd_hardness_temperature=1.0, csd_bootstrap_samples=1000,
-        init_model="/tmp/a1-bin.4",
+        init_model="/tmp/a2-bin.2", resume_model="/tmp/a2-optimizer-bin.2",
     )
     payload = build_experiment_manifest(
         args, split_summary={"protocol_version": "trusted-v1"},
@@ -153,9 +154,28 @@ def test_experiment_manifest_records_csd_logvar_contract():
         "hidden_dim": 128, "bounds": [-12.0, 4.0], "init_logvar": -8.0,
         "initial_scale": 5.0, "initial_shift": 5.0,
         "hardness_temperature": 1.0, "bootstrap_samples": 1000,
-        "init_model": "/tmp/a1-bin.4",
+        "run_mode": "resume",
+        "canonical_a1_checkpoint": str(
+            Path(__file__).resolve().parents[1]
+            / "ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
+        ),
+        "init_model": "/tmp/a2-bin.2",
+        "resume_model": "/tmp/a2-optimizer-bin.2",
         "score_path": "auxiliary_only_raw_wti_unchanged",
     }
+
+
+def test_experiment_manifest_marks_fresh_csd_logvar_run():
+    payload = build_experiment_manifest(
+        _crf_args_namespace(
+            aleatoric_crf_training=False, use_csd_logvar_sidecar=True,
+            init_model="/tmp/a1-bin.4", resume_model="",
+        ),
+        split_summary={"protocol_version": "trusted-v1"},
+        batch_semantics={"world_size": 1}, git_state={"commit": "abc"},
+    )
+    assert payload["csd_logvar"]["run_mode"] == "fresh"
+    assert payload["csd_logvar"]["resume_model"] == ""
 
 
 def test_experiment_manifest_omits_csd_logvar_when_disabled():
