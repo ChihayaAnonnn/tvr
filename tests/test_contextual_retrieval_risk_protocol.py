@@ -48,6 +48,8 @@ def _candidate(epoch=0, **updates):
         "evidence": {"risk": [0.1, 0.2]},
         "paired_digest": {
             "raw_wti_sha256": "raw",
+            "text_means_sha256": "text",
+            "video_means_sha256": "video",
             "a1_failure_risk_sha256": {"t2v": "tf", "v2t": "vf"},
             "a1_vacuity_sha256": {"t2v": "tv", "v2t": "vv"},
             "retrieval": {"t2v": {"R1": 1.0}, "v2t": {"R1": 2.0}},
@@ -56,6 +58,8 @@ def _candidate(epoch=0, **updates):
             "passed": True,
             "checks": {
                 "raw_wti": True,
+                "text_means": True,
+                "video_means": True,
                 "a1_failure_risk": True,
                 "a1_vacuity": True,
                 "retrieval": True,

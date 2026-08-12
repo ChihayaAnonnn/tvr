@@ -341,6 +341,7 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
         },
         "continuation_inputs": {
             "optimizer": {
+                "name": "torch.optim.AdamW",
                 "lr": float(getattr(args, "lr", 1e-4)),
                 "coef_lr": float(getattr(args, "coef_lr", 1.0)),
                 "warmup_proportion": float(
@@ -348,6 +349,13 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
                 ),
                 "schedule": "warmup_cosine",
                 "weight_decay": 0.2,
+                "betas": [0.9, 0.98],
+                "epsilon": 1e-6,
+                "bias_correction": True,
+                "fused": False,
+                "no_decay_patterns": [
+                    "bias", "LayerNorm.bias", "LayerNorm.weight"
+                ],
             },
             "epochs": {"fresh": 3, "continuation_total": 5},
             "batch": {
@@ -424,6 +432,9 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
                     getattr(args, "dsl_temperature", 1.0)
                 ),
                 "score_path": "post_dsl_directional_scores",
+                "eval_vid_chunk_size": int(
+                    getattr(args, "eval_vid_chunk_size", 128)
+                ),
             },
         },
         "thresholds": {

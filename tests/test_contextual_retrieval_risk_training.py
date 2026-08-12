@@ -146,6 +146,8 @@ def _paired_digest(raw="raw"):
     )
     return {
         "raw_wti_sha256": evidence["array_metadata"]["raw_wti"]["sha256"],
+        "text_means_sha256": evidence["array_metadata"]["text_means"]["sha256"],
+        "video_means_sha256": evidence["array_metadata"]["video_means"]["sha256"],
         "a1_failure_risk_sha256": {
             direction: evidence["array_metadata"]["a1_failure_risk"][direction]["sha256"]
             for direction in ("t2v", "v2t")
@@ -363,6 +365,7 @@ def test_cuda_model_registers_canonical_cpu_checkpoint_outputs(tmp_path):
         bootstrap_samples=0,
         return_array_digests=True,
         return_array_evidence=True,
+        canonical_cpu_replay=True,
     )
     evidence.update({
         "contextual_head_config": expected["contextual_head_config"],
@@ -409,6 +412,19 @@ def test_retrieval_evidence_config_cannot_override_registered_args():
                 **evidence["retrieval_config"],
                 "dsl": True,
             },
+        )
+
+
+def test_typed_evidence_rejects_dtype_metadata_conversion_attack():
+    evidence, _ = _complete_evidence()
+    attacked = copy.deepcopy(evidence)
+    values = np.asarray(attacked["text_means"], dtype=np.float64)
+    attacked["array_metadata"]["text_means"] = _array_metadata(values)
+    attacked["sha256"]["text_means"] = array_sha256(values)
+
+    with pytest.raises(ValueError, match="text_means dtype"):
+        main_task_retrieval._contextual_evidence_array(
+            attacked, "text_means"
         )
 
 
@@ -602,6 +618,36 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
     selection_path = run / "best_contextual_risk_checkpoint.json"
     original_candidates = json.loads(candidate_path.read_text())
     original_selection = json.loads(selection_path.read_text())
+    mean_tamper = copy.deepcopy(original_candidates)
+    changed_means = np.asarray(
+        mean_tamper[2]["evidence"]["text_means"], dtype=np.float32
+    ) + 0.25
+    mean_tamper[2]["evidence"]["text_means"] = changed_means.tolist()
+    mean_tamper[2]["evidence"]["array_metadata"]["text_means"] = (
+        _array_metadata(changed_means)
+    )
+    mean_tamper[2]["evidence"]["sha256"]["text_means"] = array_sha256(
+        changed_means
+    )
+    mean_tamper[2]["paired_digest"]["text_means_sha256"] = array_sha256(
+        changed_means
+    )
+    mean_selection = copy.deepcopy(original_selection)
+    mean_selection["candidates"] = mean_tamper
+    mean_selection["winner"] = mean_tamper[2]
+    main_task_retrieval.atomic_write_json(candidate_path, mean_tamper)
+    main_task_retrieval.atomic_write_json(selection_path, mean_selection)
+    with pytest.raises(ValueError, match="immutable candidate audit mismatch"):
+        _initialize_contextual_risk_protocol(
+            SimpleNamespace(
+                output_dir=str(run), init_model=str(model),
+                resume_model=str(optimizer_path), epochs=5,
+                contextual_risk_bootstrap_samples=0,
+            ),
+            object(), object(), torch.device("cpu"), 1,
+            resume_payload=optimizer_payload,
+        )
+
     tampered = copy.deepcopy(original_candidates)
     tampered[2]["paired_digest"] = _paired_digest("forged")
     tampered[2]["paired_invariance"] = {
@@ -983,6 +1029,8 @@ def test_final_test_is_deferred_when_three_epoch_continuation_is_eligible(
                 "passed": True,
                 "checks": {
                     "raw_wti": True,
+                    "text_means": True,
+                    "video_means": True,
                     "a1_failure_risk": True,
                     "a1_vacuity": True,
                     "retrieval": True,

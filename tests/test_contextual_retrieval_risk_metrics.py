@@ -545,6 +545,26 @@ def test_a3_only_eval_is_fp32_and_deterministic(monkeypatch):
     assert torch.backends.cudnn.deterministic is False
 
 
+def test_a3_eval_without_sidecar_only_still_disables_autocast(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        retrieval.torch,
+        "autocast",
+        lambda **kwargs: calls.append(kwargs) or nullcontext(),
+    )
+
+    with retrieval._eval_autocast_context(
+        SimpleNamespace(
+            csd_logvar_sidecar_only=False,
+            contextual_risk_sidecar_only=False,
+            use_contextual_risk_sidecar=True,
+        )
+    ):
+        pass
+
+    assert calls[0]["enabled"] is False
+
+
 def test_contextual_window_log_contains_registered_diagnostics(monkeypatch, caplog):
     test_logger = logging.getLogger("test.contextual.window")
     monkeypatch.setattr(retrieval, "logger", test_logger, raising=False)

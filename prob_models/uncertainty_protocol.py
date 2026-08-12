@@ -27,6 +27,8 @@ _CANDIDATE_ARTIFACT_FIELDS = {
 
 A3_REQUIRED_PAIRED_DIGEST_KEYS = (
     "raw_wti_sha256",
+    "text_means_sha256",
+    "video_means_sha256",
     "a1_failure_risk_sha256",
     "a1_vacuity_sha256",
     "retrieval",
@@ -486,6 +488,10 @@ def _valid_a3_paired_digest(paired_digest: Any) -> bool:
     raw_wti = paired_digest.get("raw_wti_sha256")
     if not isinstance(raw_wti, str) or not raw_wti:
         return False
+    for key in ("text_means_sha256", "video_means_sha256"):
+        digest = paired_digest.get(key)
+        if not isinstance(digest, str) or not digest:
+            return False
     for key in ("a1_failure_risk_sha256", "a1_vacuity_sha256"):
         directional = paired_digest.get(key)
         if not isinstance(directional, Mapping) or any(

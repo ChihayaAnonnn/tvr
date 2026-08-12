@@ -2203,6 +2203,7 @@ def _compute_retrieval_risk_metrics(
     bootstrap_samples=1000,
     return_array_digests=False,
     return_array_evidence=False,
+    canonical_cpu_replay=False,
 ):
     """Score the complete candidate matrix without mutating retrieval inputs."""
 
@@ -2210,7 +2211,11 @@ def _compute_retrieval_risk_metrics(
     raw_logits = torch.from_numpy(
         np.asarray(risk_similarity_matrix, dtype=np.float32)
     )
-    retrieval_sidecar = getattr(model, "retrieval_risk_sidecar", None)
+    retrieval_sidecar = (
+        getattr(model, "retrieval_risk_sidecar", None)
+        if canonical_cpu_replay
+        else None
+    )
     cpu_sidecar = (
         copy.deepcopy(retrieval_sidecar).cpu().eval()
         if retrieval_sidecar is not None
@@ -2378,10 +2383,13 @@ def _build_paired_digest(
     risk_similarity_matrix,
     risk_array_digests,
     directions,
+    *,
+    text_means=None,
+    video_means=None,
 ):
     """Build exact A1-output evidence for an A2 paired evaluation."""
 
-    return {
+    payload = {
         "raw_wti_sha256": array_sha256(risk_similarity_matrix),
         "a1_failure_risk_sha256": {
             direction: risk_array_digests[direction]["failure_risk"]
@@ -2393,6 +2401,16 @@ def _build_paired_digest(
         },
         "retrieval": {direction: result[direction] for direction in directions},
     }
+    if text_means is not None and video_means is not None:
+        payload.update({
+            "text_means_sha256": array_sha256(
+                np.asarray(text_means, dtype=np.float32)
+            ),
+            "video_means_sha256": array_sha256(
+                np.asarray(video_means, dtype=np.float32)
+            ),
+        })
+    return payload
 
 
 def _compute_csd_logvar_metrics(
@@ -2472,6 +2490,7 @@ def _eval_autocast_context(args):
     paired_sidecar_only = bool(
         getattr(args, "csd_logvar_sidecar_only", False)
         or getattr(args, "contextual_risk_sidecar_only", False)
+        or getattr(args, "use_contextual_risk_sidecar", False)
     )
     prior_benchmark = torch.backends.cudnn.benchmark
     prior_deterministic = torch.backends.cudnn.deterministic
@@ -2793,6 +2812,7 @@ def _eval_epoch_impl(
                 ),
                 return_array_digests=True,
                 return_array_evidence=report_contextual_risk,
+                canonical_cpu_replay=report_contextual_risk,
             )
         )
         for direction in directions:
@@ -2809,6 +2829,8 @@ def _eval_epoch_impl(
             risk_similarity_matrix,
             risk_array_digests,
             directions,
+            text_means=intrinsic["text_mu"] if intrinsic is not None else None,
+            video_means=intrinsic["video_mu"] if intrinsic is not None else None,
         )
     if report_contextual_risk:
         assert intrinsic is not None
@@ -2976,7 +2998,22 @@ def _contextual_evidence_array(evidence, name, direction=None):
         metadata = metadata[direction]
         if isinstance(legacy_sha, dict):
             legacy_sha = legacy_sha.get(direction)
+    expected_dtypes = {
+        "raw_wti": np.dtype("float32"),
+        "text_means": np.dtype("float32"),
+        "video_means": np.dtype("float32"),
+        "positive_mask": np.dtype("bool"),
+        "failure_risk": np.dtype("float32"),
+        "a1_failure_risk": np.dtype("float32"),
+        "a1_vacuity": np.dtype("float32"),
+        "retrieval_scores": np.dtype("float32"),
+    }
+    expected_dtype = expected_dtypes[name]
     dtype = np.dtype(metadata["dtype"])
+    if dtype != expected_dtype:
+        raise ValueError(
+            f"A3 evidence {name} dtype must be {expected_dtype}, got {dtype}"
+        )
     array = np.asarray(values, dtype=dtype)
     if list(array.shape) != list(metadata["shape"]):
         raise ValueError(f"A3 evidence {name} shape mismatch")
@@ -3168,6 +3205,12 @@ def _recompute_contextual_risk_metrics(
     metrics = {}
     digests = {
         "raw_wti_sha256": array_sha256(raw_wti),
+        "text_means_sha256": array_sha256(
+            _contextual_evidence_array(evidence, "text_means")
+        ),
+        "video_means_sha256": array_sha256(
+            _contextual_evidence_array(evidence, "video_means")
+        ),
         "a1_failure_risk_sha256": {},
         "a1_vacuity_sha256": {},
     }

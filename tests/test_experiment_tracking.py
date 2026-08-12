@@ -339,6 +339,7 @@ def test_contextual_resume_rejects_any_immutable_manifest_change(tmp_path):
         ("expand_msrvtt_sentences", False),
         ("use_attributes", True),
         ("msrvtt_attributes_path", "/different/attrs.json"),
+        ("eval_vid_chunk_size", 64),
     ],
 )
 def test_contextual_resume_rejects_material_continuation_input_change(
@@ -369,6 +370,7 @@ def test_contextual_resume_rejects_material_continuation_input_change(
         "expand_msrvtt_sentences": True,
         "use_attributes": False,
         "msrvtt_attributes_path": "/data/attrs.json",
+        "eval_vid_chunk_size": 128,
         "epochs": 3,
         "n_gpu": 4,
     }
@@ -417,6 +419,38 @@ def test_contextual_resume_rejects_runtime_topology_change(tmp_path, monkeypatch
 
     with pytest.raises(ValueError, match="immutable A3 manifest"):
         validate_contextual_risk_resume_manifest(existing, requested)
+
+
+def test_contextual_manifest_records_optimizer_and_eval_constants(tmp_path):
+    args = _crf_args_namespace(
+        aleatoric_crf_training=False,
+        use_retrieval_risk_sidecar=True,
+        use_contextual_risk_sidecar=True,
+        contextual_risk_sidecar_only=True,
+        output_dir=str(tmp_path),
+        eval_vid_chunk_size=128,
+    )
+    payload = build_experiment_manifest(
+        args,
+        {"protocol_version": "trusted-v1"},
+        {"world_size": 4},
+        {"commit": "abc"},
+    )
+    inputs = payload["contextual_risk"]["continuation_inputs"]
+    assert inputs["optimizer"] == {
+        "name": "torch.optim.AdamW",
+        "lr": 1e-4,
+        "coef_lr": 1.0,
+        "warmup_proportion": 0.1,
+        "schedule": "warmup_cosine",
+        "weight_decay": 0.2,
+        "betas": [0.9, 0.98],
+        "epsilon": 1e-6,
+        "bias_correction": True,
+        "fused": False,
+        "no_decay_patterns": ["bias", "LayerNorm.bias", "LayerNorm.weight"],
+    }
+    assert inputs["paired_evaluation"]["eval_vid_chunk_size"] == 128
 
 
 def test_contextual_manifest_precision_matches_disabled_training_autocast(tmp_path):

@@ -194,22 +194,68 @@ def test_paired_digest_captures_raw_wti_a1_outputs_and_both_retrievals():
         "t2v": {"failure_risk": "tf", "vacuity": "tv"},
         "v2t": {"failure_risk": "vf", "vacuity": "vv"},
     }
+    text_means = np.arange(8, dtype=np.float32).reshape(4, 2)
+    video_means = text_means[::-1].copy()
 
     paired = _build_paired_digest(
         result,
         matrix,
         risk_digests,
         ("t2v", "v2t"),
+        text_means=text_means,
+        video_means=video_means,
     )
 
     assert paired == {
         "raw_wti_sha256": array_sha256(matrix),
+        "text_means_sha256": array_sha256(text_means),
+        "video_means_sha256": array_sha256(video_means),
         "a1_failure_risk_sha256": {"t2v": "tf", "v2t": "vf"},
         "a1_vacuity_sha256": {"t2v": "tv", "v2t": "vv"},
         "retrieval": {
             "t2v": {"R1": 50.0},
             "v2t": {"R1": 25.0},
         },
+    }
+
+
+def test_non_a3_retrieval_risk_metrics_use_live_model_scorer():
+    matrix = _matrix_with_successes_and_failures()
+
+    class LiveModel:
+        def __init__(self):
+            self.calls = []
+
+        def score_retrieval_risk(self, logits, direction):
+            self.calls.append(direction)
+            size = logits.shape[0] if direction == "t2v" else logits.shape[1]
+            return {
+                "failure_risk": torch.linspace(0.1, 0.9, size),
+                "vacuity": torch.linspace(0.2, 1.0, size),
+            }
+
+    model = LiveModel()
+    _, digests = main_task_retrieval._compute_retrieval_risk_metrics(
+        model=model,
+        risk_similarity_matrix=matrix,
+        metric_t2v_matrix=matrix,
+        metric_v2t_matrix=matrix,
+        positive_mask=np.eye(4, dtype=bool),
+        directions=("t2v", "v2t"),
+        device=torch.device("cpu"),
+        bootstrap_samples=0,
+        return_array_digests=True,
+    )
+
+    assert model.calls == ["t2v", "v2t"]
+    expected_risk = torch.linspace(0.1, 0.9, 4).numpy()
+    expected_vacuity = torch.linspace(0.2, 1.0, 4).numpy()
+    assert digests == {
+        direction: {
+            "failure_risk": array_sha256(expected_risk),
+            "vacuity": array_sha256(expected_vacuity),
+        }
+        for direction in ("t2v", "v2t")
     }
 
 
