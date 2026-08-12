@@ -25,6 +25,33 @@ CSD_LOGVAR_CANONICAL_A1_SHA256 = (
     "a2c074e3988b0e4a115d054c352785271712ffdfb4e4c2da8b372bde424e2607"
 )
 
+
+def _contextual_risk_canonical_a1_checkpoint() -> Path:
+    """Resolve ignored checkpoints from a linked worktree's common repository."""
+
+    relative = Path(
+        "ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
+    )
+    project_root = Path(__file__).resolve().parent
+    local = (project_root / relative).resolve()
+    if local.exists():
+        return local
+    dot_git = project_root / ".git"
+    if dot_git.is_file():
+        prefix = "gitdir:"
+        registration = dot_git.read_text().strip()
+        if registration.startswith(prefix):
+            git_dir = Path(registration[len(prefix):].strip()).resolve()
+            if git_dir.parent.name == "worktrees":
+                return (git_dir.parents[2] / relative).resolve()
+    return local
+
+
+CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT = (
+    _contextual_risk_canonical_a1_checkpoint()
+)
+CONTEXTUAL_RISK_CANONICAL_A1_SHA256 = CSD_LOGVAR_CANONICAL_A1_SHA256
+
 _BATCH_STATS = (
     "unique_video_count",
     "duplicate_sample_count",
@@ -173,6 +200,10 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         payload["retrieval_risk"] = _retrieval_risk_manifest_section(args)
     if bool(getattr(args, "use_csd_logvar_sidecar", False)):
         payload["csd_logvar"] = _csd_logvar_manifest_section(args)
+    if bool(getattr(args, "use_contextual_risk_sidecar", False)):
+        payload["contextual_risk"] = _contextual_risk_manifest_section(
+            args, split, batch_semantics
+        )
     return payload
 
 
@@ -227,6 +258,118 @@ def _csd_logvar_manifest_section(args) -> dict:
         "resume_model": getattr(args, "resume_model", ""),
         "score_path": "auxiliary_only_raw_wti_unchanged",
     }
+
+
+def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> dict:
+    """Return the immutable registered A3 experiment contract."""
+
+    split = split_summary or {}
+    batch = batch_semantics or {}
+    split_manifest = Path(getattr(args, "split_manifest", "")).resolve()
+    output_dir = Path(getattr(args, "output_dir", "")).resolve()
+    return {
+        "enabled": True,
+        "sidecar_only": bool(
+            getattr(args, "contextual_risk_sidecar_only", False)
+        ),
+        "method": {
+            "name": "contextual_retrieval_risk",
+            "version": "A3-v2",
+        },
+        "canonical_a1": {
+            "path": str(CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT),
+            "sha256": CONTEXTUAL_RISK_CANONICAL_A1_SHA256,
+        },
+        "architecture": {
+            "topk": int(getattr(args, "contextual_risk_topk", 16)),
+            "projection_dim": int(
+                getattr(args, "contextual_risk_projection_dim", 128)
+            ),
+            "hidden_dim": int(
+                getattr(args, "contextual_risk_hidden_dim", 128)
+            ),
+            "temperature": float(
+                getattr(args, "contextual_risk_temperature", 1.0)
+            ),
+            "dropout": 0.1,
+            "shared_directional_head": True,
+        },
+        "loss": {
+            "weights": {
+                "bce": 1.0,
+                "fit": float(getattr(args, "w_contextual_risk_fit", 0.25)),
+                "rank": float(getattr(args, "w_contextual_risk_rank", 0.25)),
+            },
+            "positive_weight_bounds": [0.25, 4.0],
+            "fit": "smooth_l1_to_robust_rank_normalized_hardness",
+            "rank_minimum_hardness_gap": 0.05,
+            "hardness_temperature": float(
+                getattr(args, "contextual_risk_temperature", 1.0)
+            ),
+            "bootstrap_samples": int(
+                getattr(args, "contextual_risk_bootstrap_samples", 1000)
+            ),
+        },
+        "split_identity": {
+            "protocol_version": split.get("protocol_version"),
+            "seed": split.get("seed"),
+            "manifest_path": str(split_manifest),
+            "manifest_sha256": split.get("manifest_sha256"),
+        },
+        "training": {
+            "seed": getattr(args, "seed", None),
+            "world_size": int(batch.get("world_size", 0)),
+            "precision": "fp16" if bool(getattr(args, "fp16", False)) else "fp32",
+            "effective_batch": int(
+                batch.get(
+                    "optimizer_effective_batch",
+                    batch.get("requested_effective_batch", 0),
+                )
+            ),
+        },
+        "thresholds": {
+            "directional_rho_min": 0.20,
+            "directional_auroc_ci_low_strictly_greater_than": 0.50,
+            "directional_risk_std_min": 0.02,
+            "selective_accuracy": (
+                "monotone_non_increasing_at_25_50_75_100_percent"
+            ),
+            "paired_invariance_required": True,
+            "non_a3_state_mismatches_allowed": 0,
+        },
+        "selection_rule": (
+            "max(min_directional_rho,mean_directional_auroc,"
+            "-mean_directional_aurc,-epoch)"
+        ),
+        "continuation_rule": {
+            "initial_epoch_indices": [0, 1, 2],
+            "continued_epoch_indices": [3, 4],
+            "condition": (
+                "selection_tuple(epoch_index_2) strictly_greater_than "
+                "selection_tuple(epoch_index_1)"
+            ),
+            "resume": "exact_epoch_2_model_and_optimizer_same_output_directory",
+        },
+        "candidate_json": str(
+            (output_dir / "contextual_risk_candidates.json").resolve()
+        ),
+        "selection_json": str(
+            (output_dir / "best_contextual_risk_checkpoint.json").resolve()
+        ),
+        "final_test_eligibility": (
+            "terminal_lifecycle_and_requested_and_selected_validation_"
+            "acceptance_passes"
+        ),
+    }
+
+
+def validate_contextual_risk_resume_manifest(existing, requested) -> None:
+    """Reject continuation when any immutable A3 registration changed."""
+
+    existing_a3 = existing.get("contextual_risk")
+    requested_a3 = requested.get("contextual_risk")
+    if not isinstance(existing_a3, dict) or existing_a3 != requested_a3:
+        raise ValueError("immutable A3 manifest fields differ on resume")
 
 
 def _crf_manifest_section(args) -> dict:

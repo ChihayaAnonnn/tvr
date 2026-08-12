@@ -5,8 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from crf_ladder import TRAIN_CRFS, X264_RECIPE
-from experiment_tracking import build_experiment_manifest
+from experiment_tracking import (
+    CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT,
+    CONTEXTUAL_RISK_CANONICAL_A1_SHA256,
+    build_experiment_manifest,
+    validate_contextual_risk_resume_manifest,
+)
 
 
 def _crf_args_namespace(**overrides):
@@ -188,6 +195,106 @@ def test_experiment_manifest_omits_csd_logvar_when_disabled():
         batch_semantics={"world_size": 1}, git_state={"commit": "abc"},
     )
     assert "csd_logvar" not in payload
+
+
+def test_experiment_manifest_records_complete_contextual_risk_contract(tmp_path):
+    assert CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT.is_absolute()
+    assert CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT.exists()
+    args = _crf_args_namespace(
+        aleatoric_crf_training=False,
+        use_retrieval_risk_sidecar=True,
+        use_contextual_risk_sidecar=True,
+        contextual_risk_sidecar_only=True,
+        contextual_risk_topk=16,
+        contextual_risk_projection_dim=128,
+        contextual_risk_hidden_dim=128,
+        contextual_risk_temperature=1.0,
+        contextual_risk_bootstrap_samples=1000,
+        w_contextual_risk_fit=0.25,
+        w_contextual_risk_rank=0.25,
+        output_dir=str(tmp_path / "run"),
+        seed=0,
+        fp16=False,
+    )
+    split = {
+        "protocol_version": "trusted-v1",
+        "seed": 0,
+        "manifest_sha256": "split-sha",
+    }
+    payload = build_experiment_manifest(
+        args,
+        split_summary=split,
+        batch_semantics={
+            "world_size": 4,
+            "requested_effective_batch": 256,
+            "optimizer_effective_batch": 256,
+        },
+        git_state={"commit": "abc"},
+    )
+
+    a3 = payload["contextual_risk"]
+    assert a3["method"] == {"name": "contextual_retrieval_risk", "version": "A3-v2"}
+    assert a3["canonical_a1"] == {
+        "path": str(CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT),
+        "sha256": CONTEXTUAL_RISK_CANONICAL_A1_SHA256,
+    }
+    assert a3["architecture"] == {
+        "topk": 16, "projection_dim": 128, "hidden_dim": 128,
+        "temperature": 1.0, "dropout": 0.1, "shared_directional_head": True,
+    }
+    assert a3["loss"]["weights"] == {"bce": 1.0, "fit": 0.25, "rank": 0.25}
+    assert a3["split_identity"]["protocol_version"] == "trusted-v1"
+    assert a3["split_identity"]["manifest_sha256"] == "split-sha"
+    assert a3["training"] == {
+        "seed": 0, "world_size": 4, "precision": "fp32",
+        "effective_batch": 256,
+    }
+    assert a3["thresholds"] == {
+        "directional_rho_min": 0.20,
+        "directional_auroc_ci_low_strictly_greater_than": 0.50,
+        "directional_risk_std_min": 0.02,
+        "selective_accuracy": "monotone_non_increasing_at_25_50_75_100_percent",
+        "paired_invariance_required": True,
+        "non_a3_state_mismatches_allowed": 0,
+    }
+    assert a3["continuation_rule"]["initial_epoch_indices"] == [0, 1, 2]
+    assert a3["continuation_rule"]["continued_epoch_indices"] == [3, 4]
+    assert a3["candidate_json"] == str(
+        (tmp_path / "run" / "contextual_risk_candidates.json").resolve()
+    )
+    assert a3["final_test_eligibility"] == (
+        "terminal_lifecycle_and_requested_and_selected_validation_acceptance_passes"
+    )
+
+
+def test_contextual_resume_rejects_any_immutable_manifest_change(tmp_path):
+    args = _crf_args_namespace(
+        aleatoric_crf_training=False,
+        use_contextual_risk_sidecar=True,
+        contextual_risk_sidecar_only=True,
+        contextual_risk_topk=16,
+        contextual_risk_projection_dim=128,
+        contextual_risk_hidden_dim=128,
+        contextual_risk_temperature=1.0,
+        contextual_risk_bootstrap_samples=1000,
+        w_contextual_risk_fit=0.25,
+        w_contextual_risk_rank=0.25,
+        output_dir=str(tmp_path),
+        fp16=False,
+    )
+    kwargs = dict(
+        split_summary={"protocol_version": "trusted-v1", "manifest_sha256": "sha"},
+        batch_semantics={"world_size": 4, "optimizer_effective_batch": 256},
+        git_state={"commit": "abc"},
+    )
+    original = build_experiment_manifest(args, **kwargs)
+    changed = build_experiment_manifest(
+        SimpleNamespace(**{**vars(args), "contextual_risk_topk": 8}), **kwargs
+    )
+
+    assert validate_contextual_risk_resume_manifest(original, original) is None
+    with pytest.raises(ValueError, match="immutable A3 manifest"):
+        validate_contextual_risk_resume_manifest(original, changed)
 
 
 def test_experiment_manifest_records_ladder_manifest_sha_when_present(tmp_path):

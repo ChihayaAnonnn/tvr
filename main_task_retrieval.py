@@ -18,6 +18,8 @@ from tqdm import tqdm
 from dataloaders.data_dataloaders import DATALOADER_DICT
 from dataloaders.msrvtt_protocol import load_trusted_manifest, validate_trusted_manifest
 from experiment_tracking import (
+    CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT,
+    CONTEXTUAL_RISK_CANONICAL_A1_SHA256,
     CSD_LOGVAR_CANONICAL_A1_CHECKPOINT,
     CSD_LOGVAR_CANONICAL_A1_SHA256,
     atomic_write_json,
@@ -25,6 +27,7 @@ from experiment_tracking import (
     collect_git_state,
     compute_batch_semantics,
     is_global_rank_zero,
+    validate_contextual_risk_resume_manifest,
 )
 from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_to_text_sim
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
@@ -40,6 +43,19 @@ from prob_models.csd_logvar_protocol import (
     validate_csd_logvar_candidate_artifacts,
     validate_csd_logvar_resume_lineage,
     validate_csd_logvar_selected_checkpoint,
+)
+from prob_models.uncertainty_protocol import (
+    A3_REQUIRED_PAIRED_DIGEST_KEYS,
+    append_candidate_atomic,
+    choose_contextual_risk_checkpoint,
+    compare_paired_invariance as compare_uncertainty_paired_invariance,
+    contextual_risk_acceptance,
+    contextual_risk_candidate_is_valid,
+    contextual_risk_selection_tuple,
+    non_sidecar_state_dict_mismatches,
+    validate_candidate_artifacts,
+    validate_resume_lineage,
+    validate_selected_checkpoint,
 )
 from prob_models.retrieval_risk_metrics import (
     build_eval_positive_mask,
@@ -557,6 +573,7 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--contextual_risk_projection_dim", type=int, default=128)
     parser.add_argument("--contextual_risk_hidden_dim", type=int, default=128)
     parser.add_argument("--contextual_risk_temperature", type=float, default=1.0)
+    parser.add_argument("--contextual_risk_bootstrap_samples", type=int, default=1000)
     parser.add_argument("--w_contextual_risk_fit", type=float, default=0.25)
     parser.add_argument("--w_contextual_risk_rank", type=float, default=0.25)
     args = parser.parse_args()
@@ -606,6 +623,26 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         raise ValueError("contextual_risk_temperature must be positive")
     if min(args.w_contextual_risk_fit, args.w_contextual_risk_rank) < 0:
         raise ValueError("contextual risk loss weights must be non-negative")
+    if args.contextual_risk_bootstrap_samples < 0:
+        raise ValueError("contextual risk bootstrap samples must be non-negative")
+    if args.contextual_risk_sidecar_only and args.do_train:
+        if args.resume_model:
+            if not args.init_model:
+                raise ValueError(
+                    "A3 continuation requires both --init_model and --resume_model"
+                )
+            if args.epochs != 5:
+                raise ValueError("A3 continuation must target --epochs=5")
+        else:
+            if not args.init_model or Path(args.init_model).resolve() != (
+                CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT
+            ):
+                raise ValueError(
+                    "fresh A3-only runs require --init_model to resolve to "
+                    f"{CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT}"
+                )
+            if args.epochs != 3:
+                raise ValueError("fresh A3-only runs require --epochs=3")
     if args.use_csd_logvar_sidecar and not args.use_uatvr_full:
         raise ValueError("use_csd_logvar_sidecar requires --use_uatvr_full")
     if args.csd_logvar_sidecar_only and not args.use_csd_logvar_sidecar:
@@ -1166,7 +1203,7 @@ def _restore_training_checkpoint(
         ]
         if missing:
             raise ValueError(
-                "A2 resume checkpoint missing " + ", ".join(missing)
+                "sidecar resume checkpoint missing " + ", ".join(missing)
             )
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     if "scheduler_state_dict" in checkpoint:
@@ -1202,7 +1239,11 @@ def save_model(
         args.output_dir, "pytorch_model.bin.{}{}".format("" if type_name == "" else type_name + ".", epoch)
     )
     optimizer_state_file = _optimizer_checkpoint_path(epoch, args, type_name)
-    if bool(getattr(args, "csd_logvar_sidecar_only", False)):
+    append_only_sidecar = bool(
+        getattr(args, "csd_logvar_sidecar_only", False)
+        or getattr(args, "contextual_risk_sidecar_only", False)
+    )
+    if append_only_sidecar:
         existing = [
             path
             for path in (output_model_file, optimizer_state_file)
@@ -1210,7 +1251,7 @@ def save_model(
         ]
         if existing:
             raise FileExistsError(
-                "A2 append-only save refuses existing checkpoint(s): "
+                "sidecar append-only save refuses existing checkpoint(s): "
                 + ", ".join(existing)
             )
     torch.save(model_to_save.state_dict(), output_model_file)
@@ -2705,6 +2746,426 @@ def _candidate_clamp_ok(metrics):
     )
 
 
+def _build_contextual_risk_candidate(
+    *,
+    epoch,
+    checkpoint_path,
+    optimizer_checkpoint_path,
+    validation_metrics,
+    paired_baseline,
+    reference_checkpoint,
+):
+    """Build one complete, validation-only A3 candidate record."""
+
+    model_path = Path(checkpoint_path).resolve()
+    optimizer_path = Path(optimizer_checkpoint_path).resolve()
+    contextual = validation_metrics["contextual_risk"]
+    paired_digest = validation_metrics["paired_digest"]
+    paired_invariance = compare_uncertainty_paired_invariance(
+        paired_baseline,
+        paired_digest,
+        A3_REQUIRED_PAIRED_DIGEST_KEYS,
+    )
+    mismatches = non_sidecar_state_dict_mismatches(
+        reference_checkpoint,
+        model_path,
+        ("contextual_risk_sidecar.",),
+    )
+    evidence = validation_metrics["contextual_risk_evidence"]
+    finite = numeric_metrics_are_finite(
+        {
+            "contextual_risk": contextual,
+            "contextual_risk_evidence": evidence,
+            "paired_digest": paired_digest,
+        }
+    )
+    gate_metrics = {
+        "t2v": contextual["t2v"],
+        "v2t": contextual["v2t"],
+        "paired_invariance": paired_invariance,
+        "non_a3_mismatches": mismatches,
+    }
+    candidate = {
+        "epoch": int(epoch),
+        "path": str(model_path),
+        "model_sha256": file_sha256(model_path),
+        "optimizer_path": str(optimizer_path),
+        "optimizer_sha256": file_sha256(optimizer_path),
+        "valid": bool(finite and paired_invariance["passed"] and not mismatches),
+        "finite": finite,
+        "runtime_abort": False,
+        "paired_digest": paired_digest,
+        "paired_invariance": paired_invariance,
+        "non_a3_mismatches": mismatches,
+        "rho": [
+            contextual[direction]["spearman_risk_vs_rank"]
+            for direction in ("t2v", "v2t")
+        ],
+        "auroc": [
+            contextual[direction]["failure_auroc"]["value"]
+            for direction in ("t2v", "v2t")
+        ],
+        "aurc": [
+            contextual[direction]["aurc"] for direction in ("t2v", "v2t")
+        ],
+        "evidence": evidence,
+        "metrics": gate_metrics,
+    }
+    candidate["acceptance"] = contextual_risk_acceptance(gate_metrics)
+    candidate["valid"] = bool(
+        candidate["valid"] and contextual_risk_candidate_is_valid(candidate)
+    )
+    return candidate
+
+
+def _contextual_risk_selection_payload(candidates, winner):
+    return {
+        "selection_split": "val",
+        "selection_metric": (
+            "max(min_directional_rho,mean_directional_auroc,"
+            "-mean_directional_aurc,-epoch)"
+        ),
+        "tie_break": "earlier_epoch",
+        "candidates": candidates,
+        "winner": winner,
+    }
+
+
+def _contextual_risk_should_continue(candidates):
+    """Apply the registered epoch-2 versus epoch-1 continuation decision."""
+
+    by_epoch = {int(candidate["epoch"]): candidate for candidate in candidates}
+    if sorted(by_epoch) != [0, 1, 2] or len(candidates) != 3:
+        raise ValueError(
+            "A3 continuation decision requires exactly epoch indices 0, 1, and 2"
+        )
+    return contextual_risk_selection_tuple(by_epoch[2]) > (
+        contextual_risk_selection_tuple(by_epoch[1])
+    )
+
+
+def _reaudit_contextual_risk_candidate(
+    stored, *, paired_baseline, reference_checkpoint
+):
+    """Recompute every derivable A3 audit field without mutating its record."""
+
+    candidate = dict(stored)
+    contextual = candidate["metrics"]
+    paired_digest = candidate["paired_digest"]
+    paired_invariance = compare_uncertainty_paired_invariance(
+        paired_baseline,
+        paired_digest,
+        A3_REQUIRED_PAIRED_DIGEST_KEYS,
+    )
+    mismatches = non_sidecar_state_dict_mismatches(
+        reference_checkpoint,
+        candidate["path"],
+        ("contextual_risk_sidecar.",),
+    )
+    finite = numeric_metrics_are_finite({
+        "contextual_risk": {
+            "t2v": contextual["t2v"],
+            "v2t": contextual["v2t"],
+        },
+        "evidence": candidate["evidence"],
+        "paired_digest": paired_digest,
+    })
+    gate_metrics = {
+        "t2v": contextual["t2v"],
+        "v2t": contextual["v2t"],
+        "paired_invariance": paired_invariance,
+        "non_a3_mismatches": mismatches,
+    }
+    audited = {
+        **candidate,
+        "finite": finite,
+        "paired_invariance": paired_invariance,
+        "non_a3_mismatches": mismatches,
+        "rho": [
+            contextual[direction]["spearman_risk_vs_rank"]
+            for direction in ("t2v", "v2t")
+        ],
+        "auroc": [
+            contextual[direction]["failure_auroc"]["value"]
+            for direction in ("t2v", "v2t")
+        ],
+        "aurc": [
+            contextual[direction]["aurc"] for direction in ("t2v", "v2t")
+        ],
+        "metrics": gate_metrics,
+        "acceptance": contextual_risk_acceptance(gate_metrics),
+    }
+    audited["valid"] = bool(
+        finite
+        and paired_invariance["passed"]
+        and not mismatches
+        and contextual_risk_candidate_is_valid(
+            {**audited, "valid": True}
+        )
+    )
+    immutable_audits = (
+        "finite",
+        "paired_invariance",
+        "non_a3_mismatches",
+        "rho",
+        "auroc",
+        "aurc",
+        "metrics",
+        "acceptance",
+        "valid",
+    )
+    changed = [name for name in immutable_audits if candidate.get(name) != audited[name]]
+    if changed:
+        raise ValueError(
+            "A3 immutable candidate audit mismatch: " + ", ".join(changed)
+        )
+    return audited
+
+
+def _initialize_contextual_risk_protocol(
+    args,
+    model,
+    eval_dataloader,
+    device,
+    n_gpu,
+    resume_payload=None,
+):
+    """Register a fresh canonical A1 baseline or validate one A3 continuation."""
+
+    output_dir = Path(args.output_dir)
+    baseline_path = output_dir / "a3_paired_baseline.json"
+    candidate_path = output_dir / "contextual_risk_candidates.json"
+    selection_path = output_dir / "best_contextual_risk_checkpoint.json"
+    continuing = bool(getattr(args, "resume_model", ""))
+    protocol_paths = (baseline_path, candidate_path, selection_path)
+    if continuing:
+        missing = [path.name for path in protocol_paths if not path.exists()]
+        if missing:
+            raise FileNotFoundError(
+                "A3 continuation requires original protocol artifacts: "
+                + ", ".join(missing)
+            )
+    elif any(path.exists() for path in protocol_paths):
+        raise FileExistsError(
+            "fresh A3 run requires an output directory without existing "
+            "A3 protocol lineage artifacts"
+        )
+
+    if continuing:
+        registration = json.loads(baseline_path.read_text())
+        reference_checkpoint = str(
+            Path(registration["reference_checkpoint"]).resolve()
+        )
+        reference_sha256 = registration.get("reference_checkpoint_sha256")
+        if reference_sha256 != CONTEXTUAL_RISK_CANONICAL_A1_SHA256:
+            raise ValueError("A3 registered reference SHA-256 is not canonical A1")
+        if file_sha256(reference_checkpoint) != reference_sha256:
+            raise ValueError("A3 reference checkpoint SHA-256 mismatch")
+        paired_baseline = registration["paired_digest"]
+        candidates = json.loads(candidate_path.read_text())
+        selection = json.loads(selection_path.read_text())
+        if selection.get("candidates") != candidates:
+            raise ValueError("A3 candidate and selection artifacts disagree")
+        validate_candidate_artifacts(
+            candidates, output_dir=output_dir, method_name="A3"
+        )
+        candidates = [
+            _reaudit_contextual_risk_candidate(
+                candidate,
+                paired_baseline=paired_baseline,
+                reference_checkpoint=reference_checkpoint,
+            )
+            for candidate in candidates
+        ]
+        expected_winner = choose_contextual_risk_checkpoint(
+            candidates, output_dir=output_dir
+        )
+        if selection.get("winner") != expected_winner:
+            raise ValueError("A3 persisted winner does not match validation candidates")
+        if not _contextual_risk_should_continue(candidates):
+            raise ValueError(
+                "A3 continuation is not eligible because epoch index 2 did not "
+                "strictly improve over epoch index 1"
+            )
+        epoch_two = next(
+            candidate for candidate in candidates if int(candidate["epoch"]) == 2
+        )
+        if not contextual_risk_candidate_is_valid(epoch_two):
+            raise ValueError("A3 continuation requires a valid epoch-index-2 candidate")
+        if int(getattr(args, "epochs", 5)) != 5:
+            raise ValueError("A3 continuation must target five total epochs")
+        if resume_payload is None:
+            raise ValueError("A3 continuation requires an optimizer payload")
+        resume_candidate = validate_resume_lineage(
+            candidates,
+            output_dir=output_dir,
+            model_checkpoint=args.init_model,
+            optimizer_checkpoint=args.resume_model,
+            optimizer_payload=resume_payload,
+            sidecar_prefix="contextual_risk_sidecar.",
+            method_name="A3",
+        )
+        if int(resume_candidate["epoch"]) != 2:
+            raise ValueError("A3 continuation must resume epoch index 2")
+    else:
+        reference_checkpoint = str(Path(args.init_model).resolve())
+        if Path(reference_checkpoint) != CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT:
+            raise ValueError(
+                "fresh A3 run must initialize from the canonical A1 checkpoint"
+            )
+        reference_sha256 = file_sha256(reference_checkpoint)
+        if reference_sha256 != CONTEXTUAL_RISK_CANONICAL_A1_SHA256:
+            raise ValueError("fresh A3 reference checkpoint SHA-256 mismatch")
+        if int(getattr(args, "epochs", 3)) != 3:
+            raise ValueError("fresh A3 run must contain exactly three epochs")
+        baseline_eval = eval_epoch(
+            args,
+            model,
+            eval_dataloader,
+            device,
+            n_gpu,
+            report_csd_logvar=False,
+        )
+        paired_baseline = baseline_eval["paired_digest"]
+        atomic_write_json(
+            baseline_path,
+            {
+                "reference_checkpoint": reference_checkpoint,
+                "reference_checkpoint_sha256": reference_sha256,
+                "paired_digest": paired_baseline,
+            },
+        )
+        candidates = []
+        resume_candidate = None
+    return {
+        "baseline_path": baseline_path,
+        "candidate_path": candidate_path,
+        "selection_path": selection_path,
+        "paired_baseline": paired_baseline,
+        "reference_checkpoint": reference_checkpoint,
+        "candidates": candidates,
+        "resume_candidate": resume_candidate,
+    }
+
+
+def _record_contextual_risk_selection(
+    *,
+    epoch,
+    checkpoint_path,
+    optimizer_checkpoint_path,
+    validation_metrics,
+    paired_baseline,
+    reference_checkpoint,
+    candidate_path,
+    selection_path,
+):
+    """Audit and append one A3 validation candidate, then persist its winner."""
+
+    candidate = _build_contextual_risk_candidate(
+        epoch=epoch,
+        checkpoint_path=checkpoint_path,
+        optimizer_checkpoint_path=optimizer_checkpoint_path,
+        validation_metrics=validation_metrics,
+        paired_baseline=paired_baseline,
+        reference_checkpoint=reference_checkpoint,
+    )
+    candidates = append_candidate_atomic(candidate_path, candidate)
+    validate_candidate_artifacts(
+        candidates,
+        output_dir=Path(selection_path).parent,
+        method_name="A3",
+    )
+    try:
+        winner = choose_contextual_risk_checkpoint(
+            candidates, output_dir=Path(selection_path).parent
+        )
+    except ValueError as exc:
+        if "no valid contextual risk checkpoint" not in str(exc):
+            raise
+        winner = None
+    atomic_write_json(
+        selection_path,
+        _contextual_risk_selection_payload(candidates, winner),
+    )
+    return winner
+
+
+def _maybe_run_contextual_risk_final_test(
+    args, selection_payload, run_selected_jsfusion_once
+):
+    """Run the held-out test once, and only after the selected validation gate."""
+
+    if not bool(getattr(args, "run_final_test", False)):
+        return None
+    candidates = selection_payload.get("candidates", [])
+    if (
+        isinstance(candidates, list)
+        and len(candidates) == 3
+        and {int(item.get("epoch", -1)) for item in candidates} == {0, 1, 2}
+        and _contextual_risk_should_continue(candidates)
+    ):
+        logger.info(
+            "A3 continuation is eligible; JSFUSION final test is deferred "
+            "until the five-epoch lineage is complete"
+        )
+        return None
+    winner = selection_payload.get("winner")
+    if winner is None:
+        logger.warning(
+            "A3 validation gate failed; JSFUSION test is intentionally skipped"
+        )
+        return None
+    acceptance = contextual_risk_acceptance(winner["metrics"])
+    if not acceptance["passed"]:
+        logger.warning(
+            "A3 validation gate failed; JSFUSION test is intentionally skipped"
+        )
+        return None
+    selected = validate_selected_checkpoint(
+        selection_payload,
+        output_dir=args.output_dir,
+        method_name="A3",
+    )
+    claim_path = Path(args.output_dir) / "a3_final_test_claim.json"
+    final_path = Path(args.output_dir) / "final_test.json"
+    if claim_path.exists() or final_path.exists():
+        raise RuntimeError(
+            "A3 JSFUSION final test has already been claimed for this lineage"
+        )
+    claim = {
+        "status": "started",
+        "selected_epoch": int(selected["epoch"]),
+        "selected_path": selected["path"],
+        "selected_model_sha256": selected["model_sha256"],
+    }
+    claim_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(
+            claim_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+    except FileExistsError as exc:
+        raise RuntimeError(
+            "A3 JSFUSION final test has already been claimed for this lineage"
+        ) from exc
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        json.dump(claim, handle, ensure_ascii=False, sort_keys=True, indent=2)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    try:
+        result = run_selected_jsfusion_once(selected)
+    except Exception as exc:
+        atomic_write_json(
+            claim_path,
+            {**claim, "status": "failed", "error_type": type(exc).__name__},
+        )
+        raise
+    atomic_write_json(claim_path, {**claim, "status": "completed"})
+    return result
+
+
 def _build_csd_logvar_candidate(
     *,
     epoch,
@@ -2954,18 +3415,29 @@ def _evaluate_selected_test_checkpoints(
     selection_payload,
     *,
     csd_logvar_sidecar_only,
+    contextual_risk_sidecar_only=False,
 ):
     """Evaluate validation-selected checkpoints without test-time selection."""
 
-    if csd_logvar_sidecar_only:
-        selected = validate_csd_logvar_selected_checkpoint(
-            selection_payload,
-            output_dir=args.output_dir,
-        )
+    if csd_logvar_sidecar_only or contextual_risk_sidecar_only:
+        if csd_logvar_sidecar_only:
+            selected = validate_csd_logvar_selected_checkpoint(
+                selection_payload,
+                output_dir=args.output_dir,
+            )
+            method_name = "A2"
+        else:
+            selected = validate_selected_checkpoint(
+                selection_payload,
+                output_dir=args.output_dir,
+                method_name="A3",
+            )
+            method_name = "A3"
         checkpoint_path = selected["path"]
         logger.info(
-            "***** Running final bidirectional test from A2-selected "
+            "***** Running final bidirectional test from %s-selected "
             "checkpoint: %s *****",
+            method_name,
             checkpoint_path,
         )
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
@@ -3102,10 +3574,24 @@ def main():
             git_state=collect_git_state(Path(__file__).resolve().parent),
         )
         if is_global_rank_zero(args):
-            atomic_write_json(
-                Path(args.output_dir) / "experiment_manifest.json",
-                tracking_payload,
+            manifest_path = Path(args.output_dir) / "experiment_manifest.json"
+            a3_only = bool(
+                getattr(args, "contextual_risk_sidecar_only", False)
             )
+            if a3_only and args.resume_model:
+                if not manifest_path.exists():
+                    raise FileNotFoundError(
+                        "A3 continuation requires the original experiment manifest"
+                    )
+                validate_contextual_risk_resume_manifest(
+                    json.loads(manifest_path.read_text()), tracking_payload
+                )
+            elif a3_only and manifest_path.exists():
+                raise FileExistsError(
+                    "fresh A3 run refuses an existing experiment manifest"
+                )
+            else:
+                atomic_write_json(manifest_path, tracking_payload)
             _write_training_args_json(args, Path(args.output_dir) / "training_args.json")
             for key, value in batch_semantics.items():
                 logger.info("  Batch semantics | %s=%s", key, value)
@@ -3155,7 +3641,9 @@ def main():
         best_v2t_score = float("-inf")
         best_v2t_checkpoint = "None"
         a2_only = bool(getattr(args, "csd_logvar_sidecar_only", False))
+        a3_only = bool(getattr(args, "contextual_risk_sidecar_only", False))
         csd_protocol = None
+        contextual_protocol = None
 
         # CRF-dev checkpoint selection (plan Task 9 wiring). Populated per epoch
         # on rank 0; the winner is written atomically to best_crf_checkpoint.json
@@ -3185,7 +3673,16 @@ def main():
                 n_gpu,
                 resume_payload=resume_checkpoint,
             )
-        if a2_only and dist.is_available() and dist.is_initialized():
+        if a3_only and args.local_rank == 0:
+            contextual_protocol = _initialize_contextual_risk_protocol(
+                args,
+                model,
+                eval_dataloader,
+                device,
+                n_gpu,
+                resume_payload=resume_checkpoint,
+            )
+        if (a2_only or a3_only) and dist.is_available() and dist.is_initialized():
             dist.barrier()
 
         if resume_checkpoint is not None:
@@ -3193,7 +3690,7 @@ def main():
                 resume_checkpoint,
                 optimizer,
                 scheduler,
-                require_complete=a2_only,
+                require_complete=a2_only or a3_only,
             )
 
         if args.local_rank == 0:
@@ -3303,6 +3800,39 @@ def main():
                             sum(winner["auroc"]) / 2.0,
                             winner["path"],
                         )
+                elif a3_only:
+                    winner = _record_contextual_risk_selection(
+                        epoch=epoch,
+                        checkpoint_path=output_model_file,
+                        optimizer_checkpoint_path=output_optimizer_file,
+                        validation_metrics=validation_metrics,
+                        paired_baseline=contextual_protocol["paired_baseline"],
+                        reference_checkpoint=contextual_protocol[
+                            "reference_checkpoint"
+                        ],
+                        candidate_path=contextual_protocol["candidate_path"],
+                        selection_path=contextual_protocol["selection_path"],
+                    )
+                    contextual_protocol["candidates"] = json.loads(
+                        contextual_protocol["candidate_path"].read_text()
+                    )
+                    if winner is None:
+                        logger.warning(
+                            "  No valid %s A3 checkpoint through epoch %d",
+                            eval_split,
+                            epoch,
+                        )
+                    else:
+                        logger.info(
+                            "  Best %s A3 | epoch=%d min-rho=%.4f "
+                            "mean-AUROC=%.4f mean-AURC=%.4f | %s",
+                            eval_split,
+                            winner["epoch"],
+                            min(winner["rho"]),
+                            sum(winner["auroc"]) / 2.0,
+                            sum(winner["aurc"]) / 2.0,
+                            winner["path"],
+                        )
                 else:
                     best_t2v_score, best_t2v_checkpoint = select_best_checkpoint(
                         best_t2v_score,
@@ -3348,6 +3878,28 @@ def main():
                 )
                 if selection_payload["winner"] != winner:
                     raise RuntimeError("persisted A2 winner does not match candidates")
+            elif a3_only:
+                candidates = json.loads(
+                    contextual_protocol["candidate_path"].read_text()
+                )
+                selection_payload = json.loads(
+                    contextual_protocol["selection_path"].read_text()
+                )
+                if selection_payload["candidates"] != candidates:
+                    raise RuntimeError(
+                        "persisted A3 candidates do not match append-only artifact"
+                    )
+                try:
+                    winner = choose_contextual_risk_checkpoint(
+                        candidates,
+                        output_dir=args.output_dir,
+                    )
+                except ValueError as exc:
+                    if "no valid contextual risk checkpoint" not in str(exc):
+                        raise
+                    winner = None
+                if selection_payload["winner"] != winner:
+                    raise RuntimeError("persisted A3 winner does not match candidates")
             else:
                 if (
                     best_t2v_checkpoint == "None"
@@ -3375,7 +3927,47 @@ def main():
                     selection_payload,
                 )
 
-            if args.run_final_test:
+            if args.run_final_test and a3_only:
+                model_to_evaluate = model.module if hasattr(model, "module") else model
+
+                def run_selected_jsfusion_once(_selected):
+                    test_factory = DATALOADER_DICT[args.datatype].get("test")
+                    if test_factory is None:
+                        raise ValueError(f"{args.datatype} has no test dataloader")
+                    test_dataloader, test_length = test_factory(
+                        args, tokenizer, subset="test"
+                    )
+                    logger.info(
+                        "  Split: test | Samples: %d | Steps: %d | Batch: %d",
+                        test_length,
+                        len(test_dataloader),
+                        args.batch_size_val,
+                    )
+                    previous_eval_split = args.eval_split
+                    args.eval_split = "test"
+                    try:
+                        return _evaluate_selected_test_checkpoints(
+                            args,
+                            model_to_evaluate,
+                            test_dataloader,
+                            device,
+                            n_gpu,
+                            selection_payload,
+                            csd_logvar_sidecar_only=False,
+                            contextual_risk_sidecar_only=True,
+                        )
+                    finally:
+                        args.eval_split = previous_eval_split
+
+                final_test_payload = _maybe_run_contextual_risk_final_test(
+                    args, selection_payload, run_selected_jsfusion_once
+                )
+                if final_test_payload is not None:
+                    atomic_write_json(
+                        Path(args.output_dir) / "final_test.json",
+                        final_test_payload,
+                    )
+            elif args.run_final_test:
                 model_to_evaluate = model.module if hasattr(model, "module") else model
                 test_factory = DATALOADER_DICT[args.datatype].get("test")
                 if test_factory is None:
