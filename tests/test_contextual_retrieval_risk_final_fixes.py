@@ -359,16 +359,35 @@ def test_registered_a3_python_contract_rejects_manifest_material_mismatch(
 def _set_registered_a3_initial_environment(monkeypatch):
     expected_environment = retrieval._registered_a3_expected_environment()
     for name in list(os.environ):
-        if name.startswith(("NCCL_", "CUDA_", "CUBLAS_")) or name in {
+        if name.startswith(("NCCL_", "TORCH_NCCL_", "CUDA_", "CUBLAS_")) or name in {
             "NVIDIA_TF32_OVERRIDE",
             "TORCH_ALLOW_TF32_CUBLAS_OVERRIDE",
         }:
             monkeypatch.delenv(name)
     for name, value in expected_environment.items():
         monkeypatch.setenv(name, value)
+    for name, value in {
+        "ROLE_NAME": "default",
+        "TORCHELASTIC_RESTART_COUNT": "0",
+        "TORCHELASTIC_MAX_RESTARTS": "0",
+        "TORCHELASTIC_RUN_ID": "none",
+        "TORCHELASTIC_USE_AGENT_STORE": "True",
+    }.items():
+        monkeypatch.setenv(name, value)
     for name in ("RANK", "LOCAL_RANK", "ROLE_RANK"):
         monkeypatch.setenv(name, "0")
     return expected_environment
+
+
+def _remove_torchrun_worker_topology(monkeypatch):
+    for name in (
+        "ROLE_NAME",
+        "TORCHELASTIC_RESTART_COUNT",
+        "TORCHELASTIC_MAX_RESTARTS",
+        "TORCHELASTIC_RUN_ID",
+        "TORCHELASTIC_USE_AGENT_STORE",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
 
 def test_registered_a3_initial_environment_is_checked_before_seed_normalization(
@@ -411,6 +430,7 @@ def test_registered_a3_initial_environment_rejects_missing_material_value(
         "NCCL_ALGO",
         "NCCL_PROTO",
         "NCCL_P2P_DISABLE",
+        "TORCH_NCCL_ASYNC_ERROR_HANDLING",
         "NVIDIA_TF32_OVERRIDE",
         "TORCH_ALLOW_TF32_CUBLAS_OVERRIDE",
         "CUBLAS_LOGINFO_DBG",
@@ -428,6 +448,97 @@ def test_registered_a3_initial_environment_rejects_extra_accelerator_override(
         retrieval._assert_registered_a3_initial_environment(args)
 
 
+def test_registered_a3_initial_environment_rejects_direct_async_env_spoof(
+    monkeypatch,
+):
+    args = SimpleNamespace(contextual_risk_sidecar_only=True)
+    _set_registered_a3_initial_environment(monkeypatch)
+    _remove_torchrun_worker_topology(monkeypatch)
+    monkeypatch.setenv("NCCL_ASYNC_ERROR_HANDLING", "1")
+
+    with pytest.raises(ValueError, match="torchrun worker topology"):
+        retrieval._assert_registered_a3_initial_environment(args)
+
+
+def test_registered_a3_initial_environment_rejects_wrong_torchrun_async_value(
+    monkeypatch,
+):
+    args = SimpleNamespace(contextual_risk_sidecar_only=True)
+    _set_registered_a3_initial_environment(monkeypatch)
+    monkeypatch.setenv("NCCL_ASYNC_ERROR_HANDLING", "0")
+
+    with pytest.raises(
+        ValueError,
+        match=r"NCCL_ASYNC_ERROR_HANDLING='0'.*registered '1'",
+    ):
+        retrieval._assert_registered_a3_initial_environment(args)
+
+
+def test_registered_a3_canonical_torchrun_worker_environment_passes():
+    env = os.environ.copy()
+    for name in list(env):
+        if name.startswith(("NCCL_", "TORCH_NCCL_", "CUDA_", "CUBLAS_")) or name in {
+            "NVIDIA_TF32_OVERRIDE",
+            "TORCH_ALLOW_TF32_CUBLAS_OVERRIDE",
+        }:
+            env.pop(name)
+    worker_owned = {
+        "RANK",
+        "LOCAL_RANK",
+        "ROLE_RANK",
+        "ROLE_NAME",
+        "WORLD_SIZE",
+        "LOCAL_WORLD_SIZE",
+        "GROUP_WORLD_SIZE",
+        "ROLE_WORLD_SIZE",
+        "GROUP_RANK",
+        "MASTER_ADDR",
+        "MASTER_PORT",
+        "TORCHELASTIC_RESTART_COUNT",
+        "TORCHELASTIC_MAX_RESTARTS",
+        "TORCHELASTIC_RUN_ID",
+        "TORCHELASTIC_USE_AGENT_STORE",
+        "NCCL_ASYNC_ERROR_HANDLING",
+    }
+    env.update(
+        {
+            name: value
+            for name, value in retrieval._registered_a3_expected_environment().items()
+            if name not in worker_owned
+        }
+    )
+    command = [
+        "/home/xujie/.conda/envs/tvr/bin/torchrun",
+        "--nproc_per_node=4",
+        "--master_addr=127.0.0.9",
+        "--master_port=29547",
+        "--",
+        "-c",
+        (
+            "from types import SimpleNamespace; "
+            "import main_task_retrieval as retrieval; "
+            "retrieval._assert_registered_a3_initial_environment("
+            "SimpleNamespace(contextual_risk_sidecar_only=True)); "
+            "print('A3_ENV_OK', flush=True)"
+        ),
+    ]
+
+    assert "NCCL_ASYNC_ERROR_HANDLING" not in env
+    assert "TORCH_NCCL_ASYNC_ERROR_HANDLING" not in env
+    result = subprocess.run(
+        command,
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count("A3_ENV_OK") == 4
+
+
 def test_registered_a3_accelerator_environment_exact_whitelist_passes(monkeypatch):
     args = SimpleNamespace(contextual_risk_sidecar_only=True)
     expected = _set_registered_a3_initial_environment(monkeypatch)
@@ -438,6 +549,7 @@ def test_registered_a3_accelerator_environment_exact_whitelist_passes(monkeypatc
     }
 
     assert material_names == {
+        "NCCL_ASYNC_ERROR_HANDLING",
         "NCCL_P2P_LEVEL",
         "NCCL_IB_DISABLE",
         "NCCL_DEBUG",

@@ -1106,6 +1106,7 @@ def _registered_a3_expected_environment():
         "NCCL_P2P_LEVEL": "NVL",
         "NCCL_IB_DISABLE": "1",
         "NCCL_DEBUG": "WARN",
+        "NCCL_ASYNC_ERROR_HANDLING": "1",
         "TORCH_WARN_ONCE": "1",
         "MASTER_ADDR": "127.0.0.9",
         "MASTER_PORT": "29547",
@@ -1281,7 +1282,24 @@ def _assert_registered_a3_initial_environment(args):
         for name in forbidden
         if name in os.environ
     )
+    torchrun_topology = {
+        "ROLE_NAME": "default",
+        "TORCHELASTIC_RESTART_COUNT": "0",
+        "TORCHELASTIC_MAX_RESTARTS": "0",
+        "TORCHELASTIC_RUN_ID": "none",
+        "TORCHELASTIC_USE_AGENT_STORE": "True",
+    }
+    topology_mismatches = [
+        f"{name}={os.environ.get(name)!r} (registered {value!r})"
+        for name, value in torchrun_topology.items()
+        if os.environ.get(name) != value
+    ]
+    if topology_mismatches:
+        mismatches.append(
+            "torchrun worker topology mismatch: " + ", ".join(topology_mismatches)
+        )
     allowed_accelerator_environment = {
+        "NCCL_ASYNC_ERROR_HANDLING",
         "NCCL_P2P_LEVEL",
         "NCCL_IB_DISABLE",
         "NCCL_DEBUG",
@@ -1293,7 +1311,7 @@ def _assert_registered_a3_initial_environment(args):
         name
         for name in os.environ
         if (
-            name.startswith(("NCCL_", "CUDA_", "CUBLAS_"))
+            name.startswith(("NCCL_", "TORCH_NCCL_", "CUDA_", "CUBLAS_"))
             or name
             in {
                 "NVIDIA_TF32_OVERRIDE",

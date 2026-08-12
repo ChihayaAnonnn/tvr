@@ -47,7 +47,7 @@ reject_registered_accelerator_prefix_overrides() {
     local name
     while IFS= read -r name; do
         case "${name}" in
-            NCCL_*|CUDA_*|CUBLAS_*|NVIDIA_TF32_OVERRIDE|TORCH_ALLOW_TF32_CUBLAS_OVERRIDE)
+            NCCL_*|TORCH_NCCL_*|CUDA_*|CUBLAS_*|NVIDIA_TF32_OVERRIDE|TORCH_ALLOW_TF32_CUBLAS_OVERRIDE)
                 echo "registered A3 environment ${name} cannot be inherited" >&2
                 exit 2
                 ;;
@@ -185,6 +185,7 @@ NUMEXPR_NUM_THREADS=1 \
 NCCL_P2P_LEVEL=NVL \
 NCCL_IB_DISABLE=1 \
 NCCL_DEBUG=WARN \
+NCCL_ASYNC_ERROR_HANDLING=1 \
 TORCH_WARN_ONCE=1 \
 MASTER_ADDR=127.0.0.9 \
 MASTER_PORT=29547 \

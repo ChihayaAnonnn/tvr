@@ -30,6 +30,11 @@ sleep 0.2
         "printf '%s\\n' \"$$\" >> \"${A3_TEST_CONTROLLER_MARKER}\"\n"
         "printf '%s\\n' \"$$\" > \"${TRAIN_PID_FILE}\"\n"
         ": > \"${A3_TEST_HANDOFF_MARKER}\"\n"
+        "if [[ -n \"${A3_TEST_CONTROLLER_ENV_MARKER:-}\" ]]; then\n"
+        "  printf '%s\\n' \"${NCCL_ASYNC_ERROR_HANDLING-<absent>}\" "
+        "\"${TORCH_NCCL_ASYNC_ERROR_HANDLING-<absent>}\" "
+        "> \"${A3_TEST_CONTROLLER_ENV_MARKER}\"\n"
+        "fi\n"
         f"{wait}"
     )
     controller.chmod(0o755)
@@ -39,7 +44,7 @@ sleep 0.2
 def _launcher_env(controller, marker, *, output_dir=None):
     env = os.environ.copy()
     for name in list(env):
-        if name.startswith(("NCCL_", "CUDA_", "CUBLAS_")) or name in {
+        if name.startswith(("NCCL_", "TORCH_NCCL_", "CUDA_", "CUBLAS_")) or name in {
             "NVIDIA_TF32_OVERRIDE",
             "TORCH_ALLOW_TF32_CUBLAS_OVERRIDE",
         }:
@@ -94,6 +99,7 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
         'OMP_NUM_THREADS=1', 'MKL_NUM_THREADS=1',
         'OPENBLAS_NUM_THREADS=1', 'NUMEXPR_NUM_THREADS=1',
         'NCCL_P2P_LEVEL=NVL', 'NCCL_IB_DISABLE=1', 'NCCL_DEBUG=WARN',
+        'NCCL_ASYNC_ERROR_HANDLING=1',
         'MASTER_PORT=29547', 'TORCH_WARN_ONCE=1',
         'TVR_PYTHON=/home/xujie/.conda/envs/tvr/bin/python',
         'TVR_TORCHRUN=/home/xujie/.conda/envs/tvr/bin/torchrun',
@@ -110,6 +116,32 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
     assert 'RUN_TIME="$(date +%H%M%S)"' in text
     assert 'git -C "${ROOT_DIR}" diff --quiet --' in text
     assert 'git -C "${ROOT_DIR}" diff --cached --quiet --' in text
+
+
+def test_registered_a3_launcher_pins_legacy_async_value_at_controller_boundary(
+    tmp_path,
+):
+    controller, marker, release = _fake_controller(
+        tmp_path, wait_for_output_release=True
+    )
+    output_dir = tmp_path / "pinned-controller-output"
+    env_marker = tmp_path / "controller-environment"
+    env = _launcher_env(controller, marker, output_dir=output_dir)
+    env["A3_TEST_CONTROLLER_RELEASE"] = str(release)
+    env["A3_TEST_CONTROLLER_ENV_MARKER"] = str(env_marker)
+    release.touch()
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+        timeout=5,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert env_marker.read_text().splitlines() == ["1", "<absent>"]
 
 
 @pytest.mark.parametrize(
@@ -253,6 +285,8 @@ def test_registered_a3_launcher_retains_reservation_when_worker_exits_before_out
         ("SMOKE_STEPS", "1"),
         ("PYTHONHASHSEED", "9"),
         ("REGISTERED_CLIP_ASSET_SHA256", "0" * 64),
+        ("NCCL_ASYNC_ERROR_HANDLING", "1"),
+        ("TORCH_NCCL_ASYNC_ERROR_HANDLING", "1"),
         ("NCCL_ALGO", "Ring"),
         ("NCCL_PROTO", "Simple"),
         ("NCCL_P2P_DISABLE", "1"),
