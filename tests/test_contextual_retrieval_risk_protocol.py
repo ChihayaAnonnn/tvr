@@ -175,6 +175,34 @@ def test_candidate_validity_accepts_finite_numpy_evidence():
     assert contextual_risk_candidate_is_valid(candidate) is True
 
 
+def test_candidate_validity_rejects_paired_digest_missing_v2t():
+    candidate = _candidate()
+    del candidate["paired_digest"]["retrieval"]["v2t"]
+
+    assert contextual_risk_candidate_is_valid(candidate) is False
+
+
+def test_candidate_validity_requires_raw_and_bidirectional_a1_digest_strings():
+    invalid_raw = _candidate()
+    invalid_raw["paired_digest"]["raw_wti_sha256"] = 123
+    missing_a1_direction = _candidate()
+    del missing_a1_direction["paired_digest"]["a1_failure_risk_sha256"]["v2t"]
+
+    assert contextual_risk_candidate_is_valid(invalid_raw) is False
+    assert contextual_risk_candidate_is_valid(missing_a1_direction) is False
+
+
+def test_candidate_validity_rejects_nonfinite_paired_retrieval_evidence():
+    candidate = _candidate()
+    candidate["paired_digest"]["retrieval"]["v2t"]["R1"] = float("inf")
+
+    assert contextual_risk_candidate_is_valid(candidate) is False
+
+
+def test_candidate_validity_accepts_complete_finite_paired_digest():
+    assert contextual_risk_candidate_is_valid(_candidate()) is True
+
+
 def test_selector_rejects_candidates_without_intact_artifacts(tmp_path):
     model = tmp_path / "model.pt"
     optimizer = tmp_path / "optimizer.pt"

@@ -463,6 +463,51 @@ def _complete_value(value: Any) -> bool:
     return value is not None and value != ""
 
 
+def _directional_structures_are_complete(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        directions = {"t2v", "v2t"}
+        present = directions.intersection(value)
+        if present and (
+            present != directions
+            or any(not _complete_value(value[key]) for key in directions)
+        ):
+            return False
+        return all(
+            _directional_structures_are_complete(item) for item in value.values()
+        )
+    if isinstance(value, (list, tuple)):
+        return all(_directional_structures_are_complete(item) for item in value)
+    return True
+
+
+def _valid_a3_paired_digest(paired_digest: Any) -> bool:
+    if not isinstance(paired_digest, Mapping):
+        return False
+    raw_wti = paired_digest.get("raw_wti_sha256")
+    if not isinstance(raw_wti, str) or not raw_wti:
+        return False
+    for key in ("a1_failure_risk_sha256", "a1_vacuity_sha256"):
+        directional = paired_digest.get(key)
+        if not isinstance(directional, Mapping) or any(
+            not isinstance(directional.get(direction), str)
+            or not directional[direction]
+            for direction in ("t2v", "v2t")
+        ):
+            return False
+    retrieval = paired_digest.get("retrieval")
+    if not isinstance(retrieval, Mapping) or any(
+        not isinstance(retrieval.get(direction), Mapping)
+        or not retrieval[direction]
+        or not _complete_value(retrieval[direction])
+        for direction in ("t2v", "v2t")
+    ):
+        return False
+    return bool(
+        _directional_structures_are_complete(paired_digest)
+        and numeric_metrics_are_finite(retrieval)
+    )
+
+
 def contextual_risk_candidate_is_valid(candidate: Mapping) -> bool:
     """Validate the persisted non-artifact evidence needed for A3 selection."""
 
@@ -480,11 +525,7 @@ def contextual_risk_candidate_is_valid(candidate: Mapping) -> bool:
         else {}
     )
     complete_hashes = (
-        isinstance(paired_digest, Mapping)
-        and all(
-            key in paired_digest and _complete_value(paired_digest[key])
-            for key in A3_REQUIRED_PAIRED_DIGEST_KEYS
-        )
+        _valid_a3_paired_digest(paired_digest)
         and required_checks.issubset(checks)
     )
     metric_pairs = tuple(candidate.get(name) for name in ("rho", "auroc", "aurc"))
