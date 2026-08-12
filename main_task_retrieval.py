@@ -10,6 +10,7 @@ import random
 import tempfile
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -970,8 +971,8 @@ def _contextual_risk_lifecycle_owner(args):
 REGISTERED_A3_SCHEDULER_HORIZON_EPOCHS = 5
 
 
-def _registered_a3_expected_config():
-    """Return every material normalized worker value in the A3 registration."""
+def _registered_a3_expected_values():
+    """Return every material worker value fixed by the A3 registration."""
 
     project_root = Path(__file__).resolve().parent
     data_root = Path("/data2/hxj/data/MSRVTT")
@@ -1004,6 +1005,7 @@ def _registered_a3_expected_config():
         "num_thread_reader": 12,
         "prefetch_factor": 4,
         "lr": 1e-4,
+        "lr_decay": 0.9,
         "coef_lr": 1e-3,
         "warmup_proportion": 0.1,
         "batch_size": 256,
@@ -1011,6 +1013,7 @@ def _registered_a3_expected_config():
         "batch_size_val": 16,
         "gradient_accumulation_steps": 1,
         "n_display": 20,
+        "log_mus_scores": False,
         "seed": 0,
         "max_words": 32,
         "max_frames": 8,
@@ -1020,7 +1023,11 @@ def _registered_a3_expected_config():
         "slice_framepos": 3,
         "video_dim": 1024,
         "n_pair": 1,
+        "margin": 0.1,
+        "task_type": "retrieval",
         "cross_model": "cross-base",
+        "cache_dir": "",
+        "do_lower_case": False,
         "linear_patch": "2d",
         "sim_header": "seqTransf",
         "loose_type": True,
@@ -1081,11 +1088,179 @@ def _registered_a3_expected_config():
         "csd_logvar_sidecar_only": False,
         "intrinsic_concentration_only": False,
         "aleatoric_crf_training": False,
+        "crf_ladder_root": "data/generated/msrvtt_crf",
+        "crf_order_fraction": 0.2,
+        "aleatoric_base_margin": 0.05,
+        "aleatoric_lambda_cf": 1.0,
+        "aleatoric_lambda_cv": 1.0,
+        "aleatoric_lambda_of": 1.0,
+        "aleatoric_lambda_ov": 1.0,
+        "aleatoric_prior_weight": 0.0,
+        "aleatoric_ranking_weight": 1.0,
+        "aleatoric_pooling_temperature": 0.0,
+        "w_csd": 1.0,
+        "w_csd_grounding": 0.05,
+        "w_csd_vib": 1e-4,
+        "csd_logvar_hidden_dim": 128,
+        "csd_logvar_min": -12.0,
+        "csd_logvar_max": 4.0,
+        "csd_logvar_init": -8.0,
+        "csd_initial_scale": 5.0,
+        "csd_initial_shift": 5.0,
+        "csd_hardness_temperature": 1.0,
+        "csd_bootstrap_samples": 1000,
         "fp16": False,
+        "fp16_opt_level": "O1",
         "world_size": 4,
         "n_gpu": 4,
         "pin_memory": True,
     }
+
+
+_REGISTERED_A3_MISSING = object()
+_REGISTERED_A3_DYNAMIC_NAMESPACE_FIELDS = {
+    # Validated separately because fresh/continuation values differ.
+    "epochs",
+    "init_model",
+    "resume_model",
+    # Owned by the registered lifecycle and torchrun topology gates.
+    "output_dir",
+    "rank",
+}
+
+
+@dataclass(frozen=True)
+class _RegisteredA3ContractField:
+    name: str
+    source: str
+    kind: str
+    expected: object
+    required: bool = True
+    missing_default: object = _REGISTERED_A3_MISSING
+
+
+def _registered_a3_contract_schema():
+    """Declare source, type, presence, and value for each normalized A3 field."""
+
+    path_fields = {
+        "source_train_csv",
+        "train_csv",
+        "val_csv",
+        "test_csv",
+        "split_manifest",
+        "data_path",
+        "features_path",
+    }
+    derived_fields = {
+        "requested_effective_batch_size",
+        "world_size",
+        "n_gpu",
+        "pin_memory",
+    }
+    optional_false_fields = {"intrinsic_concentration_only"}
+    fields = []
+    for name, expected in _registered_a3_expected_values().items():
+        if name in path_fields:
+            kind = "path"
+        elif expected is None:
+            kind = "none"
+        elif type(expected) is bool:
+            kind = "boolean"
+        elif type(expected) is int:
+            kind = "integer"
+        elif type(expected) is float:
+            kind = "float"
+        else:
+            kind = "string"
+        optional = name in optional_false_fields
+        fields.append(
+            _RegisteredA3ContractField(
+                name=name,
+                source="derived" if name in derived_fields else "namespace",
+                kind=kind,
+                expected=expected,
+                required=not optional,
+                missing_default=False if optional else _REGISTERED_A3_MISSING,
+            )
+        )
+    fields.append(
+        _RegisteredA3ContractField(
+            name="CUDA_VISIBLE_DEVICES",
+            source="environment",
+            kind="string",
+            expected="0,2,3,4",
+        )
+    )
+    return tuple(fields)
+
+
+def _registered_a3_expected_config():
+    """Return registered Namespace/derived values for manifests and diagnostics."""
+
+    return {
+        field.name: field.expected
+        for field in _registered_a3_contract_schema()
+        if field.source != "environment"
+    }
+
+
+def _normalize_registered_a3_contract_value(field, value):
+    if field.kind == "boolean":
+        if type(value) is not bool:
+            raise TypeError("must be a boolean")
+        return value
+    if field.kind == "integer":
+        if type(value) is not int:
+            raise TypeError("must be an integer")
+        return value
+    if field.kind == "float":
+        if type(value) is not float or not math.isfinite(value):
+            raise TypeError("must be a finite float")
+        return value
+    if field.kind == "string":
+        if type(value) is not str:
+            raise TypeError("must be a string")
+        return value
+    if field.kind == "path":
+        if not isinstance(value, (str, os.PathLike)) or not str(value):
+            raise TypeError("must be a non-empty path")
+        return str(Path(value).resolve())
+    if field.kind == "none":
+        if value is not None:
+            raise TypeError("must be None")
+        return None
+    raise RuntimeError(f"unknown registered A3 field kind: {field.kind}")
+
+
+def _registered_a3_schema_mismatches(args):
+    """Extract, normalize, and compare all schema-declared A3 worker values."""
+
+    mismatches = []
+    for field in _registered_a3_contract_schema():
+        if field.source == "environment":
+            actual = os.environ.get(field.name, _REGISTERED_A3_MISSING)
+        else:
+            actual = getattr(args, field.name, _REGISTERED_A3_MISSING)
+        if actual is _REGISTERED_A3_MISSING:
+            if field.required:
+                mismatches.append(
+                    f"{field.name} is required from registered {field.source}"
+                )
+                continue
+            actual = field.missing_default
+        try:
+            normalized = _normalize_registered_a3_contract_value(field, actual)
+            expected = _normalize_registered_a3_contract_value(
+                field, field.expected
+            )
+        except TypeError as exc:
+            mismatches.append(f"{field.name}={actual!r} {exc}")
+            continue
+        if normalized != expected:
+            mismatches.append(
+                f"{field.name}={normalized!r} (registered {expected!r})"
+            )
+    return mismatches
 
 
 def _registered_a3_expected_environment():
@@ -1192,43 +1367,28 @@ def _preflight_registered_a3_clip_asset(args, *, verify_load):
 def _assert_registered_a3_contract(args, batch_semantics=None):
     """Fail closed before optimization for every registered A3 worker."""
 
-    if not bool(getattr(args, "contextual_risk_sidecar_only", False)):
+    if not (
+        bool(getattr(args, "contextual_risk_sidecar_only", False))
+        or bool(getattr(args, "registered_contextual_risk_a3", False))
+    ):
         return
-    expected = _registered_a3_expected_config()
-    path_fields = {
-        "source_train_csv",
-        "train_csv",
-        "val_csv",
-        "test_csv",
-        "split_manifest",
-        "data_path",
-        "features_path",
-    }
-    mismatches = []
-    for name, registered in expected.items():
-        actual = getattr(args, name, None)
-        if name in path_fields:
-            actual = str(Path(actual).resolve()) if actual else actual
-            registered = str(Path(registered).resolve())
-        if actual != registered:
-            mismatches.append(f"{name}={actual!r} (registered {registered!r})")
+    mismatches = _registered_a3_schema_mismatches(args)
 
     continuing = bool(getattr(args, "resume_model", ""))
     expected_epochs = 5 if continuing else 3
-    if int(getattr(args, "epochs", -1)) != expected_epochs:
+    actual_epochs = getattr(args, "epochs", _REGISTERED_A3_MISSING)
+    if type(actual_epochs) is not int:
+        mismatches.append(f"epochs={actual_epochs!r} must be an integer")
+    elif actual_epochs != expected_epochs:
         mismatches.append(
-            f"epochs={getattr(args, 'epochs', None)!r} "
-            f"(registered {expected_epochs!r})"
+            f"epochs={actual_epochs!r} (registered {expected_epochs!r})"
         )
-    if not continuing and Path(getattr(args, "init_model", "")).resolve() != (
-        CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT
-    ):
-        mismatches.append("init_model is not the canonical A1 checkpoint")
-
-    if os.environ.get("CUDA_VISIBLE_DEVICES") != "0,2,3,4":
-        mismatches.append(
-            "CUDA_VISIBLE_DEVICES must be the registered value '0,2,3,4'"
-        )
+    if not continuing:
+        init_model = getattr(args, "init_model", _REGISTERED_A3_MISSING)
+        if not isinstance(init_model, (str, os.PathLike)) or not str(init_model):
+            mismatches.append("init_model is required as a non-empty path")
+        elif Path(init_model).resolve() != CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT:
+            mismatches.append("init_model is not the canonical A1 checkpoint")
 
     if batch_semantics is not None:
         required_batch = {

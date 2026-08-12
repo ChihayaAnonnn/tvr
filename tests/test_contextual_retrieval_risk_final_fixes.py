@@ -4,6 +4,7 @@ import json
 import os
 import random
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -327,20 +328,204 @@ def test_a3_resume_manifest_requires_same_commit_and_clean_tracked_state():
         experiment_tracking.validate_contextual_risk_resume_manifest(base, dirty)
 
 
-def test_registered_a3_python_contract_rejects_manifest_material_mismatch(
-    monkeypatch,
-):
-    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
-    args = SimpleNamespace(**retrieval._registered_a3_expected_config())
-    args.output_dir = "/tmp/a3-contract"
-    args.init_model = str(experiment_tracking.CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT)
-    args.resume_model = None
-    args.epochs = 3
+def _exact_fresh_a3_launcher_args(output_dir):
+    repository = Path(__file__).resolve().parents[1]
+    common_repository = Path("/data2/hxj/project/UATVR")
+    data_root = Path("/data2/hxj/data/MSRVTT")
+    generated = repository / "data/generated/msrvtt_trusted_v1"
+    return [
+        "--do_train", "--run_final_test",
+        "--num_thread_reader", "12", "--prefetch_factor", "4", "--epochs=5",
+        "--batch_size", "256", "--gradient_accumulation_steps", "1",
+        "--n_display=20",
+        "--train_csv", str(generated / "train.csv"),
+        "--val_csv", str(generated / "val.csv"),
+        "--source_train_csv", str(data_root / "csv/MSRVTT_train.9k.csv"),
+        "--test_csv", str(data_root / "csv/MSRVTT_JSFUSION_test.csv"),
+        "--split_manifest", str(
+            repository / "dataloaders/splits/msrvtt_trusted_v1_seed0.json"
+        ),
+        "--eval_split", "val",
+        "--data_path", str(data_root / "annotation/MSRVTT_v2.json"),
+        "--features_path",
+        f"{data_root}/videos/compressed_videos/msrvtt_224_12fps/",
+        "--output_dir", str(output_dir),
+        "--lr", "1e-4", "--max_words", "32", "--max_frames", "8",
+        "--batch_size_val", "16", "--datatype", "msrvtt",
+        "--expand_msrvtt_sentences", "--feature_framerate", "1",
+        "--coef_lr", "1e-3", "--freeze_layer_num", "-1",
+        "--slice_framepos", "3", "--linear_patch", "2d",
+        "--sim_header", "seqTransf", "--pretrained_clip_name", "ViT-B/16",
+        "--clip_layer_norm_precision", "fp32", "--clip_gradient_checkpointing",
+        "--clip_visual_checkpoint_layers", "4", "--extra_video_cls_num", "2",
+        "--extra_text_cls_num", "2", "--experiment_profile", "hygiene",
+        "--experiment_desc", "A3 contextual retrieval-risk sidecar",
+        "--use_uatvr_full", "--use_ada_norm", "--init_model", str(
+            common_repository
+            / "ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
+        ),
+        "--use_retrieval_risk_sidecar", "--w_retrieval_risk", "0.0",
+        "--use_contextual_risk_sidecar", "--contextual_risk_sidecar_only",
+        "--registered_contextual_risk_a3", "--registered_clip_asset_path", str(
+            common_repository / ".cache/ViT-B-16.pt"
+        ),
+        "--registered_clip_asset_sha256",
+        "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "--contextual_risk_topk", "16", "--contextual_risk_projection_dim", "128",
+        "--contextual_risk_hidden_dim", "128", "--contextual_risk_temperature", "1.0",
+        "--w_contextual_risk_fit", "0.25", "--w_contextual_risk_rank", "0.25",
+        "--seed", "0", "--epochs", "3", "--run_final_test",
+    ]
+
+
+def _parse_exact_fresh_a3_args(monkeypatch, output_dir):
+    monkeypatch.setattr(
+        sys, "argv", ["main_task_retrieval.py", *_exact_fresh_a3_launcher_args(output_dir)]
+    )
+    args = retrieval.get_args()
+    # These are established after parsing and before the production contract gate.
     args.world_size = 4
     args.n_gpu = 4
-    args.requested_effective_batch_size = 256
-    args.batch_size = 256
-    args.registered_contextual_risk_a3 = True
+    args.pin_memory = True
+    return args
+
+
+def _clean_registered_launcher_environment():
+    env = os.environ.copy()
+    rejected = {
+        "OUTPUT_DIR", "RUN_ID", "RUN_DATE", "RUN_TIME", "RUN_TAG",
+        "NPROC", "TRAIN_BATCH_SIZE", "TRAIN_GRADIENT_ACCUMULATION_STEPS",
+        "CLIP_LAYER_NORM_PRECISION", "EXPERIMENT_PROFILE", "TRAIN_PID_FILE",
+        "RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER", "TVR_PYTHON", "TVR_TORCHRUN",
+        "A800_THROUGHPUT_COMPARISON", "CLIP_GRADIENT_CHECKPOINTING",
+        "CLIP_VISUAL_CHECKPOINT_LAYERS", "FREEZE_LAYER_NUM", "DATA_PATH",
+        "CLIP_CACHE_DIR", "TRAIN_NUM_WORKERS", "TRAIN_PREFETCH_FACTOR",
+        "MASTER_PORT", "MASTER_ADDR", "WORLD_SIZE", "RANK", "LOCAL_RANK",
+        "GROUP_RANK", "ROLE_RANK", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS", "NCCL_P2P_LEVEL",
+        "NCCL_IB_DISABLE", "NCCL_DEBUG", "TORCH_WARN_ONCE", "PYTHONHASHSEED",
+        "CUBLAS_WORKSPACE_CONFIG", "SMOKE_STEPS", "EXPERIMENT_DESC",
+        "REGISTERED_CLIP_ASSET_PATH", "REGISTERED_CLIP_ASSET_SHA256",
+    }
+    for name in list(env):
+        if name in rejected or name.startswith(
+            ("NCCL_", "TORCH_NCCL_", "CUDA_", "CUBLAS_")
+        ) or name in {"NVIDIA_TF32_OVERRIDE", "TORCH_ALLOW_TF32_CUBLAS_OVERRIDE"}:
+            env.pop(name)
+    return env
+
+
+def test_exact_a3_args_are_composed_by_the_real_shell_launchers(tmp_path):
+    repository = Path(__file__).resolve().parents[1]
+    contextual_script = repository / "run_train_msrvtt_contextual_risk_bg.sh"
+    base_script = repository / "run_train_msrvtt_bg.sh"
+    tail_capture = tmp_path / "contextual-tail.args"
+    contextual_output = tmp_path / "contextual-capture-output"
+    controller = tmp_path / "capture-controller.sh"
+    controller.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "printf '%s\\0' \"$@\" > \"${A3_ARGV_CAPTURE}\"\n"
+        "printf '%s\\n' \"$$\" > \"${TRAIN_PID_FILE}\"\n"
+        "mkdir -p \"${OUTPUT_DIR}\"\n"
+        "sleep 1\n"
+    )
+    controller.chmod(0o755)
+    env = _clean_registered_launcher_environment()
+    env.update(
+        {
+            "A3_LAUNCHER_TEST_MODE": "1",
+            "A3_BG_CONTROLLER": str(controller),
+            "A3_TEST_OUTPUT_DIR": str(contextual_output),
+            "A3_ARGV_CAPTURE": str(tail_capture),
+        }
+    )
+    contextual = subprocess.run(
+        ["bash", str(contextual_script)],
+        cwd=repository,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    assert contextual.returncode == 0, contextual.stderr
+    tail_args = [
+        item.decode() for item in tail_capture.read_bytes().split(b"\0") if item
+    ]
+    contextual_output.rmdir()
+
+    fake_python = tmp_path / "no-op-python.sh"
+    fake_python.write_text("#!/usr/bin/env bash\nexit 0\n")
+    fake_python.chmod(0o755)
+    full_capture = tmp_path / "full-worker.args"
+    fake_torchrun = tmp_path / "capture-torchrun.sh"
+    fake_torchrun.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "printf '%s\\0' \"$@\" > \"${A3_ARGV_CAPTURE}\"\n"
+    )
+    fake_torchrun.chmod(0o755)
+    worker_output = tmp_path / "worker-must-not-create-output"
+    worker_env = os.environ.copy()
+    worker_env.update(
+        {
+            "RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER": "1",
+            "TVR_PYTHON": str(fake_python),
+            "TVR_TORCHRUN": str(fake_torchrun),
+            "A3_ARGV_CAPTURE": str(full_capture),
+            "OUTPUT_DIR": str(worker_output),
+            "RUN_ID": "contract_only_capture",
+            "CUDA_VISIBLE_DEVICES": "0,2,3,4",
+            "NPROC": "4",
+            "TRAIN_BATCH_SIZE": "256",
+            "TRAIN_GRADIENT_ACCUMULATION_STEPS": "1",
+            "TRAIN_NUM_WORKERS": "12",
+            "TRAIN_PREFETCH_FACTOR": "4",
+            "CLIP_LAYER_NORM_PRECISION": "fp32",
+            "CLIP_GRADIENT_CHECKPOINTING": "1",
+            "CLIP_VISUAL_CHECKPOINT_LAYERS": "4",
+            "FREEZE_LAYER_NUM": "-1",
+            "A800_THROUGHPUT_COMPARISON": "0",
+            "DATA_PATH": "/data2/hxj/data/MSRVTT",
+            "EXPERIMENT_PROFILE": "hygiene",
+            "EXPERIMENT_DESC": "A3 contextual retrieval-risk sidecar",
+            "CLIP_CACHE_DIR": "/data2/hxj/project/UATVR/.cache",
+            "MASTER_PORT": "29547",
+        }
+    )
+    worker = subprocess.run(
+        ["bash", str(base_script), *tail_args],
+        cwd=repository,
+        env=worker_env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    assert worker.returncode == 0, worker.stderr
+    full_args = [
+        item.decode() for item in full_capture.read_bytes().split(b"\0") if item
+    ]
+    main_index = full_args.index(str(repository / "main_task_retrieval.py"))
+    assert full_args[main_index + 1 :] == _exact_fresh_a3_launcher_args(
+        worker_output
+    )
+    assert not worker_output.exists()
+
+
+def test_registered_a3_exact_real_parser_contract_passes(monkeypatch, tmp_path):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
+
+    retrieval._assert_registered_a3_contract(args)
+
+
+def test_registered_a3_python_contract_rejects_manifest_material_mismatch(
+    monkeypatch, tmp_path,
+):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
     batch = {
         "world_size": 4,
         "requested_effective_batch": 256,
@@ -354,6 +539,123 @@ def test_registered_a3_python_contract_rejects_manifest_material_mismatch(
     args.batch_size_val = 32
     with pytest.raises(ValueError, match="batch_size_val"):
         retrieval._assert_registered_a3_contract(args, batch)
+
+
+def test_registered_a3_contract_rejects_missing_required_parser_field(
+    monkeypatch, tmp_path,
+):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
+    del args.contextual_risk_topk
+
+    with pytest.raises(ValueError, match="contextual_risk_topk.*required"):
+        retrieval._assert_registered_a3_contract(args)
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        ("do_eval", 1, "do_eval.*boolean"),
+        ("contextual_risk_topk", "16", "contextual_risk_topk.*integer"),
+        ("contextual_risk_temperature", "1.0", "contextual_risk_temperature.*float"),
+        ("contextual_risk_temperature", 1, "contextual_risk_temperature.*float"),
+    ],
+)
+def test_registered_a3_contract_rejects_wrong_semantic_types(
+    monkeypatch, tmp_path, name, value, message,
+):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
+    setattr(args, name, value)
+
+    with pytest.raises(ValueError, match=message):
+        retrieval._assert_registered_a3_contract(args)
+
+
+def test_registered_a3_contract_normalizes_paths_semantically(monkeypatch, tmp_path):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
+    args.train_csv = str(Path(args.train_csv).parent / ".." / "msrvtt_trusted_v1" / "train.csv")
+    retrieval._assert_registered_a3_contract(args)
+
+    args.train_csv = str(tmp_path / "other.csv")
+    with pytest.raises(ValueError, match="train_csv"):
+        retrieval._assert_registered_a3_contract(args)
+
+
+def test_registered_a3_contract_normalizes_only_declared_missing_future_flag(
+    monkeypatch, tmp_path,
+):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
+    assert not hasattr(args, "intrinsic_concentration_only")
+    retrieval._assert_registered_a3_contract(args)
+
+    args.intrinsic_concentration_only = True
+    with pytest.raises(ValueError, match="intrinsic_concentration_only"):
+        retrieval._assert_registered_a3_contract(args)
+
+
+def test_registered_a3_contract_schema_is_complete_for_real_parser(monkeypatch, tmp_path):
+    args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
+    schema = retrieval._registered_a3_contract_schema()
+    names = [field.name for field in schema]
+
+    assert len(names) == len(set(names))
+    assert {field.source for field in schema} == {"namespace", "derived", "environment"}
+    assert all(field.expected is not retrieval._REGISTERED_A3_MISSING for field in schema)
+    assert {
+        field.name for field in schema if field.source == "namespace" and field.required
+    } <= vars(args).keys()
+    assert {
+        field.name for field in schema if field.source == "derived"
+    } <= vars(args).keys()
+
+    required_schema_namespace_names = {
+        field.name
+        for field in schema
+        if field.source in {"namespace", "derived"} and field.required
+    }
+    assert vars(args).keys() == (
+        required_schema_namespace_names
+        | retrieval._REGISTERED_A3_DYNAMIC_NAMESPACE_FIELDS
+    )
+
+
+def test_registered_a3_four_rank_contract_only_exact_launcher_probe(tmp_path):
+    output_dir = tmp_path / "must-not-be-created"
+    env = os.environ.copy()
+    env["CUDA_VISIBLE_DEVICES"] = "0,2,3,4"
+    command = [
+        "/home/xujie/.conda/envs/tvr/bin/torchrun",
+        "--nproc_per_node=4",
+        "--master_addr=127.0.0.9",
+        "--master_port=29547",
+        "--",
+        "-c",
+        (
+            "import os; import main_task_retrieval as r; "
+            "a=r.get_args(); a.world_size=int(os.environ['WORLD_SIZE']); "
+            "a.n_gpu=len(os.environ['CUDA_VISIBLE_DEVICES'].split(',')); "
+            "a.pin_memory=True; r._assert_registered_a3_contract(a); "
+            "print('A3_CONTRACT_ONLY_OK', flush=True)"
+        ),
+        *_exact_fresh_a3_launcher_args(output_dir),
+    ]
+
+    result = subprocess.run(
+        command,
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count("A3_CONTRACT_ONLY_OK") == 4
+    assert not output_dir.exists()
 
 
 def _set_registered_a3_initial_environment(monkeypatch):
