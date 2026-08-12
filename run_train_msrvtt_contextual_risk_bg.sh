@@ -29,7 +29,12 @@ reject_registered_environment_overrides() {
         EXPERIMENT_PROFILE TRAIN_PID_FILE RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER \
         TVR_PYTHON TVR_TORCHRUN A800_THROUGHPUT_COMPARISON \
         CLIP_GRADIENT_CHECKPOINTING CLIP_VISUAL_CHECKPOINT_LAYERS \
-        FREEZE_LAYER_NUM; do
+        FREEZE_LAYER_NUM DATA_PATH CLIP_CACHE_DIR TRAIN_NUM_WORKERS \
+        TRAIN_PREFETCH_FACTOR MASTER_PORT MASTER_ADDR WORLD_SIZE RANK \
+        LOCAL_RANK GROUP_RANK ROLE_RANK OMP_NUM_THREADS MKL_NUM_THREADS \
+        OPENBLAS_NUM_THREADS NUMEXPR_NUM_THREADS NCCL_P2P_LEVEL \
+        NCCL_IB_DISABLE NCCL_DEBUG TORCH_WARN_ONCE PYTHONHASHSEED \
+        CUBLAS_WORKSPACE_CONFIG SMOKE_STEPS EXPERIMENT_DESC; do
         if [[ -v "${name}" ]]; then
             echo "registered A3 environment ${name} cannot be overridden" >&2
             exit 2
@@ -38,36 +43,23 @@ reject_registered_environment_overrides() {
 }
 
 reject_registered_argument_overrides() {
-    local argument option
-    for argument in "$@"; do
-        option="${argument%%=*}"
-        case "${option}" in
-            --init_model|--resume_model|--use_uatvr_full|--use_ada_norm|\
-            --use_retrieval_risk_sidecar|--retrieval_risk_sidecar_only|\
-            --w_retrieval_risk|--use_contextual_risk_sidecar|\
-            --contextual_risk_sidecar_only|--contextual_risk_topk|\
-            --contextual_risk_projection_dim|--contextual_risk_hidden_dim|\
-            --contextual_risk_temperature|--contextual_risk_bootstrap_samples|\
-            --w_contextual_risk_fit|--w_contextual_risk_rank|\
-            --clip_layer_norm_precision|--fp16|--seed|--nproc|\
-            --nproc_per_node|--cuda_visible_devices|--batch_size|\
-            --train_batch_size|--gradient_accumulation_steps|--epochs|\
-            --experiment_profile|--eval_split|--datatype|\
-            --expand_msrvtt_sentences|--train_csv|--val_csv|\
-            --source_train_csv|--test_csv|--split_manifest|--data_path|\
-            --features_path|--output_dir|--run_id|--run_date|--run_time|\
-            --run_tag|--run_final_test|--use_csd_logvar_sidecar|\
-            --csd_logvar_sidecar_only|--intrinsic_concentration_only)
-                echo "registered A3 option ${option} cannot be overridden" >&2
-                exit 2
-                ;;
-        esac
-    done
+    if [[ "$#" -ne 0 ]]; then
+        echo "registered A3 launcher does not accept trailing arguments" >&2
+        exit 2
+    fi
 }
 
 validate_test_seams
 reject_registered_environment_overrides
 reject_registered_argument_overrides "$@"
+
+if [[ "${A3_LAUNCHER_TEST_MODE:-0}" != "1" ]]; then
+    if ! git -C "${ROOT_DIR}" diff --quiet -- || \
+       ! git -C "${ROOT_DIR}" diff --cached --quiet --; then
+        echo "registered A3 requires clean tracked source before launch" >&2
+        exit 2
+    fi
+fi
 
 if [[ ! -f "${BASE_CKPT}" ]]; then
     echo "Missing canonical A1 checkpoint BASE_CKPT=${BASE_CKPT}" >&2
@@ -100,6 +92,7 @@ if ! mkdir "${RESERVATION_DIR}"; then
     exit 2
 fi
 RESERVATION_HELD=1
+CONTROLLER_MAY_HAVE_SPAWNED=0
 HANDOFF_PID_FILE="$(mktemp "${RESERVATION_DIR}/controller-pid.XXXXXX")"
 
 retain_reservation_failure() {
@@ -119,19 +112,35 @@ cleanup_reservation() {
 }
 trap cleanup_reservation EXIT
 
+retain_reservation_on_signal() {
+    local signal_name="$1"
+    local exit_status="$2"
+    trap - INT TERM
+    if [[ "${CONTROLLER_MAY_HAVE_SPAWNED}" == "1" ]]; then
+        echo "A3 ${signal_name} received after controller start; retaining reservation: ${RESERVATION_DIR}" >&2
+        RESERVATION_HELD=0
+        trap - EXIT
+    fi
+    exit "${exit_status}"
+}
+trap 'retain_reservation_on_signal SIGINT 130' INT
+trap 'retain_reservation_on_signal SIGTERM 143' TERM
+
+CONTROLLER_MAY_HAVE_SPAWNED=1
 RUN_DATE="${RUN_DATE}" \
 RUN_TIME="${RUN_TIME}" \
 RUN_TAG="${RUN_TAG}" \
 RUN_ID="${RUN_ID}" \
 OUTPUT_DIR="${OUTPUT_DIR}" \
 TRAIN_PID_FILE="${HANDOFF_PID_FILE}" \
-CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,2,3,4}" \
+CUDA_VISIBLE_DEVICES="0,2,3,4" \
 NPROC=4 \
 TRAIN_BATCH_SIZE=256 \
 TRAIN_GRADIENT_ACCUMULATION_STEPS=1 \
 CLIP_LAYER_NORM_PRECISION=fp32 \
+PYTHONHASHSEED=0 \
 EXPERIMENT_PROFILE=hygiene \
-EXPERIMENT_DESC="${EXPERIMENT_DESC:-A3 contextual retrieval-risk sidecar}" \
+EXPERIMENT_DESC="A3 contextual retrieval-risk sidecar" \
 bash "${CONTROLLER_SCRIPT}" \
     --use_uatvr_full \
     --use_ada_norm \
@@ -140,6 +149,7 @@ bash "${CONTROLLER_SCRIPT}" \
     --w_retrieval_risk 0.0 \
     --use_contextual_risk_sidecar \
     --contextual_risk_sidecar_only \
+    --registered_contextual_risk_a3 \
     --contextual_risk_topk 16 \
     --contextual_risk_projection_dim 128 \
     --contextual_risk_hidden_dim 128 \

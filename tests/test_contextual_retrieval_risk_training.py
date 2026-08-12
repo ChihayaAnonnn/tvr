@@ -528,6 +528,17 @@ def _write_pair(run, reference, epoch):
         "global_step": (epoch + 1) * 5,
     }
     torch.save(payload, optimizer_path)
+    marker_path = run / f"checkpoint_epoch.{epoch}.published.json"
+    main_task_retrieval.atomic_write_json(
+        marker_path,
+        {
+            "epoch": epoch,
+            "model_path": str(model_path.resolve()),
+            "model_sha256": file_sha256(model_path),
+            "optimizer_path": str(optimizer_path.resolve()),
+            "optimizer_sha256": file_sha256(optimizer_path),
+        },
+    )
     return model_path, optimizer_path, payload
 
 
@@ -982,8 +993,11 @@ def test_later_valid_candidates_can_win_but_invalid_candidate_cannot(tmp_path):
     assert winner["epoch"] == 3
 
     invalid = _validation(rho=0.99, raw="changed")
-    winner, *_ = _record(run, reference, candidates, 4, invalid)
-    assert winner["epoch"] == 3
+    with pytest.raises(RuntimeError, match="terminal A3 invariance violation"):
+        _record(run, reference, candidates, 4, invalid)
+    candidates[:] = json.loads(
+        (run / "contextual_risk_candidates.json").read_text()
+    )
     assert candidates[4]["valid"] is False
 
 

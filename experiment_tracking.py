@@ -123,14 +123,19 @@ def compute_batch_semantics(
 
 
 def collect_git_state(project_root):
-    """Capture commit and porcelain paths without embedding command-line data."""
+    """Capture the commit and tracked/index changes relative to ``HEAD``.
+
+    Registered experiments intentionally permit ignored and untracked runtime
+    artifacts (logs, checkpoints, smoke outputs).  Only tracked worktree or
+    index changes make the source state dirty.
+    """
 
     root = Path(project_root)
     commit = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=root, text=True, stderr=subprocess.STDOUT
     ).strip()
     lines = subprocess.check_output(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+        ["git", "status", "--porcelain=v1", "--untracked-files=no"],
         cwd=root,
         text=True,
         stderr=subprocess.STDOUT,
@@ -338,6 +343,13 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
                     batch.get("requested_effective_batch", 0),
                 )
             ),
+            "scheduler_horizon_epochs": 5,
+            "optimizer_steps_per_epoch": int(
+                batch.get("optimizer_steps_per_epoch", 0)
+            ),
+            "scheduler_total_optimizer_steps": int(
+                batch.get("total_optimizer_steps", 0)
+            ),
         },
         "continuation_inputs": {
             "optimizer": {
@@ -357,7 +369,11 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
                     "bias", "LayerNorm.bias", "LayerNorm.weight"
                 ],
             },
-            "epochs": {"fresh": 3, "continuation_total": 5},
+            "epochs": {
+                "fresh_stop_after": 3,
+                "scheduler_horizon": 5,
+                "continuation_total": 5,
+            },
             "batch": {
                 "train": int(getattr(args, "batch_size", 256)),
                 "validation": int(getattr(args, "batch_size_val", 3500)),
@@ -484,6 +500,17 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
 
 def validate_contextual_risk_resume_manifest(existing, requested) -> None:
     """Reject continuation when any immutable A3 registration changed."""
+
+    existing_git = existing.get("git") or {}
+    requested_git = requested.get("git") or {}
+    if existing_git.get("commit") != requested_git.get("commit"):
+        raise ValueError("immutable A3 manifest git commit differs on resume")
+    if bool(existing_git.get("dirty", False)) or bool(
+        requested_git.get("dirty", False)
+    ):
+        raise ValueError(
+            "immutable A3 manifest requires clean tracked source state"
+        )
 
     batch_keys = (
         "requested_effective_batch",

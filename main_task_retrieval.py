@@ -7,6 +7,7 @@ import json
 import math
 import os
 import random
+import tempfile
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -572,6 +573,11 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--csd_bootstrap_samples", type=int, default=1000)
     parser.add_argument("--use_contextual_risk_sidecar", action="store_true")
     parser.add_argument("--contextual_risk_sidecar_only", action="store_true")
+    parser.add_argument(
+        "--registered_contextual_risk_a3",
+        action="store_true",
+        help="Assert the complete immutable registered A3 worker contract.",
+    )
     parser.add_argument("--contextual_risk_topk", type=int, default=16)
     parser.add_argument("--contextual_risk_projection_dim", type=int, default=128)
     parser.add_argument("--contextual_risk_hidden_dim", type=int, default=128)
@@ -602,6 +608,14 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     if args.contextual_risk_sidecar_only and not args.use_contextual_risk_sidecar:
         raise ValueError(
             "contextual_risk_sidecar_only requires --use_contextual_risk_sidecar"
+        )
+    if (
+        args.registered_contextual_risk_a3
+        and not args.contextual_risk_sidecar_only
+    ):
+        raise ValueError(
+            "registered_contextual_risk_a3 requires "
+            "--contextual_risk_sidecar_only"
         )
     if args.contextual_risk_sidecar_only and not args.use_retrieval_risk_sidecar:
         raise ValueError(
@@ -942,6 +956,228 @@ def _contextual_risk_lifecycle_owner(args):
     return is_global_rank_zero(args)
 
 
+REGISTERED_A3_SCHEDULER_HORIZON_EPOCHS = 5
+
+
+def _registered_a3_expected_config():
+    """Return every material normalized worker value in the A3 registration."""
+
+    project_root = Path(__file__).resolve().parent
+    data_root = Path("/data2/hxj/data/MSRVTT")
+    generated = project_root / "data/generated/msrvtt_trusted_v1"
+    return {
+        "registered_contextual_risk_a3": True,
+        "do_train": True,
+        "do_eval": False,
+        "do_pretrain": False,
+        "run_final_test": True,
+        "datatype": "msrvtt",
+        "eval_split": "val",
+        "expand_msrvtt_sentences": True,
+        "source_train_csv": str(data_root / "csv/MSRVTT_train.9k.csv"),
+        "train_csv": str(generated / "train.csv"),
+        "val_csv": str(generated / "val.csv"),
+        "test_csv": str(data_root / "csv/MSRVTT_JSFUSION_test.csv"),
+        "split_manifest": str(
+            project_root / "dataloaders/splits/msrvtt_trusted_v1_seed0.json"
+        ),
+        "data_path": str(data_root / "annotation/MSRVTT_v2.json"),
+        "features_path": str(
+            data_root / "videos/compressed_videos/msrvtt_224_12fps"
+        ),
+        "use_attributes": False,
+        "msrvtt_attributes_path": "",
+        "msvd_attributes_path": "",
+        "max_words_attrs": None,
+        "attr_num_blocks": 4,
+        "num_thread_reader": 12,
+        "prefetch_factor": 4,
+        "lr": 1e-4,
+        "coef_lr": 1e-3,
+        "warmup_proportion": 0.1,
+        "batch_size": 256,
+        "requested_effective_batch_size": 256,
+        "batch_size_val": 16,
+        "gradient_accumulation_steps": 1,
+        "n_display": 20,
+        "seed": 0,
+        "max_words": 32,
+        "max_frames": 8,
+        "feature_framerate": 1,
+        "train_frame_order": 0,
+        "eval_frame_order": 0,
+        "slice_framepos": 3,
+        "video_dim": 1024,
+        "n_pair": 1,
+        "cross_model": "cross-base",
+        "linear_patch": "2d",
+        "sim_header": "seqTransf",
+        "loose_type": True,
+        "text_num_hidden_layers": 12,
+        "visual_num_hidden_layers": 12,
+        "cross_num_hidden_layers": 4,
+        "pretrained_clip_name": "ViT-B/16",
+        "clip_layer_norm_precision": "fp32",
+        "clip_gradient_checkpointing": True,
+        "clip_visual_checkpoint_layers": 4,
+        "freeze_layer_num": -1,
+        "strategy": 1,
+        "extra_video_cls_num": 2,
+        "extra_text_cls_num": 2,
+        "n_video_embeddings": 7,
+        "n_text_embeddings": 7,
+        "eval_vid_chunk_size": 128,
+        "DSL": False,
+        "dsl_temperature": 1.0,
+        "experiment_profile": "hygiene",
+        "experiment_desc": "A3 contextual retrieval-risk sidecar",
+        "use_uatvr_full": True,
+        "use_ada_norm": True,
+        "disable_spatial_enhancer": False,
+        "rope_mode": "2d",
+        "fusion_mode": "prob_mos",
+        "fusion_temperature": 1.5,
+        "w_query_sim": 0.01,
+        "w_uncertainty_reg": 0.001,
+        "w_evidential": 0.01,
+        "w_neg_reg": 0.01,
+        "uncertainty_mode": "none",
+        "uncertainty_text_head": "text",
+        "log_sigma_min": -1.5,
+        "log_sigma_max": 4.0,
+        "anneal_warmup_epochs": 0,
+        "mamba_lr_ratio": 0.1,
+        "w_mil": 0.01,
+        "w_orth": 0.1,
+        "use_retrieval_risk_sidecar": True,
+        "retrieval_risk_sidecar_only": False,
+        "w_retrieval_risk": 0.0,
+        "retrieval_risk_temperature": 1.0,
+        "retrieval_risk_hidden_dim": 32,
+        "retrieval_risk_bootstrap_samples": 1000,
+        "use_contextual_risk_sidecar": True,
+        "contextual_risk_sidecar_only": True,
+        "contextual_risk_topk": 16,
+        "contextual_risk_projection_dim": 128,
+        "contextual_risk_hidden_dim": 128,
+        "contextual_risk_temperature": 1.0,
+        "contextual_risk_bootstrap_samples": 1000,
+        "w_contextual_risk_fit": 0.25,
+        "w_contextual_risk_rank": 0.25,
+        "use_csd_logvar_sidecar": False,
+        "csd_logvar_sidecar_only": False,
+        "intrinsic_concentration_only": False,
+        "aleatoric_crf_training": False,
+        "fp16": False,
+        "world_size": 4,
+        "n_gpu": 4,
+        "pin_memory": True,
+    }
+
+
+def _assert_registered_a3_contract(args, batch_semantics=None):
+    """Fail closed before optimization for every registered A3 worker."""
+
+    if not bool(getattr(args, "contextual_risk_sidecar_only", False)):
+        return
+    expected = _registered_a3_expected_config()
+    path_fields = {
+        "source_train_csv",
+        "train_csv",
+        "val_csv",
+        "test_csv",
+        "split_manifest",
+        "data_path",
+        "features_path",
+    }
+    mismatches = []
+    for name, registered in expected.items():
+        actual = getattr(args, name, None)
+        if name in path_fields:
+            actual = str(Path(actual).resolve()) if actual else actual
+            registered = str(Path(registered).resolve())
+        if actual != registered:
+            mismatches.append(f"{name}={actual!r} (registered {registered!r})")
+
+    continuing = bool(getattr(args, "resume_model", ""))
+    expected_epochs = 5 if continuing else 3
+    if int(getattr(args, "epochs", -1)) != expected_epochs:
+        mismatches.append(
+            f"epochs={getattr(args, 'epochs', None)!r} "
+            f"(registered {expected_epochs!r})"
+        )
+    if not continuing and Path(getattr(args, "init_model", "")).resolve() != (
+        CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT
+    ):
+        mismatches.append("init_model is not the canonical A1 checkpoint")
+
+    if os.environ.get("CUDA_VISIBLE_DEVICES") != "0,2,3,4":
+        mismatches.append(
+            "CUDA_VISIBLE_DEVICES must be the registered value '0,2,3,4'"
+        )
+
+    if batch_semantics is not None:
+        required_batch = {
+            "world_size": 4,
+            "requested_effective_batch": 256,
+            "optimizer_effective_batch": 256,
+            "gradient_accumulation_steps": 1,
+        }
+        for name, registered in required_batch.items():
+            if batch_semantics.get(name) != registered:
+                mismatches.append(
+                    f"batch.{name}={batch_semantics.get(name)!r} "
+                    f"(registered {registered!r})"
+                )
+        steps_per_epoch = int(batch_semantics.get("optimizer_steps_per_epoch", 0))
+        expected_total = steps_per_epoch * REGISTERED_A3_SCHEDULER_HORIZON_EPOCHS
+        if steps_per_epoch <= 0 or int(
+            batch_semantics.get("total_optimizer_steps", 0)
+        ) != expected_total:
+            mismatches.append(
+                "batch.total_optimizer_steps does not use the registered "
+                "five-epoch scheduler horizon"
+            )
+    if mismatches:
+        raise ValueError(
+            "registered A3 worker contract mismatch: " + "; ".join(mismatches)
+        )
+
+
+def _assert_registered_a3_initial_environment(args):
+    """Check process-start values before seed setup can normalize them."""
+
+    if not bool(getattr(args, "contextual_risk_sidecar_only", False)):
+        return
+    expected = {
+        "CUDA_VISIBLE_DEVICES": "0,2,3,4",
+        "PYTHONHASHSEED": "0",
+    }
+    mismatches = [
+        f"{name}={os.environ.get(name)!r} (registered {value!r})"
+        for name, value in expected.items()
+        if os.environ.get(name) != value
+    ]
+    forbidden = (
+        "SMOKE_STEPS",
+        "RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER",
+        "A3_LAUNCHER_TEST_MODE",
+        "A3_BG_CONTROLLER",
+        "A3_TEST_OUTPUT_DIR",
+        "A3_TEST_OWNERSHIP_TIMEOUT_SECONDS",
+    )
+    mismatches.extend(
+        f"{name} is forbidden in a registered A3 worker"
+        for name in forbidden
+        if name in os.environ
+    )
+    if mismatches:
+        raise ValueError(
+            "registered A3 initial environment mismatch: "
+            + "; ".join(mismatches)
+        )
+
+
 def _a3_training_autocast_enabled(args):
     """A3's registered training precision is exact FP32."""
 
@@ -1124,6 +1360,25 @@ def _should_keep_clip_parameter_trainable(name, args):
     return False
 
 
+def _build_warmup_cosine_scheduler(
+    optimizer, *, warmup_proportion, total_steps
+):
+    """Build the registered scheduler with an immutable step horizon."""
+
+    warmup_frac = float(warmup_proportion)
+    t_total = max(1, int(total_steps))
+
+    def _warmup_cosine_lambda(step):
+        x = step / t_total
+        if warmup_frac > 0 and x < warmup_frac:
+            return x / warmup_frac
+        return 0.5 * (1.0 + math.cos(math.pi * x))
+
+    return torch.optim.lr_scheduler.LambdaLR(
+        optimizer, lr_lambda=_warmup_cosine_lambda
+    )
+
+
 def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, local_rank, coef_lr=1.0):
     if hasattr(model, "module"):
         model = model.module
@@ -1178,15 +1433,6 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
     # 学习率调度用 LambdaLR 复现 BertAdam 的 warmup_cosine 语义：
     #   x = step / t_total；x<warmup 线性升到 1，之后走 0.5*(1+cos(pi*x)) 衰减到 0。
     # 与 BertAdam 的差异：AdamW 做 bias correction（BertAdam 没做），bf16 训练下这是更稳的选择。
-    warmup_frac = args.warmup_proportion
-    t_total = max(1, num_train_optimization_steps)
-
-    def _warmup_cosine_lambda(step):
-        x = step / t_total
-        if warmup_frac > 0 and x < warmup_frac:
-            return x / warmup_frac
-        return 0.5 * (1.0 + math.cos(math.pi * x))
-
     # fused=True requires strict dtype uniformity across params; disable when
     # init_model is set since older ckpts (e.g. June bin.4) mix fp16/fp32.
     use_fused = not bool(getattr(args, "init_model", None))
@@ -1198,8 +1444,10 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
         weight_decay=weight_decay,
         fused=use_fused,
     )
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=_warmup_cosine_lambda
+    scheduler = _build_warmup_cosine_scheduler(
+        optimizer,
+        warmup_proportion=args.warmup_proportion,
+        total_steps=num_train_optimization_steps,
     )
 
     # DDP 三开关：
@@ -1246,6 +1494,10 @@ def _build_training_checkpoint_payload(
     scheduler,
     tr_loss,
     global_step,
+    scheduler_horizon_epochs=None,
+    scheduler_total_steps=None,
+    optimizer_steps_per_epoch=None,
+    rng_state_by_rank=None,
 ):
     payload = {
         "epoch": int(epoch),
@@ -1255,7 +1507,87 @@ def _build_training_checkpoint_payload(
     }
     if scheduler is not None:
         payload["scheduler_state_dict"] = scheduler.state_dict()
+    if scheduler_horizon_epochs is not None:
+        payload["scheduler_horizon_epochs"] = int(scheduler_horizon_epochs)
+    if scheduler_total_steps is not None:
+        payload["scheduler_total_steps"] = int(scheduler_total_steps)
+    if optimizer_steps_per_epoch is not None:
+        payload["optimizer_steps_per_epoch"] = int(optimizer_steps_per_epoch)
+    if rng_state_by_rank is not None:
+        payload["rng_state_by_rank"] = rng_state_by_rank
     return payload
+
+
+def _capture_local_rng_state():
+    """Capture every stochastic generator used by an A3 worker process."""
+
+    return {
+        "python": random.getstate(),
+        "numpy": np.random.get_state(),
+        "torch_cpu": torch.get_rng_state(),
+        "torch_cuda": torch.cuda.get_rng_state_all()
+        if torch.cuda.is_available()
+        else [],
+    }
+
+
+def _gather_distributed_rng_states():
+    """Collect rank-local RNG state on every rank at an epoch checkpoint."""
+
+    import torch.distributed as dist
+
+    rank = dist.get_rank() if dist.is_available() and dist.is_initialized() else 0
+    local = {"rank": int(rank), "state": _capture_local_rng_state()}
+    if not (dist.is_available() and dist.is_initialized()):
+        gathered = [local]
+    else:
+        gathered = [None] * dist.get_world_size()
+        dist.all_gather_object(gathered, local)
+    states = {}
+    for item in gathered:
+        if not isinstance(item, dict) or "rank" not in item or "state" not in item:
+            raise RuntimeError("distributed A3 RNG gather returned malformed state")
+        item_rank = int(item["rank"])
+        if item_rank in states:
+            raise RuntimeError("distributed A3 RNG gather returned duplicate rank")
+        states[item_rank] = item["state"]
+    if sorted(states) != list(range(len(gathered))):
+        raise RuntimeError("distributed A3 RNG gather omitted a global rank")
+    return states
+
+
+def _restore_rng_state_for_current_rank(rng_state_by_rank, *, rank=None):
+    """Restore the exact global-rank RNG state before stochastic training."""
+
+    import torch.distributed as dist
+
+    if rank is None:
+        rank = (
+            dist.get_rank()
+            if dist.is_available() and dist.is_initialized()
+            else 0
+        )
+    state = rng_state_by_rank.get(rank)
+    if state is None:
+        state = rng_state_by_rank.get(str(rank))
+    if not isinstance(state, dict):
+        raise ValueError(f"A3 RNG checkpoint is missing global rank {rank}")
+    required = {"python", "numpy", "torch_cpu", "torch_cuda"}
+    missing = sorted(required.difference(state))
+    if missing:
+        raise ValueError("A3 RNG checkpoint missing " + ", ".join(missing))
+    random.setstate(state["python"])
+    np.random.set_state(state["numpy"])
+    torch.set_rng_state(state["torch_cpu"].cpu())
+    cuda_states = state["torch_cuda"]
+    if torch.cuda.is_available():
+        if len(cuda_states) != torch.cuda.device_count():
+            raise ValueError(
+                "A3 CUDA RNG checkpoint device count differs from current worker"
+            )
+        torch.cuda.set_rng_state_all([item.cpu() for item in cuda_states])
+    elif cuda_states:
+        raise ValueError("A3 CUDA RNG checkpoint cannot restore without CUDA")
 
 
 def _restore_training_checkpoint(
@@ -1264,6 +1596,10 @@ def _restore_training_checkpoint(
     scheduler,
     *,
     require_complete,
+    expected_scheduler_horizon_epochs=None,
+    expected_scheduler_total_steps=None,
+    expected_optimizer_steps_per_epoch=None,
+    restore_rng=True,
 ):
     if require_complete:
         missing = [
@@ -1275,11 +1611,40 @@ def _restore_training_checkpoint(
             raise ValueError(
                 "sidecar resume checkpoint missing " + ", ".join(missing)
             )
+    registered_a3 = any(
+        value is not None
+        for value in (
+            expected_scheduler_horizon_epochs,
+            expected_scheduler_total_steps,
+            expected_optimizer_steps_per_epoch,
+        )
+    )
+    if registered_a3:
+        expected = {
+            "scheduler_horizon_epochs": expected_scheduler_horizon_epochs,
+            "scheduler_total_steps": expected_scheduler_total_steps,
+            "optimizer_steps_per_epoch": expected_optimizer_steps_per_epoch,
+        }
+        missing = sorted(
+            name for name, value in expected.items()
+            if value is not None and name not in checkpoint
+        )
+        if "rng_state_by_rank" not in checkpoint:
+            missing.append("rng_state_by_rank")
+        if missing:
+            raise ValueError(
+                "registered A3 resume checkpoint missing " + ", ".join(missing)
+            )
+        for name, value in expected.items():
+            if value is not None and int(checkpoint[name]) != int(value):
+                raise ValueError(f"registered A3 resume {name} mismatch")
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     if "scheduler_state_dict" in checkpoint:
         if scheduler is None:
             raise ValueError("cannot restore scheduler state without a scheduler")
         scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+    if registered_a3 and restore_rng:
+        _restore_rng_state_for_current_rank(checkpoint["rng_state_by_rank"])
     return int(checkpoint["epoch"]) + 1, int(checkpoint.get("global_step", 0))
 
 
@@ -1293,6 +1658,73 @@ def _optimizer_checkpoint_path(epoch, args, type_name=""):
     )
 
 
+def _checkpoint_publication_marker_path(epoch, args, type_name=""):
+    stem = "checkpoint_epoch.{}{}".format(
+        "" if type_name == "" else type_name + ".",
+        epoch,
+    )
+    return Path(args.output_dir) / f"{stem}.published.json"
+
+
+def _fsync_directory(path):
+    descriptor = os.open(str(Path(path)), os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _torch_save_staged(payload, final_path):
+    final = Path(final_path)
+    descriptor, staging_name = tempfile.mkstemp(
+        prefix=f".{final.name}.",
+        suffix=".staging",
+        dir=str(final.parent),
+    )
+    staging = Path(staging_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            torch.save(payload, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except BaseException:
+        # Retain staging as crash evidence; startup diagnoses it explicitly.
+        raise
+    return staging
+
+
+def _validate_checkpoint_publication(
+    marker_path, *, epoch, model_path, optimizer_path
+):
+    marker_file = Path(marker_path)
+    if not marker_file.is_file():
+        raise ValueError(
+            f"A3 checkpoint publication marker is missing: {marker_file}"
+        )
+    try:
+        marker = json.loads(marker_file.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("A3 checkpoint publication marker is unreadable") from exc
+    expected_model = Path(model_path).resolve()
+    expected_optimizer = Path(optimizer_path).resolve()
+    if int(marker.get("epoch", -1)) != int(epoch):
+        raise ValueError("A3 checkpoint publication marker epoch mismatch")
+    if Path(marker.get("model_path", "")).resolve() != expected_model:
+        raise ValueError("A3 checkpoint publication marker model path mismatch")
+    if Path(marker.get("optimizer_path", "")).resolve() != expected_optimizer:
+        raise ValueError("A3 checkpoint publication marker optimizer path mismatch")
+    try:
+        model_sha = file_sha256(expected_model)
+        optimizer_sha = file_sha256(expected_optimizer)
+    except OSError as exc:
+        raise ValueError("A3 published checkpoint pair is incomplete") from exc
+    if marker.get("model_sha256") != model_sha:
+        raise ValueError("A3 publication marker model SHA-256 mismatch")
+    if marker.get("optimizer_sha256") != optimizer_sha:
+        raise ValueError("A3 publication marker optimizer SHA-256 mismatch")
+    return marker
+
+
 def save_model(
     epoch,
     args,
@@ -1302,6 +1734,10 @@ def save_model(
     type_name="",
     scheduler=None,
     global_step=0,
+    scheduler_horizon_epochs=None,
+    scheduler_total_steps=None,
+    optimizer_steps_per_epoch=None,
+    rng_state_by_rank=None,
 ):
     # Only save the model it-self
     model_to_save = model.module if hasattr(model, "module") else model
@@ -1313,28 +1749,82 @@ def save_model(
         getattr(args, "csd_logvar_sidecar_only", False)
         or getattr(args, "contextual_risk_sidecar_only", False)
     )
+    a3_only = bool(getattr(args, "contextual_risk_sidecar_only", False))
+    marker_path = _checkpoint_publication_marker_path(epoch, args, type_name)
     if append_only_sidecar:
         existing = [
             path
-            for path in (output_model_file, optimizer_state_file)
+            for path in (output_model_file, optimizer_state_file, marker_path)
             if Path(path).exists()
         ]
         if existing:
             raise FileExistsError(
                 "sidecar append-only save refuses existing checkpoint(s): "
-                + ", ".join(existing)
+                + ", ".join(str(path) for path in existing)
             )
-    torch.save(model_to_save.state_dict(), output_model_file)
-    torch.save(
-        _build_training_checkpoint_payload(
-            epoch=epoch,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            tr_loss=tr_loss,
-            global_step=global_step,
-        ),
-        optimizer_state_file,
+    training_payload = _build_training_checkpoint_payload(
+        epoch=epoch,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        tr_loss=tr_loss,
+        global_step=global_step,
+        scheduler_horizon_epochs=scheduler_horizon_epochs,
+        scheduler_total_steps=scheduler_total_steps,
+        optimizer_steps_per_epoch=optimizer_steps_per_epoch,
+        rng_state_by_rank=rng_state_by_rank,
     )
+    if a3_only:
+        missing_registration = [
+            name
+            for name, value in (
+                ("scheduler_horizon_epochs", scheduler_horizon_epochs),
+                ("scheduler_total_steps", scheduler_total_steps),
+                ("optimizer_steps_per_epoch", optimizer_steps_per_epoch),
+                ("rng_state_by_rank", rng_state_by_rank),
+            )
+            if value is None
+        ]
+        if missing_registration:
+            raise ValueError(
+                "registered A3 checkpoint missing "
+                + ", ".join(missing_registration)
+            )
+        output_model_path = Path(output_model_file)
+        optimizer_state_path = Path(optimizer_state_file)
+        staging = [
+            *output_model_path.parent.glob(f".{output_model_path.name}.*.staging"),
+            *optimizer_state_path.parent.glob(
+                f".{optimizer_state_path.name}.*.staging"
+            ),
+        ]
+        if staging:
+            raise FileExistsError(
+                "A3 incomplete staged checkpoint retained for diagnosis: "
+                + ", ".join(str(path) for path in sorted(staging))
+            )
+        model_staging = _torch_save_staged(
+            model_to_save.state_dict(), output_model_path
+        )
+        optimizer_staging = _torch_save_staged(
+            training_payload, optimizer_state_path
+        )
+        os.replace(model_staging, output_model_path)
+        os.replace(optimizer_staging, optimizer_state_path)
+        _fsync_directory(output_model_path.parent)
+        atomic_write_json(
+            marker_path,
+            {
+                "epoch": int(epoch),
+                "model_path": str(output_model_path.resolve()),
+                "model_sha256": file_sha256(output_model_path),
+                "optimizer_path": str(optimizer_state_path.resolve()),
+                "optimizer_sha256": file_sha256(optimizer_state_path),
+            },
+        )
+        _fsync_directory(output_model_path.parent)
+    else:
+        torch.save(model_to_save.state_dict(), output_model_file)
+        torch.save(training_payload, optimizer_state_file)
     logger.info("Model saved to %s", output_model_file)
     logger.info("Optimizer saved to %s", optimizer_state_file)
     return output_model_file
@@ -3639,6 +4129,67 @@ def _regenerate_contextual_risk_baseline(
     }
 
 
+def _validate_a3_candidate_publication(candidate, *, output_dir):
+    """Bind a persisted A3 candidate to its committed checkpoint pair."""
+
+    marker_value = candidate.get("publication_marker")
+    marker_sha = candidate.get("publication_marker_sha256")
+    if not isinstance(marker_value, str) or not marker_value or not marker_sha:
+        raise ValueError("A3 candidate publication marker evidence is missing")
+    expected = _checkpoint_publication_marker_path(
+        int(candidate["epoch"]), argparse.Namespace(output_dir=str(output_dir))
+    ).resolve()
+    marker_path = Path(marker_value).resolve()
+    if marker_path != expected:
+        raise ValueError("A3 candidate publication marker path mismatch")
+    if file_sha256(marker_path) != marker_sha:
+        raise ValueError("A3 candidate publication marker SHA-256 mismatch")
+    return _validate_checkpoint_publication(
+        marker_path,
+        epoch=int(candidate["epoch"]),
+        model_path=candidate["path"],
+        optimizer_path=candidate["optimizer_path"],
+    )
+
+
+def _validate_a3_publication_directory(output_dir):
+    """Reject retained staging or an uncommitted checkpoint pair at startup."""
+
+    output_path = Path(output_dir)
+    staging = sorted(output_path.glob(".pytorch_*.staging"))
+    if staging:
+        raise ValueError(
+            "A3 incomplete staged checkpoint retained for diagnosis: "
+            + ", ".join(str(path) for path in staging)
+        )
+    epochs = set()
+    for pattern, prefix in (
+        ("pytorch_model.bin.*", "pytorch_model.bin."),
+        ("pytorch_opt.bin.*", "pytorch_opt.bin."),
+    ):
+        for path in output_path.glob(pattern):
+            suffix = path.name.removeprefix(prefix)
+            if suffix.isdigit():
+                epochs.add(int(suffix))
+    for epoch in sorted(epochs):
+        model_path = output_path / f"pytorch_model.bin.{epoch}"
+        optimizer_path = output_path / f"pytorch_opt.bin.{epoch}"
+        marker_path = _checkpoint_publication_marker_path(
+            epoch, argparse.Namespace(output_dir=str(output_path))
+        )
+        try:
+            _validate_checkpoint_publication(
+                marker_path,
+                epoch=epoch,
+                model_path=model_path,
+                optimizer_path=optimizer_path,
+            )
+        except ValueError as exc:
+            raise ValueError(
+                f"A3 incomplete unpublished checkpoint pair at epoch {epoch}: {exc}"
+            ) from exc
+
+
 def _initialize_contextual_risk_protocol(
     args,
     model,
@@ -3650,6 +4201,7 @@ def _initialize_contextual_risk_protocol(
     """Register a fresh canonical A1 baseline or validate one A3 continuation."""
 
     output_dir = Path(args.output_dir)
+    _validate_a3_publication_directory(output_dir)
     baseline_path = output_dir / "a3_paired_baseline.json"
     candidate_path = output_dir / "contextual_risk_candidates.json"
     selection_path = output_dir / "best_contextual_risk_checkpoint.json"
@@ -3725,6 +4277,10 @@ def _initialize_contextual_risk_protocol(
         validate_candidate_artifacts(
             candidates, output_dir=output_dir, method_name="A3"
         )
+        for persisted_candidate in candidates:
+            _validate_a3_candidate_publication(
+                persisted_candidate, output_dir=output_dir
+            )
         candidates = [
             _reaudit_contextual_risk_candidate(
                 candidate,
@@ -3844,6 +4400,16 @@ def _record_contextual_risk_selection(
 ):
     """Audit and append one A3 validation candidate, then persist its winner."""
 
+    output_dir = Path(selection_path).parent
+    marker_path = _checkpoint_publication_marker_path(
+        epoch, argparse.Namespace(output_dir=str(output_dir))
+    )
+    _validate_checkpoint_publication(
+        marker_path,
+        epoch=epoch,
+        model_path=checkpoint_path,
+        optimizer_path=optimizer_checkpoint_path,
+    )
     candidate = _build_contextual_risk_candidate(
         epoch=epoch,
         checkpoint_path=checkpoint_path,
@@ -3855,6 +4421,8 @@ def _record_contextual_risk_selection(
         expected_retrieval_config=expected_retrieval_config,
         expected_head_configs=expected_head_configs,
     )
+    candidate["publication_marker"] = str(marker_path.resolve())
+    candidate["publication_marker_sha256"] = file_sha256(marker_path)
     candidates = append_candidate_atomic(candidate_path, candidate)
     validate_candidate_artifacts(
         candidates,
@@ -3873,6 +4441,12 @@ def _record_contextual_risk_selection(
         selection_path,
         _contextual_risk_selection_payload(candidates, winner),
     )
+    if candidate["non_a3_mismatches"] or not candidate["paired_invariance"][
+        "passed"
+    ]:
+        raise RuntimeError(
+            "terminal A3 invariance violation recorded; training is aborted"
+        )
     return winner
 
 
@@ -4310,6 +4884,14 @@ def main():
     import torch.distributed as dist
 
     args = get_args()
+    initial_git_state = collect_git_state(Path(__file__).resolve().parent)
+    if bool(getattr(args, "contextual_risk_sidecar_only", False)) and bool(
+        initial_git_state.get("dirty", False)
+    ):
+        raise ValueError(
+            "registered A3 requires clean tracked source state: "
+            + ", ".join(initial_git_state.get("modified_paths", []))
+        )
 
     # Validate the committed trusted-v1 manifest against the canonical source
     # files before constructing a tokenizer, model, or dataloader.  Task10 will
@@ -4336,9 +4918,11 @@ def main():
         dist.init_process_group(backend="nccl", timeout=datetime.timedelta(minutes=120))
         pass  # process group initialized
 
+    _assert_registered_a3_initial_environment(args)
     args = set_seed_logger(args)
     device, n_gpu = init_device(args, args.local_rank)
     args.pin_memory = torch.cuda.is_available()
+    _assert_registered_a3_contract(args)
 
     tokenizer = ClipTokenizer()
 
@@ -4375,37 +4959,42 @@ def main():
     batch_semantics = None
     if args.do_train:
         train_dataloader = train_bundle[0]
+        scheduler_horizon_epochs = (
+            REGISTERED_A3_SCHEDULER_HORIZON_EPOCHS
+            if bool(getattr(args, "contextual_risk_sidecar_only", False))
+            else args.epochs
+        )
         batch_semantics = compute_batch_semantics(
             requested_effective_batch=args.requested_effective_batch_size,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
             world_size=args.world_size,
             dataloader_steps=len(train_dataloader),
-            epochs=args.epochs,
+            epochs=scheduler_horizon_epochs,
         )
+        _assert_registered_a3_contract(args, batch_semantics)
+        git_state = initial_git_state
         tracking_payload = build_experiment_manifest(
             args,
             split_summary=split_summary,
             batch_semantics=batch_semantics,
-            git_state=collect_git_state(Path(__file__).resolve().parent),
+            git_state=git_state,
         )
-        if is_global_rank_zero(args):
-            manifest_path = Path(args.output_dir) / "experiment_manifest.json"
-            a3_only = bool(
-                getattr(args, "contextual_risk_sidecar_only", False)
+        manifest_path = Path(args.output_dir) / "experiment_manifest.json"
+        a3_only = bool(getattr(args, "contextual_risk_sidecar_only", False))
+        if a3_only and args.resume_model:
+            if not manifest_path.exists():
+                raise FileNotFoundError(
+                    "A3 continuation requires the original experiment manifest"
+                )
+            validate_contextual_risk_resume_manifest(
+                json.loads(manifest_path.read_text()), tracking_payload
             )
-            if a3_only and args.resume_model:
-                if not manifest_path.exists():
-                    raise FileNotFoundError(
-                        "A3 continuation requires the original experiment manifest"
-                    )
-                validate_contextual_risk_resume_manifest(
-                    json.loads(manifest_path.read_text()), tracking_payload
-                )
-            elif a3_only and manifest_path.exists():
-                raise FileExistsError(
-                    "fresh A3 run refuses an existing experiment manifest"
-                )
-            else:
+        elif a3_only and manifest_path.exists():
+            raise FileExistsError(
+                "fresh A3 run refuses an existing experiment manifest"
+            )
+        if is_global_rank_zero(args):
+            if not (a3_only and args.resume_model):
                 atomic_write_json(manifest_path, tracking_payload)
             _write_training_args_json(args, Path(args.output_dir) / "training_args.json")
             for key, value in batch_semantics.items():
@@ -4511,6 +5100,21 @@ def main():
                 optimizer,
                 scheduler,
                 require_complete=a2_only or a3_only,
+                expected_scheduler_horizon_epochs=(
+                    REGISTERED_A3_SCHEDULER_HORIZON_EPOCHS
+                    if a3_only
+                    else None
+                ),
+                expected_scheduler_total_steps=(
+                    batch_semantics["total_optimizer_steps"]
+                    if a3_only
+                    else None
+                ),
+                expected_optimizer_steps_per_epoch=(
+                    batch_semantics["optimizer_steps_per_epoch"]
+                    if a3_only
+                    else None
+                ),
             )
 
         if args.local_rank == 0:
@@ -4532,6 +5136,11 @@ def main():
                 global_step,
                 local_rank=args.local_rank,
             )
+
+            checkpoint_rng_states = (
+                _gather_distributed_rng_states() if a3_only else None
+            )
+            contextual_terminal_error = None
 
             if lifecycle_owner:
                 if torch.cuda.is_available():
@@ -4555,6 +5164,22 @@ def main():
                     type_name="",
                     scheduler=scheduler,
                     global_step=global_step,
+                    scheduler_horizon_epochs=(
+                        REGISTERED_A3_SCHEDULER_HORIZON_EPOCHS
+                        if a3_only
+                        else None
+                    ),
+                    scheduler_total_steps=(
+                        batch_semantics["total_optimizer_steps"]
+                        if a3_only
+                        else None
+                    ),
+                    optimizer_steps_per_epoch=(
+                        batch_semantics["optimizer_steps_per_epoch"]
+                        if a3_only
+                        else None
+                    ),
+                    rng_state_by_rank=checkpoint_rng_states,
                 )
                 output_optimizer_file = _optimizer_checkpoint_path(epoch, args)
                 if bool(getattr(args, "aleatoric_crf_training", False)):
@@ -4621,33 +5246,39 @@ def main():
                             winner["path"],
                         )
                 elif a3_only:
-                    winner = _record_contextual_risk_selection(
-                        epoch=epoch,
-                        checkpoint_path=output_model_file,
-                        optimizer_checkpoint_path=output_optimizer_file,
-                        validation_metrics=validation_metrics,
-                        paired_baseline=contextual_protocol["paired_baseline"],
-                        reference_checkpoint=contextual_protocol[
-                            "reference_checkpoint"
-                        ],
-                        candidate_path=contextual_protocol["candidate_path"],
-                        selection_path=contextual_protocol["selection_path"],
-                        bootstrap_samples=args.contextual_risk_bootstrap_samples,
-                        expected_retrieval_config=_registered_retrieval_config(
-                            np.asarray(
-                                validation_metrics["contextual_risk_evidence"][
-                                    "positive_mask"
-                                ],
-                                dtype=bool,
+                    try:
+                        winner = _record_contextual_risk_selection(
+                            epoch=epoch,
+                            checkpoint_path=output_model_file,
+                            optimizer_checkpoint_path=output_optimizer_file,
+                            validation_metrics=validation_metrics,
+                            paired_baseline=contextual_protocol["paired_baseline"],
+                            reference_checkpoint=contextual_protocol[
+                                "reference_checkpoint"
+                            ],
+                            candidate_path=contextual_protocol["candidate_path"],
+                            selection_path=contextual_protocol["selection_path"],
+                            bootstrap_samples=args.contextual_risk_bootstrap_samples,
+                            expected_retrieval_config=_registered_retrieval_config(
+                                np.asarray(
+                                    validation_metrics["contextual_risk_evidence"][
+                                        "positive_mask"
+                                    ],
+                                    dtype=bool,
+                                ),
+                                dsl=bool(args.DSL),
+                                dsl_temperature=float(args.dsl_temperature),
                             ),
-                            dsl=bool(args.DSL),
-                            dsl_temperature=float(args.dsl_temperature),
-                        ),
-                        expected_head_configs=_registered_a3_head_configs(
-                            args,
-                            validation_metrics["contextual_risk_evidence"],
-                        ),
-                    )
+                            expected_head_configs=_registered_a3_head_configs(
+                                args,
+                                validation_metrics["contextual_risk_evidence"],
+                            ),
+                        )
+                    except RuntimeError as exc:
+                        if "terminal A3 invariance violation" not in str(exc):
+                            raise
+                        winner = None
+                        contextual_terminal_error = str(exc)
                     contextual_protocol["candidates"] = json.loads(
                         contextual_protocol["candidate_path"].read_text()
                     )
@@ -4695,12 +5326,21 @@ def main():
                     )
                 logger.info("=" * 60)
 
+            if a3_only and dist.is_available() and dist.is_initialized():
+                terminal_payload = [contextual_terminal_error]
+                dist.broadcast_object_list(terminal_payload, src=0)
+                contextual_terminal_error = terminal_payload[0]
+            if contextual_terminal_error is not None:
+                raise RuntimeError(contextual_terminal_error)
+
             # Barrier so ranks 1..N-1 don't get too far ahead of rank 0's eval
             # into the next epoch's first forward — the CRF-dev evaluator adds
             # ~30-60s of rank-0-only work that would otherwise sit inside
             # allreduce wait time.
             if dist.is_available() and dist.is_initialized():
                 dist.barrier()
+            if a3_only:
+                _restore_rng_state_for_current_rank(checkpoint_rng_states)
 
         if lifecycle_owner:
             if a2_only:

@@ -137,6 +137,47 @@ def validate_candidate_artifacts(
             raise ValueError(
                 f"persisted {method_name} candidate optimizer checkpoint SHA-256 mismatch"
             )
+        publication_fields = {
+            "publication_marker",
+            "publication_marker_sha256",
+        }
+        if publication_fields.intersection(candidate):
+            missing_publication = sorted(publication_fields.difference(candidate))
+            if missing_publication:
+                raise ValueError(
+                    f"recorded {method_name} candidate missing publication fields: "
+                    + ", ".join(missing_publication)
+                )
+            marker_path = Path(candidate["publication_marker"]).resolve()
+            if marker_path.parent != output_path:
+                raise ValueError(
+                    f"recorded {method_name} publication marker is outside "
+                    "the output directory"
+                )
+            try:
+                marker_sha = file_sha256(marker_path)
+                marker = json.loads(marker_path.read_text())
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(
+                    f"persisted {method_name} publication marker is unavailable"
+                ) from exc
+            if marker_sha != candidate["publication_marker_sha256"]:
+                raise ValueError(
+                    f"persisted {method_name} publication marker SHA-256 mismatch"
+                )
+            if (
+                int(marker.get("epoch", -1)) != epoch
+                or Path(marker.get("model_path", "")).resolve() != model_path
+                or Path(marker.get("optimizer_path", "")).resolve()
+                != optimizer_path
+                or marker.get("model_sha256") != candidate["model_sha256"]
+                or marker.get("optimizer_sha256")
+                != candidate["optimizer_sha256"]
+            ):
+                raise ValueError(
+                    f"persisted {method_name} publication marker does not "
+                    "commit the recorded checkpoint pair"
+                )
     return list(candidates)
 
 

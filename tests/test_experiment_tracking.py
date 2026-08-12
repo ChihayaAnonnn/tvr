@@ -229,6 +229,8 @@ def test_experiment_manifest_records_complete_contextual_risk_contract(tmp_path)
             "world_size": 4,
             "requested_effective_batch": 256,
             "optimizer_effective_batch": 256,
+            "optimizer_steps_per_epoch": 10,
+            "total_optimizer_steps": 50,
         },
         git_state={"commit": "abc"},
     )
@@ -249,6 +251,9 @@ def test_experiment_manifest_records_complete_contextual_risk_contract(tmp_path)
     assert a3["training"] == {
         "seed": 0, "world_size": 4, "precision": "fp32",
         "effective_batch": 256,
+        "scheduler_horizon_epochs": 5,
+        "optimizer_steps_per_epoch": 10,
+        "scheduler_total_optimizer_steps": 50,
     }
     assert a3["thresholds"] == {
         "directional_rho_min": 0.20,

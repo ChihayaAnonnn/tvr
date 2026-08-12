@@ -26,6 +26,7 @@ sleep 0.2
     controller.write_text(
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n"
+        "exec >/dev/null 2>&1\n"
         "printf '%s\\n' \"$$\" >> \"${A3_TEST_CONTROLLER_MARKER}\"\n"
         "printf '%s\\n' \"$$\" > \"${TRAIN_PID_FILE}\"\n"
         ": > \"${A3_TEST_HANDOFF_MARKER}\"\n"
@@ -63,6 +64,7 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
         "--use_retrieval_risk_sidecar",
         "--use_contextual_risk_sidecar",
         "--contextual_risk_sidecar_only",
+        "--registered_contextual_risk_a3",
         "--contextual_risk_topk 16",
         "--contextual_risk_projection_dim 128",
         "--contextual_risk_hidden_dim 128",
@@ -76,17 +78,22 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
         assert flag in text
 
     assert 'CLIP_LAYER_NORM_PRECISION=fp32' in text
+    assert 'PYTHONHASHSEED=0' in text
     assert 'EXPERIMENT_PROFILE=hygiene' in text
     assert 'TRAIN_BATCH_SIZE=256' in text
     assert 'TRAIN_GRADIENT_ACCUMULATION_STEPS=1' in text
-    assert 'CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,2,3,4}"' in text
+    assert 'CUDA_VISIBLE_DEVICES="0,2,3,4"' in text
     assert 'NPROC=4' in text
     assert 'RUN_DATE="$(date +%Y%m%d)"' in text
     assert 'RUN_TIME="$(date +%H%M%S)"' in text
+    assert 'git -C "${ROOT_DIR}" diff --quiet --' in text
+    assert 'git -C "${ROOT_DIR}" diff --cached --quiet --' in text
 
 
-@pytest.mark.parametrize("override", ["--seed", "--contextual_risk_topk=8"])
-def test_registered_a3_launcher_rejects_bound_trailing_overrides_before_controller(
+@pytest.mark.parametrize(
+    "override", ["--seed", "--contextual_risk_topk=8", "--n_display=1", "note"]
+)
+def test_registered_a3_launcher_rejects_all_trailing_arguments_before_controller(
     tmp_path, override
 ):
     controller, marker, _ = _fake_controller(tmp_path)
@@ -103,7 +110,7 @@ def test_registered_a3_launcher_rejects_bound_trailing_overrides_before_controll
     )
 
     assert result.returncode == 2
-    assert "registered A3 option" in result.stderr
+    assert "does not accept trailing arguments" in result.stderr
     assert not marker.exists()
 
 
@@ -217,6 +224,12 @@ def test_registered_a3_launcher_retains_reservation_when_worker_exits_before_out
         ("RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER", "1"),
         ("TVR_PYTHON", "/bin/false"),
         ("TVR_TORCHRUN", "/bin/false"),
+        ("DATA_PATH", "/tmp/not-msrvtt"),
+        ("TRAIN_NUM_WORKERS", "1"),
+        ("TRAIN_PREFETCH_FACTOR", "1"),
+        ("MASTER_PORT", "29999"),
+        ("SMOKE_STEPS", "1"),
+        ("PYTHONHASHSEED", "9"),
     ],
 )
 def test_registered_a3_launcher_rejects_inherited_controller_execution_overrides(
@@ -276,3 +289,64 @@ def test_registered_a3_launcher_omits_other_sidecar_only_modes():
 def test_registered_a3_launcher_is_executable_and_parses():
     assert SCRIPT.is_file() and os.access(SCRIPT, os.X_OK)
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
+
+
+def test_registered_a3_launcher_retains_reservation_on_ownership_timeout(tmp_path):
+    controller, marker, release = _fake_controller(
+        tmp_path, wait_for_output_release=True
+    )
+    output_dir = tmp_path / "timeout-output"
+    env = _launcher_env(controller, marker, output_dir=output_dir)
+    env["A3_TEST_CONTROLLER_RELEASE"] = str(release)
+    env["A3_TEST_OWNERSHIP_TIMEOUT_SECONDS"] = "1"
+
+    try:
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            text=True,
+            capture_output=True,
+            env=env,
+            check=False,
+            timeout=5,
+        )
+    finally:
+        release.touch()
+
+    assert result.returncode == 2
+    assert "ownership timed out" in result.stderr
+    assert Path(f"{output_dir}.reserve").is_dir()
+
+
+def test_registered_a3_launcher_signal_retains_reservation_after_worker_handoff(
+    tmp_path,
+):
+    controller, marker, release = _fake_controller(
+        tmp_path, wait_for_output_release=True
+    )
+    output_dir = tmp_path / "signal-output"
+    env = _launcher_env(controller, marker, output_dir=output_dir)
+    env["A3_TEST_CONTROLLER_RELEASE"] = str(release)
+    handoff = Path(env["A3_TEST_HANDOFF_MARKER"])
+    process = subprocess.Popen(
+        ["bash", str(SCRIPT)],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while not handoff.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert handoff.exists()
+        process.terminate()
+        _, stderr = process.communicate(timeout=5)
+    finally:
+        release.touch()
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+
+    assert process.returncode != 0
+    assert "retaining reservation" in stderr
+    assert Path(f"{output_dir}.reserve").is_dir()
