@@ -437,6 +437,67 @@ def test_regenerated_canonical_baseline_comparison_is_exact():
         )
 
 
+def test_registered_training_and_baseline_reload_share_exact_fp32_model_boundary(
+    tmp_path, monkeypatch
+):
+    class NestedHalfModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.encoder = torch.nn.ModuleDict({
+                "projection": torch.nn.Linear(2, 2, bias=False).half()
+            })
+            self.encoder.register_buffer(
+                "running_scale", torch.ones(2, dtype=torch.bfloat16)
+            )
+
+        @classmethod
+        def from_pretrained(cls, *_args, **_kwargs):
+            return cls()
+
+    checkpoint = tmp_path / "canonical-a1.pt"
+    torch.save({}, checkpoint)
+    args = SimpleNamespace(
+        init_model=str(checkpoint),
+        cache_dir=None,
+        use_uatvr_full=False,
+        cross_model="cross-base",
+        contextual_risk_sidecar_only=True,
+        local_rank=1,
+    )
+    monkeypatch.setattr(
+        main_task_retrieval, "_import_uatvr", lambda _full: NestedHalfModel
+    )
+    training_model = main_task_retrieval.init_model(
+        args, torch.device("cpu"), 1, 1
+    )
+
+    observed = []
+
+    def fake_eval(_args, model, *_rest, **_kwargs):
+        parameter_dtypes = {value.dtype for value in model.parameters()}
+        buffer_dtypes = {value.dtype for value in model.buffers()}
+        observed.append((parameter_dtypes, buffer_dtypes))
+        output = model.encoder["projection"](
+            torch.ones(1, 2, dtype=torch.float32)
+        )
+        output = output * model.encoder.running_scale
+        assert output.dtype == torch.float32
+        return {"paired_digest": {}, "contextual_risk_evidence": {}}
+
+    monkeypatch.setattr(main_task_retrieval, "eval_epoch", fake_eval)
+    main_task_retrieval._regenerate_contextual_risk_baseline(
+        args, object(), torch.device("cpu"), 1, str(checkpoint)
+    )
+
+    assert {value.dtype for value in training_model.parameters()} == {
+        torch.float32
+    }
+    assert {value.dtype for value in training_model.buffers()} == {
+        torch.float32
+    }
+    assert observed == [({torch.float32}, {torch.float32})]
+
+
 def test_typed_evidence_rejects_dtype_metadata_conversion_attack():
     evidence, _ = _complete_evidence()
     attacked = copy.deepcopy(evidence)

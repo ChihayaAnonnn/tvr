@@ -856,6 +856,35 @@ def init_device(args, local_rank):
     return device, n_gpu
 
 
+def _normalize_registered_a3_model_fp32(model):
+    """Normalize and verify the complete registered A3 model in exact FP32."""
+
+    low_precision = (torch.float16, torch.bfloat16)
+    with torch.no_grad():
+        for parameter in model.parameters():
+            if parameter.dtype in low_precision:
+                parameter.data = parameter.data.to(torch.float32)
+        for buffer in model.buffers():
+            if buffer.dtype in low_precision:
+                buffer.data = buffer.data.to(torch.float32)
+    offenders = [
+        f"parameter:{name}={parameter.dtype}"
+        for name, parameter in model.named_parameters()
+        if parameter.dtype in low_precision
+    ]
+    offenders.extend(
+        f"buffer:{name}={buffer.dtype}"
+        for name, buffer in model.named_buffers()
+        if buffer.dtype in low_precision
+    )
+    if offenders:
+        raise TypeError(
+            "registered A3 exact-FP32 model retains low-precision state: "
+            + ", ".join(offenders)
+        )
+    return model
+
+
 def init_model(args, device, n_gpu, local_rank):
     if args.init_model:
         model_state_dict = torch.load(args.init_model, map_location="cpu")
@@ -872,11 +901,14 @@ def init_model(args, device, n_gpu, local_rank):
 
     UATVR_cls = _import_uatvr(getattr(args, "use_uatvr_full", False))
     model = UATVR_cls.from_pretrained(args.cross_model, cache_dir=cache_dir, state_dict=model_state_dict, task_config=args)
-    # Ensure all trainable params are fp32 so fused AdamW gets uniform dtype.
-    # (CLIP's convert_weights may leave visual conv/proj weights in fp16.)
-    for p in model.parameters():
-        if p.dtype in (torch.float16, torch.bfloat16):
-            p.data = p.data.to(torch.float32)
+    if bool(getattr(args, "contextual_risk_sidecar_only", False)):
+        _normalize_registered_a3_model_fp32(model)
+    else:
+        # Preserve the historical optimizer compatibility normalization outside
+        # registered A3. (CLIP conversion can leave parameters in FP16.)
+        for p in model.parameters():
+            if p.dtype in (torch.float16, torch.bfloat16):
+                p.data = p.data.to(torch.float32)
     model.to(device)
 
     return model
@@ -1308,7 +1340,9 @@ def save_model(
     return output_model_file
 
 
-def load_model(epoch, args, n_gpu, device, model_file=None):  # for evaluation and test
+def load_model(
+    epoch, args, n_gpu, device, model_file=None, *, registered_a3_fp32=False
+):  # for evaluation and test
     if model_file is None or len(model_file) == 0:
         model_file = os.path.join(args.output_dir, "pytorch_model.bin.{}".format(epoch))
     if os.path.exists(model_file):
@@ -1321,6 +1355,8 @@ def load_model(epoch, args, n_gpu, device, model_file=None):  # for evaluation a
         model = UATVR_cls.from_pretrained(
             args.cross_model, cache_dir=cache_dir, state_dict=model_state_dict, task_config=args
         )
+        if registered_a3_fp32:
+            _normalize_registered_a3_model_fp32(model)
         model.to(device)
         if args.local_rank == 0:
             logger.info("Model loaded from %s", model_file)
@@ -3583,6 +3619,7 @@ def _regenerate_contextual_risk_baseline(
         n_gpu,
         device,
         model_file=reference_checkpoint,
+        registered_a3_fp32=True,
     )
     if canonical_model is None:
         raise FileNotFoundError("canonical A1 checkpoint could not be loaded")
