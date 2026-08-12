@@ -50,11 +50,27 @@ Selection used only valid validation candidates and maximized `(min directional 
 | 3 | no | no | -0.135875 | 0.030122 | 0.413804 | 0.555363 | fail |
 | 4 | no | no | -0.134939 | -0.027107 | 0.414401 | 0.451429 | fail |
 
-For the selected checkpoint, validation acceptance checks were: rho **fail**, AUROC **fail**, monotone selective accuracy **fail**, non-zero variance **pass**, clamp rate **pass**. Finiteness, clamp validity, paired invariance, and the empty non-A2 mismatch audit all passed. Overall A2-CG acceptance was **false**.
+The selected checkpoint was re-evaluated read-only on trusted-v1 validation with its registered four-GPU configuration and the FP32 A2 path. This recovered the complete validation payload:
 
-### One-shot JSFUSION test (descriptive only)
+| Direction | Intrinsic rho | Intrinsic AUROC (95% CI) | AURC | Accuracy @ 25/50/75/100% coverage |
+|---|---:|---:|---:|---|
+| T2V | -0.1472380481 | 0.4063919497 (0.3938617656–0.4186213335) | 0.2945737828 | 0.6788/0.7168/0.7312/0.7588 |
+| V2T | 0.0613642730 | 0.6123045332 (0.4672918970–0.7360882957) | 0.0176523264 | 0.9920/0.9840/0.9786666667/0.9740 |
 
-These test results describe the validation-selected epoch-index 2 checkpoint; they did not affect continuation, selection, or acceptance.
+| Validation quantity | Min | Max | Mean | Std | Clamp low/high |
+|---|---:|---:|---:|---:|---:|
+| Text logvar | -8.274755478 | -8.204441071 | -8.253947714 | 0.009513806 | 0/0 |
+| Text variance | 0.0002548704 | 0.0002734365 | 0.0002602410 | 0.0000024859 | 0/0 |
+| Video logvar | -8.417714119 | -8.417625427 | -8.417667713 | 0.0000152383 | 0/0 |
+| Video variance | 0.0002209191 | 0.0002209387 | 0.0002209293 | 0.00000000337 | 0/0 |
+| CSD mean distance | 1.873531943 | 2.208549991 | 2.068645132 | 0.041071780 | n/a |
+| CSD variance distance | 0.243604196 | 0.253120094 | 0.246359218 | 0.001272798 | n/a |
+
+Validation acceptance checks were: rho **fail** (both directions below 0.20), AUROC **fail** (T2V below 0.5), monotone selective accuracy **fail** (T2V retained accuracy worsened when high-uncertainty queries were removed), non-zero variance **pass**, and clamp rate **pass**. Finiteness, clamp validity, paired invariance, and the empty non-A2 mismatch audit all passed. Overall A2-CG acceptance was **false**. Candidates 3 and 4 were correctly invalid: all four paired-digest comparisons (raw WTI, retrieval, A1 risk, and A1 vacuity) were false, although their numeric metrics were finite, clamp checks passed, and their non-A2 state-dict mismatch lists were empty.
+
+### JSFUSION test and protocol deviation (descriptive only)
+
+JSFUSION was evaluated after the initial three epochs and evaluated again after continuation. Both evaluations used the same validation-selected epoch-index 2 checkpoint and produced the metrics below. Neither evaluation influenced continuation, selection, or acceptance. This duplicate evaluation is a protocol deviation that weakens strict one-shot test hygiene, but it does not alter the validation-only A2-CG failure conclusion.
 
 | Direction | Retrieval R@1/R@5/R@10 | Intrinsic rho | Intrinsic AUROC (95% CI) | AURC | Accuracy @ 25/50/75/100% coverage |
 |---|---|---:|---:|---:|---|
