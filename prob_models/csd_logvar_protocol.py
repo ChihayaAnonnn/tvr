@@ -34,6 +34,70 @@ def file_sha256(path) -> str:
     return digest.hexdigest()
 
 
+_CANDIDATE_ARTIFACT_FIELDS = {
+    "epoch",
+    "path",
+    "model_sha256",
+    "optimizer_path",
+    "optimizer_sha256",
+}
+
+
+def validate_csd_logvar_candidate_artifacts(candidates, *, output_dir):
+    """Verify every persisted model/optimizer pair without changing evidence."""
+
+    output_path = Path(output_dir).resolve()
+    seen_epochs = set()
+    seen_models = set()
+    seen_optimizers = set()
+    for candidate in candidates:
+        missing = sorted(_CANDIDATE_ARTIFACT_FIELDS.difference(candidate))
+        if missing:
+            raise ValueError(
+                "recorded A2 candidate missing lineage fields: "
+                + ", ".join(missing)
+            )
+        epoch = int(candidate["epoch"])
+        model_path = Path(candidate["path"]).resolve()
+        optimizer_path = Path(candidate["optimizer_path"]).resolve()
+        if epoch in seen_epochs:
+            raise ValueError("recorded A2 candidate epochs must be unique")
+        if model_path in seen_models or optimizer_path in seen_optimizers:
+            raise ValueError("recorded A2 candidate artifact paths must be unique")
+        seen_epochs.add(epoch)
+        seen_models.add(model_path)
+        seen_optimizers.add(optimizer_path)
+        if model_path.parent != output_path:
+            raise ValueError(
+                "recorded model checkpoint is outside the output directory"
+            )
+        if optimizer_path.parent != output_path:
+            raise ValueError(
+                "recorded optimizer checkpoint is outside the output directory"
+            )
+        try:
+            current_model_sha256 = file_sha256(model_path)
+        except OSError as exc:
+            raise ValueError(
+                "persisted A2 candidate model checkpoint is unavailable"
+            ) from exc
+        if current_model_sha256 != candidate["model_sha256"]:
+            raise ValueError(
+                "persisted A2 candidate model checkpoint SHA-256 mismatch"
+            )
+        try:
+            current_optimizer_sha256 = file_sha256(optimizer_path)
+        except OSError as exc:
+            raise ValueError(
+                "persisted A2 candidate optimizer checkpoint is unavailable"
+            ) from exc
+        if current_optimizer_sha256 != candidate["optimizer_sha256"]:
+            raise ValueError(
+                "persisted A2 candidate optimizer checkpoint SHA-256 mismatch"
+            )
+    return list(candidates)
+
+
 def validate_csd_logvar_resume_lineage(
     candidates,
     *,
@@ -41,26 +105,18 @@ def validate_csd_logvar_resume_lineage(
     model_checkpoint,
     optimizer_checkpoint,
     optimizer_payload,
+    artifacts_verified=False,
 ):
     """Require an exact recorded same-run model/optimizer resume pair."""
 
     output_path = Path(output_dir).resolve()
     requested_model = Path(model_checkpoint).resolve()
     requested_optimizer = Path(optimizer_checkpoint).resolve()
-    required_fields = {
-        "epoch",
-        "path",
-        "model_sha256",
-        "optimizer_path",
-        "optimizer_sha256",
-    }
-    for candidate in candidates:
-        missing = sorted(required_fields.difference(candidate))
-        if missing:
-            raise ValueError(
-                "recorded A2 candidate missing lineage fields: "
-                + ", ".join(missing)
-            )
+    if not artifacts_verified:
+        validate_csd_logvar_candidate_artifacts(
+            candidates,
+            output_dir=output_path,
+        )
     matches = [
         candidate
         for candidate in candidates
@@ -71,10 +127,18 @@ def validate_csd_logvar_resume_lineage(
             "A2 continuation model must match exactly one recorded candidate"
         )
     candidate = matches[0]
+    highest_epoch = max(int(item["epoch"]) for item in candidates)
+    if int(candidate["epoch"]) != highest_epoch:
+        raise ValueError(
+            "A2 continuation must resume the highest-epoch recorded candidate"
+        )
     recorded_model = Path(candidate["path"]).resolve()
     if recorded_model.parent != output_path:
         raise ValueError("recorded model checkpoint is outside the output directory")
-    if file_sha256(recorded_model) != candidate["model_sha256"]:
+    if (
+        not artifacts_verified
+        and file_sha256(recorded_model) != candidate["model_sha256"]
+    ):
         raise ValueError("A2 continuation model checkpoint SHA-256 mismatch")
 
     recorded_optimizer = Path(candidate["optimizer_path"]).resolve()
@@ -84,7 +148,10 @@ def validate_csd_logvar_resume_lineage(
         )
     if requested_optimizer != recorded_optimizer:
         raise ValueError("A2 continuation optimizer checkpoint path mismatch")
-    if file_sha256(recorded_optimizer) != candidate["optimizer_sha256"]:
+    if (
+        not artifacts_verified
+        and file_sha256(recorded_optimizer) != candidate["optimizer_sha256"]
+    ):
         raise ValueError("A2 continuation optimizer checkpoint SHA-256 mismatch")
     if "epoch" not in optimizer_payload:
         raise ValueError("A2 continuation optimizer checkpoint epoch is missing")
@@ -93,6 +160,38 @@ def validate_csd_logvar_resume_lineage(
     if candidate.get("non_a2_mismatches"):
         raise ValueError("A2 continuation candidate has non-A2 state mismatches")
     return candidate
+
+
+def validate_csd_logvar_selected_checkpoint(selection_payload, *, output_dir):
+    """Resolve and hash the recorded winner immediately before final test."""
+
+    winner = selection_payload.get("winner")
+    candidates = selection_payload.get("candidates")
+    if not isinstance(winner, dict) or not isinstance(candidates, list):
+        raise ValueError("A2 selection payload requires a winner and candidates")
+    matches = [
+        candidate
+        for candidate in candidates
+        if int(candidate.get("epoch", -1)) == int(winner.get("epoch", -2))
+    ]
+    if len(matches) != 1:
+        raise ValueError("selected A2 winner must match one recorded candidate")
+    recorded = matches[0]
+    winner_path = Path(winner.get("path", "")).resolve()
+    recorded_path = Path(recorded.get("path", "")).resolve()
+    if winner_path != recorded_path:
+        raise ValueError("selected A2 model path differs from recorded candidate")
+    if winner.get("model_sha256") != recorded.get("model_sha256"):
+        raise ValueError("selected A2 model hash differs from recorded candidate")
+    if recorded_path.parent != Path(output_dir).resolve():
+        raise ValueError("selected A2 model is outside the output directory")
+    try:
+        current_sha256 = file_sha256(recorded_path)
+    except OSError as exc:
+        raise ValueError("selected A2 model checkpoint is unavailable") from exc
+    if current_sha256 != recorded["model_sha256"]:
+        raise ValueError("selected A2 model SHA-256 mismatch")
+    return recorded
 
 
 def non_csd_state_dict_mismatches(
@@ -141,9 +240,14 @@ def compare_paired_invariance(baseline, candidate):
     return {"passed": all(checks.values()), "checks": checks}
 
 
-def choose_csd_logvar_checkpoint(candidates):
+def choose_csd_logvar_checkpoint(candidates, *, output_dir=None):
     """Choose the valid bidirectional winner without consulting test data."""
 
+    if output_dir is not None:
+        validate_csd_logvar_candidate_artifacts(
+            candidates,
+            output_dir=output_dir,
+        )
     valid = [candidate for candidate in candidates if candidate["valid"]]
     if not valid:
         raise ValueError("no valid CSD logvar checkpoint")

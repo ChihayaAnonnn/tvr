@@ -7,6 +7,7 @@ import math
 import os
 import random
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +19,7 @@ from dataloaders.data_dataloaders import DATALOADER_DICT
 from dataloaders.msrvtt_protocol import load_trusted_manifest, validate_trusted_manifest
 from experiment_tracking import (
     CSD_LOGVAR_CANONICAL_A1_CHECKPOINT,
+    CSD_LOGVAR_CANONICAL_A1_SHA256,
     atomic_write_json,
     build_experiment_manifest,
     collect_git_state,
@@ -35,7 +37,9 @@ from prob_models.csd_logvar_protocol import (
     file_sha256,
     non_csd_state_dict_mismatches,
     numeric_metrics_are_finite,
+    validate_csd_logvar_candidate_artifacts,
     validate_csd_logvar_resume_lineage,
+    validate_csd_logvar_selected_checkpoint,
 )
 from prob_models.retrieval_risk_metrics import (
     build_eval_positive_mask,
@@ -573,6 +577,14 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         raise ValueError(
             "csd_logvar_sidecar_only requires --use_retrieval_risk_sidecar"
         )
+    if (
+        args.do_train
+        and args.use_csd_logvar_sidecar
+        and not args.csd_logvar_sidecar_only
+    ):
+        raise ValueError(
+            "CSD logvar training requires --csd_logvar_sidecar_only"
+        )
     if args.csd_logvar_sidecar_only:
         if args.resume_model:
             if not args.init_model:
@@ -1084,6 +1096,17 @@ def save_model(
         args.output_dir, "pytorch_model.bin.{}{}".format("" if type_name == "" else type_name + ".", epoch)
     )
     optimizer_state_file = _optimizer_checkpoint_path(epoch, args, type_name)
+    if bool(getattr(args, "csd_logvar_sidecar_only", False)):
+        existing = [
+            path
+            for path in (output_model_file, optimizer_state_file)
+            if Path(path).exists()
+        ]
+        if existing:
+            raise FileExistsError(
+                "A2 append-only save refuses existing checkpoint(s): "
+                + ", ".join(existing)
+            )
     torch.save(model_to_save.state_dict(), output_model_file)
     torch.save(
         _build_training_checkpoint_payload(
@@ -1916,14 +1939,27 @@ def _apply_dual_softmax(similarity_matrix, temperature=1.0):
     )
 
 
+@contextmanager
 def _eval_autocast_context(args):
-    """Use legacy BF16 eval except for exact paired A2-only evaluation."""
+    """Scope exact FP32 and deterministic cuDNN to paired A2 evaluation."""
 
-    return torch.autocast(
-        device_type="cuda",
-        dtype=torch.bfloat16,
-        enabled=not bool(getattr(args, "csd_logvar_sidecar_only", False)),
-    )
+    a2_only = bool(getattr(args, "csd_logvar_sidecar_only", False))
+    prior_benchmark = torch.backends.cudnn.benchmark
+    prior_deterministic = torch.backends.cudnn.deterministic
+    if a2_only:
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+    try:
+        with torch.autocast(
+            device_type="cuda",
+            dtype=torch.bfloat16,
+            enabled=not a2_only,
+        ):
+            yield
+    finally:
+        if a2_only:
+            torch.backends.cudnn.benchmark = prior_benchmark
+            torch.backends.cudnn.deterministic = prior_deterministic
 
 
 def eval_epoch(
@@ -2377,7 +2413,26 @@ def _initialize_csd_logvar_protocol(
         paired_registration = json.loads(baseline_path.read_text())
         paired_baseline = paired_registration["paired_digest"]
         reference_checkpoint = paired_registration["reference_checkpoint"]
+        registered_reference_sha256 = paired_registration.get(
+            "reference_checkpoint_sha256"
+        )
+        if not registered_reference_sha256:
+            raise ValueError(
+                "A2 continuation baseline registration is missing the "
+                "reference checkpoint SHA-256"
+            )
+        actual_reference_sha256 = file_sha256(reference_checkpoint)
+        if actual_reference_sha256 != registered_reference_sha256:
+            raise ValueError("A2 reference checkpoint SHA-256 mismatch")
+        if registered_reference_sha256 != CSD_LOGVAR_CANONICAL_A1_SHA256:
+            raise ValueError(
+                "A2 registered reference SHA-256 is not the canonical A1"
+            )
     else:
+        reference_checkpoint = args.init_model
+        reference_checkpoint_sha256 = file_sha256(reference_checkpoint)
+        if reference_checkpoint_sha256 != CSD_LOGVAR_CANONICAL_A1_SHA256:
+            raise ValueError("fresh A2 reference checkpoint SHA-256 mismatch")
         baseline_eval = eval_epoch(
             args,
             model,
@@ -2387,11 +2442,11 @@ def _initialize_csd_logvar_protocol(
             report_csd_logvar=False,
         )
         paired_baseline = baseline_eval["paired_digest"]
-        reference_checkpoint = args.init_model
         atomic_write_json(
             baseline_path,
             {
                 "reference_checkpoint": reference_checkpoint,
+                "reference_checkpoint_sha256": reference_checkpoint_sha256,
                 "paired_digest": paired_baseline,
             },
         )
@@ -2402,6 +2457,10 @@ def _initialize_csd_logvar_protocol(
         if resume_payload is None:
             raise ValueError("A2 continuation requires an optimizer payload")
         candidates = json.loads(selection_path.read_text())["candidates"]
+        validate_csd_logvar_candidate_artifacts(
+            candidates,
+            output_dir=args.output_dir,
+        )
         candidates = _reaudit_csd_logvar_candidates(
             candidates,
             reference_checkpoint,
@@ -2412,6 +2471,7 @@ def _initialize_csd_logvar_protocol(
             model_checkpoint=args.init_model,
             optimizer_checkpoint=args.resume_model,
             optimizer_payload=resume_payload,
+            artifacts_verified=True,
         )
         try:
             winner = choose_csd_logvar_checkpoint(candidates)
@@ -2444,6 +2504,14 @@ def _record_csd_logvar_selection(
 ):
     """Append, audit, select, and atomically persist one A2 candidate."""
 
+    epochs = [int(candidate["epoch"]) for candidate in candidates]
+    if epochs and int(epoch) <= max(epochs):
+        raise ValueError(
+            "A2 candidate append-only epoch must exceed every recorded epoch"
+        )
+    if len(epochs) != len(set(epochs)):
+        raise ValueError("A2 candidate epochs must be unique")
+
     candidate = _build_csd_logvar_candidate(
         epoch=epoch,
         checkpoint_path=checkpoint_path,
@@ -2453,6 +2521,10 @@ def _record_csd_logvar_selection(
         reference_checkpoint=reference_checkpoint,
     )
     candidates.append(candidate)
+    validate_csd_logvar_candidate_artifacts(
+        candidates,
+        output_dir=Path(selection_path).parent,
+    )
     try:
         winner = choose_csd_logvar_checkpoint(candidates)
     except ValueError:
@@ -2481,7 +2553,11 @@ def _evaluate_selected_test_checkpoints(
     """Evaluate validation-selected checkpoints without test-time selection."""
 
     if csd_logvar_sidecar_only:
-        checkpoint_path = selection_payload["winner"]["path"]
+        selected = validate_csd_logvar_selected_checkpoint(
+            selection_payload,
+            output_dir=args.output_dir,
+        )
+        checkpoint_path = selected["path"]
         logger.info(
             "***** Running final bidirectional test from A2-selected "
             "checkpoint: %s *****",
@@ -2852,7 +2928,8 @@ def main():
         if args.local_rank == 0:
             if a2_only:
                 winner = choose_csd_logvar_checkpoint(
-                    csd_protocol["candidates"]
+                    csd_protocol["candidates"],
+                    output_dir=args.output_dir,
                 )
                 selection_payload = json.loads(
                     csd_protocol["selection_path"].read_text()

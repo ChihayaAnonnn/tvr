@@ -21,6 +21,9 @@ CSD_LOGVAR_CANONICAL_A1_CHECKPOINT = (
     Path(__file__).resolve().parent
     / "ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
 ).resolve()
+CSD_LOGVAR_CANONICAL_A1_SHA256 = (
+    "a2c074e3988b0e4a115d054c352785271712ffdfb4e4c2da8b372bde424e2607"
+)
 
 _BATCH_STATS = (
     "unique_video_count",
@@ -219,6 +222,7 @@ def _csd_logvar_manifest_section(args) -> dict:
             "resume" if bool(getattr(args, "resume_model", "")) else "fresh"
         ),
         "canonical_a1_checkpoint": str(CSD_LOGVAR_CANONICAL_A1_CHECKPOINT),
+        "canonical_a1_sha256": CSD_LOGVAR_CANONICAL_A1_SHA256,
         "init_model": getattr(args, "init_model", ""),
         "resume_model": getattr(args, "resume_model", ""),
         "score_path": "auxiliary_only_raw_wti_unchanged",

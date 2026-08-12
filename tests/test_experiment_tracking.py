@@ -159,6 +159,9 @@ def test_experiment_manifest_records_csd_logvar_contract():
             Path(__file__).resolve().parents[1]
             / "ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
         ),
+        "canonical_a1_sha256": (
+            "a2c074e3988b0e4a115d054c352785271712ffdfb4e4c2da8b372bde424e2607"
+        ),
         "init_model": "/tmp/a2-bin.2",
         "resume_model": "/tmp/a2-optimizer-bin.2",
         "score_path": "auxiliary_only_raw_wti_unchanged",

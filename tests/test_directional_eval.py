@@ -78,6 +78,35 @@ def test_eval_autocast_is_disabled_only_for_a2_only_mode(
     ]
 
 
+def test_a2_eval_scopes_deterministic_cudnn_without_changing_legacy(
+    monkeypatch,
+):
+    monkeypatch.setattr(main_task_retrieval.torch.backends.cudnn, "benchmark", True)
+    monkeypatch.setattr(
+        main_task_retrieval.torch.backends.cudnn, "deterministic", False
+    )
+    monkeypatch.setattr(
+        main_task_retrieval.torch,
+        "autocast",
+        lambda **_kwargs: nullcontext(),
+    )
+
+    with _eval_autocast_context(
+        SimpleNamespace(csd_logvar_sidecar_only=False)
+    ):
+        assert torch.backends.cudnn.benchmark is True
+        assert torch.backends.cudnn.deterministic is False
+
+    with _eval_autocast_context(
+        SimpleNamespace(csd_logvar_sidecar_only=True)
+    ):
+        assert torch.backends.cudnn.benchmark is False
+        assert torch.backends.cudnn.deterministic is True
+
+    assert torch.backends.cudnn.benchmark is True
+    assert torch.backends.cudnn.deterministic is False
+
+
 def test_risk_reporting_preserves_directional_metrics_exactly():
     matrix = _matrix_with_successes_and_failures()
     before = _compute_directional_metrics(matrix, matrix)

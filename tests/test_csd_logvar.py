@@ -27,13 +27,32 @@ def test_closed_form_distance_uses_log_variance_not_log_standard_deviation():
 
 def test_forward_clamps_logvar_and_reports_components():
     sidecar = CSDLogVarSidecar(embed_dim=2, hidden_dim=3)
+    with torch.no_grad():
+        sidecar.text_head[-1].weight.zero_()
+        sidecar.text_head[-1].bias.fill_(-20.0)
+        sidecar.video_head[-1].weight.zero_()
+        sidecar.video_head[-1].bias.fill_(20.0)
     text_mu = torch.nn.functional.normalize(torch.randn(2, 2), dim=-1)
     video_mu = torch.nn.functional.normalize(torch.randn(3, 2), dim=-1)
     output = sidecar(text_mu, video_mu)
     assert output["text_logvar"].shape == (2, 2)
     assert output["video_logvar"].shape == (3, 2)
+    torch.testing.assert_close(
+        output["text_logvar"], torch.full((2, 2), sidecar.logvar_min)
+    )
+    torch.testing.assert_close(
+        output["video_logvar"], torch.full((3, 2), sidecar.logvar_max)
+    )
     torch.testing.assert_close(output["distance"], output["mean_distance"] + output["variance_distance"])
     torch.testing.assert_close(output["u_text"], output["text_logvar"].exp().mean(dim=-1))
+    torch.testing.assert_close(output["u_video"], output["video_logvar"].exp().mean(dim=-1))
+    torch.testing.assert_close(
+        output["match_logits"],
+        -torch.nn.functional.softplus(sidecar.raw_scale) * output["distance"]
+        + sidecar.shift,
+        rtol=0,
+        atol=0,
+    )
 
 
 @pytest.mark.parametrize("kwargs", [

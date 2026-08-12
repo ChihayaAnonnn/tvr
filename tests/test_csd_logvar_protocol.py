@@ -1,5 +1,6 @@
 import copy
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -14,6 +15,7 @@ from main_task_retrieval import (
     _initialize_csd_logvar_protocol,
     _record_csd_logvar_selection,
     _restore_training_checkpoint,
+    save_model,
 )
 from prob_models.csd_logvar_protocol import (
     array_sha256,
@@ -130,6 +132,64 @@ def test_resume_lineage_rejects_any_mismatch(tmp_path, mutation, message):
             optimizer_checkpoint=requested_optimizer,
             optimizer_payload=payload,
         )
+
+
+def test_resume_lineage_rejects_nonterminal_recorded_candidate(tmp_path):
+    model_path, optimizer_path, payload, older = _lineage_fixture(tmp_path)
+    terminal_model = tmp_path / "pytorch_model.bin.3"
+    terminal_optimizer = tmp_path / "pytorch_opt.bin.3"
+    torch.save({"backbone": torch.tensor([1.0])}, terminal_model)
+    torch.save({**payload, "epoch": 3}, terminal_optimizer)
+    terminal = {
+        **older,
+        "epoch": 3,
+        "path": str(terminal_model.resolve()),
+        "model_sha256": file_sha256(terminal_model),
+        "optimizer_path": str(terminal_optimizer.resolve()),
+        "optimizer_sha256": file_sha256(terminal_optimizer),
+    }
+
+    with pytest.raises(ValueError, match="highest-epoch"):
+        validate_csd_logvar_resume_lineage(
+            [older, terminal],
+            output_dir=tmp_path,
+            model_checkpoint=model_path,
+            optimizer_checkpoint=optimizer_path,
+            optimizer_payload=payload,
+        )
+
+
+@pytest.mark.parametrize("existing", ["model", "optimizer"])
+def test_a2_save_rejects_any_checkpoint_overwrite(
+    tmp_path, monkeypatch, existing
+):
+    model_path = tmp_path / "pytorch_model.bin.2"
+    optimizer_path = tmp_path / "pytorch_opt.bin.2"
+    target = model_path if existing == "model" else optimizer_path
+    target.write_bytes(b"existing-checkpoint")
+    model = torch.nn.Linear(2, 1)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.1)
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "logger",
+        SimpleNamespace(info=lambda *args: None),
+        raising=False,
+    )
+
+    with pytest.raises(FileExistsError, match="append-only"):
+        save_model(
+            2,
+            SimpleNamespace(
+                output_dir=str(tmp_path), csd_logvar_sidecar_only=True
+            ),
+            model,
+            optimizer,
+            tr_loss=0.5,
+        )
+
+    assert target.read_bytes() == b"existing-checkpoint"
+    other = optimizer_path if existing == "model" else model_path
+    assert not other.exists()
 
 
 def test_state_audit_ignores_only_a2_keys(tmp_path):
@@ -249,6 +309,29 @@ def test_selector_rejects_invalid_candidates():
                 }
             ]
         )
+
+
+def test_selector_reverifies_nonwinning_candidate_artifacts(tmp_path):
+    candidates = []
+    for epoch in (0, 1):
+        model_path = tmp_path / f"pytorch_model.bin.{epoch}"
+        optimizer_path = tmp_path / f"pytorch_opt.bin.{epoch}"
+        model_path.write_bytes(f"model-{epoch}".encode())
+        optimizer_path.write_bytes(f"optimizer-{epoch}".encode())
+        candidates.append({
+            "epoch": epoch,
+            "path": str(model_path.resolve()),
+            "model_sha256": file_sha256(model_path),
+            "optimizer_path": str(optimizer_path.resolve()),
+            "optimizer_sha256": file_sha256(optimizer_path),
+            "valid": True,
+            "rho": [0.1 + epoch, 0.1 + epoch],
+            "auroc": [0.7, 0.7],
+        })
+    Path(candidates[0]["path"]).write_bytes(b"tampered-nonwinner")
+
+    with pytest.raises(ValueError, match="persisted A2 candidate.*SHA-256"):
+        choose_csd_logvar_checkpoint(candidates, output_dir=tmp_path)
 
 
 def _acceptance_metrics():
@@ -421,6 +504,13 @@ def test_fresh_protocol_registers_a1_baseline_without_intrinsic_metrics(
 ):
     reference_path = tmp_path / "a1.pt"
     torch.save({"backbone": torch.tensor([1.0])}, reference_path)
+    reference_sha256 = file_sha256(reference_path)
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "CSD_LOGVAR_CANONICAL_A1_SHA256",
+        reference_sha256,
+        raising=False,
+    )
     args = SimpleNamespace(
         output_dir=str(tmp_path / "run"),
         init_model=str(reference_path),
@@ -447,6 +537,7 @@ def test_fresh_protocol_registers_a1_baseline_without_intrinsic_metrics(
     )
     assert registration == {
         "reference_checkpoint": str(reference_path),
+        "reference_checkpoint_sha256": reference_sha256,
         "paired_digest": _paired_digest(),
     }
 
@@ -482,6 +573,13 @@ def test_continuation_reuses_original_reference_and_reaudits_candidates(
     candidate_path = run_path / "pytorch_model.bin.0"
     optimizer_path = run_path / "pytorch_opt.bin.0"
     torch.save({"backbone": torch.tensor([1.0])}, reference_path)
+    reference_sha256 = file_sha256(reference_path)
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "CSD_LOGVAR_CANONICAL_A1_SHA256",
+        reference_sha256,
+        raising=False,
+    )
     torch.save({"backbone": torch.tensor([1.0])}, candidate_path)
     optimizer_payload = {
         "epoch": 0,
@@ -494,6 +592,7 @@ def test_continuation_reuses_original_reference_and_reaudits_candidates(
         run_path / "a1_paired_baseline.json",
         {
             "reference_checkpoint": str(reference_path),
+            "reference_checkpoint_sha256": reference_sha256,
             "paired_digest": _paired_digest(),
         },
     )
@@ -544,6 +643,163 @@ def test_continuation_reuses_original_reference_and_reaudits_candidates(
     )
     assert persisted["candidates"] == protocol["candidates"]
     assert persisted["winner"] == protocol["candidates"][0]
+
+
+def test_continuation_rejects_tampered_registered_a1(
+    tmp_path, monkeypatch
+):
+    run_path = tmp_path / "run"
+    run_path.mkdir()
+    reference_path = tmp_path / "original-a1.pt"
+    candidate_path = run_path / "pytorch_model.bin.0"
+    optimizer_path = run_path / "pytorch_opt.bin.0"
+    torch.save({"backbone": torch.tensor([1.0])}, reference_path)
+    registered_sha256 = file_sha256(reference_path)
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "CSD_LOGVAR_CANONICAL_A1_SHA256",
+        registered_sha256,
+        raising=False,
+    )
+    torch.save({"backbone": torch.tensor([1.0])}, candidate_path)
+    optimizer_payload = {
+        "epoch": 0,
+        "optimizer_state_dict": {"state": {}, "param_groups": []},
+        "scheduler_state_dict": {"last_epoch": 1},
+        "global_step": 5,
+    }
+    torch.save(optimizer_payload, optimizer_path)
+    candidate = {
+        "epoch": 0,
+        "path": str(candidate_path.resolve()),
+        "model_sha256": file_sha256(candidate_path),
+        "optimizer_path": str(optimizer_path.resolve()),
+        "optimizer_sha256": file_sha256(optimizer_path),
+        "valid": True,
+        "finite": True,
+        "clamp_ok": True,
+        "paired_invariance": {"passed": True, "checks": {}},
+        "non_a2_mismatches": [],
+        "rho": [0.3, 0.3],
+        "auroc": [0.7, 0.7],
+    }
+    main_task_retrieval.atomic_write_json(
+        run_path / "a1_paired_baseline.json",
+        {
+            "reference_checkpoint": str(reference_path),
+            "reference_checkpoint_sha256": registered_sha256,
+            "paired_digest": _paired_digest(),
+        },
+    )
+    main_task_retrieval.atomic_write_json(
+        run_path / "best_csd_logvar_checkpoint.json",
+        {"candidates": [candidate], "winner": candidate},
+    )
+    torch.save({"backbone": torch.tensor([9.0])}, reference_path)
+
+    with pytest.raises(ValueError, match="reference checkpoint SHA-256"):
+        _initialize_csd_logvar_protocol(
+            SimpleNamespace(
+                output_dir=str(run_path),
+                init_model=str(candidate_path),
+                resume_model=str(optimizer_path),
+            ),
+            object(),
+            object(),
+            torch.device("cpu"),
+            1,
+            resume_payload=optimizer_payload,
+        )
+
+
+@pytest.mark.parametrize("tampered_artifact", ["model", "optimizer"])
+def test_continuation_rejects_tampered_nonselected_candidate(
+    tmp_path, monkeypatch, tampered_artifact
+):
+    run_path = tmp_path / "run"
+    run_path.mkdir()
+    reference_path = tmp_path / "original-a1.pt"
+    torch.save({"backbone": torch.tensor([1.0])}, reference_path)
+    reference_sha256 = file_sha256(reference_path)
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "CSD_LOGVAR_CANONICAL_A1_SHA256",
+        reference_sha256,
+        raising=False,
+    )
+    candidates = []
+    optimizer_payloads = []
+    for epoch in (0, 1):
+        model_path = run_path / f"pytorch_model.bin.{epoch}"
+        optimizer_path = run_path / f"pytorch_opt.bin.{epoch}"
+        torch.save(
+            {
+                "backbone": torch.tensor([1.0]),
+                "csd_logvar_sidecar.weight": torch.tensor([float(epoch)]),
+            },
+            model_path,
+        )
+        optimizer_payload = {
+            "epoch": epoch,
+            "optimizer_state_dict": {"state": {}, "param_groups": []},
+            "scheduler_state_dict": {"last_epoch": epoch + 1},
+            "global_step": epoch + 5,
+        }
+        torch.save(optimizer_payload, optimizer_path)
+        optimizer_payloads.append(optimizer_payload)
+        candidates.append({
+            "epoch": epoch,
+            "path": str(model_path.resolve()),
+            "model_sha256": file_sha256(model_path),
+            "optimizer_path": str(optimizer_path.resolve()),
+            "optimizer_sha256": file_sha256(optimizer_path),
+            "valid": True,
+            "finite": True,
+            "clamp_ok": True,
+            "paired_invariance": {"passed": True, "checks": {}},
+            "non_a2_mismatches": [],
+            "rho": [0.3, 0.3],
+            "auroc": [0.7, 0.7],
+        })
+    main_task_retrieval.atomic_write_json(
+        run_path / "a1_paired_baseline.json",
+        {
+            "reference_checkpoint": str(reference_path),
+            "reference_checkpoint_sha256": reference_sha256,
+            "paired_digest": _paired_digest(),
+        },
+    )
+    main_task_retrieval.atomic_write_json(
+        run_path / "best_csd_logvar_checkpoint.json",
+        {"candidates": candidates, "winner": candidates[1]},
+    )
+    if tampered_artifact == "model":
+        torch.save(
+            {
+                "backbone": torch.tensor([1.0]),
+                "csd_logvar_sidecar.weight": torch.tensor([99.0]),
+            },
+            candidates[0]["path"],
+        )
+    else:
+        torch.save(
+            {**optimizer_payloads[0], "global_step": 999},
+            candidates[0]["optimizer_path"],
+        )
+
+    with pytest.raises(ValueError, match="persisted A2 candidate.*SHA-256"):
+        _initialize_csd_logvar_protocol(
+            SimpleNamespace(
+                output_dir=str(run_path),
+                init_model=candidates[1]["path"],
+                resume_model=candidates[1]["optimizer_path"],
+            ),
+            object(),
+            object(),
+            torch.device("cpu"),
+            1,
+            resume_payload=optimizer_payloads[1],
+        )
 
 
 def test_continuation_requires_original_candidate_list(tmp_path):
@@ -610,6 +866,60 @@ def test_validation_record_writes_bidirectional_winner_after_each_epoch(
     assert payload["selection_metric"] == (
         "max(min(t2v_rho,v2t_rho),mean(t2v_auroc,v2t_auroc))"
     )
+
+
+@pytest.mark.parametrize("reused_epoch", [0, 1])
+def test_validation_record_rejects_duplicate_or_nonappend_epoch(
+    tmp_path, reused_epoch
+):
+    reference_path = tmp_path / "a1.pt"
+    first_path = tmp_path / "pytorch_model.bin.1"
+    first_optimizer = tmp_path / "pytorch_opt.bin.1"
+    next_path = tmp_path / "pytorch_model.bin.next"
+    next_optimizer = tmp_path / "pytorch_opt.bin.next"
+    torch.save({"backbone": torch.tensor([1.0])}, reference_path)
+    for path, value in ((first_path, 1.0), (next_path, 2.0)):
+        torch.save(
+            {
+                "backbone": torch.tensor([1.0]),
+                "csd_logvar_sidecar.weight": torch.tensor([value]),
+            },
+            path,
+        )
+    first_optimizer.write_bytes(b"optimizer-1")
+    next_optimizer.write_bytes(b"optimizer-next")
+    metrics = {
+        "t2v": {"R1": 1.0},
+        "v2t": {"R1": 2.0},
+        "paired_digest": _paired_digest(),
+        "csd_logvar": _acceptance_metrics(),
+    }
+    candidates = []
+    selection_path = tmp_path / "best_csd_logvar_checkpoint.json"
+    _record_csd_logvar_selection(
+        epoch=1,
+        checkpoint_path=first_path,
+        optimizer_checkpoint_path=first_optimizer,
+        validation_metrics=metrics,
+        paired_baseline=_paired_digest(),
+        reference_checkpoint=reference_path,
+        candidates=candidates,
+        selection_path=selection_path,
+    )
+
+    with pytest.raises(ValueError, match="append-only epoch"):
+        _record_csd_logvar_selection(
+            epoch=reused_epoch,
+            checkpoint_path=next_path,
+            optimizer_checkpoint_path=next_optimizer,
+            validation_metrics=metrics,
+            paired_baseline=_paired_digest(),
+            reference_checkpoint=reference_path,
+            candidates=candidates,
+            selection_path=selection_path,
+        )
+
+    assert [candidate["epoch"] for candidate in candidates] == [1]
 
 
 def test_invalid_first_epoch_is_recorded_and_later_epoch_can_win(tmp_path):
@@ -698,13 +1008,20 @@ def test_a2_final_test_loads_one_winner_and_evaluates_both_directions(
         return {"t2v": {"R1": 9.0}, "v2t": {"R1": 8.0}}
 
     monkeypatch.setattr(main_task_retrieval, "eval_epoch", fake_eval)
+    recorded = {
+        "epoch": 2,
+        "path": str(checkpoint_path.resolve()),
+        "model_sha256": file_sha256(checkpoint_path),
+        "rho": [0.3, 0.4],
+    }
     selection = {
         "selection_split": "val",
-        "winner": {"path": str(checkpoint_path), "rho": [0.3, 0.4]},
+        "candidates": [recorded],
+        "winner": dict(recorded),
     }
 
     payload = _evaluate_selected_test_checkpoints(
-        SimpleNamespace(),
+        SimpleNamespace(output_dir=str(tmp_path)),
         _Model(),
         object(),
         torch.device("cpu"),
@@ -720,6 +1037,49 @@ def test_a2_final_test_loads_one_winner_and_evaluates_both_directions(
         "selection": selection,
         "test_metrics": {"t2v": {"R1": 9.0}, "v2t": {"R1": 8.0}},
     }
+
+
+def test_a2_final_test_rejects_selected_checkpoint_tamper(
+    tmp_path, monkeypatch
+):
+    checkpoint_path = tmp_path / "pytorch_model.bin.2"
+    torch.save({"weight": torch.tensor([1.0])}, checkpoint_path)
+    recorded = {
+        "epoch": 2,
+        "path": str(checkpoint_path.resolve()),
+        "model_sha256": file_sha256(checkpoint_path),
+        "rho": [0.3, 0.4],
+    }
+    selection = {
+        "selection_split": "val",
+        "candidates": [recorded],
+        "winner": dict(recorded),
+    }
+    torch.save({"weight": torch.tensor([9.0])}, checkpoint_path)
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "logger",
+        SimpleNamespace(info=lambda *args: None),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "eval_epoch",
+        lambda *args, **kwargs: pytest.fail(
+            "tampered selected checkpoint must fail before evaluation"
+        ),
+    )
+
+    with pytest.raises(ValueError, match="selected A2 model SHA-256"):
+        _evaluate_selected_test_checkpoints(
+            SimpleNamespace(output_dir=str(tmp_path)),
+            object(),
+            object(),
+            torch.device("cpu"),
+            1,
+            selection,
+            csd_logvar_sidecar_only=True,
+        )
 
 
 def _optimizer_and_scheduler(steps=1):

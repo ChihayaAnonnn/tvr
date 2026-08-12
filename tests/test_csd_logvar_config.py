@@ -75,3 +75,31 @@ def test_a2_only_continuation_accepts_noncanonical_init_checkpoint(monkeypatch):
     ]))
     assert args.init_model == "/tmp/a2-bin.2"
     assert args.resume_model == "/tmp/a2-optimizer-bin.2"
+
+
+def test_training_rejects_csd_sidecar_without_sidecar_only(monkeypatch):
+    with pytest.raises(ValueError, match="csd_logvar_sidecar_only"):
+        _parse(monkeypatch, [
+            "--use_uatvr_full",
+            "--use_csd_logvar_sidecar",
+        ])
+
+
+def test_evaluation_may_report_csd_without_sidecar_only(monkeypatch):
+    monkeypatch.setattr(sys, "argv", [
+        "main_task_retrieval.py",
+        "--do_eval",
+        "--expand_msrvtt_sentences",
+        "--output_dir",
+        "/tmp/csd-logvar-config-eval-test",
+        "--init_model",
+        "/tmp/csd-logvar-eval-checkpoint.pt",
+        "--use_uatvr_full",
+        "--use_csd_logvar_sidecar",
+    ])
+
+    args = get_args()
+
+    assert args.do_train is False
+    assert args.use_csd_logvar_sidecar is True
+    assert args.csd_logvar_sidecar_only is False
