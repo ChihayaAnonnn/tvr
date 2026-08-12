@@ -820,6 +820,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_mask,
         sim_header="seqTransf",
         group_ids=None,
+        return_csd_aux=False,
     ):
         sequence_output, visual_output = (
             sequence_output.contiguous(),
@@ -1095,6 +1096,16 @@ class UATVR(CLIP4ClipPreTrainedModel):
             )
             return loss
         else:
+            if return_csd_aux and self.use_csd_logvar_sidecar:
+                csd_output = self.csd_logvar_sidecar(
+                    text_pooled.detach(), mu_video.detach()
+                )
+                return wti_logits, {
+                    "text_mu": text_pooled.detach(),
+                    "video_mu": mu_video.detach(),
+                    "text_logvar": csd_output["text_logvar"].detach(),
+                    "video_logvar": csd_output["video_logvar"].detach(),
+                }
             return wti_logits
 
     @staticmethod
@@ -1254,6 +1265,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         shaped=False,
         loose_type=False,
         group_ids=None,
+        return_csd_aux=False,
     ):
         if shaped is False:
             attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
@@ -1280,5 +1292,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 attention_mask,
                 video_mask,
                 sim_header=self.sim_header,
+                return_csd_aux=return_csd_aux,
             )
+            if return_csd_aux and self.use_csd_logvar_sidecar:
+                return retrieve_logits
             return retrieve_logits, {}

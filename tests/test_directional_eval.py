@@ -1,11 +1,18 @@
+from types import SimpleNamespace
+
 import numpy as np
 import torch
 
 from main_task_retrieval import (
     _apply_dual_softmax,
+    _compute_csd_logvar_metrics,
     _compute_directional_metrics,
     _compute_retrieval_risk_metrics,
+    _merge_csd_eval_outputs,
+    _run_on_single_gpu,
+    _select_eval_device_ids,
 )
+from modules.modeling_mulit import UATVR as FullUATVR
 
 
 class _DeterministicRiskModel:
@@ -96,3 +103,193 @@ def test_dual_softmax_uses_registered_temperature_without_mutating_input():
     np.testing.assert_array_equal(matrix, before)
     np.testing.assert_allclose(t2v, expected_t2v.numpy())
     np.testing.assert_allclose(v2t_directional, expected_v2t.numpy())
+
+
+def test_csd_worker_merge_keeps_one_text_per_caption_and_one_unique_video():
+    outputs = [
+        {
+            "similarity_rows": [np.array([[1.0, 2.0], [3.0, 4.0]])],
+            "text_mu": torch.tensor([[10.0], [11.0]]),
+            "text_logvar": torch.tensor([[-10.0], [-11.0]]),
+            "video_mu": torch.tensor([[20.0], [21.0]]),
+            "video_logvar": torch.tensor([[-8.0], [-9.0]]),
+        },
+        {
+            "similarity_rows": [np.array([[5.0, 6.0], [7.0, 8.0]])],
+            "text_mu": torch.tensor([[12.0], [13.0]]),
+            "text_logvar": torch.tensor([[-12.0], [-7.0]]),
+            # Every parallel worker sees all videos; only worker zero is used.
+            "video_mu": torch.tensor([[120.0], [121.0]]),
+            "video_logvar": torch.tensor([[-6.0], [-5.0]]),
+        },
+    ]
+
+    matrix, intrinsic = _merge_csd_eval_outputs(outputs)
+
+    np.testing.assert_array_equal(
+        matrix,
+        np.array(
+            [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]]
+        ),
+    )
+    assert intrinsic["text_mu"].squeeze(-1).tolist() == [10.0, 11.0, 12.0, 13.0]
+    assert intrinsic["video_mu"].squeeze(-1).tolist() == [20.0, 21.0]
+
+
+def test_csd_worker_merge_rejects_misaligned_retrieval_axes():
+    outputs = [
+        {
+            "similarity_rows": [np.ones((2, 3), dtype=np.float32)],
+            "text_mu": torch.ones(1, 2),
+            "text_logvar": torch.ones(1, 2),
+            "video_mu": torch.ones(3, 2),
+            "video_logvar": torch.ones(3, 2),
+        }
+    ]
+
+    with np.testing.assert_raises_regex(
+        ValueError, "intrinsic uncertainty axes do not align"
+    ):
+        _merge_csd_eval_outputs(outputs)
+
+
+class _CSDCollectionModel(torch.nn.Module):
+    loose_type = True
+
+    def __init__(self):
+        super().__init__()
+        self.anchor = torch.nn.Parameter(torch.zeros(()))
+
+    def get_similarity_logits(
+        self,
+        sequence_output,
+        text_token,
+        visual_output,
+        visual_hidden,
+        input_mask,
+        video_mask,
+        loose_type,
+        return_csd_aux=False,
+    ):
+        del text_token, visual_hidden, input_mask, video_mask, loose_type
+        text_mu = sequence_output.squeeze(1)
+        video_mu = visual_output.mean(1)
+        logits = text_mu @ video_mu.T
+        if not return_csd_aux:
+            return logits, {}
+        return logits, {
+            "text_mu": text_mu,
+            "text_logvar": -text_mu,
+            "video_mu": video_mu,
+            "video_logvar": -video_mu,
+        }
+
+
+def test_single_gpu_csd_collection_deduplicates_chunked_modalities():
+    model = _CSDCollectionModel()
+    args = SimpleNamespace(
+        eval_vid_chunk_size=2,
+        use_csd_logvar_sidecar=True,
+    )
+    batch_list_t = [
+        (torch.ones(2, 1), torch.zeros(2, 1)),
+        (torch.ones(2, 1), torch.zeros(2, 1)),
+    ]
+    batch_list_v = [
+        (torch.ones(2, 1),),
+        (torch.ones(1, 1),),
+    ]
+    text_outputs = [
+        (torch.tensor([[[1.0, 0.0]], [[2.0, 0.0]]]), torch.ones(2, 1, 2)),
+        (torch.tensor([[[3.0, 0.0]], [[4.0, 0.0]]]), torch.ones(2, 1, 2)),
+    ]
+    visual_outputs = [
+        (torch.tensor([[[1.0, 0.0]], [[0.0, 1.0]]]), torch.ones(2, 1, 1, 2)),
+        (torch.tensor([[[1.0, 1.0]]]), torch.ones(1, 1, 1, 2)),
+    ]
+
+    output = _run_on_single_gpu(
+        model,
+        args,
+        batch_list_t,
+        batch_list_v,
+        text_outputs,
+        visual_outputs,
+    )
+
+    assert len(output["similarity_rows"]) == 2
+    assert output["text_mu"].shape == (4, 2)
+    assert output["text_logvar"].shape == (4, 2)
+    assert output["video_mu"].shape == (3, 2)
+    assert output["video_logvar"].shape == (3, 2)
+
+
+def test_full_model_similarity_aux_is_opt_in_without_changing_default_return():
+    class _ModelShell:
+        training = False
+        sim_header = "seqTransf"
+        use_csd_logvar_sidecar = True
+
+        def _loose_similarity(self, *args, return_csd_aux=False, **kwargs):
+            logits = torch.tensor([[2.0]])
+            if return_csd_aux:
+                return logits, {"text_mu": torch.tensor([[1.0]])}
+            return logits
+
+    shell = _ModelShell()
+    call_args = (None, None, None, None, torch.ones(1, 1), torch.ones(1, 1))
+
+    default = FullUATVR.get_similarity_logits(shell, *call_args)
+    auxiliary = FullUATVR.get_similarity_logits(
+        shell, *call_args, return_csd_aux=True
+    )
+
+    assert default[0].item() == 2.0
+    assert default[1] == {}
+    assert auxiliary[0].item() == 2.0
+    assert auxiliary[1]["text_mu"].item() == 1.0
+
+
+def test_csd_reporting_uses_caption_uncertainty_for_t2v_and_video_for_v2t():
+    scores = np.array(
+        [[4.0, 0.0], [3.0, 0.0], [0.0, 4.0], [5.0, 3.0]],
+        dtype=np.float32,
+    )
+    positive_mask = np.array(
+        [[True, False], [True, False], [False, True], [False, True]]
+    )
+    intrinsic = {
+        "text_mu": torch.tensor(
+            [[1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, 1.0]]
+        ),
+        "video_mu": torch.tensor([[1.0, 0.0], [0.0, 1.0]]),
+        "text_logvar": torch.log(
+            torch.tensor([[0.1, 0.1], [0.2, 0.2], [0.3, 0.3], [0.9, 0.9]])
+        ),
+        "video_logvar": torch.log(torch.tensor([[0.1, 0.1], [0.9, 0.9]])),
+    }
+
+    result = _compute_csd_logvar_metrics(
+        metric_t2v_matrix=scores,
+        metric_v2t_matrix=scores,
+        positive_mask=positive_mask,
+        intrinsic=intrinsic,
+        bootstrap_samples=20,
+        logvar_min=-12.0,
+        logvar_max=4.0,
+    )
+
+    assert result["t2v"]["num_queries"] == 4
+    assert result["v2t"]["num_queries"] == 2
+    assert set(result) == {
+        "t2v",
+        "v2t",
+        "text_distribution",
+        "video_distribution",
+        "distance_components",
+    }
+
+
+def test_parallel_eval_uses_only_workers_with_text_batches():
+    assert _select_eval_device_ids(n_gpu=4, num_text_batches=2) == [0, 1]
+    assert _select_eval_device_ids(n_gpu=4, num_text_batches=5) == [0, 1, 2]

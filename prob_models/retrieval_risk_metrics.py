@@ -167,3 +167,135 @@ def evaluate_retrieval_risk(
         "risk_stats": _summary(risk),
         "vacuity_stats": _summary(vacuity),
     }
+
+
+def evaluate_intrinsic_uncertainty(
+    scores: np.ndarray,
+    positive_mask: np.ndarray,
+    uncertainty: np.ndarray,
+    bootstrap_samples: int = 1000,
+    seed: int = 0,
+) -> dict[str, object]:
+    """Aggregate query-level intrinsic uncertainty by retrieval direction."""
+
+    ranks = positive_ranks(scores, positive_mask)
+    uncertainty = np.asarray(uncertainty, dtype=np.float64).reshape(-1)
+    if uncertainty.shape != ranks.shape or not np.isfinite(uncertainty).all():
+        raise ValueError("uncertainty must be finite with one value per query")
+
+    failure = ranks > 0
+    value = _binary_auroc(failure, uncertainty)
+    ci_low, ci_high = _bootstrap_auroc(
+        failure,
+        uncertainty,
+        int(bootstrap_samples),
+        int(seed),
+    )
+    rho = spearmanr(uncertainty, ranks).statistic
+    if not np.isfinite(rho):
+        raise ValueError("Spearman correlation requires non-constant inputs")
+    return {
+        "num_queries": int(ranks.size),
+        "num_failures": int(failure.sum()),
+        "spearman_uncertainty_vs_rank": float(rho),
+        "failure_auroc": {
+            "value": float(value),
+            "ci_low": ci_low,
+            "ci_high": ci_high,
+        },
+        "risk_coverage": _risk_coverage(ranks, uncertainty),
+        "uncertainty_stats": _summary(uncertainty),
+    }
+
+
+def summarize_logvar(
+    logvar: np.ndarray,
+    lower: float,
+    upper: float,
+) -> dict[str, object]:
+    """Summarize log-variance, variance, and exact clamp-bound rates."""
+
+    values = np.asarray(logvar, dtype=np.float64)
+    if values.ndim != 2 or values.size == 0 or not np.isfinite(values).all():
+        raise ValueError("logvar must be a non-empty finite 2-D array")
+    return {
+        "logvar": _summary(values.reshape(-1)),
+        "variance": _summary(np.exp(values).reshape(-1)),
+        "clamp_low_fraction": float(np.mean(values == float(lower))),
+        "clamp_high_fraction": float(np.mean(values == float(upper))),
+    }
+
+
+def _stream_summary(chunks) -> dict[str, float]:
+    count, total, square_total = 0, 0.0, 0.0
+    minimum, maximum = np.inf, -np.inf
+    for chunk in chunks:
+        values = np.asarray(chunk, dtype=np.float64)
+        count += values.size
+        total += float(values.sum())
+        square_total += float(np.square(values).sum())
+        minimum = min(minimum, float(values.min()))
+        maximum = max(maximum, float(values.max()))
+    mean = total / count
+    variance = max(square_total / count - mean * mean, 0.0)
+    return {
+        "min": minimum,
+        "max": maximum,
+        "mean": mean,
+        "std": float(np.sqrt(variance)),
+    }
+
+
+def summarize_csd_components(
+    text_mu: np.ndarray,
+    video_mu: np.ndarray,
+    text_logvar: np.ndarray,
+    video_logvar: np.ndarray,
+    chunk_size: int = 256,
+) -> dict[str, dict[str, float]]:
+    """Summarize CSD mean/variance distances without a full pair matrix."""
+
+    text_mu = np.asarray(text_mu, dtype=np.float64)
+    video_mu = np.asarray(video_mu, dtype=np.float64)
+    text_logvar = np.asarray(text_logvar, dtype=np.float64)
+    video_logvar = np.asarray(video_logvar, dtype=np.float64)
+    arrays = (text_mu, video_mu, text_logvar, video_logvar)
+    if any(
+        values.ndim != 2
+        or values.size == 0
+        or not np.isfinite(values).all()
+        for values in arrays
+    ):
+        raise ValueError("CSD inputs must be non-empty finite 2-D arrays")
+    if text_mu.shape != text_logvar.shape:
+        raise ValueError("text mean/logvar shapes must match")
+    if video_mu.shape != video_logvar.shape:
+        raise ValueError("video mean/logvar shapes must match")
+    if chunk_size <= 0 or text_mu.shape[1] != video_mu.shape[1]:
+        raise ValueError("chunk_size and embedding dimensions must be valid")
+
+    text_variance = np.exp(text_logvar).sum(1)
+    video_variance = np.exp(video_logvar).sum(1)
+
+    def mean_chunks():
+        video_norm = np.square(video_mu).sum(1)[None, :]
+        for start in range(0, len(text_mu), chunk_size):
+            text = text_mu[start : start + chunk_size]
+            yield np.maximum(
+                np.square(text).sum(1)[:, None]
+                + video_norm
+                - 2.0 * text @ video_mu.T,
+                0.0,
+            )
+
+    def variance_chunks():
+        for start in range(0, len(text_variance), chunk_size):
+            yield (
+                text_variance[start : start + chunk_size, None]
+                + video_variance[None, :]
+            )
+
+    return {
+        "mean_distance": _stream_summary(mean_chunks()),
+        "variance_distance": _stream_summary(variance_chunks()),
+    }

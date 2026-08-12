@@ -29,7 +29,10 @@ from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modules.modeling import UATVR as _UATVR_HEAD
 from prob_models.retrieval_risk_metrics import (
     build_eval_positive_mask,
+    evaluate_intrinsic_uncertainty,
     evaluate_retrieval_risk,
+    summarize_csd_components,
+    summarize_logvar,
 )
 
 
@@ -1466,7 +1469,10 @@ def _run_on_single_gpu(
     else:
         del visual_output_all, video_mask_all
 
+    collect_csd = bool(getattr(args, "use_csd_logvar_sidecar", False))
     sim_matrix = []
+    text_payload = []
+    video_payload = []
     for idx1, b1 in enumerate(batch_list_t):
         input_mask, _segment_ids, *_tmp = b1
         sequence_output, text_token = batch_sequence_output_list[idx1]
@@ -1475,10 +1481,10 @@ def _run_on_single_gpu(
         input_mask = input_mask.to(device)
 
         row_logits = []
-        for chunk in video_chunks:
+        for chunk_index, chunk in enumerate(video_chunks):
             if is_june:
                 visual_output, visual_hidden, video_mask = chunk
-                logits, *_tmp = model.get_similarity_logits(
+                logits, aux = model.get_similarity_logits(
                     sequence_output,
                     text_token,
                     visual_output,
@@ -1486,6 +1492,7 @@ def _run_on_single_gpu(
                     input_mask,
                     video_mask,
                     loose_type=model.loose_type,
+                    return_csd_aux=collect_csd,
                 )
             else:
                 visual_output, video_mask = chunk
@@ -1498,12 +1505,82 @@ def _run_on_single_gpu(
                     loose_type=model.loose_type,
                 )
             row_logits.append(logits)
+            if collect_csd and chunk_index == 0:
+                text_payload.append(
+                    {
+                        name: aux[name].float().cpu()
+                        for name in ("text_mu", "text_logvar")
+                    }
+                )
+            if collect_csd and idx1 == 0:
+                video_payload.append(
+                    {
+                        name: aux[name].float().cpu()
+                        for name in ("video_mu", "video_logvar")
+                    }
+                )
 
         # bf16 张量不能直接 .numpy()，必须先转 fp32。
         b1_all_v_logits = torch.cat(row_logits, dim=1).float().cpu()
         sim_matrix.append(b1_all_v_logits.detach().numpy())
 
-    return sim_matrix
+    if not collect_csd:
+        return sim_matrix
+    return {
+        "similarity_rows": sim_matrix,
+        "text_mu": torch.cat(
+            [payload["text_mu"] for payload in text_payload], dim=0
+        ),
+        "text_logvar": torch.cat(
+            [payload["text_logvar"] for payload in text_payload], dim=0
+        ),
+        "video_mu": torch.cat(
+            [payload["video_mu"] for payload in video_payload], dim=0
+        ),
+        "video_logvar": torch.cat(
+            [payload["video_logvar"] for payload in video_payload], dim=0
+        ),
+    }
+
+
+def _merge_csd_eval_outputs(outputs):
+    """Merge per-worker CSD payloads along retrieval matrix axes."""
+
+    similarity_rows = [
+        row for output in outputs for row in output["similarity_rows"]
+    ]
+    matrix = np.concatenate(tuple(similarity_rows), axis=0)
+    text_mu = torch.cat([output["text_mu"] for output in outputs], dim=0)
+    text_logvar = torch.cat(
+        [output["text_logvar"] for output in outputs], dim=0
+    )
+    video_mu = outputs[0]["video_mu"]
+    video_logvar = outputs[0]["video_logvar"]
+    if (
+        text_mu.size(0) != matrix.shape[0]
+        or text_logvar.shape != text_mu.shape
+        or video_mu.size(0) != matrix.shape[1]
+        or video_logvar.shape != video_mu.shape
+    ):
+        raise ValueError(
+            "intrinsic uncertainty axes do not align with retrieval matrix"
+        )
+    return matrix, {
+        "text_mu": text_mu,
+        "text_logvar": text_logvar,
+        "video_mu": video_mu,
+        "video_logvar": video_logvar,
+    }
+
+
+def _select_eval_device_ids(n_gpu, num_text_batches):
+    """Avoid launching parallel similarity workers with empty text splits."""
+
+    if n_gpu <= 0 or num_text_batches <= 0:
+        raise ValueError("evaluation requires a GPU and at least one text batch")
+    split_len = (int(num_text_batches) + int(n_gpu) - 1) // int(n_gpu)
+    worker_count = (int(num_text_batches) + split_len - 1) // split_len
+    return list(range(worker_count))
 
 
 def select_best_checkpoint(
@@ -1632,6 +1709,48 @@ def _compute_retrieval_risk_metrics(
     return payload
 
 
+def _compute_csd_logvar_metrics(
+    *,
+    metric_t2v_matrix,
+    metric_v2t_matrix,
+    positive_mask,
+    intrinsic,
+    bootstrap_samples,
+    logvar_min,
+    logvar_max,
+):
+    """Evaluate modality-specific intrinsic uncertainty by query axis."""
+
+    return {
+        "t2v": evaluate_intrinsic_uncertainty(
+            metric_t2v_matrix,
+            positive_mask,
+            intrinsic["text_logvar"].exp().mean(-1).numpy(),
+            bootstrap_samples,
+            0,
+        ),
+        "v2t": evaluate_intrinsic_uncertainty(
+            metric_v2t_matrix.T,
+            positive_mask.T,
+            intrinsic["video_logvar"].exp().mean(-1).numpy(),
+            bootstrap_samples,
+            1,
+        ),
+        "text_distribution": summarize_logvar(
+            intrinsic["text_logvar"].numpy(), logvar_min, logvar_max
+        ),
+        "video_distribution": summarize_logvar(
+            intrinsic["video_logvar"].numpy(), logvar_min, logvar_max
+        ),
+        "distance_components": summarize_csd_components(
+            intrinsic["text_mu"].numpy(),
+            intrinsic["video_mu"].numpy(),
+            intrinsic["text_logvar"].numpy(),
+            intrinsic["video_logvar"].numpy(),
+        ),
+    }
+
+
 def _apply_dual_softmax(similarity_matrix, temperature=1.0):
     """Return independent T2V/V2T DSL matrices without mutating the input."""
 
@@ -1660,8 +1779,20 @@ def _apply_dual_softmax(similarity_matrix, temperature=1.0):
     )
 
 
-def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "v2t")):
+def eval_epoch(
+    args,
+    model,
+    eval_dataloader,
+    device,
+    n_gpu,
+    directions=("t2v", "v2t"),
+    report_csd_logvar=None,
+):
     directions = _normalize_eval_directions(directions)
+    if report_csd_logvar is None:
+        report_csd_logvar = bool(
+            getattr(args, "use_csd_logvar_sidecar", False)
+        )
 
     if hasattr(model, "module"):
         model = model.module.to(device)
@@ -1777,7 +1908,7 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
             n_gpu > 1
             and "LOCAL_RANK" not in os.environ
         ):
-            device_ids = list(range(n_gpu))
+            device_ids = _select_eval_device_ids(n_gpu, len(batch_list_t))
             batch_list_t_splits = []
             batch_list_v_splits = []
             batch_t_output_splits = []
@@ -1804,7 +1935,12 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
                         for output in batch_sequence_output_list[s_:e_]
                     ]
                     batch_t_output_splits.append(devc_batch_list)
-                    devc_batch_list = [tensor.to(devc) for tensor in batch_visual_output_list]
+                    devc_batch_list = [
+                        tuple(tensor.to(devc) for tensor in output)
+                        if isinstance(output, tuple)
+                        else output.to(devc)
+                        for output in batch_visual_output_list
+                    ]
                     batch_v_output_splits.append(devc_batch_list)
 
             parameters_tuple_list = [
@@ -1818,10 +1954,16 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
                 for dev_id in device_ids
             ]
             parallel_outputs = parallel_apply(_run_on_single_gpu, model, parameters_tuple_list, device_ids)
-            sim_matrix = []
-            for idx in range(len(parallel_outputs)):
-                sim_matrix += parallel_outputs[idx]
-            sim_matrix = np.concatenate(tuple(sim_matrix), axis=0)
+            if getattr(args, "use_csd_logvar_sidecar", False):
+                sim_matrix, intrinsic = _merge_csd_eval_outputs(
+                    parallel_outputs
+                )
+            else:
+                sim_matrix = []
+                for idx in range(len(parallel_outputs)):
+                    sim_matrix += parallel_outputs[idx]
+                sim_matrix = np.concatenate(tuple(sim_matrix), axis=0)
+                intrinsic = None
             v2t_directional_matrix = sim_matrix
             mus_matrix = sim_matrix
         else:
@@ -1833,7 +1975,13 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
                 batch_sequence_output_list,
                 batch_visual_output_list,
             )
-            sim_matrix = np.concatenate(tuple(retrieval_output), axis=0)
+            if getattr(args, "use_csd_logvar_sidecar", False):
+                sim_matrix, intrinsic = _merge_csd_eval_outputs(
+                    [retrieval_output]
+                )
+            else:
+                sim_matrix = np.concatenate(tuple(retrieval_output), axis=0)
+                intrinsic = None
             v2t_directional_matrix = sim_matrix
             mus_matrix = sim_matrix
 
@@ -1896,12 +2044,17 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
         direction: _serialize_retrieval_metrics(directional_metrics[direction])
         for direction in directions
     }
-    if getattr(model, "use_retrieval_risk_sidecar", False):
+    report_retrieval_risk = bool(
+        getattr(model, "use_retrieval_risk_sidecar", False)
+    )
+    positive_mask = None
+    if report_retrieval_risk or report_csd_logvar:
         positive_mask = build_eval_positive_mask(
             metric_t2v_matrix.shape[0],
             metric_t2v_matrix.shape[1],
             cut_off_points_ if multi_sentence_ else None,
         )
+    if report_retrieval_risk:
         result["retrieval_risk"] = _compute_retrieval_risk_metrics(
             model=model,
             risk_similarity_matrix=risk_similarity_matrix,
@@ -1922,6 +2075,26 @@ def eval_epoch(args, model, eval_dataloader, device, n_gpu, directions=("t2v", "
                 risk_metrics["spearman_risk_vs_rank"],
                 risk_metrics["failure_auroc"]["value"],
                 risk_metrics["risk_coverage"]["aurc"],
+            )
+    if report_csd_logvar:
+        assert intrinsic is not None
+        result["csd_logvar"] = _compute_csd_logvar_metrics(
+            metric_t2v_matrix=metric_t2v_matrix,
+            metric_v2t_matrix=metric_v2t_matrix,
+            positive_mask=positive_mask,
+            intrinsic=intrinsic,
+            bootstrap_samples=getattr(args, "csd_bootstrap_samples", 1000),
+            logvar_min=getattr(args, "csd_logvar_min", -12.0),
+            logvar_max=getattr(args, "csd_logvar_max", 4.0),
+        )
+        for direction in ("t2v", "v2t"):
+            intrinsic_metrics = result["csd_logvar"][direction]
+            logger.info(
+                "  %s intrinsic | rho=%+.4f AUROC=%.4f AURC=%.4f",
+                direction.upper(),
+                intrinsic_metrics["spearman_uncertainty_vs_rank"],
+                intrinsic_metrics["failure_auroc"]["value"],
+                intrinsic_metrics["risk_coverage"]["aurc"],
             )
     return result
 
