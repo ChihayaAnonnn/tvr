@@ -127,11 +127,18 @@ def _risk_coverage(ranks: np.ndarray, risk: np.ndarray) -> dict[str, float]:
     return payload
 
 
+def _prefix_mean_aurc(ranks: np.ndarray, risk: np.ndarray) -> float:
+    order = np.argsort(risk, kind="stable")
+    correct = (ranks[order] == 0).astype(np.float64)
+    count = np.arange(1, correct.size + 1, dtype=np.float64)
+    return float(np.mean(1.0 - np.cumsum(correct) / count))
+
+
 def evaluate_retrieval_risk(
     scores: np.ndarray,
     positive_mask: np.ndarray,
     risk: np.ndarray,
-    vacuity: np.ndarray,
+    vacuity: np.ndarray | None = None,
     bootstrap_samples: int = 1000,
     seed: int = 0,
 ) -> dict[str, object]:
@@ -139,11 +146,16 @@ def evaluate_retrieval_risk(
 
     ranks = positive_ranks(scores, positive_mask)
     risk = np.asarray(risk, dtype=np.float64).reshape(-1)
-    vacuity = np.asarray(vacuity, dtype=np.float64).reshape(-1)
-    if risk.shape != ranks.shape or vacuity.shape != ranks.shape:
-        raise ValueError("risk and vacuity must have one value per query")
-    if not np.isfinite(risk).all() or not np.isfinite(vacuity).all():
-        raise ValueError("risk and vacuity must be finite")
+    if risk.shape != ranks.shape:
+        raise ValueError("risk must have one value per query")
+    if not np.isfinite(risk).all():
+        raise ValueError("risk must be finite")
+    if vacuity is not None:
+        vacuity = np.asarray(vacuity, dtype=np.float64).reshape(-1)
+        if vacuity.shape != ranks.shape:
+            raise ValueError("vacuity must have one value per query")
+        if not np.isfinite(vacuity).all():
+            raise ValueError("vacuity must be finite")
 
     failure = ranks > 0
     auroc = _binary_auroc(failure, risk)
@@ -154,7 +166,7 @@ def evaluate_retrieval_risk(
     if not np.isfinite(spearman):
         raise ValueError("Spearman correlation requires non-constant inputs")
 
-    return {
+    result = {
         "num_queries": int(ranks.size),
         "num_failures": int(failure.sum()),
         "spearman_risk_vs_rank": float(spearman),
@@ -163,10 +175,16 @@ def evaluate_retrieval_risk(
             "ci_low": ci_low,
             "ci_high": ci_high,
         },
+        "aurc": _prefix_mean_aurc(ranks, risk),
         "risk_coverage": _risk_coverage(ranks, risk),
         "risk_stats": _summary(risk),
-        "vacuity_stats": _summary(vacuity),
+        "saturation_fraction": float(
+            np.mean((risk < 1e-4) | (risk > 1.0 - 1e-4))
+        ),
     }
+    if vacuity is not None:
+        result["vacuity_stats"] = _summary(vacuity)
+    return result
 
 
 def evaluate_intrinsic_uncertainty(

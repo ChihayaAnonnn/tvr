@@ -1389,8 +1389,81 @@ def _should_log_training_step(global_step, log_step, smoke_cap, args):
     return global_step % log_step == 0 or (
         smoke_cap is not None
         and global_step == smoke_cap
-        and bool(getattr(args, "use_csd_logvar_sidecar", False))
+        and bool(
+            getattr(args, "use_csd_logvar_sidecar", False)
+            or getattr(args, "use_contextual_risk_sidecar", False)
+        )
     )
+
+
+def _contextual_risk_log_interval(args):
+    if getattr(args, "use_contextual_risk_sidecar", False):
+        return 20
+    return int(args.n_display)
+
+
+def _validate_contextual_risk_diagnostics(terms):
+    """Abort immediately on invalid A3 loss values or one-class targets."""
+
+    for name, value in terms.items():
+        if name.startswith("contextual_risk_") and not math.isfinite(float(value)):
+            raise FloatingPointError(f"non-finite A3 diagnostic: {name}")
+    for direction in ("t2v", "v2t"):
+        rate = float(terms[f"contextual_risk_{direction}_failure_rate"])
+        if not 0.0 < rate < 1.0:
+            raise RuntimeError(
+                f"A3 {direction} BCE requires both success and failure classes"
+            )
+
+
+def _contextual_risk_gradient_norm(model):
+    inner = model.module if hasattr(model, "module") else model
+    squared_norm = 0.0
+    for name, parameter in inner.named_parameters():
+        if name.startswith("contextual_risk_sidecar.") and parameter.grad is not None:
+            gradient = parameter.grad.detach().float()
+            squared_norm += float(torch.sum(gradient * gradient))
+    norm = math.sqrt(squared_norm)
+    if not math.isfinite(norm):
+        raise FloatingPointError("non-finite A3 gradient norm")
+    return norm
+
+
+def _advance_contextual_zero_gradient_windows(previous, gradient_norm):
+    if not math.isfinite(float(gradient_norm)):
+        raise FloatingPointError("non-finite A3 gradient norm")
+    consecutive = int(previous) + 1 if float(gradient_norm) == 0.0 else 0
+    if consecutive >= 2:
+        raise RuntimeError("zero A3 gradient for two consecutive windows")
+    return consecutive
+
+
+def _log_contextual_risk_window(means):
+    logger.info(
+        "  [A3 window] total=%.4f BCE=%.4f fit=%.4f rank=%.4f | grad=%.4e",
+        means["contextual_risk_loss"],
+        means["contextual_risk_bce"],
+        means["contextual_risk_fit"],
+        means["contextual_risk_rank"],
+        means["contextual_risk_gradient_norm"],
+    )
+    for direction in ("t2v", "v2t"):
+        prefix = f"contextual_risk_{direction}_"
+        logger.info(
+            "  [A3 window] %s failure=%.4f weight=%.4f | "
+            "risk=%.4f/%.4f hardness=%.4f/%.4f | valid-pair=%.4f "
+            "saturation=%.4f top-K entropy=%.4f",
+            direction.upper(),
+            means[prefix + "failure_rate"],
+            means[prefix + "positive_weight"],
+            means[prefix + "prediction_mean"],
+            means[prefix + "prediction_std"],
+            means[prefix + "hardness_mean"],
+            means[prefix + "hardness_std"],
+            means[prefix + "valid_ranking_fraction"],
+            means[prefix + "saturation_fraction"],
+            means[prefix + "entropy"],
+        )
 
 
 def _time_per_dataloader_step_since_log(
@@ -1408,7 +1481,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     set_retrieval_risk_training_mode(model)
     set_csd_logvar_training_mode(model)
     _set_contextual_risk_training_mode(model)
-    log_step = args.n_display
+    log_step = _contextual_risk_log_interval(args)
     last_log_time = time.time()
     last_logged_dataloader_step = 0
     epoch_start_time = time.time()
@@ -1433,6 +1506,14 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     crf_window_count = 0
     csd_window: dict[str, float] = {}
     csd_window_count = 0
+    contextual_window: dict[str, float] = {}
+    contextual_window_count = 0
+    contextual_gradient_total = 0.0
+    contextual_gradient_count = 0
+    inner_model = model.module if hasattr(model, "module") else model
+    contextual_zero_gradient_windows = int(
+        getattr(inner_model, "_contextual_zero_gradient_windows", 0)
+    )
 
     for step, batch in enumerate(train_dataloader):
         if smoke_cap is not None and step >= smoke_cap:
@@ -1488,6 +1569,13 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                         if key.startswith("csd_logvar_")
                         and key != "csd_logvar_loss"
                     }
+                elif getattr(args, "use_contextual_risk_sidecar", False):
+                    loss_terms = {
+                        key: value.detach()
+                        for key, value in loss_output.items()
+                        if key.startswith("contextual_risk_")
+                    }
+                    _validate_contextual_risk_diagnostics(loss_terms)
                 loss = loss_output["total"]
             else:
                 loss = loss_output
@@ -1505,12 +1593,23 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 for name, tensor in loss_terms.items():
                     csd_window[name] = csd_window.get(name, 0.0) + float(tensor)
                 csd_window_count += 1
+            elif any(
+                name.startswith("contextual_risk_") for name in loss_terms
+            ):
+                for name, tensor in loss_terms.items():
+                    contextual_window[name] = (
+                        contextual_window.get(name, 0.0) + float(tensor)
+                    )
+                contextual_window_count += 1
             else:
                 for name, tensor in loss_terms.items():
                     crf_window[name] = crf_window.get(name, 0.0) + float(tensor)
                 crf_window_count += 1
 
         if (step + 1) % args.gradient_accumulation_steps == 0:
+            if getattr(args, "use_contextual_risk_sidecar", False):
+                contextual_gradient_total += _contextual_risk_gradient_norm(model)
+                contextual_gradient_count += 1
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
             # 先记录本次 step 将要应用的 LR，再 step。
@@ -1528,8 +1627,36 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
 
             global_step += 1
 
+            should_log = _should_log_training_step(
+                global_step, log_step, smoke_cap, args
+            )
+            contextual_window_means = None
+            if should_log and contextual_window_count > 0:
+                contextual_window_means = {
+                    key: value / contextual_window_count
+                    for key, value in contextual_window.items()
+                }
+                contextual_window_means["contextual_risk_gradient_norm"] = (
+                    contextual_gradient_total / contextual_gradient_count
+                )
+                contextual_zero_gradient_windows = (
+                    _advance_contextual_zero_gradient_windows(
+                        contextual_zero_gradient_windows,
+                        contextual_window_means[
+                            "contextual_risk_gradient_norm"
+                        ],
+                    )
+                )
+                inner_model._contextual_zero_gradient_windows = (
+                    contextual_zero_gradient_windows
+                )
+                contextual_window = {}
+                contextual_window_count = 0
+                contextual_gradient_total = 0.0
+                contextual_gradient_count = 0
+
             if (
-                _should_log_training_step(global_step, log_step, smoke_cap, args)
+                should_log
                 and local_rank == 0
             ):
                 # --- 计算进度 & ETA ---
@@ -1614,6 +1741,8 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     )
                     csd_window = {}
                     csd_window_count = 0
+                if contextual_window_means is not None:
+                    _log_contextual_risk_window(contextual_window_means)
 
     total_loss = total_loss / len(train_dataloader)
     epoch_time = time.time() - epoch_start_time
@@ -1706,6 +1835,10 @@ def _run_on_single_gpu(
         del visual_output_all, video_mask_all
 
     collect_csd = bool(getattr(args, "use_csd_logvar_sidecar", False))
+    collect_contextual = bool(
+        getattr(args, "use_contextual_risk_sidecar", False)
+    )
+    collect_aux = collect_csd or collect_contextual
     sim_matrix = []
     text_payload = []
     video_payload = []
@@ -1720,6 +1853,9 @@ def _run_on_single_gpu(
         for chunk_index, chunk in enumerate(video_chunks):
             if is_june:
                 visual_output, visual_hidden, video_mask = chunk
+                auxiliary_kwargs = {"return_csd_aux": collect_csd}
+                if collect_contextual:
+                    auxiliary_kwargs["return_contextual_aux"] = True
                 logits, aux = model.get_similarity_logits(
                     sequence_output,
                     text_token,
@@ -1728,7 +1864,7 @@ def _run_on_single_gpu(
                     input_mask,
                     video_mask,
                     loose_type=model.loose_type,
-                    return_csd_aux=collect_csd,
+                    **auxiliary_kwargs,
                 )
             else:
                 visual_output, video_mask = chunk
@@ -1741,18 +1877,26 @@ def _run_on_single_gpu(
                     loose_type=model.loose_type,
                 )
             row_logits.append(logits)
-            if collect_csd and chunk_index == 0:
+            if collect_aux and chunk_index == 0:
                 text_payload.append(
                     {
                         name: aux[name].float().cpu()
-                        for name in ("text_mu", "text_logvar")
+                        for name in (
+                            ("text_mu", "text_logvar")
+                            if collect_csd
+                            else ("text_mu",)
+                        )
                     }
                 )
-            if collect_csd and idx1 == 0:
+            if collect_aux and idx1 == 0:
                 video_payload.append(
                     {
                         name: aux[name].float().cpu()
-                        for name in ("video_mu", "video_logvar")
+                        for name in (
+                            ("video_mu", "video_logvar")
+                            if collect_csd
+                            else ("video_mu",)
+                        )
                     }
                 )
 
@@ -1760,51 +1904,77 @@ def _run_on_single_gpu(
         b1_all_v_logits = torch.cat(row_logits, dim=1).float().cpu()
         sim_matrix.append(b1_all_v_logits.detach().numpy())
 
-    if not collect_csd:
+    if not collect_aux:
         return sim_matrix
-    return {
+    payload = {
         "similarity_rows": sim_matrix,
         "text_mu": torch.cat(
             [payload["text_mu"] for payload in text_payload], dim=0
         ),
-        "text_logvar": torch.cat(
-            [payload["text_logvar"] for payload in text_payload], dim=0
-        ),
         "video_mu": torch.cat(
             [payload["video_mu"] for payload in video_payload], dim=0
         ),
-        "video_logvar": torch.cat(
-            [payload["video_logvar"] for payload in video_payload], dim=0
-        ),
     }
+    if collect_csd:
+        payload.update(
+            {
+                "text_logvar": torch.cat(
+                    [payload["text_logvar"] for payload in text_payload], dim=0
+                ),
+                "video_logvar": torch.cat(
+                    [payload["video_logvar"] for payload in video_payload], dim=0
+                ),
+            }
+        )
+    return payload
 
 
-def _merge_csd_eval_outputs(outputs):
-    """Merge per-worker CSD payloads along retrieval matrix axes."""
-
+def _merge_canonical_eval_means(outputs):
+    """Merge ordered text means and deduplicate all-worker video means."""
     similarity_rows = [
         row for output in outputs for row in output["similarity_rows"]
     ]
     matrix = np.concatenate(tuple(similarity_rows), axis=0)
     text_mu = torch.cat([output["text_mu"] for output in outputs], dim=0)
+    video_mu = outputs[0]["video_mu"]
+    if (
+        text_mu.size(0) != matrix.shape[0]
+        or video_mu.size(0) != matrix.shape[1]
+    ):
+        raise ValueError(
+            "canonical mean axes do not align with retrieval matrix"
+        )
+    return matrix, {"text_mu": text_mu, "video_mu": video_mu}
+
+
+def _merge_contextual_eval_outputs(outputs):
+    """Merge the complete WTI matrix with canonical A3 modality means."""
+
+    return _merge_canonical_eval_means(outputs)
+
+
+def _merge_csd_eval_outputs(outputs):
+    """Merge per-worker CSD payloads along retrieval matrix axes."""
+
+    try:
+        matrix, means = _merge_canonical_eval_means(outputs)
+    except ValueError as error:
+        raise ValueError(
+            "intrinsic uncertainty axes do not align with retrieval matrix"
+        ) from error
     text_logvar = torch.cat(
         [output["text_logvar"] for output in outputs], dim=0
     )
-    video_mu = outputs[0]["video_mu"]
     video_logvar = outputs[0]["video_logvar"]
-    if (
-        text_mu.size(0) != matrix.shape[0]
-        or text_logvar.shape != text_mu.shape
-        or video_mu.size(0) != matrix.shape[1]
-        or video_logvar.shape != video_mu.shape
-    ):
+    if text_logvar.shape != means["text_mu"].shape or video_logvar.shape != means[
+        "video_mu"
+    ].shape:
         raise ValueError(
             "intrinsic uncertainty axes do not align with retrieval matrix"
         )
     return matrix, {
-        "text_mu": text_mu,
+        **means,
         "text_logvar": text_logvar,
-        "video_mu": video_mu,
         "video_logvar": video_logvar,
     }
 
@@ -1955,6 +2125,72 @@ def _compute_retrieval_risk_metrics(
     return payload
 
 
+def _compute_contextual_retrieval_risk_metrics(
+    *,
+    model,
+    risk_similarity_matrix,
+    positive_mask,
+    text_means,
+    video_means,
+    directions,
+    device,
+    bootstrap_samples=1000,
+    return_evidence=False,
+):
+    """Score A3 once per direction on the complete raw candidate matrix."""
+
+    directions = _normalize_eval_directions(directions)
+    raw_wti = np.asarray(risk_similarity_matrix, dtype=np.float32)
+    text_array = torch.as_tensor(text_means).detach().float().cpu().numpy()
+    video_array = torch.as_tensor(video_means).detach().float().cpu().numpy()
+    raw_logits = torch.from_numpy(raw_wti).to(device)
+    text_tensor = torch.from_numpy(text_array).to(device)
+    video_tensor = torch.from_numpy(video_array).to(device)
+    payload = {}
+    failure_risk_arrays = {}
+    with torch.no_grad():
+        for offset, direction in enumerate(directions):
+            output = model.score_contextual_retrieval_risk(
+                raw_logits,
+                text_tensor,
+                video_tensor,
+                direction,
+            )
+            failure_risk = output["failure_risk"].float().cpu().numpy()
+            failure_risk_arrays[direction] = failure_risk
+            scores = raw_wti if direction == "t2v" else raw_wti.T
+            mask = positive_mask if direction == "t2v" else positive_mask.T
+            payload[direction] = evaluate_retrieval_risk(
+                scores,
+                mask,
+                failure_risk,
+                bootstrap_samples=bootstrap_samples,
+                seed=offset,
+            )
+
+    if not return_evidence:
+        return payload
+    evidence = {
+        "raw_wti": raw_wti.tolist(),
+        "text_means": text_array.tolist(),
+        "video_means": video_array.tolist(),
+        "failure_risk": {
+            direction: failure_risk_arrays[direction].tolist()
+            for direction in directions
+        },
+        "sha256": {
+            "raw_wti": array_sha256(raw_wti),
+            "text_means": array_sha256(text_array),
+            "video_means": array_sha256(video_array),
+            "failure_risk": {
+                direction: array_sha256(failure_risk_arrays[direction])
+                for direction in directions
+            },
+        },
+    }
+    return payload, evidence
+
+
 def _build_paired_digest(
     result,
     risk_similarity_matrix,
@@ -2049,23 +2285,26 @@ def _apply_dual_softmax(similarity_matrix, temperature=1.0):
 
 @contextmanager
 def _eval_autocast_context(args):
-    """Scope exact FP32 and deterministic cuDNN to paired A2 evaluation."""
+    """Scope exact FP32 and deterministic cuDNN to paired sidecar evaluation."""
 
-    a2_only = bool(getattr(args, "csd_logvar_sidecar_only", False))
+    paired_sidecar_only = bool(
+        getattr(args, "csd_logvar_sidecar_only", False)
+        or getattr(args, "contextual_risk_sidecar_only", False)
+    )
     prior_benchmark = torch.backends.cudnn.benchmark
     prior_deterministic = torch.backends.cudnn.deterministic
-    if a2_only:
+    if paired_sidecar_only:
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
     try:
         with torch.autocast(
             device_type="cuda",
             dtype=torch.bfloat16,
-            enabled=not a2_only,
+            enabled=not paired_sidecar_only,
         ):
             yield
     finally:
-        if a2_only:
+        if paired_sidecar_only:
             torch.backends.cudnn.benchmark = prior_benchmark
             torch.backends.cudnn.deterministic = prior_deterministic
 
@@ -2249,6 +2488,10 @@ def eval_epoch(
                 sim_matrix, intrinsic = _merge_csd_eval_outputs(
                     parallel_outputs
                 )
+            elif getattr(args, "use_contextual_risk_sidecar", False):
+                sim_matrix, intrinsic = _merge_contextual_eval_outputs(
+                    parallel_outputs
+                )
             else:
                 sim_matrix = []
                 for idx in range(len(parallel_outputs)):
@@ -2268,6 +2511,10 @@ def eval_epoch(
             )
             if getattr(args, "use_csd_logvar_sidecar", False):
                 sim_matrix, intrinsic = _merge_csd_eval_outputs(
+                    [retrieval_output]
+                )
+            elif getattr(args, "use_contextual_risk_sidecar", False):
+                sim_matrix, intrinsic = _merge_contextual_eval_outputs(
                     [retrieval_output]
                 )
             else:
@@ -2338,8 +2585,11 @@ def eval_epoch(
     report_retrieval_risk = bool(
         getattr(model, "use_retrieval_risk_sidecar", False)
     )
+    report_contextual_risk = bool(
+        getattr(model, "use_contextual_risk_sidecar", False)
+    )
     positive_mask = None
-    if report_retrieval_risk or report_csd_logvar:
+    if report_retrieval_risk or report_contextual_risk or report_csd_logvar:
         positive_mask = build_eval_positive_mask(
             metric_t2v_matrix.shape[0],
             metric_t2v_matrix.shape[1],
@@ -2376,6 +2626,33 @@ def eval_epoch(
             risk_array_digests,
             directions,
         )
+    if report_contextual_risk:
+        assert intrinsic is not None
+        (
+            result["contextual_risk"],
+            result["contextual_risk_evidence"],
+        ) = _compute_contextual_retrieval_risk_metrics(
+            model=model,
+            risk_similarity_matrix=risk_similarity_matrix,
+            positive_mask=positive_mask,
+            text_means=intrinsic["text_mu"],
+            video_means=intrinsic["video_mu"],
+            directions=directions,
+            device=device,
+            bootstrap_samples=getattr(
+                args, "contextual_risk_bootstrap_samples", 1000
+            ),
+            return_evidence=True,
+        )
+        for direction in directions:
+            contextual_metrics = result["contextual_risk"][direction]
+            logger.info(
+                "  %s contextual risk | rho=%+.4f AUROC=%.4f AURC=%.4f",
+                direction.upper(),
+                contextual_metrics["spearman_risk_vs_rank"],
+                contextual_metrics["failure_auroc"]["value"],
+                contextual_metrics["aurc"],
+            )
     if report_csd_logvar:
         assert intrinsic is not None
         result["csd_logvar"] = _compute_csd_logvar_metrics(

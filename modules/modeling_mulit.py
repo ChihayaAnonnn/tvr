@@ -617,6 +617,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         for direction in ("t2v", "v2t"):
             for name in (
                 "failure_rate",
+                "positive_weight",
                 "prediction_mean",
                 "prediction_std",
                 "target_mean",
@@ -628,6 +629,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 terms[f"contextual_risk_{direction}_{name}"] = output[direction][
                     name
                 ].detach()
+            hardness = output[direction]["hardness"].detach()
+            terms[f"contextual_risk_{direction}_hardness_mean"] = hardness.mean()
+            terms[f"contextual_risk_{direction}_hardness_std"] = hardness.std(
+                unbiased=False
+            )
         return terms
 
     def score_retrieval_risk(self, logits, direction):
@@ -640,8 +646,15 @@ class UATVR(CLIP4ClipPreTrainedModel):
     ):
         if not self.use_contextual_risk_sidecar:
             raise RuntimeError("contextual retrieval risk sidecar is disabled")
+        if direction == "v2t":
+            query_means, candidate_means = video_means, text_means
+        else:
+            query_means, candidate_means = text_means, video_means
         return self.contextual_risk_sidecar(
-            logits.detach(), text_means.detach(), video_means.detach(), direction
+            logits.detach(),
+            query_means.detach(),
+            candidate_means.detach(),
+            direction,
         )
 
     def forward(
@@ -934,6 +947,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         sim_header="seqTransf",
         group_ids=None,
         return_csd_aux=False,
+        return_contextual_aux=False,
     ):
         sequence_output, visual_output = (
             sequence_output.contiguous(),
@@ -1240,6 +1254,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
                     "text_logvar": csd_output["text_logvar"].detach(),
                     "video_logvar": csd_output["video_logvar"].detach(),
                 }
+            if return_contextual_aux and self.use_contextual_risk_sidecar:
+                return wti_logits, {
+                    "text_mu": text_pooled.detach(),
+                    "video_mu": mu_video.detach(),
+                }
             return wti_logits
 
     @staticmethod
@@ -1400,6 +1419,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         loose_type=False,
         group_ids=None,
         return_csd_aux=False,
+        return_contextual_aux=False,
     ):
         if shaped is False:
             attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
@@ -1427,7 +1447,10 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 video_mask,
                 sim_header=self.sim_header,
                 return_csd_aux=return_csd_aux,
+                return_contextual_aux=return_contextual_aux,
             )
             if return_csd_aux and self.use_csd_logvar_sidecar:
+                return retrieve_logits
+            if return_contextual_aux and self.use_contextual_risk_sidecar:
                 return retrieve_logits
             return retrieve_logits, {}
