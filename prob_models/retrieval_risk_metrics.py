@@ -215,14 +215,24 @@ def summarize_logvar(
 ) -> dict[str, object]:
     """Summarize log-variance, variance, and exact clamp-bound rates."""
 
-    values = np.asarray(logvar, dtype=np.float64)
-    if values.ndim != 2 or values.size == 0 or not np.isfinite(values).all():
+    source_values = np.asarray(logvar)
+    if not np.issubdtype(source_values.dtype, np.floating):
+        raise ValueError("logvar must have a floating-point dtype")
+    if (
+        source_values.ndim != 2
+        or source_values.size == 0
+        or not np.isfinite(source_values).all()
+    ):
         raise ValueError("logvar must be a non-empty finite 2-D array")
+    source_type = source_values.dtype.type
+    low_fraction = np.mean(source_values == source_type(lower))
+    high_fraction = np.mean(source_values == source_type(upper))
+    values = source_values.astype(np.float64, copy=False)
     return {
         "logvar": _summary(values.reshape(-1)),
         "variance": _summary(np.exp(values).reshape(-1)),
-        "clamp_low_fraction": float(np.mean(values == float(lower))),
-        "clamp_high_fraction": float(np.mean(values == float(upper))),
+        "clamp_low_fraction": float(low_fraction),
+        "clamp_high_fraction": float(high_fraction),
     }
 
 

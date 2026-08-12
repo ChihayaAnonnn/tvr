@@ -36,6 +36,19 @@ def test_logvar_summary_reports_clamp_rates():
     assert summary["variance"]["mean"] > 0
 
 
+def test_logvar_summary_matches_float32_non_integer_clamp_bounds():
+    lower, upper = -7.1, 3.1
+    values = np.array(
+        [[lower, -2.0], [1.0, upper]],
+        dtype=np.float32,
+    )
+
+    summary = summarize_logvar(values, lower, upper)
+
+    assert summary["clamp_low_fraction"] == 0.25
+    assert summary["clamp_high_fraction"] == 0.25
+
+
 def test_chunked_csd_summary_matches_direct_components():
     text_mu = np.array([[1.0, 0.0], [0.0, 1.0]])
     video_mu = np.array([[1.0, 0.0], [-1.0, 0.0]])
