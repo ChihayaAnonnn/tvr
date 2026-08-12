@@ -18,6 +18,7 @@ from main_task_retrieval import (
     _contextual_risk_should_continue,
     _initialize_contextual_risk_protocol,
     _maybe_run_contextual_risk_final_test,
+    _publish_experiment_manifest,
     _record_contextual_risk_selection,
     _restore_training_checkpoint,
     _serialize_retrieval_metrics,
@@ -1352,6 +1353,142 @@ def test_a3_exact_fp32_disables_and_restores_tf32_without_changing_a2():
     finally:
         torch.backends.cuda.matmul.allow_tf32 = original_matmul
         torch.backends.cudnn.allow_tf32 = original_cudnn
+
+
+def _manifest_publish_args(*, rank, tmp_path, resume_model=""):
+    """Namespace covering exactly the fields _publish_experiment_manifest reads."""
+    return SimpleNamespace(
+        rank=rank,
+        local_rank=rank,
+        contextual_risk_sidecar_only=True,
+        resume_model=resume_model,
+        output_dir=str(tmp_path),
+    )
+
+
+def _silence_manifest_logger(monkeypatch):
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "logger",
+        SimpleNamespace(info=lambda *args, **kwargs: None),
+        raising=False,
+    )
+
+
+def test_publish_experiment_manifest_non_rank_zero_ignores_rank_zero_write(
+    tmp_path, monkeypatch
+):
+    """Non-zero ranks must not race the fresh check against rank 0's write.
+
+    Reproduces the 2026-08-12 third-lineage failure at main_task_retrieval.py
+    where ranks 1--3 raised FileExistsError on the manifest rank 0 itself had
+    just published (log
+    6858631e06e34d85fd3ccd52f5b3110b4a565d8ce92a8c3893d6a801caf1cf7e).
+    """
+    _silence_manifest_logger(monkeypatch)
+    manifest_path = tmp_path / "experiment_manifest.json"
+    manifest_path.write_text(json.dumps({"marker": "from-rank-0"}))
+    args = _manifest_publish_args(rank=1, tmp_path=tmp_path)
+
+    _publish_experiment_manifest(
+        args,
+        tracking_payload={"marker": "tracking"},
+        manifest_path=manifest_path,
+        batch_semantics={},
+    )
+
+    # rank != 0 must not touch either artifact.
+    assert json.loads(manifest_path.read_text()) == {"marker": "from-rank-0"}
+    assert not (tmp_path / "training_args.json").exists()
+
+
+def test_publish_experiment_manifest_rank_zero_writes_when_absent(
+    tmp_path, monkeypatch
+):
+    _silence_manifest_logger(monkeypatch)
+    manifest_path = tmp_path / "experiment_manifest.json"
+    args = _manifest_publish_args(rank=0, tmp_path=tmp_path)
+
+    _publish_experiment_manifest(
+        args,
+        tracking_payload={"marker": "tracking"},
+        manifest_path=manifest_path,
+        batch_semantics={"world_size": 4},
+    )
+
+    assert json.loads(manifest_path.read_text()) == {"marker": "tracking"}
+    persisted_args = json.loads((tmp_path / "training_args.json").read_text())
+    assert persisted_args["rank"] == 0
+    assert persisted_args["contextual_risk_sidecar_only"] is True
+
+
+def test_publish_experiment_manifest_rank_zero_refuses_existing_fresh(
+    tmp_path, monkeypatch
+):
+    _silence_manifest_logger(monkeypatch)
+    manifest_path = tmp_path / "experiment_manifest.json"
+    manifest_path.write_text(json.dumps({"stale": True}))
+    args = _manifest_publish_args(rank=0, tmp_path=tmp_path)
+
+    with pytest.raises(FileExistsError, match="fresh A3 run refuses"):
+        _publish_experiment_manifest(
+            args,
+            tracking_payload={"marker": "tracking"},
+            manifest_path=manifest_path,
+            batch_semantics={},
+        )
+    assert json.loads(manifest_path.read_text()) == {"stale": True}
+
+
+def test_publish_experiment_manifest_resume_missing_raises_on_every_rank(
+    tmp_path, monkeypatch
+):
+    _silence_manifest_logger(monkeypatch)
+    manifest_path = tmp_path / "experiment_manifest.json"
+    args = _manifest_publish_args(
+        rank=1, tmp_path=tmp_path, resume_model="/tmp/prior/opt.bin"
+    )
+
+    with pytest.raises(FileNotFoundError, match="A3 continuation requires"):
+        _publish_experiment_manifest(
+            args,
+            tracking_payload={"marker": "tracking"},
+            manifest_path=manifest_path,
+            batch_semantics={},
+        )
+
+
+def test_publish_experiment_manifest_resume_validates_on_every_rank(
+    tmp_path, monkeypatch
+):
+    _silence_manifest_logger(monkeypatch)
+    calls = []
+
+    def _fake_validate(existing, requested):
+        calls.append((existing, requested))
+
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "validate_contextual_risk_resume_manifest",
+        _fake_validate,
+    )
+    manifest_path = tmp_path / "experiment_manifest.json"
+    manifest_path.write_text(json.dumps({"lineage": "prior"}))
+    args = _manifest_publish_args(
+        rank=1, tmp_path=tmp_path, resume_model="/tmp/prior/opt.bin"
+    )
+
+    _publish_experiment_manifest(
+        args,
+        tracking_payload={"marker": "tracking"},
+        manifest_path=manifest_path,
+        batch_semantics={},
+    )
+
+    assert calls == [({"lineage": "prior"}, {"marker": "tracking"})]
+    # Non-rank-zero resume must not re-publish the manifest or write args.
+    assert json.loads(manifest_path.read_text()) == {"lineage": "prior"}
+    assert not (tmp_path / "training_args.json").exists()
 
 
 def test_a3_save_refuses_checkpoint_overwrite(tmp_path, monkeypatch):

@@ -1791,6 +1791,53 @@ def prep_optimizer(args, model, num_train_optimization_steps, device, n_gpu, loc
     return optimizer, scheduler, model
 
 
+def _publish_experiment_manifest(
+    args,
+    *,
+    tracking_payload,
+    manifest_path,
+    batch_semantics,
+):
+    """Register or validate the A3 experiment manifest.
+
+    Rank 0 exclusively owns the fresh check-and-write so non-zero ranks
+    cannot race the file into existence that rank 0 itself just wrote and
+    then refuse it.  Resume-time read validation runs on every rank so any
+    manifest divergence fails the whole process group rather than only
+    rank 0.  A group barrier at the end blocks non-zero ranks until rank 0
+    has finished publishing training arguments and diagnostics.
+    """
+
+    manifest_path = Path(manifest_path)
+    a3_only = bool(getattr(args, "contextual_risk_sidecar_only", False))
+    resume_a3 = a3_only and bool(getattr(args, "resume_model", ""))
+    if resume_a3:
+        if not manifest_path.exists():
+            raise FileNotFoundError(
+                "A3 continuation requires the original experiment manifest"
+            )
+        validate_contextual_risk_resume_manifest(
+            json.loads(manifest_path.read_text()), tracking_payload
+        )
+    if is_global_rank_zero(args):
+        if a3_only and not resume_a3 and manifest_path.exists():
+            raise FileExistsError(
+                "fresh A3 run refuses an existing experiment manifest"
+            )
+        if not resume_a3:
+            atomic_write_json(manifest_path, tracking_payload)
+        _write_training_args_json(
+            args, Path(args.output_dir) / "training_args.json"
+        )
+        for key, value in batch_semantics.items():
+            logger.info("  Batch semantics | %s=%s", key, value)
+    if a3_only:
+        import torch.distributed as dist
+
+        if dist.is_available() and dist.is_initialized():
+            dist.barrier()
+
+
 def _write_training_args_json(args, path):
     """Persist the training-time args namespace so the audit CLI can rebuild
     the same UATVR architecture at eval time (Task 9 wiring)."""
@@ -5415,25 +5462,12 @@ def main():
             git_state=git_state,
         )
         manifest_path = Path(args.output_dir) / "experiment_manifest.json"
-        a3_only = bool(getattr(args, "contextual_risk_sidecar_only", False))
-        if a3_only and args.resume_model:
-            if not manifest_path.exists():
-                raise FileNotFoundError(
-                    "A3 continuation requires the original experiment manifest"
-                )
-            validate_contextual_risk_resume_manifest(
-                json.loads(manifest_path.read_text()), tracking_payload
-            )
-        elif a3_only and manifest_path.exists():
-            raise FileExistsError(
-                "fresh A3 run refuses an existing experiment manifest"
-            )
-        if is_global_rank_zero(args):
-            if not (a3_only and args.resume_model):
-                atomic_write_json(manifest_path, tracking_payload)
-            _write_training_args_json(args, Path(args.output_dir) / "training_args.json")
-            for key, value in batch_semantics.items():
-                logger.info("  Batch semantics | %s=%s", key, value)
+        _publish_experiment_manifest(
+            args,
+            tracking_payload=tracking_payload,
+            manifest_path=manifest_path,
+            batch_semantics=batch_semantics,
+        )
 
     if args.local_rank == 0:
         logger.info("***** Running %s evaluation *****", eval_split)
