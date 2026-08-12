@@ -853,6 +853,11 @@ def configure_csd_logvar_sidecar_training(model, args):
     ]
     if unexpected:
         raise RuntimeError(f"unexpected A2 trainable parameters: {unexpected}")
+    return sum(
+        parameter.numel()
+        for parameter in model.parameters()
+        if parameter.requires_grad
+    )
 
 
 def set_csd_logvar_training_mode(model):
@@ -1251,6 +1256,12 @@ def _unpack_train_batch(batch):
     return input_ids, input_mask, segment_ids, video, video_mask, group_ids
 
 
+def _should_log_training_step(global_step, log_step, smoke_cap):
+    return global_step % log_step == 0 or (
+        smoke_cap is not None and global_step == smoke_cap
+    )
+
+
 def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, scheduler, global_step, local_rank=0):
     global logger
     torch.cuda.empty_cache()
@@ -1375,7 +1386,10 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
 
             global_step += 1
 
-            if global_step % log_step == 0 and local_rank == 0:
+            if (
+                _should_log_training_step(global_step, log_step, smoke_cap)
+                and local_rank == 0
+            ):
                 # --- 计算进度 & ETA ---
                 opt_step = global_step % total_opt_steps or total_opt_steps
                 progress = opt_step / total_opt_steps * 100
@@ -2554,7 +2568,9 @@ def main():
             if not _should_keep_clip_parameter_trainable(name, args):
                 param.requires_grad = False
     configure_retrieval_risk_sidecar_training(model, args)
-    configure_csd_logvar_sidecar_training(model, args)
+    csd_trainable_count = configure_csd_logvar_sidecar_training(model, args)
+    if csd_trainable_count is not None and is_global_rank_zero(args):
+        logger.info("[CSD] trainable parameters: %d scalars", csd_trainable_count)
 
     ## ####################################
     # dataloader loading

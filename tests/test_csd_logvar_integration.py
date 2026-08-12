@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import torch
 from torch import nn
 
+import main_task_retrieval as retrieval
 from main_task_retrieval import (
     configure_csd_logvar_sidecar_training,
     set_csd_logvar_training_mode,
@@ -22,13 +23,14 @@ class _TinyA2Model(nn.Module):
 
 def test_a2_only_freezes_every_parameter_outside_exact_prefix():
     model = _TinyA2Model()
-    configure_csd_logvar_sidecar_training(
+    trainable_count = configure_csd_logvar_sidecar_training(
         model,
         SimpleNamespace(
             use_csd_logvar_sidecar=True,
             csd_logvar_sidecar_only=True,
         ),
     )
+    assert trainable_count == 64
     trainable = {
         name for name, parameter in model.named_parameters()
         if parameter.requires_grad
@@ -41,6 +43,12 @@ def test_a2_only_freezes_every_parameter_outside_exact_prefix():
         for parameter in model.parameters()
         if parameter.requires_grad
     ) == 64
+
+
+def test_one_step_smoke_flushes_diagnostics_before_display_interval():
+    assert retrieval._should_log_training_step(1, log_step=20, smoke_cap=1)
+    assert not retrieval._should_log_training_step(1, log_step=20, smoke_cap=None)
+    assert retrieval._should_log_training_step(20, log_step=20, smoke_cap=None)
 
 
 def test_a2_mode_keeps_only_new_sidecar_in_train_mode():
