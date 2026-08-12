@@ -5,6 +5,7 @@ import torch
 
 from main_task_retrieval import (
     _apply_dual_softmax,
+    _build_paired_digest,
     _compute_csd_logvar_metrics,
     _compute_directional_metrics,
     _compute_retrieval_risk_metrics,
@@ -13,6 +14,7 @@ from main_task_retrieval import (
     _select_eval_device_ids,
 )
 from modules.modeling_mulit import UATVR as FullUATVR
+from prob_models.csd_logvar_protocol import array_sha256
 
 
 class _DeterministicRiskModel:
@@ -84,6 +86,69 @@ def test_risk_reporting_uses_transposed_v2t_positive_mask():
     )
 
     assert result["v2t"]["num_queries"] == 4
+
+
+def test_risk_reporting_retains_exact_output_array_digests():
+    matrix = _matrix_with_successes_and_failures()
+    model = _DeterministicRiskModel()
+
+    risk, digests = _compute_retrieval_risk_metrics(
+        model=model,
+        risk_similarity_matrix=matrix,
+        metric_t2v_matrix=matrix,
+        metric_v2t_matrix=matrix,
+        positive_mask=np.eye(4, dtype=bool),
+        directions=("t2v", "v2t"),
+        device=torch.device("cpu"),
+        bootstrap_samples=20,
+        return_array_digests=True,
+    )
+
+    expected_risk = np.array(
+        [0.1, 0.36666664, 0.6333333, 0.9], dtype=np.float32
+    )
+    expected_vacuity = np.full(4, 0.4, dtype=np.float32)
+    assert set(risk) == {"t2v", "v2t"}
+    assert digests == {
+        "t2v": {
+            "failure_risk": array_sha256(expected_risk),
+            "vacuity": array_sha256(expected_vacuity),
+        },
+        "v2t": {
+            "failure_risk": array_sha256(expected_risk),
+            "vacuity": array_sha256(expected_vacuity),
+        },
+    }
+
+
+def test_paired_digest_captures_raw_wti_a1_outputs_and_both_retrievals():
+    matrix = _matrix_with_successes_and_failures()
+    result = {
+        "t2v": {"R1": 50.0},
+        "v2t": {"R1": 25.0},
+        "retrieval_risk": {"t2v": {}, "v2t": {}},
+    }
+    risk_digests = {
+        "t2v": {"failure_risk": "tf", "vacuity": "tv"},
+        "v2t": {"failure_risk": "vf", "vacuity": "vv"},
+    }
+
+    paired = _build_paired_digest(
+        result,
+        matrix,
+        risk_digests,
+        ("t2v", "v2t"),
+    )
+
+    assert paired == {
+        "raw_wti_sha256": array_sha256(matrix),
+        "a1_failure_risk_sha256": {"t2v": "tf", "v2t": "vf"},
+        "a1_vacuity_sha256": {"t2v": "tv", "v2t": "vv"},
+        "retrieval": {
+            "t2v": {"R1": 50.0},
+            "v2t": {"R1": 25.0},
+        },
+    }
 
 
 def test_dual_softmax_uses_registered_temperature_without_mutating_input():

@@ -27,6 +27,14 @@ from experiment_tracking import (
 from metrics import compute_metrics, tensor_text_to_video_metrics, tensor_video_to_text_sim
 from modules.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modules.modeling import UATVR as _UATVR_HEAD
+from prob_models.csd_logvar_protocol import (
+    array_sha256,
+    choose_csd_logvar_checkpoint,
+    compare_paired_invariance,
+    csd_logvar_acceptance,
+    non_csd_state_dict_mismatches,
+    numeric_metrics_are_finite,
+)
 from prob_models.retrieval_risk_metrics import (
     build_eval_positive_mask,
     evaluate_intrinsic_uncertainty,
@@ -1681,6 +1689,7 @@ def _compute_retrieval_risk_metrics(
     directions,
     device,
     bootstrap_samples=1000,
+    return_array_digests=False,
 ):
     """Score the complete candidate matrix without mutating retrieval inputs."""
 
@@ -1689,9 +1698,12 @@ def _compute_retrieval_risk_metrics(
         np.asarray(risk_similarity_matrix, dtype=np.float32)
     ).to(device)
     payload = {}
+    array_digests = {}
     with torch.no_grad():
         for offset, direction in enumerate(directions):
             output = model.score_retrieval_risk(raw_logits, direction)
+            failure_risk = output["failure_risk"].float().cpu().numpy()
+            vacuity = output["vacuity"].float().cpu().numpy()
             if direction == "t2v":
                 scores = metric_t2v_matrix
                 mask = positive_mask
@@ -1701,12 +1713,40 @@ def _compute_retrieval_risk_metrics(
             payload[direction] = evaluate_retrieval_risk(
                 scores,
                 mask,
-                output["failure_risk"].float().cpu().numpy(),
-                output["vacuity"].float().cpu().numpy(),
+                failure_risk,
+                vacuity,
                 bootstrap_samples=bootstrap_samples,
                 seed=offset,
             )
+            array_digests[direction] = {
+                "failure_risk": array_sha256(failure_risk),
+                "vacuity": array_sha256(vacuity),
+            }
+    if return_array_digests:
+        return payload, array_digests
     return payload
+
+
+def _build_paired_digest(
+    result,
+    risk_similarity_matrix,
+    risk_array_digests,
+    directions,
+):
+    """Build exact A1-output evidence for an A2 paired evaluation."""
+
+    return {
+        "raw_wti_sha256": array_sha256(risk_similarity_matrix),
+        "a1_failure_risk_sha256": {
+            direction: risk_array_digests[direction]["failure_risk"]
+            for direction in directions
+        },
+        "a1_vacuity_sha256": {
+            direction: risk_array_digests[direction]["vacuity"]
+            for direction in directions
+        },
+        "retrieval": {direction: result[direction] for direction in directions},
+    }
 
 
 def _compute_csd_logvar_metrics(
@@ -2055,17 +2095,20 @@ def eval_epoch(
             cut_off_points_ if multi_sentence_ else None,
         )
     if report_retrieval_risk:
-        result["retrieval_risk"] = _compute_retrieval_risk_metrics(
-            model=model,
-            risk_similarity_matrix=risk_similarity_matrix,
-            metric_t2v_matrix=metric_t2v_matrix,
-            metric_v2t_matrix=metric_v2t_matrix,
-            positive_mask=positive_mask,
-            directions=directions,
-            device=device,
-            bootstrap_samples=getattr(
-                args, "retrieval_risk_bootstrap_samples", 1000
-            ),
+        result["retrieval_risk"], risk_array_digests = (
+            _compute_retrieval_risk_metrics(
+                model=model,
+                risk_similarity_matrix=risk_similarity_matrix,
+                metric_t2v_matrix=metric_t2v_matrix,
+                metric_v2t_matrix=metric_v2t_matrix,
+                positive_mask=positive_mask,
+                directions=directions,
+                device=device,
+                bootstrap_samples=getattr(
+                    args, "retrieval_risk_bootstrap_samples", 1000
+                ),
+                return_array_digests=True,
+            )
         )
         for direction in directions:
             risk_metrics = result["retrieval_risk"][direction]
@@ -2076,6 +2119,12 @@ def eval_epoch(
                 risk_metrics["failure_auroc"]["value"],
                 risk_metrics["risk_coverage"]["aurc"],
             )
+        result["paired_digest"] = _build_paired_digest(
+            result,
+            risk_similarity_matrix,
+            risk_array_digests,
+            directions,
+        )
     if report_csd_logvar:
         assert intrinsic is not None
         result["csd_logvar"] = _compute_csd_logvar_metrics(
@@ -2097,6 +2146,268 @@ def eval_epoch(
                 intrinsic_metrics["risk_coverage"]["aurc"],
             )
     return result
+
+
+def _candidate_clamp_ok(metrics):
+    return all(
+        metrics[name]["clamp_low_fraction"]
+        + metrics[name]["clamp_high_fraction"]
+        < 0.05
+        for name in ("text_distribution", "video_distribution")
+    )
+
+
+def _build_csd_logvar_candidate(
+    *,
+    epoch,
+    checkpoint_path,
+    validation_metrics,
+    paired_baseline,
+    reference_checkpoint,
+):
+    """Build one fully audited bidirectional validation candidate."""
+
+    intrinsic = validation_metrics["csd_logvar"]
+    paired_invariance = compare_paired_invariance(
+        paired_baseline,
+        validation_metrics["paired_digest"],
+    )
+    mismatches = non_csd_state_dict_mismatches(
+        reference_checkpoint,
+        checkpoint_path,
+    )
+    finite = numeric_metrics_are_finite(validation_metrics)
+    clamp_ok = _candidate_clamp_ok(intrinsic)
+    return {
+        "epoch": int(epoch),
+        "path": str(checkpoint_path),
+        "valid": bool(
+            finite and paired_invariance["passed"] and not mismatches and clamp_ok
+        ),
+        "finite": finite,
+        "paired_invariance": paired_invariance,
+        "non_a2_mismatches": mismatches,
+        "clamp_ok": clamp_ok,
+        "rho": [
+            intrinsic[direction]["spearman_uncertainty_vs_rank"]
+            for direction in ("t2v", "v2t")
+        ],
+        "auroc": [
+            intrinsic[direction]["failure_auroc"]["value"]
+            for direction in ("t2v", "v2t")
+        ],
+        "acceptance": csd_logvar_acceptance(intrinsic),
+    }
+
+
+def _reaudit_csd_logvar_candidates(candidates, reference_checkpoint):
+    """Recheck every persisted candidate against the original A1 tensors."""
+
+    audited = []
+    for stored in candidates:
+        candidate = dict(stored)
+        mismatches = non_csd_state_dict_mismatches(
+            reference_checkpoint,
+            candidate["path"],
+        )
+        candidate["non_a2_mismatches"] = mismatches
+        candidate["valid"] = bool(
+            candidate["finite"]
+            and candidate["paired_invariance"]["passed"]
+            and not mismatches
+            and candidate["clamp_ok"]
+        )
+        audited.append(candidate)
+    return audited
+
+
+def _csd_logvar_selection_payload(candidates, winner):
+    return {
+        "selection_split": "val",
+        "selection_metric": (
+            "max(min(t2v_rho,v2t_rho),mean(t2v_auroc,v2t_auroc))"
+        ),
+        "tie_break": "earlier_epoch",
+        "candidates": candidates,
+        "winner": winner,
+    }
+
+
+def _initialize_csd_logvar_protocol(
+    args,
+    model,
+    eval_dataloader,
+    device,
+    n_gpu,
+):
+    """Register fresh A1 evidence or restore one continuation lineage."""
+
+    baseline_path = Path(args.output_dir) / "a1_paired_baseline.json"
+    selection_path = Path(args.output_dir) / "best_csd_logvar_checkpoint.json"
+    continuing = bool(args.resume_model)
+    if continuing and not baseline_path.exists():
+        raise FileNotFoundError(
+            "A2 continuation requires the original paired baseline registration"
+        )
+    if continuing and not selection_path.exists():
+        raise FileNotFoundError(
+            "A2 continuation requires the original candidate selection list"
+        )
+    if not continuing and (baseline_path.exists() or selection_path.exists()):
+        raise FileExistsError(
+            "fresh A2 run requires an output directory without existing "
+            "protocol lineage artifacts"
+        )
+
+    if continuing:
+        paired_registration = json.loads(baseline_path.read_text())
+        paired_baseline = paired_registration["paired_digest"]
+        reference_checkpoint = paired_registration["reference_checkpoint"]
+    else:
+        baseline_eval = eval_epoch(
+            args,
+            model,
+            eval_dataloader,
+            device,
+            n_gpu,
+            report_csd_logvar=False,
+        )
+        paired_baseline = baseline_eval["paired_digest"]
+        reference_checkpoint = args.init_model
+        atomic_write_json(
+            baseline_path,
+            {
+                "reference_checkpoint": reference_checkpoint,
+                "paired_digest": paired_baseline,
+            },
+        )
+
+    candidates = []
+    if continuing:
+        candidates = json.loads(selection_path.read_text())["candidates"]
+        candidates = _reaudit_csd_logvar_candidates(
+            candidates,
+            reference_checkpoint,
+        )
+        try:
+            winner = choose_csd_logvar_checkpoint(candidates)
+        except ValueError:
+            winner = None
+        atomic_write_json(
+            selection_path,
+            _csd_logvar_selection_payload(candidates, winner),
+        )
+    return {
+        "baseline_path": baseline_path,
+        "selection_path": selection_path,
+        "paired_baseline": paired_baseline,
+        "reference_checkpoint": reference_checkpoint,
+        "candidates": candidates,
+    }
+
+
+def _record_csd_logvar_selection(
+    *,
+    epoch,
+    checkpoint_path,
+    validation_metrics,
+    paired_baseline,
+    reference_checkpoint,
+    candidates,
+    selection_path,
+):
+    """Append, audit, select, and atomically persist one A2 candidate."""
+
+    candidate = _build_csd_logvar_candidate(
+        epoch=epoch,
+        checkpoint_path=checkpoint_path,
+        validation_metrics=validation_metrics,
+        paired_baseline=paired_baseline,
+        reference_checkpoint=reference_checkpoint,
+    )
+    candidates.append(candidate)
+    try:
+        winner = choose_csd_logvar_checkpoint(candidates)
+    except ValueError:
+        atomic_write_json(
+            selection_path,
+            _csd_logvar_selection_payload(candidates, None),
+        )
+        return None
+    atomic_write_json(
+        selection_path,
+        _csd_logvar_selection_payload(candidates, winner),
+    )
+    return winner
+
+
+def _evaluate_selected_test_checkpoints(
+    args,
+    model,
+    test_dataloader,
+    device,
+    n_gpu,
+    selection_payload,
+    *,
+    csd_logvar_sidecar_only,
+):
+    """Evaluate validation-selected checkpoints without test-time selection."""
+
+    if csd_logvar_sidecar_only:
+        checkpoint_path = selection_payload["winner"]["path"]
+        logger.info(
+            "***** Running final bidirectional test from A2-selected "
+            "checkpoint: %s *****",
+            checkpoint_path,
+        )
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        model.load_state_dict(checkpoint)
+        model.to(device)
+        test_metrics = eval_epoch(
+            args,
+            model,
+            test_dataloader,
+            device,
+            n_gpu,
+            directions=("t2v", "v2t"),
+        )
+        return {
+            "test_split": "test",
+            "selection": selection_payload,
+            "test_metrics": test_metrics,
+        }
+
+    test_metrics_by_checkpoint = {}
+    final_test_payload = {}
+    for direction in ("t2v", "v2t"):
+        selection = selection_payload[direction]
+        checkpoint_path = selection["checkpoint"]
+        cache_key = (checkpoint_path, direction)
+        if cache_key not in test_metrics_by_checkpoint:
+            logger.info(
+                "***** Running final test from %s-selected checkpoint: %s *****",
+                direction.upper(),
+                checkpoint_path,
+            )
+            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+            model.load_state_dict(checkpoint)
+            model.to(device)
+            test_metrics_by_checkpoint[cache_key] = eval_epoch(
+                args,
+                model,
+                test_dataloader,
+                device,
+                n_gpu,
+                directions=(direction,),
+            )
+        final_test_payload[direction] = {
+            **selection,
+            "test_metrics": test_metrics_by_checkpoint[cache_key],
+        }
+    return {
+        "test_split": "test",
+        "selections": final_test_payload,
+    }
 
 
 def main():
@@ -2226,6 +2537,8 @@ def main():
         best_t2v_checkpoint = "None"
         best_v2t_score = float("-inf")
         best_v2t_checkpoint = "None"
+        a2_only = bool(getattr(args, "csd_logvar_sidecar_only", False))
+        csd_protocol = None
 
         # CRF-dev checkpoint selection (plan Task 9 wiring). Populated per epoch
         # on rank 0; the winner is written atomically to best_crf_checkpoint.json
@@ -2246,6 +2559,17 @@ def main():
             optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             resumed_epoch = checkpoint["epoch"] + 1
             # resumed_loss = checkpoint['loss']  # unused (kept for potential debugging)
+
+        if a2_only and args.local_rank == 0:
+            csd_protocol = _initialize_csd_logvar_protocol(
+                args,
+                model,
+                eval_dataloader,
+                device,
+                n_gpu,
+            )
+        if a2_only and dist.is_available() and dist.is_initialized():
+            dist.barrier()
 
         global_step = 0
 
@@ -2319,30 +2643,59 @@ def main():
                 validation_metrics = eval_epoch(
                     args, model, eval_dataloader, device, n_gpu
                 )
-                best_t2v_score, best_t2v_checkpoint = select_best_checkpoint(
-                    best_t2v_score,
-                    best_t2v_checkpoint,
-                    validation_metrics["t2v"]["R1"],
-                    output_model_file,
-                )
-                best_v2t_score, best_v2t_checkpoint = select_best_checkpoint(
-                    best_v2t_score,
-                    best_v2t_checkpoint,
-                    validation_metrics["v2t"]["R1"],
-                    output_model_file,
-                )
-                logger.info(
-                    "  Best %s T2V R@1: %.1f | %s",
-                    eval_split,
-                    best_t2v_score,
-                    best_t2v_checkpoint,
-                )
-                logger.info(
-                    "  Best %s V2T R@1: %.1f | %s",
-                    eval_split,
-                    best_v2t_score,
-                    best_v2t_checkpoint,
-                )
+                if a2_only:
+                    winner = _record_csd_logvar_selection(
+                        epoch=epoch,
+                        checkpoint_path=output_model_file,
+                        validation_metrics=validation_metrics,
+                        paired_baseline=csd_protocol["paired_baseline"],
+                        reference_checkpoint=csd_protocol[
+                            "reference_checkpoint"
+                        ],
+                        candidates=csd_protocol["candidates"],
+                        selection_path=csd_protocol["selection_path"],
+                    )
+                    if winner is None:
+                        logger.warning(
+                            "  No valid %s A2 checkpoint through epoch %d",
+                            eval_split,
+                            epoch,
+                        )
+                    else:
+                        logger.info(
+                            "  Best %s A2 | epoch=%d min-rho=%.4f "
+                            "mean-AUROC=%.4f | %s",
+                            eval_split,
+                            winner["epoch"],
+                            min(winner["rho"]),
+                            sum(winner["auroc"]) / 2.0,
+                            winner["path"],
+                        )
+                else:
+                    best_t2v_score, best_t2v_checkpoint = select_best_checkpoint(
+                        best_t2v_score,
+                        best_t2v_checkpoint,
+                        validation_metrics["t2v"]["R1"],
+                        output_model_file,
+                    )
+                    best_v2t_score, best_v2t_checkpoint = select_best_checkpoint(
+                        best_v2t_score,
+                        best_v2t_checkpoint,
+                        validation_metrics["v2t"]["R1"],
+                        output_model_file,
+                    )
+                    logger.info(
+                        "  Best %s T2V R@1: %.1f | %s",
+                        eval_split,
+                        best_t2v_score,
+                        best_t2v_checkpoint,
+                    )
+                    logger.info(
+                        "  Best %s V2T R@1: %.1f | %s",
+                        eval_split,
+                        best_v2t_score,
+                        best_v2t_checkpoint,
+                    )
                 logger.info("=" * 60)
 
             # Barrier so ranks 1..N-1 don't get too far ahead of rank 0's eval
@@ -2353,26 +2706,41 @@ def main():
                 dist.barrier()
 
         if args.local_rank == 0:
-            if best_t2v_checkpoint == "None" or best_v2t_checkpoint == "None":
-                raise RuntimeError("training completed without a validation checkpoint")
-            selection_payload = {
-                "selection_split": "val",
-                "tie_break": "later_epoch",
-                "t2v": {
-                    "selection_metric": "t2v_r1",
-                    "selection_score": best_t2v_score,
-                    "checkpoint": best_t2v_checkpoint,
-                },
-                "v2t": {
-                    "selection_metric": "v2t_r1",
-                    "selection_score": best_v2t_score,
-                    "checkpoint": best_v2t_checkpoint,
-                },
-            }
-            atomic_write_json(
-                Path(args.output_dir) / "best_validation_checkpoints.json",
-                selection_payload,
-            )
+            if a2_only:
+                winner = choose_csd_logvar_checkpoint(
+                    csd_protocol["candidates"]
+                )
+                selection_payload = json.loads(
+                    csd_protocol["selection_path"].read_text()
+                )
+                if selection_payload["winner"] != winner:
+                    raise RuntimeError("persisted A2 winner does not match candidates")
+            else:
+                if (
+                    best_t2v_checkpoint == "None"
+                    or best_v2t_checkpoint == "None"
+                ):
+                    raise RuntimeError(
+                        "training completed without a validation checkpoint"
+                    )
+                selection_payload = {
+                    "selection_split": "val",
+                    "tie_break": "later_epoch",
+                    "t2v": {
+                        "selection_metric": "t2v_r1",
+                        "selection_score": best_t2v_score,
+                        "checkpoint": best_t2v_checkpoint,
+                    },
+                    "v2t": {
+                        "selection_metric": "v2t_r1",
+                        "selection_score": best_v2t_score,
+                        "checkpoint": best_v2t_checkpoint,
+                    },
+                }
+                atomic_write_json(
+                    Path(args.output_dir) / "best_validation_checkpoints.json",
+                    selection_payload,
+                )
 
             if args.run_final_test:
                 model_to_evaluate = model.module if hasattr(model, "module") else model
@@ -2390,42 +2758,21 @@ def main():
                 previous_eval_split = args.eval_split
                 args.eval_split = "test"
                 try:
-                    test_metrics_by_checkpoint = {}
-                    final_test_payload = {}
-                    for direction in ("t2v", "v2t"):
-                        selection = selection_payload[direction]
-                        checkpoint_path = selection["checkpoint"]
-                        cache_key = (checkpoint_path, direction)
-                        if cache_key not in test_metrics_by_checkpoint:
-                            logger.info(
-                                "***** Running final test from %s-selected checkpoint: %s *****",
-                                direction.upper(),
-                                checkpoint_path,
-                            )
-                            checkpoint = torch.load(checkpoint_path, map_location="cpu")
-                            model_to_evaluate.load_state_dict(checkpoint)
-                            model_to_evaluate.to(device)
-                            test_metrics_by_checkpoint[cache_key] = eval_epoch(
-                                args,
-                                model_to_evaluate,
-                                test_dataloader,
-                                device,
-                                n_gpu,
-                                directions=(direction,),
-                            )
-                        final_test_payload[direction] = {
-                            **selection,
-                            "test_metrics": test_metrics_by_checkpoint[cache_key],
-                        }
+                    final_test_payload = _evaluate_selected_test_checkpoints(
+                        args,
+                        model_to_evaluate,
+                        test_dataloader,
+                        device,
+                        n_gpu,
+                        selection_payload,
+                        csd_logvar_sidecar_only=a2_only,
+                    )
                 finally:
                     args.eval_split = previous_eval_split
 
                 atomic_write_json(
                     Path(args.output_dir) / "final_test.json",
-                    {
-                        "test_split": "test",
-                        "selections": final_test_payload,
-                    },
+                    final_test_payload,
                 )
 
     elif args.do_eval:
