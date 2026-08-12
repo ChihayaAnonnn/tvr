@@ -78,9 +78,12 @@ def contextual_topk_features(
     attention = torch.softmax(attention_logits, dim=1)
     context = torch.sum(attention.unsqueeze(-1) * selected, dim=1)
     gaps = (top_values[:, :1] - top_values).masked_fill(~top_valid, 0.0)
-    entropy = -(
-        attention * attention.clamp_min(1e-12).log()
-    ).sum(dim=1) / math.log(effective_k)
+    if effective_k == 1:
+        entropy = attention.new_zeros(attention.size(0))
+    else:
+        entropy = -(
+            attention * attention.clamp_min(1e-12).log()
+        ).sum(dim=1) / math.log(effective_k)
     score_features = score_distribution_features(logits.detach(), direction, temperature)
     direction_code = score_features.new_tensor(
         [1.0, 0.0] if direction == "t2v" else [0.0, 1.0]
@@ -108,7 +111,7 @@ class ContextualRetrievalRiskSidecar(nn.Module):
     def __init__(
         self,
         embed_dim: int,
-        projection_dim: int = 32,
+        projection_dim: int = 128,
         hidden_dim: int = 32,
         topk: int = 16,
         temperature: float = 1.0,

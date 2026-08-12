@@ -41,6 +41,26 @@ def test_contextual_head_detaches_retrieval_inputs():
     assert any(parameter.grad is not None for parameter in head.parameters())
 
 
+def test_contextual_head_uses_binding_projection_default():
+    head = ContextualRetrievalRiskSidecar(embed_dim=4)
+
+    assert head.text_projection.out_features == 128
+    assert head.video_projection.out_features == 128
+
+
+def test_topk_one_defines_zero_finite_entropy():
+    features = contextual_topk_features(
+        torch.tensor([[4.0, 1.0], [0.0, 2.0]]),
+        torch.randn(2, 3),
+        torch.randn(2, 3),
+        "t2v",
+        topk=1,
+    )
+
+    assert torch.isfinite(features["topk_entropy"]).all()
+    torch.testing.assert_close(features["topk_entropy"], torch.zeros(2))
+
+
 def test_head_uses_one_shared_network_and_direction_specific_projections():
     head = ContextualRetrievalRiskSidecar(
         embed_dim=4, projection_dim=3, hidden_dim=7, topk=2, dropout=0.0
