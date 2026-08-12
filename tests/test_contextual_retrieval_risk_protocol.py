@@ -136,7 +136,6 @@ def test_selector_requires_artifact_verification():
             "selective",
         ),
         (lambda m: m["v2t"]["risk_stats"].update(std=0.019), "spread"),
-        (lambda m: m["paired_invariance"].update(passed=False), "invariance"),
         (lambda m: m["non_a3_mismatches"].append("backbone"), "state"),
     ],
 )

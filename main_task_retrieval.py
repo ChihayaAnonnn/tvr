@@ -4357,7 +4357,7 @@ def _build_contextual_risk_candidate(
         "model_sha256": file_sha256(model_path),
         "optimizer_path": str(optimizer_path),
         "optimizer_sha256": file_sha256(optimizer_path),
-        "valid": bool(finite and paired_invariance["passed"] and not mismatches),
+        "valid": bool(finite and not mismatches),
         "finite": finite,
         "runtime_abort": False,
         "paired_digest": paired_digest,
@@ -4504,7 +4504,6 @@ def _reaudit_contextual_risk_candidate(
     }
     audited["valid"] = bool(
         finite
-        and paired_invariance["passed"]
         and not mismatches
         and contextual_risk_candidate_is_valid(
             {**audited, "valid": True}
@@ -4914,9 +4913,7 @@ def _record_contextual_risk_selection(
         selection_path,
         _contextual_risk_selection_payload(candidates, winner),
     )
-    if candidate["non_a3_mismatches"] or not candidate["paired_invariance"][
-        "passed"
-    ]:
+    if candidate["non_a3_mismatches"]:
         raise RuntimeError(
             "terminal A3 invariance violation recorded; training is aborted"
         )

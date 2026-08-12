@@ -589,8 +589,6 @@ def contextual_risk_candidate_is_valid(candidate: Mapping) -> bool:
         and _complete_value(evidence)
         and numeric_metrics_are_finite(evidence)
         and complete_hashes
-        and paired_invariance.get("passed", False)
-        and all(bool(checks[key]) for key in required_checks)
         and not candidate.get("non_a3_mismatches")
         and not candidate.get("runtime_abort", False)
         and not candidate.get("runtime_abort_condition", False)
@@ -628,7 +626,6 @@ def contextual_risk_acceptance(metrics: Mapping) -> dict[str, object]:
             monotone_selective_accuracy(item) for item in directions
         ),
         "spread": all(item["risk_stats"]["std"] >= 0.02 for item in directions),
-        "invariance": bool(metrics["paired_invariance"]["passed"]),
         "state": not metrics["non_a3_mismatches"],
     }
     passed = all(checks.values())

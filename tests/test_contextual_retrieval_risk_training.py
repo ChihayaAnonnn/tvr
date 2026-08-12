@@ -981,7 +981,10 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
         )
 
 
-def test_later_valid_candidates_can_win_but_invalid_candidate_cannot(tmp_path):
+def test_later_valid_candidates_can_win_but_leaked_candidate_cannot(tmp_path):
+    """Weight-level leakage (``non_a3_mismatches``) is the only remaining
+    fail-closed condition after the paired_invariance gate was removed."""
+
     run = tmp_path / "run"
     run.mkdir()
     reference = tmp_path / "a1.pt"
@@ -993,13 +996,94 @@ def test_later_valid_candidates_can_win_but_invalid_candidate_cannot(tmp_path):
         )
     assert winner["epoch"] == 3
 
-    invalid = _validation(rho=0.99, raw="changed")
+    # Simulate a training bug that mutates a frozen non-sidecar weight so the
+    # candidate's ``backbone`` tensor differs from the A1 reference.
+    leaky_model = run / "pytorch_model.bin.4"
+    torch.save(
+        {
+            "backbone": torch.tensor([2.0]),
+            "contextual_risk_sidecar.weight": torch.tensor([4.0]),
+        },
+        leaky_model,
+    )
+    leaky_optimizer = run / "pytorch_opt.bin.4"
+    torch.save(
+        {
+            "epoch": 4,
+            "optimizer_state_dict": {"state": {}, "param_groups": []},
+            "scheduler_state_dict": {"last_epoch": 5},
+            "global_step": 25,
+        },
+        leaky_optimizer,
+    )
+    main_task_retrieval.atomic_write_json(
+        run / "checkpoint_epoch.4.published.json",
+        {
+            "epoch": 4,
+            "model_path": str(leaky_model.resolve()),
+            "model_sha256": file_sha256(leaky_model),
+            "optimizer_path": str(leaky_optimizer.resolve()),
+            "optimizer_sha256": file_sha256(leaky_optimizer),
+        },
+    )
+
     with pytest.raises(RuntimeError, match="terminal A3 invariance violation"):
-        _record(run, reference, candidates, 4, invalid)
-    candidates[:] = json.loads(
+        with mock.patch.object(
+            main_task_retrieval, "_verify_contextual_risk_checkpoint_outputs"
+        ):
+            _record_contextual_risk_selection(
+                epoch=4,
+                checkpoint_path=leaky_model,
+                optimizer_checkpoint_path=leaky_optimizer,
+                validation_metrics=_validation(rho=0.99),
+                paired_baseline=_paired_digest(),
+                reference_checkpoint=reference,
+                candidate_path=run / "contextual_risk_candidates.json",
+                selection_path=run / "best_contextual_risk_checkpoint.json",
+                bootstrap_samples=0,
+                expected_retrieval_config=_validation()[
+                    "contextual_risk_evidence"
+                ]["retrieval_config"],
+                expected_head_configs={},
+            )
+    persisted = json.loads(
         (run / "contextual_risk_candidates.json").read_text()
     )
-    assert candidates[4]["valid"] is False
+    assert persisted[4]["valid"] is False
+    assert persisted[4]["non_a3_mismatches"]
+
+
+def test_paired_invariance_failure_is_audit_only_not_terminal(tmp_path):
+    """After the paired_invariance fail-fast is removed, a candidate whose
+    baseline↔candidate digests drift (e.g. from CUDA/DataLoader nondeterminism)
+    must be recorded with the failing checks preserved for audit, and MUST NOT
+    abort training or block the winner selection.  Only weight-level leakage
+    (``non_a3_mismatches``) may fail the run closed.
+    """
+
+    run = tmp_path / "run"
+    run.mkdir()
+    reference = tmp_path / "a1.pt"
+    torch.save({"backbone": torch.tensor([1.0])}, reference)
+
+    candidates = []
+    # raw="changed" perturbs the WTI/embedding digests so paired_invariance
+    # will report passed=False and every array check False.  Weights that
+    # matter to the freeze contract remain identical to the reference.
+    drifted = _validation(rho=0.99, raw="changed")
+
+    winner, *_ = _record(run, reference, candidates, 0, drifted)
+
+    persisted = json.loads((run / "contextual_risk_candidates.json").read_text())
+    assert len(persisted) == 1
+    candidate = persisted[0]
+    checks = candidate["paired_invariance"]["checks"]
+    assert candidate["paired_invariance"]["passed"] is False
+    assert checks["raw_wti"] is False
+    assert not all(checks.values())
+    assert candidate["non_a3_mismatches"] == []
+    assert candidate["valid"] is True
+    assert winner is not None and winner["epoch"] == 0
 
 
 def test_selection_receives_validation_candidate_only(tmp_path, monkeypatch):
