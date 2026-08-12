@@ -1,14 +1,18 @@
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 import torch
 
+import main_task_retrieval
 from main_task_retrieval import (
     _apply_dual_softmax,
     _build_paired_digest,
     _compute_csd_logvar_metrics,
     _compute_directional_metrics,
     _compute_retrieval_risk_metrics,
+    _eval_autocast_context,
     _merge_csd_eval_outputs,
     _run_on_single_gpu,
     _select_eval_device_ids,
@@ -43,6 +47,35 @@ def _matrix_with_successes_and_failures():
         ],
         dtype=np.float32,
     )
+
+
+@pytest.mark.parametrize(
+    ("a2_only", "enabled"),
+    [(True, False), (False, True)],
+)
+def test_eval_autocast_is_disabled_only_for_a2_only_mode(
+    monkeypatch, a2_only, enabled
+):
+    calls = []
+
+    def fake_autocast(**kwargs):
+        calls.append(kwargs)
+        return nullcontext()
+
+    monkeypatch.setattr(main_task_retrieval.torch, "autocast", fake_autocast)
+
+    with _eval_autocast_context(
+        SimpleNamespace(csd_logvar_sidecar_only=a2_only)
+    ):
+        pass
+
+    assert calls == [
+        {
+            "device_type": "cuda",
+            "dtype": torch.bfloat16,
+            "enabled": enabled,
+        }
+    ]
 
 
 def test_risk_reporting_preserves_directional_metrics_exactly():

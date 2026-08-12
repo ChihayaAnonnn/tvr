@@ -24,6 +24,77 @@ def array_sha256(array) -> str:
     return digest.hexdigest()
 
 
+def file_sha256(path) -> str:
+    """Hash a checkpoint file without loading it into memory."""
+
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def validate_csd_logvar_resume_lineage(
+    candidates,
+    *,
+    output_dir,
+    model_checkpoint,
+    optimizer_checkpoint,
+    optimizer_payload,
+):
+    """Require an exact recorded same-run model/optimizer resume pair."""
+
+    output_path = Path(output_dir).resolve()
+    requested_model = Path(model_checkpoint).resolve()
+    requested_optimizer = Path(optimizer_checkpoint).resolve()
+    required_fields = {
+        "epoch",
+        "path",
+        "model_sha256",
+        "optimizer_path",
+        "optimizer_sha256",
+    }
+    for candidate in candidates:
+        missing = sorted(required_fields.difference(candidate))
+        if missing:
+            raise ValueError(
+                "recorded A2 candidate missing lineage fields: "
+                + ", ".join(missing)
+            )
+    matches = [
+        candidate
+        for candidate in candidates
+        if Path(candidate["path"]).resolve() == requested_model
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            "A2 continuation model must match exactly one recorded candidate"
+        )
+    candidate = matches[0]
+    recorded_model = Path(candidate["path"]).resolve()
+    if recorded_model.parent != output_path:
+        raise ValueError("recorded model checkpoint is outside the output directory")
+    if file_sha256(recorded_model) != candidate["model_sha256"]:
+        raise ValueError("A2 continuation model checkpoint SHA-256 mismatch")
+
+    recorded_optimizer = Path(candidate["optimizer_path"]).resolve()
+    if recorded_optimizer.parent != output_path:
+        raise ValueError(
+            "recorded optimizer checkpoint is outside the output directory"
+        )
+    if requested_optimizer != recorded_optimizer:
+        raise ValueError("A2 continuation optimizer checkpoint path mismatch")
+    if file_sha256(recorded_optimizer) != candidate["optimizer_sha256"]:
+        raise ValueError("A2 continuation optimizer checkpoint SHA-256 mismatch")
+    if "epoch" not in optimizer_payload:
+        raise ValueError("A2 continuation optimizer checkpoint epoch is missing")
+    if int(optimizer_payload["epoch"]) != int(candidate["epoch"]):
+        raise ValueError("A2 continuation optimizer checkpoint epoch mismatch")
+    if candidate.get("non_a2_mismatches"):
+        raise ValueError("A2 continuation candidate has non-A2 state mismatches")
+    return candidate
+
+
 def non_csd_state_dict_mismatches(
     base_checkpoint,
     candidate_checkpoint,

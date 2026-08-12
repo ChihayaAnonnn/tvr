@@ -32,8 +32,10 @@ from prob_models.csd_logvar_protocol import (
     choose_csd_logvar_checkpoint,
     compare_paired_invariance,
     csd_logvar_acceptance,
+    file_sha256,
     non_csd_state_dict_mismatches,
     numeric_metrics_are_finite,
+    validate_csd_logvar_resume_lineage,
 )
 from prob_models.retrieval_risk_metrics import (
     build_eval_positive_mask,
@@ -1007,22 +1009,85 @@ def _write_training_args_json(args, path):
     atomic_write_json(path, payload)
 
 
-def save_model(epoch, args, model, optimizer, tr_loss, type_name=""):
+def _build_training_checkpoint_payload(
+    *,
+    epoch,
+    optimizer,
+    scheduler,
+    tr_loss,
+    global_step,
+):
+    payload = {
+        "epoch": int(epoch),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "loss": tr_loss,
+        "global_step": int(global_step),
+    }
+    if scheduler is not None:
+        payload["scheduler_state_dict"] = scheduler.state_dict()
+    return payload
+
+
+def _restore_training_checkpoint(
+    checkpoint,
+    optimizer,
+    scheduler,
+    *,
+    require_complete,
+):
+    if require_complete:
+        missing = [
+            name
+            for name in ("scheduler_state_dict", "global_step")
+            if name not in checkpoint
+        ]
+        if missing:
+            raise ValueError(
+                "A2 resume checkpoint missing " + ", ".join(missing)
+            )
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    if "scheduler_state_dict" in checkpoint:
+        if scheduler is None:
+            raise ValueError("cannot restore scheduler state without a scheduler")
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+    return int(checkpoint["epoch"]) + 1, int(checkpoint.get("global_step", 0))
+
+
+def _optimizer_checkpoint_path(epoch, args, type_name=""):
+    return os.path.join(
+        args.output_dir,
+        "pytorch_opt.bin.{}{}".format(
+            "" if type_name == "" else type_name + ".",
+            epoch,
+        ),
+    )
+
+
+def save_model(
+    epoch,
+    args,
+    model,
+    optimizer,
+    tr_loss,
+    type_name="",
+    scheduler=None,
+    global_step=0,
+):
     # Only save the model it-self
     model_to_save = model.module if hasattr(model, "module") else model
     output_model_file = os.path.join(
         args.output_dir, "pytorch_model.bin.{}{}".format("" if type_name == "" else type_name + ".", epoch)
     )
-    optimizer_state_file = os.path.join(
-        args.output_dir, "pytorch_opt.bin.{}{}".format("" if type_name == "" else type_name + ".", epoch)
-    )
+    optimizer_state_file = _optimizer_checkpoint_path(epoch, args, type_name)
     torch.save(model_to_save.state_dict(), output_model_file)
     torch.save(
-        {
-            "epoch": epoch,
-            "optimizer_state_dict": optimizer.state_dict(),
-            "loss": tr_loss,
-        },
+        _build_training_checkpoint_payload(
+            epoch=epoch,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            tr_loss=tr_loss,
+            global_step=global_step,
+        ),
         optimizer_state_file,
     )
     logger.info("Model saved to %s", output_model_file)
@@ -1819,6 +1884,16 @@ def _apply_dual_softmax(similarity_matrix, temperature=1.0):
     )
 
 
+def _eval_autocast_context(args):
+    """Use legacy BF16 eval except for exact paired A2-only evaluation."""
+
+    return torch.autocast(
+        device_type="cuda",
+        dtype=torch.bfloat16,
+        enabled=not bool(getattr(args, "csd_logvar_sidecar_only", False)),
+    )
+
+
 def eval_epoch(
     args,
     model,
@@ -1862,7 +1937,7 @@ def eval_epoch(
         logger.warning("sentence num: {}, video num: {}".format(sentence_num_, video_num_))
 
     model.eval()
-    with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+    with torch.no_grad(), _eval_autocast_context(args):
         batch_list_t = []
         batch_list_v = []
         batch_sequence_output_list, batch_visual_output_list = [], []
@@ -2161,12 +2236,15 @@ def _build_csd_logvar_candidate(
     *,
     epoch,
     checkpoint_path,
+    optimizer_checkpoint_path,
     validation_metrics,
     paired_baseline,
     reference_checkpoint,
 ):
     """Build one fully audited bidirectional validation candidate."""
 
+    model_path = Path(checkpoint_path).resolve()
+    optimizer_path = Path(optimizer_checkpoint_path).resolve()
     intrinsic = validation_metrics["csd_logvar"]
     paired_invariance = compare_paired_invariance(
         paired_baseline,
@@ -2174,13 +2252,16 @@ def _build_csd_logvar_candidate(
     )
     mismatches = non_csd_state_dict_mismatches(
         reference_checkpoint,
-        checkpoint_path,
+        model_path,
     )
     finite = numeric_metrics_are_finite(validation_metrics)
     clamp_ok = _candidate_clamp_ok(intrinsic)
     return {
         "epoch": int(epoch),
-        "path": str(checkpoint_path),
+        "path": str(model_path),
+        "model_sha256": file_sha256(model_path),
+        "optimizer_path": str(optimizer_path),
+        "optimizer_sha256": file_sha256(optimizer_path),
         "valid": bool(
             finite and paired_invariance["passed"] and not mismatches and clamp_ok
         ),
@@ -2239,6 +2320,7 @@ def _initialize_csd_logvar_protocol(
     eval_dataloader,
     device,
     n_gpu,
+    resume_payload=None,
 ):
     """Register fresh A1 evidence or restore one continuation lineage."""
 
@@ -2283,11 +2365,21 @@ def _initialize_csd_logvar_protocol(
         )
 
     candidates = []
+    resume_candidate = None
     if continuing:
+        if resume_payload is None:
+            raise ValueError("A2 continuation requires an optimizer payload")
         candidates = json.loads(selection_path.read_text())["candidates"]
         candidates = _reaudit_csd_logvar_candidates(
             candidates,
             reference_checkpoint,
+        )
+        resume_candidate = validate_csd_logvar_resume_lineage(
+            candidates,
+            output_dir=args.output_dir,
+            model_checkpoint=args.init_model,
+            optimizer_checkpoint=args.resume_model,
+            optimizer_payload=resume_payload,
         )
         try:
             winner = choose_csd_logvar_checkpoint(candidates)
@@ -2303,6 +2395,7 @@ def _initialize_csd_logvar_protocol(
         "paired_baseline": paired_baseline,
         "reference_checkpoint": reference_checkpoint,
         "candidates": candidates,
+        "resume_candidate": resume_candidate,
     }
 
 
@@ -2310,6 +2403,7 @@ def _record_csd_logvar_selection(
     *,
     epoch,
     checkpoint_path,
+    optimizer_checkpoint_path,
     validation_metrics,
     paired_baseline,
     reference_checkpoint,
@@ -2321,6 +2415,7 @@ def _record_csd_logvar_selection(
     candidate = _build_csd_logvar_candidate(
         epoch=epoch,
         checkpoint_path=checkpoint_path,
+        optimizer_checkpoint_path=optimizer_checkpoint_path,
         validation_metrics=validation_metrics,
         paired_baseline=paired_baseline,
         reference_checkpoint=reference_checkpoint,
@@ -2554,11 +2649,10 @@ def main():
         # resume optimizer state besides loss to continue train
         ## ##############################################################
         resumed_epoch = 0
+        global_step = 0
+        resume_checkpoint = None
         if args.resume_model:
-            checkpoint = torch.load(args.resume_model, map_location="cpu")
-            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            resumed_epoch = checkpoint["epoch"] + 1
-            # resumed_loss = checkpoint['loss']  # unused (kept for potential debugging)
+            resume_checkpoint = torch.load(args.resume_model, map_location="cpu")
 
         if a2_only and args.local_rank == 0:
             csd_protocol = _initialize_csd_logvar_protocol(
@@ -2567,11 +2661,18 @@ def main():
                 eval_dataloader,
                 device,
                 n_gpu,
+                resume_payload=resume_checkpoint,
             )
         if a2_only and dist.is_available() and dist.is_initialized():
             dist.barrier()
 
-        global_step = 0
+        if resume_checkpoint is not None:
+            resumed_epoch, global_step = _restore_training_checkpoint(
+                resume_checkpoint,
+                optimizer,
+                scheduler,
+                require_complete=a2_only,
+            )
 
         if args.local_rank == 0:
             if resumed_epoch > 0:
@@ -2607,8 +2708,16 @@ def main():
                     torch.cuda.reset_peak_memory_stats(device)
 
                 output_model_file = save_model(
-                    epoch, args, model, optimizer, tr_loss, type_name=""
+                    epoch,
+                    args,
+                    model,
+                    optimizer,
+                    tr_loss,
+                    type_name="",
+                    scheduler=scheduler,
+                    global_step=global_step,
                 )
+                output_optimizer_file = _optimizer_checkpoint_path(epoch, args)
                 if bool(getattr(args, "aleatoric_crf_training", False)):
                     from scripts.evaluate_crf_ladder import (
                         choose_checkpoint,
@@ -2647,6 +2756,7 @@ def main():
                     winner = _record_csd_logvar_selection(
                         epoch=epoch,
                         checkpoint_path=output_model_file,
+                        optimizer_checkpoint_path=output_optimizer_file,
                         validation_metrics=validation_metrics,
                         paired_baseline=csd_protocol["paired_baseline"],
                         reference_checkpoint=csd_protocol[
