@@ -1389,10 +1389,7 @@ def _should_log_training_step(global_step, log_step, smoke_cap, args):
     return global_step % log_step == 0 or (
         smoke_cap is not None
         and global_step == smoke_cap
-        and bool(
-            getattr(args, "use_csd_logvar_sidecar", False)
-            or getattr(args, "use_contextual_risk_sidecar", False)
-        )
+        and bool(getattr(args, "use_csd_logvar_sidecar", False))
     )
 
 
@@ -1436,6 +1433,63 @@ def _advance_contextual_zero_gradient_windows(previous, gradient_norm):
     if consecutive >= 2:
         raise RuntimeError("zero A3 gradient for two consecutive windows")
     return consecutive
+
+
+def _contextual_risk_window_state(model):
+    inner = model.module if hasattr(model, "module") else model
+    state = getattr(inner, "_contextual_risk_diagnostic_window", None)
+    if state is None:
+        state = {
+            "term_sums": {},
+            "term_count": 0,
+            "gradient_total": 0.0,
+            "optimizer_steps": 0,
+            "zero_gradient_windows": 0,
+        }
+        inner._contextual_risk_diagnostic_window = state
+    return state
+
+
+def _accumulate_contextual_risk_window(model, terms):
+    state = _contextual_risk_window_state(model)
+    for name, value in terms.items():
+        state["term_sums"][name] = state["term_sums"].get(name, 0.0) + float(
+            value
+        )
+    state["term_count"] += 1
+
+
+def _finish_contextual_risk_window_step(model, gradient_norm):
+    """Finish one optimizer step and emit only a complete 20-step window."""
+
+    state = _contextual_risk_window_state(model)
+    state["gradient_total"] += float(gradient_norm)
+    state["optimizer_steps"] += 1
+    if state["optimizer_steps"] < 20:
+        return None
+    if state["optimizer_steps"] != 20 or state["term_count"] <= 0:
+        raise RuntimeError("invalid A3 diagnostic window state")
+
+    means = {
+        name: total / state["term_count"]
+        for name, total in state["term_sums"].items()
+    }
+    means["contextual_risk_gradient_norm"] = (
+        state["gradient_total"] / state["optimizer_steps"]
+    )
+    zero_gradient_windows = _advance_contextual_zero_gradient_windows(
+        state["zero_gradient_windows"],
+        means["contextual_risk_gradient_norm"],
+    )
+    inner = model.module if hasattr(model, "module") else model
+    inner._contextual_risk_diagnostic_window = {
+        "term_sums": {},
+        "term_count": 0,
+        "gradient_total": 0.0,
+        "optimizer_steps": 0,
+        "zero_gradient_windows": zero_gradient_windows,
+    }
+    return means
 
 
 def _log_contextual_risk_window(means):
@@ -1506,15 +1560,6 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     crf_window_count = 0
     csd_window: dict[str, float] = {}
     csd_window_count = 0
-    contextual_window: dict[str, float] = {}
-    contextual_window_count = 0
-    contextual_gradient_total = 0.0
-    contextual_gradient_count = 0
-    inner_model = model.module if hasattr(model, "module") else model
-    contextual_zero_gradient_windows = int(
-        getattr(inner_model, "_contextual_zero_gradient_windows", 0)
-    )
-
     for step, batch in enumerate(train_dataloader):
         if smoke_cap is not None and step >= smoke_cap:
             if local_rank == 0:
@@ -1596,20 +1641,18 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             elif any(
                 name.startswith("contextual_risk_") for name in loss_terms
             ):
-                for name, tensor in loss_terms.items():
-                    contextual_window[name] = (
-                        contextual_window.get(name, 0.0) + float(tensor)
-                    )
-                contextual_window_count += 1
+                _accumulate_contextual_risk_window(model, loss_terms)
             else:
                 for name, tensor in loss_terms.items():
                     crf_window[name] = crf_window.get(name, 0.0) + float(tensor)
                 crf_window_count += 1
 
         if (step + 1) % args.gradient_accumulation_steps == 0:
+            contextual_window_means = None
             if getattr(args, "use_contextual_risk_sidecar", False):
-                contextual_gradient_total += _contextual_risk_gradient_norm(model)
-                contextual_gradient_count += 1
+                contextual_window_means = _finish_contextual_risk_window_step(
+                    model, _contextual_risk_gradient_norm(model)
+                )
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
 
             # 先记录本次 step 将要应用的 LR，再 step。
@@ -1630,30 +1673,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             should_log = _should_log_training_step(
                 global_step, log_step, smoke_cap, args
             )
-            contextual_window_means = None
-            if should_log and contextual_window_count > 0:
-                contextual_window_means = {
-                    key: value / contextual_window_count
-                    for key, value in contextual_window.items()
-                }
-                contextual_window_means["contextual_risk_gradient_norm"] = (
-                    contextual_gradient_total / contextual_gradient_count
-                )
-                contextual_zero_gradient_windows = (
-                    _advance_contextual_zero_gradient_windows(
-                        contextual_zero_gradient_windows,
-                        contextual_window_means[
-                            "contextual_risk_gradient_norm"
-                        ],
-                    )
-                )
-                inner_model._contextual_zero_gradient_windows = (
-                    contextual_zero_gradient_windows
-                )
-                contextual_window = {}
-                contextual_window_count = 0
-                contextual_gradient_total = 0.0
-                contextual_gradient_count = 0
+            should_log = should_log or contextual_window_means is not None
 
             if (
                 should_log

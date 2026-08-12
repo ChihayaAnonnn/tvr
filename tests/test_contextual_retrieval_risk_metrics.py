@@ -404,6 +404,48 @@ def test_contextual_zero_gradient_aborts_on_second_consecutive_window():
     assert retrieval._advance_contextual_zero_gradient_windows(1, 0.2) == 0
 
 
+def test_contextual_diagnostic_window_spans_epochs_and_emits_exactly_at_20_steps():
+    model = nn.Module()
+    emitted = []
+
+    for step in range(12):
+        terms = _valid_diagnostic_terms()
+        terms["contextual_risk_loss"] = torch.tensor(float(step))
+        retrieval._accumulate_contextual_risk_window(model, terms)
+        emitted.append(
+            retrieval._finish_contextual_risk_window_step(
+                model, float(step + 1)
+            )
+        )
+
+    state_after_epoch_a = retrieval._contextual_risk_window_state(model)
+    assert state_after_epoch_a["optimizer_steps"] == 12
+    assert state_after_epoch_a["term_count"] == 12
+    assert all(payload is None for payload in emitted)
+
+    for step in range(12, 20):
+        terms = _valid_diagnostic_terms()
+        terms["contextual_risk_loss"] = torch.tensor(float(step))
+        retrieval._accumulate_contextual_risk_window(model, terms)
+        emitted.append(
+            retrieval._finish_contextual_risk_window_step(
+                model, float(step + 1)
+            )
+        )
+
+    assert all(payload is None for payload in emitted[:19])
+    assert emitted[19]["contextual_risk_loss"] == pytest.approx(9.5)
+    assert emitted[19]["contextual_risk_gradient_norm"] == pytest.approx(10.5)
+    reset = retrieval._contextual_risk_window_state(model)
+    assert reset == {
+        "term_sums": {},
+        "term_count": 0,
+        "gradient_total": 0.0,
+        "optimizer_steps": 0,
+        "zero_gradient_windows": 0,
+    }
+
+
 def test_contextual_gradient_norm_uses_only_a3_parameters():
     model = nn.Module()
     model.contextual_risk_sidecar = nn.Linear(2, 1, bias=False)
@@ -414,13 +456,13 @@ def test_contextual_gradient_norm_uses_only_a3_parameters():
     assert retrieval._contextual_risk_gradient_norm(model) == 5.0
 
 
-def test_a3_diagnostics_use_20_step_window_and_smoke_flush():
+def test_a3_diagnostics_use_complete_20_step_windows_even_in_smoke_mode():
     args = SimpleNamespace(
         use_csd_logvar_sidecar=False,
         use_contextual_risk_sidecar=True,
     )
     assert retrieval._contextual_risk_log_interval(args) == 20
-    assert retrieval._should_log_training_step(1, 20, smoke_cap=1, args=args)
+    assert not retrieval._should_log_training_step(1, 20, smoke_cap=1, args=args)
     assert retrieval._should_log_training_step(20, 20, smoke_cap=None, args=args)
 
 
