@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -262,6 +263,15 @@ def test_experiment_manifest_records_complete_contextual_risk_contract(tmp_path)
     assert a3["candidate_json"] == str(
         (tmp_path / "run" / "contextual_risk_candidates.json").resolve()
     )
+    assert a3["paired_baseline_json"] == str(
+        (tmp_path / "run" / "a3_paired_baseline.json").resolve()
+    )
+    assert a3["final_test_claim_json"] == str(
+        (tmp_path / "run" / "a3_final_test_claim.json").resolve()
+    )
+    assert a3["final_test_result_json"] == str(
+        (tmp_path / "run" / "final_test.json").resolve()
+    )
     assert a3["final_test_eligibility"] == (
         "terminal_lifecycle_and_requested_and_selected_validation_acceptance_passes"
     )
@@ -270,6 +280,7 @@ def test_experiment_manifest_records_complete_contextual_risk_contract(tmp_path)
 def test_contextual_resume_rejects_any_immutable_manifest_change(tmp_path):
     args = _crf_args_namespace(
         aleatoric_crf_training=False,
+        use_retrieval_risk_sidecar=True,
         use_contextual_risk_sidecar=True,
         contextual_risk_sidecar_only=True,
         contextual_risk_topk=16,
@@ -295,6 +306,37 @@ def test_contextual_resume_rejects_any_immutable_manifest_change(tmp_path):
     assert validate_contextual_risk_resume_manifest(original, original) is None
     with pytest.raises(ValueError, match="immutable A3 manifest"):
         validate_contextual_risk_resume_manifest(original, changed)
+
+    paired_dependency_changed = copy.deepcopy(original)
+    paired_dependency_changed["retrieval_risk"]["temperature"] = 2.0
+    with pytest.raises(ValueError, match="immutable A3 manifest"):
+        validate_contextual_risk_resume_manifest(
+            original, paired_dependency_changed
+        )
+
+    batch_changed = copy.deepcopy(original)
+    batch_changed["batch"]["world_size"] = 8
+    with pytest.raises(ValueError, match="immutable A3 manifest"):
+        validate_contextual_risk_resume_manifest(original, batch_changed)
+
+
+def test_contextual_manifest_precision_matches_disabled_training_autocast(tmp_path):
+    args = _crf_args_namespace(
+        aleatoric_crf_training=False,
+        use_retrieval_risk_sidecar=True,
+        use_contextual_risk_sidecar=True,
+        contextual_risk_sidecar_only=True,
+        output_dir=str(tmp_path),
+        fp16=True,
+    )
+    payload = build_experiment_manifest(
+        args,
+        split_summary={"protocol_version": "trusted-v1"},
+        batch_semantics={"world_size": 4, "optimizer_effective_batch": 256},
+        git_state={"commit": "abc"},
+    )
+
+    assert payload["contextual_risk"]["training"]["precision"] == "fp32"
 
 
 def test_experiment_manifest_records_ladder_manifest_sha_when_present(tmp_path):

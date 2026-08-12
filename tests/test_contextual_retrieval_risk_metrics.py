@@ -116,7 +116,7 @@ def test_model_scoring_api_aligns_rectangular_v2t_modality_axes():
 
 
 class _RecordingContextualModel(nn.Module):
-    use_retrieval_risk_sidecar = False
+    use_retrieval_risk_sidecar = True
     use_contextual_risk_sidecar = True
 
     def __init__(self):
@@ -150,6 +150,13 @@ class _RecordingContextualModel(nn.Module):
         else:
             risk = logits.new_tensor([0.9, 0.2, 0.3])
         return {"failure_risk": risk}
+
+    def score_retrieval_risk(self, logits, direction):
+        size = logits.shape[0] if direction == "t2v" else logits.shape[1]
+        return {
+            "failure_risk": torch.linspace(0.1, 0.9, size, device=logits.device),
+            "vacuity": torch.linspace(0.2, 1.0, size, device=logits.device),
+        }
 
 
 class _MultiSentenceDataset:
@@ -189,7 +196,7 @@ def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(monkeypatch):
     monkeypatch.setattr(
         retrieval,
         "_apply_dual_softmax",
-        lambda matrix, _temperature: (-matrix, -matrix),
+        lambda matrix, _temperature: (matrix, matrix),
     )
     batch = (
         torch.ones(4, 2, dtype=torch.long),
@@ -230,6 +237,29 @@ def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(monkeypatch):
     assert evidence["sha256"]["raw_wti"] == array_sha256(raw_wti)
     assert evidence["sha256"]["text_means"] == array_sha256(text_means.numpy())
     assert evidence["sha256"]["video_means"] == array_sha256(video_means.numpy())
+    assert evidence["positive_mask"]
+    assert evidence["array_metadata"]["raw_wti"] == {
+        "dtype": "float32",
+        "shape": list(raw_wti.shape),
+        "sha256": array_sha256(raw_wti),
+    }
+    assert evidence["array_metadata"]["positive_mask"]["dtype"] == "bool"
+    assert evidence["metric_config"] == {
+        "bootstrap_samples": 0,
+        "seed_by_direction": {"t2v": 0, "v2t": 1},
+    }
+    assert evidence["retrieval_config"] == {
+        "directions": ["t2v", "v2t"],
+        "cut_off_points": [1, 2, 4],
+        "independent_directions": False,
+        "dsl": True,
+        "dsl_temperature": 1.0,
+        "score_path": "post_dsl_directional_scores",
+    }
+    for direction in ("t2v", "v2t"):
+        assert evidence["array_metadata"]["retrieval_scores"][direction][
+            "shape"
+        ] == list(raw_wti.shape)
     assert set(result["contextual_risk"]) == {"t2v", "v2t"}
     assert result["contextual_risk"]["t2v"]["num_failures"] == 2
     assert result["contextual_risk"]["v2t"]["num_failures"] == 1

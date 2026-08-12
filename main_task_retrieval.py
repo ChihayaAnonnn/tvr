@@ -626,6 +626,8 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     if args.contextual_risk_bootstrap_samples < 0:
         raise ValueError("contextual risk bootstrap samples must be non-negative")
     if args.contextual_risk_sidecar_only and args.do_train:
+        if args.fp16:
+            raise ValueError("A3-only training requires FP32 and forbids --fp16")
         if args.resume_model:
             if not args.init_model:
                 raise ValueError(
@@ -897,6 +899,36 @@ def _validate_exclusive_sidecar_only_modes(args):
     ]
     if len(active) > 1:
         raise ValueError(f"at most one sidecar_only mode may be enabled: {active}")
+
+
+def _contextual_risk_lifecycle_owner(args):
+    """Return whether this process exclusively owns A3 lifecycle artifacts."""
+
+    return is_global_rank_zero(args)
+
+
+def _a3_training_autocast_enabled(args):
+    """A3's registered training precision is exact FP32."""
+
+    return not bool(getattr(args, "contextual_risk_sidecar_only", False))
+
+
+@contextmanager
+def _a3_exact_fp32_backend(args):
+    """Temporarily disable TF32 for registered A3-only computation."""
+
+    enabled = bool(getattr(args, "contextual_risk_sidecar_only", False))
+    prior_matmul_tf32 = torch.backends.cuda.matmul.allow_tf32
+    prior_cudnn_tf32 = torch.backends.cudnn.allow_tf32
+    if enabled:
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+    try:
+        yield
+    finally:
+        if enabled:
+            torch.backends.cuda.matmul.allow_tf32 = prior_matmul_tf32
+            torch.backends.cudnn.allow_tf32 = prior_cudnn_tf32
 
 
 def configure_retrieval_risk_sidecar_training(model, args):
@@ -1569,7 +1601,7 @@ def _time_per_dataloader_step_since_log(
     )
 
 
-def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, scheduler, global_step, local_rank=0):
+def _train_epoch_impl(epoch, args, model, train_dataloader, device, n_gpu, optimizer, scheduler, global_step, local_rank=0):
     global logger
     torch.cuda.empty_cache()
     model.train()
@@ -1628,7 +1660,11 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 _unpack_train_batch(batch)
             )
             # A800 原生支持 bf16；autocast 内部激活走 bf16，master 参数仍 fp32，无需 GradScaler。
-            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            with torch.autocast(
+                device_type="cuda",
+                dtype=torch.bfloat16,
+                enabled=_a3_training_autocast_enabled(args),
+            ):
                 sidecar_kwargs = {}
                 if (
                     getattr(args, "use_retrieval_risk_sidecar", False)
@@ -1816,6 +1852,17 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             _fmt_time(epoch_time),
         )
     return total_loss, global_step
+
+
+def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer,
+                scheduler, global_step, local_rank=0):
+    """Run one epoch under the registered A3 FP32 backend contract."""
+
+    with _a3_exact_fp32_backend(args):
+        return _train_epoch_impl(
+            epoch, args, model, train_dataloader, device, n_gpu, optimizer,
+            scheduler, global_step, local_rank=local_rank,
+        )
 
 
 def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
@@ -2149,6 +2196,7 @@ def _compute_retrieval_risk_metrics(
     device,
     bootstrap_samples=1000,
     return_array_digests=False,
+    return_array_evidence=False,
 ):
     """Score the complete candidate matrix without mutating retrieval inputs."""
 
@@ -2181,6 +2229,15 @@ def _compute_retrieval_risk_metrics(
                 "failure_risk": array_sha256(failure_risk),
                 "vacuity": array_sha256(vacuity),
             }
+            if return_array_evidence:
+                array_digests[direction].update({
+                    "failure_risk_values": failure_risk.tolist(),
+                    "failure_risk_dtype": str(failure_risk.dtype),
+                    "failure_risk_shape": list(failure_risk.shape),
+                    "vacuity_values": vacuity.tolist(),
+                    "vacuity_dtype": str(vacuity.dtype),
+                    "vacuity_shape": list(vacuity.shape),
+                })
     if return_array_digests:
         return payload, array_digests
     return payload
@@ -2231,10 +2288,21 @@ def _compute_contextual_retrieval_risk_metrics(
 
     if not return_evidence:
         return payload
+    mask_array = np.asarray(positive_mask, dtype=bool)
+
+    def metadata(array):
+        value = np.asarray(array)
+        return {
+            "dtype": str(value.dtype),
+            "shape": list(value.shape),
+            "sha256": array_sha256(value),
+        }
+
     evidence = {
         "raw_wti": raw_wti.tolist(),
         "text_means": text_array.tolist(),
         "video_means": video_array.tolist(),
+        "positive_mask": mask_array.tolist(),
         "failure_risk": {
             direction: failure_risk_arrays[direction].tolist()
             for direction in directions
@@ -2246,6 +2314,23 @@ def _compute_contextual_retrieval_risk_metrics(
             "failure_risk": {
                 direction: array_sha256(failure_risk_arrays[direction])
                 for direction in directions
+            },
+            "positive_mask": array_sha256(mask_array),
+        },
+        "array_metadata": {
+            "raw_wti": metadata(raw_wti),
+            "text_means": metadata(text_array),
+            "video_means": metadata(video_array),
+            "positive_mask": metadata(mask_array),
+            "failure_risk": {
+                direction: metadata(failure_risk_arrays[direction])
+                for direction in directions
+            },
+        },
+        "metric_config": {
+            "bootstrap_samples": int(bootstrap_samples),
+            "seed_by_direction": {
+                direction: offset for offset, direction in enumerate(directions)
             },
         },
     }
@@ -2358,12 +2443,13 @@ def _eval_autocast_context(args):
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
     try:
-        with torch.autocast(
-            device_type="cuda",
-            dtype=torch.bfloat16,
-            enabled=not paired_sidecar_only,
-        ):
-            yield
+        with _a3_exact_fp32_backend(args):
+            with torch.autocast(
+                device_type="cuda",
+                dtype=torch.bfloat16,
+                enabled=not paired_sidecar_only,
+            ):
+                yield
     finally:
         if paired_sidecar_only:
             torch.backends.cudnn.benchmark = prior_benchmark
@@ -2670,6 +2756,7 @@ def eval_epoch(
                     args, "retrieval_risk_bootstrap_samples", 1000
                 ),
                 return_array_digests=True,
+                return_array_evidence=report_contextual_risk,
             )
         )
         for direction in directions:
@@ -2705,6 +2792,59 @@ def eval_epoch(
             ),
             return_evidence=True,
         )
+        a3_evidence = result["contextual_risk_evidence"]
+        a3_evidence["a1_failure_risk"] = {
+            direction: risk_array_digests[direction]["failure_risk_values"]
+            for direction in directions
+        }
+        a3_evidence["a1_vacuity"] = {
+            direction: risk_array_digests[direction]["vacuity_values"]
+            for direction in directions
+        }
+        a3_evidence["array_metadata"]["a1_failure_risk"] = {
+            direction: {
+                "dtype": risk_array_digests[direction]["failure_risk_dtype"],
+                "shape": risk_array_digests[direction]["failure_risk_shape"],
+                "sha256": risk_array_digests[direction]["failure_risk"],
+            }
+            for direction in directions
+        }
+        a3_evidence["array_metadata"]["a1_vacuity"] = {
+            direction: {
+                "dtype": risk_array_digests[direction]["vacuity_dtype"],
+                "shape": risk_array_digests[direction]["vacuity_shape"],
+                "sha256": risk_array_digests[direction]["vacuity"],
+            }
+            for direction in directions
+        }
+        retrieval_score_arrays = {
+            "t2v": np.asarray(metric_t2v_matrix),
+            "v2t": np.asarray(metric_v2t_matrix),
+        }
+        a3_evidence["retrieval_scores"] = {
+            direction: retrieval_score_arrays[direction].tolist()
+            for direction in directions
+        }
+        a3_evidence["array_metadata"]["retrieval_scores"] = {
+            direction: {
+                "dtype": str(retrieval_score_arrays[direction].dtype),
+                "shape": list(retrieval_score_arrays[direction].shape),
+                "sha256": array_sha256(retrieval_score_arrays[direction]),
+            }
+            for direction in directions
+        }
+        a3_evidence["retrieval_config"] = {
+            "directions": list(directions),
+            "cut_off_points": (
+                [int(value) for value in cut_off_points_]
+                if multi_sentence_
+                else "one_to_one"
+            ),
+            "independent_directions": not multi_sentence_,
+            "dsl": bool(getattr(args, "DSL", False)),
+            "dsl_temperature": float(getattr(args, "dsl_temperature", 1.0)),
+            "score_path": "post_dsl_directional_scores",
+        }
         for direction in directions:
             contextual_metrics = result["contextual_risk"][direction]
             logger.info(
@@ -2746,6 +2886,126 @@ def _candidate_clamp_ok(metrics):
     )
 
 
+def _contextual_evidence_array(evidence, name, direction=None):
+    """Reconstruct one registered evidence array and verify its typed digest."""
+
+    values = evidence[name]
+    metadata = evidence["array_metadata"][name]
+    legacy_sha = evidence.get("sha256", {}).get(name)
+    if direction is not None:
+        values = values[direction]
+        metadata = metadata[direction]
+        if isinstance(legacy_sha, dict):
+            legacy_sha = legacy_sha.get(direction)
+    dtype = np.dtype(metadata["dtype"])
+    array = np.asarray(values, dtype=dtype)
+    if list(array.shape) != list(metadata["shape"]):
+        raise ValueError(f"A3 evidence {name} shape mismatch")
+    digest = array_sha256(array)
+    if digest != metadata["sha256"]:
+        raise ValueError(f"A3 evidence {name} SHA-256 mismatch")
+    if legacy_sha is not None and legacy_sha != digest:
+        raise ValueError(f"A3 evidence {name} legacy SHA-256 mismatch")
+    return array
+
+
+def _recompute_contextual_risk_metrics(evidence, *, bootstrap_samples):
+    """Rebuild registered A3 summaries solely from complete typed evidence."""
+
+    config = evidence["metric_config"]
+    expected_seeds = {"t2v": 0, "v2t": 1}
+    if int(config["bootstrap_samples"]) != int(bootstrap_samples):
+        raise ValueError("A3 evidence bootstrap configuration mismatch")
+    if config.get("seed_by_direction") != expected_seeds:
+        raise ValueError("A3 evidence seed configuration mismatch")
+
+    raw_wti = _contextual_evidence_array(evidence, "raw_wti")
+    positive_mask = _contextual_evidence_array(evidence, "positive_mask")
+    _contextual_evidence_array(evidence, "text_means")
+    _contextual_evidence_array(evidence, "video_means")
+    if raw_wti.shape != positive_mask.shape:
+        raise ValueError("A3 raw WTI and positive-mask shapes differ")
+
+    metrics = {}
+    digests = {
+        "raw_wti_sha256": array_sha256(raw_wti),
+        "a1_failure_risk_sha256": {},
+        "a1_vacuity_sha256": {},
+    }
+    for direction in ("t2v", "v2t"):
+        risk = _contextual_evidence_array(
+            evidence, "failure_risk", direction
+        )
+        a1_risk = _contextual_evidence_array(
+            evidence, "a1_failure_risk", direction
+        )
+        a1_vacuity = _contextual_evidence_array(
+            evidence, "a1_vacuity", direction
+        )
+        digests["a1_failure_risk_sha256"][direction] = array_sha256(a1_risk)
+        digests["a1_vacuity_sha256"][direction] = array_sha256(a1_vacuity)
+        scores = raw_wti if direction == "t2v" else raw_wti.T
+        mask = positive_mask if direction == "t2v" else positive_mask.T
+        metrics[direction] = evaluate_retrieval_risk(
+            scores,
+            mask,
+            risk,
+            bootstrap_samples=int(bootstrap_samples),
+            seed=expected_seeds[direction],
+        )
+    retrieval_config = evidence["retrieval_config"]
+    retrieval_directions = tuple(retrieval_config["directions"])
+    if retrieval_directions != ("t2v", "v2t"):
+        raise ValueError("A3 retrieval evidence must contain both directions")
+    if retrieval_config.get("score_path") != "post_dsl_directional_scores":
+        raise ValueError("A3 retrieval evidence score path mismatch")
+    retrieval_t2v = _contextual_evidence_array(
+        evidence, "retrieval_scores", "t2v"
+    )
+    retrieval_v2t = _contextual_evidence_array(
+        evidence, "retrieval_scores", "v2t"
+    )
+    if retrieval_t2v.shape != raw_wti.shape or retrieval_v2t.shape != raw_wti.shape:
+        raise ValueError("A3 retrieval evidence matrix shape mismatch")
+    dsl_enabled = retrieval_config.get("dsl")
+    if not isinstance(dsl_enabled, bool):
+        raise ValueError("A3 retrieval evidence DSL flag must be boolean")
+    dsl_temperature = float(retrieval_config.get("dsl_temperature"))
+    if not math.isfinite(dsl_temperature) or dsl_temperature <= 0:
+        raise ValueError("A3 retrieval evidence DSL temperature is invalid")
+    if dsl_enabled:
+        expected_t2v, expected_v2t = _apply_dual_softmax(
+            raw_wti, dsl_temperature
+        )
+    else:
+        expected_t2v, expected_v2t = raw_wti, raw_wti
+    if not np.array_equal(retrieval_t2v, expected_t2v):
+        raise ValueError("A3 retrieval t2v score evidence differs from raw WTI/DSL")
+    if not np.array_equal(retrieval_v2t, expected_v2t):
+        raise ValueError("A3 retrieval v2t score evidence differs from raw WTI/DSL")
+    recorded_cut_off_points = retrieval_config.get("cut_off_points")
+    cut_off_points = (
+        None
+        if recorded_cut_off_points == "one_to_one"
+        else recorded_cut_off_points
+    )
+    independent_directions = bool(
+        retrieval_config.get("independent_directions", True)
+    )
+    directional_metrics = _compute_directional_metrics(
+        retrieval_t2v,
+        retrieval_v2t,
+        cut_off_points=cut_off_points,
+        independent_directions=independent_directions,
+        directions=retrieval_directions,
+    )
+    digests["retrieval"] = {
+        direction: _serialize_retrieval_metrics(directional_metrics[direction])
+        for direction in retrieval_directions
+    }
+    return metrics, digests
+
+
 def _build_contextual_risk_candidate(
     *,
     epoch,
@@ -2754,6 +3014,7 @@ def _build_contextual_risk_candidate(
     validation_metrics,
     paired_baseline,
     reference_checkpoint,
+    bootstrap_samples,
 ):
     """Build one complete, validation-only A3 candidate record."""
 
@@ -2772,6 +3033,17 @@ def _build_contextual_risk_candidate(
         ("contextual_risk_sidecar.",),
     )
     evidence = validation_metrics["contextual_risk_evidence"]
+    recomputed_contextual, evidence_digests = _recompute_contextual_risk_metrics(
+        evidence,
+        bootstrap_samples=bootstrap_samples,
+    )
+    if contextual != recomputed_contextual:
+        raise ValueError("A3 validation metric summary differs from evidence")
+    for digest_name, digest_value in evidence_digests.items():
+        if paired_digest.get(digest_name) != digest_value:
+            raise ValueError(
+                f"A3 paired digest {digest_name} differs from complete evidence"
+            )
     finite = numeric_metrics_are_finite(
         {
             "contextual_risk": contextual,
@@ -2844,14 +3116,44 @@ def _contextual_risk_should_continue(candidates):
     )
 
 
+def _contextual_risk_continuation_eligible(candidates, *, output_dir):
+    """Return the single registered artifact-valid A3 continuation decision."""
+
+    validate_candidate_artifacts(
+        candidates, output_dir=output_dir, method_name="A3"
+    )
+    by_epoch = {int(candidate["epoch"]): candidate for candidate in candidates}
+    if sorted(by_epoch) != [0, 1, 2] or len(candidates) != 3:
+        raise ValueError(
+            "A3 continuation decision requires exactly epoch indices 0, 1, and 2"
+        )
+    return bool(
+        contextual_risk_candidate_is_valid(by_epoch[2])
+        and contextual_risk_selection_tuple(by_epoch[2])
+        > contextual_risk_selection_tuple(by_epoch[1])
+    )
+
+
 def _reaudit_contextual_risk_candidate(
-    stored, *, paired_baseline, reference_checkpoint
+    stored, *, paired_baseline, reference_checkpoint, bootstrap_samples
 ):
     """Recompute every derivable A3 audit field without mutating its record."""
 
     candidate = dict(stored)
     contextual = candidate["metrics"]
     paired_digest = candidate["paired_digest"]
+    recomputed_contextual, evidence_digests = _recompute_contextual_risk_metrics(
+        candidate["evidence"], bootstrap_samples=bootstrap_samples
+    )
+    if {
+        "t2v": contextual["t2v"], "v2t": contextual["v2t"]
+    } != recomputed_contextual:
+        raise ValueError("A3 immutable candidate metric summary mismatch")
+    for digest_name, digest_value in evidence_digests.items():
+        if paired_digest.get(digest_name) != digest_value:
+            raise ValueError(
+                f"A3 immutable candidate {digest_name} evidence mismatch"
+            )
     paired_invariance = compare_uncertainty_paired_invariance(
         paired_baseline,
         paired_digest,
@@ -2863,16 +3165,13 @@ def _reaudit_contextual_risk_candidate(
         ("contextual_risk_sidecar.",),
     )
     finite = numeric_metrics_are_finite({
-        "contextual_risk": {
-            "t2v": contextual["t2v"],
-            "v2t": contextual["v2t"],
-        },
+        "contextual_risk": recomputed_contextual,
         "evidence": candidate["evidence"],
         "paired_digest": paired_digest,
     })
     gate_metrics = {
-        "t2v": contextual["t2v"],
-        "v2t": contextual["v2t"],
+        "t2v": recomputed_contextual["t2v"],
+        "v2t": recomputed_contextual["v2t"],
         "paired_invariance": paired_invariance,
         "non_a3_mismatches": mismatches,
     }
@@ -2962,6 +3261,20 @@ def _initialize_contextual_risk_protocol(
         if file_sha256(reference_checkpoint) != reference_sha256:
             raise ValueError("A3 reference checkpoint SHA-256 mismatch")
         paired_baseline = registration["paired_digest"]
+        baseline_evidence = registration.get("evidence")
+        if not isinstance(baseline_evidence, dict):
+            raise ValueError("A3 continuation baseline complete evidence is missing")
+        _, baseline_digests = _recompute_contextual_risk_metrics(
+            baseline_evidence,
+            bootstrap_samples=getattr(
+                args, "contextual_risk_bootstrap_samples", 1000
+            ),
+        )
+        for digest_name, digest_value in baseline_digests.items():
+            if paired_baseline.get(digest_name) != digest_value:
+                raise ValueError(
+                    f"A3 baseline {digest_name} differs from complete evidence"
+                )
         candidates = json.loads(candidate_path.read_text())
         selection = json.loads(selection_path.read_text())
         if selection.get("candidates") != candidates:
@@ -2974,6 +3287,9 @@ def _initialize_contextual_risk_protocol(
                 candidate,
                 paired_baseline=paired_baseline,
                 reference_checkpoint=reference_checkpoint,
+                bootstrap_samples=getattr(
+                    args, "contextual_risk_bootstrap_samples", 1000
+                ),
             )
             for candidate in candidates
         ]
@@ -2982,16 +3298,13 @@ def _initialize_contextual_risk_protocol(
         )
         if selection.get("winner") != expected_winner:
             raise ValueError("A3 persisted winner does not match validation candidates")
-        if not _contextual_risk_should_continue(candidates):
+        if not _contextual_risk_continuation_eligible(
+            candidates, output_dir=output_dir
+        ):
             raise ValueError(
                 "A3 continuation is not eligible because epoch index 2 did not "
                 "strictly improve over epoch index 1"
             )
-        epoch_two = next(
-            candidate for candidate in candidates if int(candidate["epoch"]) == 2
-        )
-        if not contextual_risk_candidate_is_valid(epoch_two):
-            raise ValueError("A3 continuation requires a valid epoch-index-2 candidate")
         if int(getattr(args, "epochs", 5)) != 5:
             raise ValueError("A3 continuation must target five total epochs")
         if resume_payload is None:
@@ -3033,6 +3346,7 @@ def _initialize_contextual_risk_protocol(
                 "reference_checkpoint": reference_checkpoint,
                 "reference_checkpoint_sha256": reference_sha256,
                 "paired_digest": paired_baseline,
+                "evidence": baseline_eval["contextual_risk_evidence"],
             },
         )
         candidates = []
@@ -3058,6 +3372,7 @@ def _record_contextual_risk_selection(
     reference_checkpoint,
     candidate_path,
     selection_path,
+    bootstrap_samples,
 ):
     """Audit and append one A3 validation candidate, then persist its winner."""
 
@@ -3068,6 +3383,7 @@ def _record_contextual_risk_selection(
         validation_metrics=validation_metrics,
         paired_baseline=paired_baseline,
         reference_checkpoint=reference_checkpoint,
+        bootstrap_samples=bootstrap_samples,
     )
     candidates = append_candidate_atomic(candidate_path, candidate)
     validate_candidate_artifacts(
@@ -3102,7 +3418,9 @@ def _maybe_run_contextual_risk_final_test(
         isinstance(candidates, list)
         and len(candidates) == 3
         and {int(item.get("epoch", -1)) for item in candidates} == {0, 1, 2}
-        and _contextual_risk_should_continue(candidates)
+        and _contextual_risk_continuation_eligible(
+            candidates, output_dir=args.output_dir
+        )
     ):
         logger.info(
             "A3 continuation is eligible; JSFUSION final test is deferred "
@@ -3128,10 +3446,28 @@ def _maybe_run_contextual_risk_final_test(
     )
     claim_path = Path(args.output_dir) / "a3_final_test_claim.json"
     final_path = Path(args.output_dir) / "final_test.json"
-    if claim_path.exists() or final_path.exists():
+    if claim_path.exists():
+        existing_claim = json.loads(claim_path.read_text())
+        status = existing_claim.get("status")
+        if status == "completed":
+            recorded_result = Path(existing_claim.get("result_path", "")).resolve()
+            if (
+                recorded_result != final_path.resolve()
+                or not final_path.exists()
+                or file_sha256(final_path) != existing_claim.get("result_sha256")
+            ):
+                raise ValueError(
+                    "completed A3 final-test claim has a missing or corrupt result"
+                )
+        if status == "started":
+            raise RuntimeError(
+                "A3 final-test claim is started and non-retryable; inspect crash window"
+            )
         raise RuntimeError(
-            "A3 JSFUSION final test has already been claimed for this lineage"
+            f"A3 JSFUSION final test claim is {status!r} and cannot be retried"
         )
+    if final_path.exists():
+        raise ValueError("A3 final-test result exists without its durable claim")
     claim = {
         "status": "started",
         "selected_epoch": int(selected["epoch"]),
@@ -3156,13 +3492,22 @@ def _maybe_run_contextual_risk_final_test(
         os.fsync(handle.fileno())
     try:
         result = run_selected_jsfusion_once(selected)
+        atomic_write_json(final_path, result)
     except Exception as exc:
         atomic_write_json(
             claim_path,
             {**claim, "status": "failed", "error_type": type(exc).__name__},
         )
         raise
-    atomic_write_json(claim_path, {**claim, "status": "completed"})
+    atomic_write_json(
+        claim_path,
+        {
+            **claim,
+            "status": "completed",
+            "result_path": str(final_path.resolve()),
+            "result_sha256": file_sha256(final_path),
+        },
+    )
     return result
 
 
@@ -3642,6 +3987,11 @@ def main():
         best_v2t_checkpoint = "None"
         a2_only = bool(getattr(args, "csd_logvar_sidecar_only", False))
         a3_only = bool(getattr(args, "contextual_risk_sidecar_only", False))
+        lifecycle_owner = (
+            _contextual_risk_lifecycle_owner(args)
+            if a3_only
+            else args.local_rank == 0
+        )
         csd_protocol = None
         contextual_protocol = None
 
@@ -3673,7 +4023,7 @@ def main():
                 n_gpu,
                 resume_payload=resume_checkpoint,
             )
-        if a3_only and args.local_rank == 0:
+        if a3_only and lifecycle_owner:
             contextual_protocol = _initialize_contextual_risk_protocol(
                 args,
                 model,
@@ -3713,7 +4063,7 @@ def main():
                 local_rank=args.local_rank,
             )
 
-            if args.local_rank == 0:
+            if lifecycle_owner:
                 if torch.cuda.is_available():
                     current_memory = torch.cuda.memory_allocated(device) / 1024**3
                     max_memory = torch.cuda.max_memory_allocated(device) / 1024**3
@@ -3812,6 +4162,7 @@ def main():
                         ],
                         candidate_path=contextual_protocol["candidate_path"],
                         selection_path=contextual_protocol["selection_path"],
+                        bootstrap_samples=args.contextual_risk_bootstrap_samples,
                     )
                     contextual_protocol["candidates"] = json.loads(
                         contextual_protocol["candidate_path"].read_text()
@@ -3867,7 +4218,7 @@ def main():
             if dist.is_available() and dist.is_initialized():
                 dist.barrier()
 
-        if args.local_rank == 0:
+        if lifecycle_owner:
             if a2_only:
                 winner = choose_csd_logvar_checkpoint(
                     csd_protocol["candidates"],
@@ -3962,11 +4313,6 @@ def main():
                 final_test_payload = _maybe_run_contextual_risk_final_test(
                     args, selection_payload, run_selected_jsfusion_once
                 )
-                if final_test_payload is not None:
-                    atomic_write_json(
-                        Path(args.output_dir) / "final_test.json",
-                        final_test_payload,
-                    )
             elif args.run_final_test:
                 model_to_evaluate = model.module if hasattr(model, "module") else model
                 test_factory = DATALOADER_DICT[args.datatype].get("test")

@@ -319,7 +319,7 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
         "training": {
             "seed": getattr(args, "seed", None),
             "world_size": int(batch.get("world_size", 0)),
-            "precision": "fp16" if bool(getattr(args, "fp16", False)) else "fp32",
+            "precision": "fp32",
             "effective_batch": int(
                 batch.get(
                     "optimizer_effective_batch",
@@ -353,8 +353,17 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
         "candidate_json": str(
             (output_dir / "contextual_risk_candidates.json").resolve()
         ),
+        "paired_baseline_json": str(
+            (output_dir / "a3_paired_baseline.json").resolve()
+        ),
         "selection_json": str(
             (output_dir / "best_contextual_risk_checkpoint.json").resolve()
+        ),
+        "final_test_claim_json": str(
+            (output_dir / "a3_final_test_claim.json").resolve()
+        ),
+        "final_test_result_json": str(
+            (output_dir / "final_test.json").resolve()
         ),
         "final_test_eligibility": (
             "terminal_lifecycle_and_requested_and_selected_validation_"
@@ -366,9 +375,50 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
 def validate_contextual_risk_resume_manifest(existing, requested) -> None:
     """Reject continuation when any immutable A3 registration changed."""
 
-    existing_a3 = existing.get("contextual_risk")
-    requested_a3 = requested.get("contextual_risk")
-    if not isinstance(existing_a3, dict) or existing_a3 != requested_a3:
+    batch_keys = (
+        "requested_effective_batch",
+        "forward_global_contrastive_batch",
+        "per_rank_micro_batch",
+        "gradient_accumulation_steps",
+        "optimizer_effective_batch",
+        "forward_steps_per_epoch",
+        "optimizer_steps_per_epoch",
+        "world_size",
+    )
+    retrieval_keys = (
+        "enabled",
+        "sidecar_only",
+        "weight",
+        "temperature",
+        "hidden_dim",
+        "bootstrap_samples",
+        "dsl",
+        "dsl_temperature",
+        "score_path",
+    )
+
+    def immutable_contract(manifest):
+        a3 = manifest.get("contextual_risk")
+        retrieval = manifest.get("retrieval_risk")
+        if not isinstance(a3, dict) or not isinstance(retrieval, dict):
+            raise ValueError("immutable A3 manifest dependencies are missing")
+        batch = manifest.get("batch") or {}
+        return {
+            "protocol_version": manifest.get("protocol_version"),
+            "split": manifest.get("split"),
+            "seed": manifest.get("seed"),
+            "profile": manifest.get("profile"),
+            "run_final_test": manifest.get("run_final_test"),
+            "backbone": manifest.get("backbone"),
+            "data": manifest.get("data"),
+            "batch": {key: batch.get(key) for key in batch_keys},
+            "retrieval_risk": {
+                key: retrieval.get(key) for key in retrieval_keys
+            },
+            "contextual_risk": a3,
+        }
+
+    if immutable_contract(existing) != immutable_contract(requested):
         raise ValueError("immutable A3 manifest fields differ on resume")
 
 

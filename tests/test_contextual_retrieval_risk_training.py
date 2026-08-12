@@ -5,25 +5,156 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+import numpy as np
 
 import main_task_retrieval
 from main_task_retrieval import (
+    _a3_exact_fp32_backend,
+    _a3_training_autocast_enabled,
+    _compute_directional_metrics,
+    _contextual_risk_continuation_eligible,
+    _contextual_risk_lifecycle_owner,
     _contextual_risk_should_continue,
     _initialize_contextual_risk_protocol,
     _maybe_run_contextual_risk_final_test,
     _record_contextual_risk_selection,
     _restore_training_checkpoint,
+    _serialize_retrieval_metrics,
     save_model,
 )
-from prob_models.uncertainty_protocol import file_sha256
+from prob_models.retrieval_risk_metrics import (
+    evaluate_retrieval_risk,
+    positive_ranks,
+)
+from prob_models.uncertainty_protocol import array_sha256, file_sha256
+
+
+def _array_metadata(value):
+    array = np.asarray(value)
+    return {
+        "dtype": str(array.dtype),
+        "shape": list(array.shape),
+        "sha256": array_sha256(array),
+    }
+
+
+def _complete_evidence(rho=0.30, raw="raw"):
+    size = 8
+    raw_wti = np.full((size, size), -2.0, dtype=np.float32)
+    for index in range(size):
+        raw_wti[index, index] = 0.0
+        non_positive = [value for value in range(size) if value != index]
+        raw_wti[index, non_positive[:index]] = 1.0
+    if raw != "raw":
+        raw_wti[0, 1] += 0.125
+    positive_mask = np.eye(size, dtype=bool)
+    text_means = np.arange(size * 2, dtype=np.float32).reshape(size, 2)
+    video_means = text_means[::-1].copy()
+    noise = np.asarray([3, 0, 6, 1, 7, 2, 5, 4], dtype=np.float32)
+    quality = 0.2 if rho <= 0.20 else 0.5 if rho <= 0.21 else 0.8 if rho <= 0.30 else 1.0
+    failure_risk = {}
+    metrics = {}
+    a1_failure_risk = {}
+    a1_vacuity = {}
+    for offset, direction in enumerate(("t2v", "v2t")):
+        scores = raw_wti if direction == "t2v" else raw_wti.T
+        mask = positive_mask if direction == "t2v" else positive_mask.T
+        ranks = positive_ranks(scores, mask).astype(np.float32)
+        risk = (quality * ranks + (1.0 - quality) * noise).astype(np.float32)
+        failure_risk[direction] = risk
+        metrics[direction] = evaluate_retrieval_risk(
+            scores, mask, risk, bootstrap_samples=0, seed=offset
+        )
+        a1_failure_risk[direction] = (ranks / size).astype(np.float32)
+        a1_vacuity[direction] = np.linspace(
+            0.1, 0.8, size, dtype=np.float32
+        )
+    arrays = {
+        "raw_wti": raw_wti,
+        "text_means": text_means,
+        "video_means": video_means,
+        "positive_mask": positive_mask,
+    }
+    evidence = {
+        **{name: value.tolist() for name, value in arrays.items()},
+        "failure_risk": {
+            direction: value.tolist() for direction, value in failure_risk.items()
+        },
+        "a1_failure_risk": {
+            direction: value.tolist() for direction, value in a1_failure_risk.items()
+        },
+        "a1_vacuity": {
+            direction: value.tolist() for direction, value in a1_vacuity.items()
+        },
+        "sha256": {
+            "raw_wti": array_sha256(raw_wti),
+            "text_means": array_sha256(text_means),
+            "video_means": array_sha256(video_means),
+            "positive_mask": array_sha256(positive_mask),
+            "failure_risk": {
+                direction: array_sha256(value)
+                for direction, value in failure_risk.items()
+            },
+        },
+        "array_metadata": {
+            **{name: _array_metadata(value) for name, value in arrays.items()},
+            "failure_risk": {
+                direction: _array_metadata(value)
+                for direction, value in failure_risk.items()
+            },
+            "a1_failure_risk": {
+                direction: _array_metadata(value)
+                for direction, value in a1_failure_risk.items()
+            },
+            "a1_vacuity": {
+                direction: _array_metadata(value)
+                for direction, value in a1_vacuity.items()
+            },
+        },
+        "metric_config": {
+            "bootstrap_samples": 0,
+            "seed_by_direction": {"t2v": 0, "v2t": 1},
+        },
+        "retrieval_scores": {
+            "t2v": raw_wti.tolist(),
+            "v2t": raw_wti.tolist(),
+        },
+        "retrieval_config": {
+            "directions": ["t2v", "v2t"],
+            "cut_off_points": "one_to_one",
+            "independent_directions": True,
+            "dsl": False,
+            "dsl_temperature": 1.0,
+            "score_path": "post_dsl_directional_scores",
+        },
+    }
+    evidence["array_metadata"]["retrieval_scores"] = {
+        direction: _array_metadata(raw_wti)
+        for direction in ("t2v", "v2t")
+    }
+    return evidence, metrics
 
 
 def _paired_digest(raw="raw"):
+    evidence, _ = _complete_evidence(raw=raw)
+    directional = _compute_directional_metrics(
+        np.asarray(evidence["retrieval_scores"]["t2v"], dtype=np.float32),
+        np.asarray(evidence["retrieval_scores"]["v2t"], dtype=np.float32),
+    )
     return {
-        "raw_wti_sha256": raw,
-        "a1_failure_risk_sha256": {"t2v": "tf", "v2t": "vf"},
-        "a1_vacuity_sha256": {"t2v": "tv", "v2t": "vv"},
-        "retrieval": {"t2v": {"R1": 1.0}, "v2t": {"R1": 2.0}},
+        "raw_wti_sha256": evidence["array_metadata"]["raw_wti"]["sha256"],
+        "a1_failure_risk_sha256": {
+            direction: evidence["array_metadata"]["a1_failure_risk"][direction]["sha256"]
+            for direction in ("t2v", "v2t")
+        },
+        "a1_vacuity_sha256": {
+            direction: evidence["array_metadata"]["a1_vacuity"][direction]["sha256"]
+            for direction in ("t2v", "v2t")
+        },
+        "retrieval": {
+            direction: _serialize_retrieval_metrics(directional[direction])
+            for direction in ("t2v", "v2t")
+        },
     }
 
 
@@ -43,18 +174,13 @@ def _direction(rho=0.30, auroc=0.70, aurc=0.25):
 
 
 def _validation(rho=0.30, auroc=0.70, aurc=0.25, *, raw="raw"):
+    evidence, metrics = _complete_evidence(rho=rho, raw=raw)
     return {
-        "t2v": {"R1": 1.0},
-        "v2t": {"R1": 2.0},
+        "t2v": _paired_digest(raw)["retrieval"]["t2v"],
+        "v2t": _paired_digest(raw)["retrieval"]["v2t"],
         "paired_digest": _paired_digest(raw),
-        "contextual_risk": {
-            "t2v": _direction(rho, auroc, aurc),
-            "v2t": _direction(rho, auroc, aurc),
-        },
-        "contextual_risk_evidence": {
-            "t2v": {"risk": [0.1, 0.2], "rank": [1, 2]},
-            "v2t": {"risk": [0.2, 0.1], "rank": [2, 1]},
-        },
+        "contextual_risk": metrics,
+        "contextual_risk_evidence": evidence,
     }
 
 
@@ -89,6 +215,7 @@ def _record(run, reference, candidates, epoch, metrics):
         reference_checkpoint=reference,
         candidate_path=run / "contextual_risk_candidates.json",
         selection_path=run / "best_contextual_risk_checkpoint.json",
+        bootstrap_samples=0,
     )
     candidates[:] = json.loads(
         (run / "contextual_risk_candidates.json").read_text()
@@ -137,6 +264,7 @@ def test_initial_three_candidates_are_append_only_and_drive_strict_continuation(
             reference_checkpoint=reference,
             candidate_path=run / "contextual_risk_candidates.json",
             selection_path=run / "best_contextual_risk_checkpoint.json",
+            bootstrap_samples=0,
         )
 
 
@@ -164,6 +292,7 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
             "reference_checkpoint": str(reference.resolve()),
             "reference_checkpoint_sha256": reference_sha,
             "paired_digest": _paired_digest(),
+            "evidence": _complete_evidence()[0],
         },
     )
     model, optimizer_path, optimizer_payload = pairs[2]
@@ -173,6 +302,7 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
             init_model=str(model),
             resume_model=str(optimizer_path),
             epochs=5,
+            contextual_risk_bootstrap_samples=0,
         ),
         object(),
         object(),
@@ -197,6 +327,7 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
                 init_model=str(tmp_path / "copy.pt"),
                 resume_model=str(optimizer_path),
                 epochs=5,
+                contextual_risk_bootstrap_samples=0,
             ),
             object(), object(), torch.device("cpu"), 1,
             resume_payload=optimizer_payload,
@@ -211,6 +342,7 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
                 init_model=str(model),
                 resume_model=str(wrong_optimizer),
                 epochs=5,
+                contextual_risk_bootstrap_samples=0,
             ),
             object(), object(), torch.device("cpu"), 1,
             resume_payload=optimizer_payload,
@@ -231,28 +363,136 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
     forged_selection["winner"] = tampered[2]
     main_task_retrieval.atomic_write_json(candidate_path, tampered)
     main_task_retrieval.atomic_write_json(selection_path, forged_selection)
-    with pytest.raises(ValueError, match="immutable candidate audit mismatch"):
+    with pytest.raises(ValueError, match="immutable candidate .* evidence mismatch"):
         _initialize_contextual_risk_protocol(
             SimpleNamespace(
                 output_dir=str(run), init_model=str(model),
                 resume_model=str(optimizer_path), epochs=5,
+                contextual_risk_bootstrap_samples=0,
             ),
             object(), object(), torch.device("cpu"), 1,
             resume_payload=optimizer_payload,
         )
 
-    nonfinite = copy.deepcopy(original_candidates)
-    nonfinite[2]["evidence"]["t2v"]["risk"][0] = float("nan")
-    nonfinite_selection = copy.deepcopy(original_selection)
-    nonfinite_selection["candidates"] = nonfinite
-    nonfinite_selection["winner"] = nonfinite[2]
-    main_task_retrieval.atomic_write_json(candidate_path, nonfinite)
-    main_task_retrieval.atomic_write_json(selection_path, nonfinite_selection)
-    with pytest.raises(ValueError, match="immutable candidate audit mismatch"):
+    finite_metric_tamper = copy.deepcopy(original_candidates)
+    finite_metric_tamper[2]["metrics"]["t2v"][
+        "spearman_risk_vs_rank"
+    ] += 0.01
+    finite_metric_tamper[2]["rho"][0] += 0.01
+    metric_selection = copy.deepcopy(original_selection)
+    metric_selection["candidates"] = finite_metric_tamper
+    metric_selection["winner"] = finite_metric_tamper[2]
+    main_task_retrieval.atomic_write_json(candidate_path, finite_metric_tamper)
+    main_task_retrieval.atomic_write_json(selection_path, metric_selection)
+    with pytest.raises(ValueError, match="metric summary mismatch"):
         _initialize_contextual_risk_protocol(
             SimpleNamespace(
                 output_dir=str(run), init_model=str(model),
                 resume_model=str(optimizer_path), epochs=5,
+                contextual_risk_bootstrap_samples=0,
+            ),
+            object(), object(), torch.device("cpu"), 1,
+            resume_payload=optimizer_payload,
+        )
+
+    digest_tamper = copy.deepcopy(original_candidates)
+    digest_tamper[2]["evidence"]["array_metadata"]["text_means"][
+        "sha256"
+    ] = "0" * 64
+    digest_selection = copy.deepcopy(original_selection)
+    digest_selection["candidates"] = digest_tamper
+    digest_selection["winner"] = digest_tamper[2]
+    main_task_retrieval.atomic_write_json(candidate_path, digest_tamper)
+    main_task_retrieval.atomic_write_json(selection_path, digest_selection)
+    with pytest.raises(ValueError, match="text_means SHA-256 mismatch"):
+        _initialize_contextual_risk_protocol(
+            SimpleNamespace(
+                output_dir=str(run), init_model=str(model),
+                resume_model=str(optimizer_path), epochs=5,
+                contextual_risk_bootstrap_samples=0,
+            ),
+            object(), object(), torch.device("cpu"), 1,
+            resume_payload=optimizer_payload,
+        )
+
+    coherent_retrieval_tamper = copy.deepcopy(original_candidates)
+    forged_scores = -np.asarray(
+        original_candidates[0]["evidence"]["raw_wti"], dtype=np.float32
+    )
+    forged_directional = _compute_directional_metrics(
+        forged_scores, forged_scores
+    )
+    forged_retrieval = {
+        direction: _serialize_retrieval_metrics(
+            forged_directional[direction]
+        )
+        for direction in ("t2v", "v2t")
+    }
+
+    def forge_retrieval_evidence(evidence):
+        for direction in ("t2v", "v2t"):
+            evidence["retrieval_scores"][direction] = forged_scores.tolist()
+            evidence["array_metadata"]["retrieval_scores"][
+                direction
+            ] = _array_metadata(forged_scores)
+
+    for candidate in coherent_retrieval_tamper:
+        candidate["paired_digest"]["retrieval"] = forged_retrieval
+        forge_retrieval_evidence(candidate["evidence"])
+    retrieval_selection = copy.deepcopy(original_selection)
+    retrieval_selection["candidates"] = coherent_retrieval_tamper
+    retrieval_selection["winner"] = coherent_retrieval_tamper[2]
+    baseline_registration = json.loads(
+        (run / "a3_paired_baseline.json").read_text()
+    )
+    original_baseline_registration = copy.deepcopy(baseline_registration)
+    baseline_registration["paired_digest"]["retrieval"] = forged_retrieval
+    forge_retrieval_evidence(baseline_registration["evidence"])
+    main_task_retrieval.atomic_write_json(
+        run / "a3_paired_baseline.json", baseline_registration
+    )
+    main_task_retrieval.atomic_write_json(
+        candidate_path, coherent_retrieval_tamper
+    )
+    main_task_retrieval.atomic_write_json(selection_path, retrieval_selection)
+    with pytest.raises(ValueError, match="retrieval t2v score evidence differs"):
+        _initialize_contextual_risk_protocol(
+            SimpleNamespace(
+                output_dir=str(run), init_model=str(model),
+                resume_model=str(optimizer_path), epochs=5,
+                contextual_risk_bootstrap_samples=0,
+            ),
+            object(), object(), torch.device("cpu"), 1,
+            resume_payload=optimizer_payload,
+        )
+    main_task_retrieval.atomic_write_json(
+        run / "a3_paired_baseline.json", original_baseline_registration
+    )
+
+    array_tamper = copy.deepcopy(original_candidates)
+    array_tamper[2]["evidence"]["failure_risk"]["t2v"][0] += 0.125
+    changed_risk = np.asarray(
+        array_tamper[2]["evidence"]["failure_risk"]["t2v"],
+        dtype=np.float32,
+    )
+    changed_sha = array_sha256(changed_risk)
+    array_tamper[2]["evidence"]["array_metadata"]["failure_risk"][
+        "t2v"
+    ]["sha256"] = changed_sha
+    array_tamper[2]["evidence"]["sha256"]["failure_risk"][
+        "t2v"
+    ] = changed_sha
+    array_selection = copy.deepcopy(original_selection)
+    array_selection["candidates"] = array_tamper
+    array_selection["winner"] = array_tamper[2]
+    main_task_retrieval.atomic_write_json(candidate_path, array_tamper)
+    main_task_retrieval.atomic_write_json(selection_path, array_selection)
+    with pytest.raises(ValueError, match="metric summary mismatch"):
+        _initialize_contextual_risk_protocol(
+            SimpleNamespace(
+                output_dir=str(run), init_model=str(model),
+                resume_model=str(optimizer_path), epochs=5,
+                contextual_risk_bootstrap_samples=0,
             ),
             object(), object(), torch.device("cpu"), 1,
             resume_payload=optimizer_payload,
@@ -301,6 +541,7 @@ def test_selection_receives_validation_candidate_only(tmp_path, monkeypatch):
         reference_checkpoint=reference,
         candidate_path=run / "contextual_risk_candidates.json",
         selection_path=run / "best_contextual_risk_checkpoint.json",
+        bootstrap_samples=0,
     )
 
     assert len(observed) == 1
@@ -337,8 +578,12 @@ def test_final_test_gate_calls_jsfusion_once_only_on_validation_pass(
     assert calls == [winner]
     claim = json.loads((tmp_path / "a3_final_test_claim.json").read_text())
     assert claim["status"] == "completed"
+    result_path = tmp_path / "final_test.json"
+    assert json.loads(result_path.read_text()) == {"test": 1}
+    assert claim["result_path"] == str(result_path.resolve())
+    assert claim["result_sha256"] == file_sha256(result_path)
 
-    with pytest.raises(RuntimeError, match="already been claimed"):
+    with pytest.raises(RuntimeError, match="cannot be retried"):
         _maybe_run_contextual_risk_final_test(
             args,
             selection,
@@ -394,7 +639,60 @@ def test_failed_final_test_claim_cannot_be_retried(tmp_path):
     assert claim["status"] == "failed"
     assert claim["error_type"] == "OSError"
 
-    with pytest.raises(RuntimeError, match="already been claimed"):
+    with pytest.raises(RuntimeError, match="cannot be retried"):
+        _maybe_run_contextual_risk_final_test(args, selection, lambda selected: None)
+
+
+@pytest.mark.parametrize("status", ["started", "completed"])
+def test_final_test_claim_crash_windows_are_diagnosable(tmp_path, status):
+    checkpoint = tmp_path / "pytorch_model.bin.0"
+    checkpoint.write_bytes(b"model")
+    winner = {
+        "epoch": 0,
+        "path": str(checkpoint.resolve()),
+        "model_sha256": file_sha256(checkpoint),
+        "metrics": {
+            **_validation()["contextual_risk"],
+            "paired_invariance": {"passed": True},
+            "non_a3_mismatches": [],
+        },
+    }
+    main_task_retrieval.atomic_write_json(
+        tmp_path / "a3_final_test_claim.json",
+        {"status": status},
+    )
+    error = RuntimeError if status == "started" else ValueError
+    message = "started and non-retryable" if status == "started" else "corrupt result"
+
+    with pytest.raises(error, match=message):
+        _maybe_run_contextual_risk_final_test(
+            SimpleNamespace(run_final_test=True, output_dir=str(tmp_path)),
+            {"winner": winner, "candidates": [winner]},
+            lambda selected: pytest.fail("crash-window claim must not rerun test"),
+        )
+
+
+def test_completed_final_test_claim_rejects_result_hash_tampering(tmp_path):
+    checkpoint = tmp_path / "pytorch_model.bin.0"
+    checkpoint.write_bytes(b"model")
+    winner = {
+        "epoch": 0,
+        "path": str(checkpoint.resolve()),
+        "model_sha256": file_sha256(checkpoint),
+        "metrics": {
+            **_validation()["contextual_risk"],
+            "paired_invariance": {"passed": True},
+            "non_a3_mismatches": [],
+        },
+    }
+    args = SimpleNamespace(run_final_test=True, output_dir=str(tmp_path))
+    selection = {"winner": winner, "candidates": [winner]}
+    _maybe_run_contextual_risk_final_test(
+        args, selection, lambda selected: {"test": 1}
+    )
+    (tmp_path / "final_test.json").write_text('{"test": 2}\n')
+
+    with pytest.raises(ValueError, match="corrupt result"):
         _maybe_run_contextual_risk_final_test(args, selection, lambda selected: None)
 
 
@@ -404,14 +702,34 @@ def test_final_test_is_deferred_when_three_epoch_continuation_is_eligible(
     candidates = []
     for epoch, rho in enumerate((0.20, 0.21, 0.22)):
         checkpoint = tmp_path / f"pytorch_model.bin.{epoch}"
+        optimizer = tmp_path / f"pytorch_opt.bin.{epoch}"
         checkpoint.write_bytes(f"model-{epoch}".encode())
+        optimizer.write_bytes(f"optimizer-{epoch}".encode())
+        evidence, _ = _complete_evidence(rho=rho)
         candidates.append({
             "epoch": epoch,
             "path": str(checkpoint.resolve()),
             "model_sha256": file_sha256(checkpoint),
+            "optimizer_path": str(optimizer.resolve()),
+            "optimizer_sha256": file_sha256(optimizer),
+            "valid": True,
+            "finite": True,
+            "runtime_abort": False,
             "rho": [rho, rho],
             "auroc": [0.70, 0.70],
             "aurc": [0.25, 0.25],
+            "evidence": evidence,
+            "paired_digest": _paired_digest(),
+            "paired_invariance": {
+                "passed": True,
+                "checks": {
+                    "raw_wti": True,
+                    "a1_failure_risk": True,
+                    "a1_vacuity": True,
+                    "retrieval": True,
+                },
+            },
+            "non_a3_mismatches": [],
             "metrics": {
                 **_validation(rho=rho)["contextual_risk"],
                 "paired_invariance": {"passed": True},
@@ -434,6 +752,111 @@ def test_final_test_is_deferred_when_three_epoch_continuation_is_eligible(
 
     assert result is None
     assert calls == []
+
+
+def test_invalid_epoch_two_does_not_defer_terminal_winner(tmp_path, monkeypatch):
+    candidates = []
+    for epoch, rho in enumerate((0.20, 0.21, 0.99)):
+        checkpoint = tmp_path / f"pytorch_model.bin.{epoch}"
+        optimizer = tmp_path / f"pytorch_opt.bin.{epoch}"
+        checkpoint.write_bytes(f"model-{epoch}".encode())
+        optimizer.write_bytes(f"optimizer-{epoch}".encode())
+        candidate = {
+            "epoch": epoch,
+            "path": str(checkpoint.resolve()),
+            "model_sha256": file_sha256(checkpoint),
+            "optimizer_path": str(optimizer.resolve()),
+            "optimizer_sha256": file_sha256(optimizer),
+            "valid": epoch != 2,
+            "finite": True,
+            "runtime_abort": False,
+            "rho": [rho, rho],
+            "auroc": [0.70, 0.70],
+            "aurc": [0.25, 0.25],
+            "evidence": {"risk": [0.1, 0.2]},
+            "paired_digest": _paired_digest(),
+            "paired_invariance": {
+                "passed": True,
+                "checks": {
+                    "raw_wti": True, "a1_failure_risk": True,
+                    "a1_vacuity": True, "retrieval": True,
+                },
+            },
+            "non_a3_mismatches": [],
+            "metrics": {
+                **_validation(rho=rho)["contextual_risk"],
+                "paired_invariance": {"passed": True},
+                "non_a3_mismatches": [],
+            },
+        }
+        candidates.append(candidate)
+    calls = []
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "logger",
+        SimpleNamespace(info=lambda *args: None, warning=lambda *args: None),
+        raising=False,
+    )
+
+    assert _contextual_risk_continuation_eligible(
+        candidates, output_dir=tmp_path
+    ) is False
+    result = _maybe_run_contextual_risk_final_test(
+        SimpleNamespace(run_final_test=True, output_dir=str(tmp_path)),
+        {"winner": candidates[1], "candidates": candidates},
+        lambda selected: calls.append(selected) or {"test": 1},
+    )
+    assert result == {"test": 1}
+    assert calls == [candidates[1]]
+
+
+def test_a3_lifecycle_owner_is_global_rank_zero_not_local_rank_zero():
+    assert _contextual_risk_lifecycle_owner(
+        SimpleNamespace(rank=0, local_rank=0)
+    ) is True
+    assert _contextual_risk_lifecycle_owner(
+        SimpleNamespace(rank=4, local_rank=0)
+    ) is False
+    assert _contextual_risk_lifecycle_owner(
+        SimpleNamespace(rank=1, local_rank=1)
+    ) is False
+
+
+def test_a3_autocast_is_disabled_without_changing_a2_or_legacy():
+    assert _a3_training_autocast_enabled(
+        SimpleNamespace(contextual_risk_sidecar_only=True)
+    ) is False
+    assert _a3_training_autocast_enabled(
+        SimpleNamespace(
+            contextual_risk_sidecar_only=False,
+            csd_logvar_sidecar_only=True,
+        )
+    ) is True
+    assert _a3_training_autocast_enabled(SimpleNamespace()) is True
+
+
+def test_a3_exact_fp32_disables_and_restores_tf32_without_changing_a2():
+    original_matmul = torch.backends.cuda.matmul.allow_tf32
+    original_cudnn = torch.backends.cudnn.allow_tf32
+    try:
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        with _a3_exact_fp32_backend(
+            SimpleNamespace(contextual_risk_sidecar_only=True)
+        ):
+            assert torch.backends.cuda.matmul.allow_tf32 is False
+            assert torch.backends.cudnn.allow_tf32 is False
+        assert torch.backends.cuda.matmul.allow_tf32 is True
+        assert torch.backends.cudnn.allow_tf32 is True
+
+        with _a3_exact_fp32_backend(
+            SimpleNamespace(csd_logvar_sidecar_only=True)
+        ):
+            assert torch.backends.cuda.matmul.allow_tf32 is True
+            assert torch.backends.cudnn.allow_tf32 is True
+    finally:
+        torch.backends.cuda.matmul.allow_tf32 = original_matmul
+        torch.backends.cudnn.allow_tf32 = original_cudnn
 
 
 def test_a3_save_refuses_checkpoint_overwrite(tmp_path, monkeypatch):
