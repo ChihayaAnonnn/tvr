@@ -45,10 +45,64 @@ def test_a2_only_freezes_every_parameter_outside_exact_prefix():
     ) == 64
 
 
-def test_one_step_smoke_flushes_diagnostics_before_display_interval():
-    assert retrieval._should_log_training_step(1, log_step=20, smoke_cap=1)
-    assert not retrieval._should_log_training_step(1, log_step=20, smoke_cap=None)
-    assert retrieval._should_log_training_step(20, log_step=20, smoke_cap=None)
+def test_a2_smoke_flushes_diagnostics_before_display_interval():
+    args = SimpleNamespace(use_csd_logvar_sidecar=True)
+    assert retrieval._should_log_training_step(
+        1, log_step=20, smoke_cap=1, args=args
+    )
+
+
+def test_a1_smoke_does_not_force_a_log_before_display_interval():
+    args = SimpleNamespace(
+        use_csd_logvar_sidecar=False,
+        use_retrieval_risk_sidecar=True,
+    )
+    assert not retrieval._should_log_training_step(
+        1, log_step=20, smoke_cap=1, args=args
+    )
+
+
+def test_crf_smoke_does_not_force_a_log_before_display_interval():
+    args = SimpleNamespace(
+        use_csd_logvar_sidecar=False,
+        aleatoric_crf_training=True,
+    )
+    assert not retrieval._should_log_training_step(
+        1, log_step=20, smoke_cap=1, args=args
+    )
+
+
+def test_display_boundary_logs_for_every_profile():
+    profiles = (
+        SimpleNamespace(use_csd_logvar_sidecar=True),
+        SimpleNamespace(
+            use_csd_logvar_sidecar=False,
+            use_retrieval_risk_sidecar=True,
+        ),
+        SimpleNamespace(
+            use_csd_logvar_sidecar=False,
+            aleatoric_crf_training=True,
+        ),
+    )
+    assert all(
+        retrieval._should_log_training_step(
+            20, log_step=20, smoke_cap=1, args=args
+        )
+        for args in profiles
+    )
+
+
+def test_time_per_step_uses_actual_dataloader_steps_since_last_log():
+    assert retrieval._time_per_dataloader_step_since_log(
+        elapsed_seconds=9.0,
+        current_dataloader_step=3,
+        last_logged_dataloader_step=0,
+    ) == 3.0
+    assert retrieval._time_per_dataloader_step_since_log(
+        elapsed_seconds=80.0,
+        current_dataloader_step=40,
+        last_logged_dataloader_step=0,
+    ) == 2.0
 
 
 def test_a2_mode_keeps_only_new_sidecar_in_train_mode():

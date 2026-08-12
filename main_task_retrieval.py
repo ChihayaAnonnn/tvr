@@ -1256,9 +1256,19 @@ def _unpack_train_batch(batch):
     return input_ids, input_mask, segment_ids, video, video_mask, group_ids
 
 
-def _should_log_training_step(global_step, log_step, smoke_cap):
+def _should_log_training_step(global_step, log_step, smoke_cap, args):
     return global_step % log_step == 0 or (
-        smoke_cap is not None and global_step == smoke_cap
+        smoke_cap is not None
+        and global_step == smoke_cap
+        and bool(getattr(args, "use_csd_logvar_sidecar", False))
+    )
+
+
+def _time_per_dataloader_step_since_log(
+    elapsed_seconds, current_dataloader_step, last_logged_dataloader_step
+):
+    return elapsed_seconds / (
+        current_dataloader_step - last_logged_dataloader_step
     )
 
 
@@ -1269,7 +1279,8 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     set_retrieval_risk_training_mode(model)
     set_csd_logvar_training_mode(model)
     log_step = args.n_display
-    start_time = time.time()
+    last_log_time = time.time()
+    last_logged_dataloader_step = 0
     epoch_start_time = time.time()
     total_loss = 0
     num_steps = len(train_dataloader)
@@ -1387,16 +1398,23 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             global_step += 1
 
             if (
-                _should_log_training_step(global_step, log_step, smoke_cap)
+                _should_log_training_step(global_step, log_step, smoke_cap, args)
                 and local_rank == 0
             ):
                 # --- 计算进度 & ETA ---
                 opt_step = global_step % total_opt_steps or total_opt_steps
                 progress = opt_step / total_opt_steps * 100
-                time_per_step = (time.time() - start_time) / (log_step * args.gradient_accumulation_steps)
+                current_dataloader_step = step + 1
+                current_time = time.time()
+                time_per_step = _time_per_dataloader_step_since_log(
+                    current_time - last_log_time,
+                    current_dataloader_step,
+                    last_logged_dataloader_step,
+                )
                 remaining_steps = num_steps - (step + 1)
                 eta = time_per_step * remaining_steps
-                start_time = time.time()
+                last_log_time = current_time
+                last_logged_dataloader_step = current_dataloader_step
 
                 lr_clip = scheduled_group_lrs[0]
                 lr_new = (
