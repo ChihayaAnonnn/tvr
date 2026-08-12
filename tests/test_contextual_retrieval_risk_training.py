@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 import torch
@@ -26,6 +27,8 @@ from prob_models.retrieval_risk_metrics import (
     evaluate_retrieval_risk,
     positive_ranks,
 )
+from prob_models.contextual_retrieval_risk import ContextualRetrievalRiskSidecar
+from prob_models.retrieval_risk import RetrievalRiskSidecar
 from prob_models.uncertainty_protocol import array_sha256, file_sha256
 
 
@@ -184,6 +187,231 @@ def _validation(rho=0.30, auroc=0.70, aurc=0.25, *, raw="raw"):
     }
 
 
+def _real_checkpoint_evidence(tmp_path):
+    evidence, _ = _complete_evidence()
+    raw = torch.tensor(evidence["raw_wti"], dtype=torch.float32)
+    text = torch.tensor(evidence["text_means"], dtype=torch.float32)
+    video = torch.tensor(evidence["video_means"], dtype=torch.float32)
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(17)
+        contextual = ContextualRetrievalRiskSidecar(
+            embed_dim=2,
+            projection_dim=3,
+            hidden_dim=4,
+            topk=3,
+            temperature=1.0,
+            dropout=0.1,
+        ).eval()
+        retrieval = RetrievalRiskSidecar(
+            hidden_dim=4, temperature=1.0
+        ).eval()
+    with torch.no_grad():
+        for direction in ("t2v", "v2t"):
+            contextual_risk = contextual(
+                raw,
+                text if direction == "t2v" else video,
+                video if direction == "t2v" else text,
+                direction,
+            )["failure_risk"].numpy()
+            a1 = retrieval(raw, direction)
+            for name, value in (
+                ("failure_risk", contextual_risk),
+                ("a1_failure_risk", a1["failure_risk"].numpy()),
+                ("a1_vacuity", a1["vacuity"].numpy()),
+            ):
+                evidence[name][direction] = value.tolist()
+                evidence["array_metadata"][name][direction] = _array_metadata(value)
+                if name in evidence.get("sha256", {}):
+                    evidence["sha256"][name][direction] = array_sha256(value)
+    evidence["contextual_head_config"] = {
+        "embed_dim": 2,
+        "projection_dim": 3,
+        "hidden_dim": 4,
+        "topk": 3,
+        "temperature": 1.0,
+        "dropout": 0.1,
+    }
+    evidence["a1_head_config"] = {
+        "feature_dim": 8,
+        "hidden_dim": 4,
+        "temperature": 1.0,
+    }
+    checkpoint = tmp_path / "checkpoint.pt"
+    state = {
+        **{
+            f"contextual_risk_sidecar.{name}": value
+            for name, value in contextual.state_dict().items()
+        },
+        **{
+            f"retrieval_risk_sidecar.{name}": value
+            for name, value in retrieval.state_dict().items()
+        },
+    }
+    torch.save(state, checkpoint)
+    return checkpoint, evidence
+
+
+def test_checkpoint_state_anchors_contextual_and_a1_output_evidence(tmp_path):
+    checkpoint, evidence = _real_checkpoint_evidence(tmp_path)
+
+    main_task_retrieval._verify_contextual_risk_checkpoint_outputs(
+        checkpoint,
+        evidence,
+        expected_head_configs={
+            "contextual": evidence["contextual_head_config"],
+            "a1": evidence["a1_head_config"],
+        },
+    )
+
+    contextual_tamper = copy.deepcopy(evidence)
+    changed = np.asarray(
+        contextual_tamper["failure_risk"]["t2v"], dtype=np.float32
+    ) + 0.125
+    contextual_tamper["failure_risk"]["t2v"] = changed.tolist()
+    contextual_tamper["array_metadata"]["failure_risk"]["t2v"] = (
+        _array_metadata(changed)
+    )
+    contextual_tamper["sha256"]["failure_risk"]["t2v"] = array_sha256(changed)
+    with pytest.raises(ValueError, match="checkpoint-derived contextual"):
+        main_task_retrieval._verify_contextual_risk_checkpoint_outputs(
+            checkpoint,
+            contextual_tamper,
+            expected_head_configs={
+                "contextual": evidence["contextual_head_config"],
+                "a1": evidence["a1_head_config"],
+            },
+        )
+
+    a1_tamper = copy.deepcopy(evidence)
+    changed = np.asarray(
+        a1_tamper["a1_failure_risk"]["v2t"], dtype=np.float32
+    ) + 0.125
+    a1_tamper["a1_failure_risk"]["v2t"] = changed.tolist()
+    a1_tamper["array_metadata"]["a1_failure_risk"]["v2t"] = (
+        _array_metadata(changed)
+    )
+    with pytest.raises(ValueError, match="checkpoint-derived A1"):
+        main_task_retrieval._verify_contextual_risk_checkpoint_outputs(
+            checkpoint,
+            a1_tamper,
+            expected_head_configs={
+                "contextual": evidence["contextual_head_config"],
+                "a1": evidence["a1_head_config"],
+            },
+        )
+
+    config_tamper = copy.deepcopy(evidence)
+    config_tamper["contextual_head_config"]["temperature"] = 2.0
+    with pytest.raises(ValueError, match="configuration differs from manifest"):
+        main_task_retrieval._verify_contextual_risk_checkpoint_outputs(
+            checkpoint,
+            config_tamper,
+            expected_head_configs={
+                "contextual": evidence["contextual_head_config"],
+                "a1": evidence["a1_head_config"],
+            },
+        )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+def test_cuda_model_registers_canonical_cpu_checkpoint_outputs(tmp_path):
+    checkpoint, expected = _real_checkpoint_evidence(tmp_path)
+    state = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    contextual = ContextualRetrievalRiskSidecar(
+        **expected["contextual_head_config"]
+    ).cuda().eval()
+    contextual.load_state_dict({
+        name.removeprefix("contextual_risk_sidecar."): value
+        for name, value in state.items()
+        if name.startswith("contextual_risk_sidecar.")
+    })
+    retrieval = RetrievalRiskSidecar(
+        **expected["a1_head_config"]
+    ).cuda().eval()
+    retrieval.load_state_dict({
+        name.removeprefix("retrieval_risk_sidecar."): value
+        for name, value in state.items()
+        if name.startswith("retrieval_risk_sidecar.")
+    })
+    shell = SimpleNamespace(
+        contextual_risk_sidecar=contextual,
+        retrieval_risk_sidecar=retrieval,
+    )
+    raw = np.asarray(expected["raw_wti"], dtype=np.float32)
+    mask = np.asarray(expected["positive_mask"], dtype=bool)
+    text = torch.tensor(expected["text_means"], device="cuda")
+    video = torch.tensor(expected["video_means"], device="cuda")
+    _, evidence = main_task_retrieval._compute_contextual_retrieval_risk_metrics(
+        model=shell,
+        risk_similarity_matrix=raw,
+        positive_mask=mask,
+        text_means=text,
+        video_means=video,
+        directions=("t2v", "v2t"),
+        device=torch.device("cuda"),
+        bootstrap_samples=0,
+        return_evidence=True,
+    )
+    _, a1 = main_task_retrieval._compute_retrieval_risk_metrics(
+        model=shell,
+        risk_similarity_matrix=raw,
+        metric_t2v_matrix=raw,
+        metric_v2t_matrix=raw,
+        positive_mask=mask,
+        directions=("t2v", "v2t"),
+        device=torch.device("cuda"),
+        bootstrap_samples=0,
+        return_array_digests=True,
+        return_array_evidence=True,
+    )
+    evidence.update({
+        "contextual_head_config": expected["contextual_head_config"],
+        "a1_head_config": expected["a1_head_config"],
+        "a1_failure_risk": {
+            direction: a1[direction]["failure_risk_values"]
+            for direction in ("t2v", "v2t")
+        },
+        "a1_vacuity": {
+            direction: a1[direction]["vacuity_values"]
+            for direction in ("t2v", "v2t")
+        },
+    })
+    for name, stem in (
+        ("a1_failure_risk", "failure_risk"),
+        ("a1_vacuity", "vacuity"),
+    ):
+        evidence["array_metadata"][name] = {
+            direction: {
+                "dtype": a1[direction][f"{stem}_dtype"],
+                "shape": a1[direction][f"{stem}_shape"],
+                "sha256": a1[direction][stem],
+            }
+            for direction in ("t2v", "v2t")
+        }
+
+    main_task_retrieval._verify_contextual_risk_checkpoint_outputs(
+        checkpoint,
+        evidence,
+        expected_head_configs={
+            "contextual": expected["contextual_head_config"],
+            "a1": expected["a1_head_config"],
+        },
+    )
+
+
+def test_retrieval_evidence_config_cannot_override_registered_args():
+    evidence, _ = _complete_evidence()
+    with pytest.raises(ValueError, match="retrieval configuration mismatch"):
+        main_task_retrieval._recompute_contextual_risk_metrics(
+            evidence,
+            bootstrap_samples=0,
+            expected_retrieval_config={
+                **evidence["retrieval_config"],
+                "dsl": True,
+            },
+        )
+
+
 def _write_pair(run, reference, epoch):
     model_path = run / f"pytorch_model.bin.{epoch}"
     optimizer_path = run / f"pytorch_opt.bin.{epoch}"
@@ -206,17 +434,25 @@ def _write_pair(run, reference, epoch):
 
 def _record(run, reference, candidates, epoch, metrics):
     model, optimizer, payload = _write_pair(run, reference, epoch)
-    winner = _record_contextual_risk_selection(
-        epoch=epoch,
-        checkpoint_path=model,
-        optimizer_checkpoint_path=optimizer,
-        validation_metrics=metrics,
-        paired_baseline=_paired_digest(),
-        reference_checkpoint=reference,
-        candidate_path=run / "contextual_risk_candidates.json",
-        selection_path=run / "best_contextual_risk_checkpoint.json",
-        bootstrap_samples=0,
-    )
+    with mock.patch.object(
+        main_task_retrieval,
+        "_verify_contextual_risk_checkpoint_outputs",
+    ):
+        winner = _record_contextual_risk_selection(
+            epoch=epoch,
+            checkpoint_path=model,
+            optimizer_checkpoint_path=optimizer,
+            validation_metrics=metrics,
+            paired_baseline=_paired_digest(),
+            reference_checkpoint=reference,
+            candidate_path=run / "contextual_risk_candidates.json",
+            selection_path=run / "best_contextual_risk_checkpoint.json",
+            bootstrap_samples=0,
+            expected_retrieval_config=metrics[
+                "contextual_risk_evidence"
+            ]["retrieval_config"],
+            expected_head_configs={},
+        )
     candidates[:] = json.loads(
         (run / "contextual_risk_candidates.json").read_text()
     )
@@ -224,8 +460,13 @@ def _record(run, reference, candidates, epoch, metrics):
 
 
 def test_initial_three_candidates_are_append_only_and_drive_strict_continuation(
-    tmp_path,
+    tmp_path, monkeypatch,
 ):
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "_verify_contextual_risk_checkpoint_outputs",
+        lambda *_args, **_kwargs: None,
+    )
     run = tmp_path / "run"
     run.mkdir()
     reference = tmp_path / "a1.pt"
@@ -265,12 +506,21 @@ def test_initial_three_candidates_are_append_only_and_drive_strict_continuation(
             candidate_path=run / "contextual_risk_candidates.json",
             selection_path=run / "best_contextual_risk_checkpoint.json",
             bootstrap_samples=0,
+            expected_retrieval_config=_validation()[
+                "contextual_risk_evidence"
+            ]["retrieval_config"],
+            expected_head_configs={},
         )
 
 
 def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_four(
     tmp_path, monkeypatch
 ):
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "_verify_contextual_risk_checkpoint_outputs",
+        lambda *_args, **_kwargs: None,
+    )
     run = tmp_path / "run"
     run.mkdir()
     reference = tmp_path / "a1.pt"
@@ -530,6 +780,11 @@ def test_selection_receives_validation_candidate_only(tmp_path, monkeypatch):
         return candidates[0]
 
     monkeypatch.setattr(main_task_retrieval, "choose_contextual_risk_checkpoint", select)
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "_verify_contextual_risk_checkpoint_outputs",
+        lambda *_args, **_kwargs: None,
+    )
     metrics = _validation()
     metrics["test_metrics"] = {"t2v": {"R1": 99.0}}
     _record_contextual_risk_selection(
@@ -542,6 +797,10 @@ def test_selection_receives_validation_candidate_only(tmp_path, monkeypatch):
         candidate_path=run / "contextual_risk_candidates.json",
         selection_path=run / "best_contextual_risk_checkpoint.json",
         bootstrap_samples=0,
+        expected_retrieval_config=metrics[
+            "contextual_risk_evidence"
+        ]["retrieval_config"],
+        expected_head_configs={},
     )
 
     assert len(observed) == 1

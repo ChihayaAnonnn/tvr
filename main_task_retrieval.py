@@ -1,6 +1,7 @@
 from __future__ import division, print_function, unicode_literals
 
 import argparse
+import copy
 import datetime
 import json
 import math
@@ -57,6 +58,8 @@ from prob_models.uncertainty_protocol import (
     validate_resume_lineage,
     validate_selected_checkpoint,
 )
+from prob_models.contextual_retrieval_risk import ContextualRetrievalRiskSidecar
+from prob_models.retrieval_risk import RetrievalRiskSidecar
 from prob_models.retrieval_risk_metrics import (
     build_eval_positive_mask,
     evaluate_intrinsic_uncertainty,
@@ -917,7 +920,10 @@ def _a3_training_autocast_enabled(args):
 def _a3_exact_fp32_backend(args):
     """Temporarily disable TF32 for registered A3-only computation."""
 
-    enabled = bool(getattr(args, "contextual_risk_sidecar_only", False))
+    enabled = bool(
+        getattr(args, "contextual_risk_sidecar_only", False)
+        or getattr(args, "use_contextual_risk_sidecar", False)
+    )
     prior_matmul_tf32 = torch.backends.cuda.matmul.allow_tf32
     prior_cudnn_tf32 = torch.backends.cudnn.allow_tf32
     if enabled:
@@ -2203,12 +2209,24 @@ def _compute_retrieval_risk_metrics(
     directions = _normalize_eval_directions(directions)
     raw_logits = torch.from_numpy(
         np.asarray(risk_similarity_matrix, dtype=np.float32)
-    ).to(device)
+    )
+    retrieval_sidecar = getattr(model, "retrieval_risk_sidecar", None)
+    cpu_sidecar = (
+        copy.deepcopy(retrieval_sidecar).cpu().eval()
+        if retrieval_sidecar is not None
+        else None
+    )
+    if cpu_sidecar is None:
+        raw_logits = raw_logits.to(device)
     payload = {}
     array_digests = {}
     with torch.no_grad():
         for offset, direction in enumerate(directions):
-            output = model.score_retrieval_risk(raw_logits, direction)
+            output = (
+                cpu_sidecar(raw_logits, direction)
+                if cpu_sidecar is not None
+                else model.score_retrieval_risk(raw_logits, direction)
+            )
             failure_risk = output["failure_risk"].float().cpu().numpy()
             vacuity = output["vacuity"].float().cpu().numpy()
             if direction == "t2v":
@@ -2261,19 +2279,37 @@ def _compute_contextual_retrieval_risk_metrics(
     raw_wti = np.asarray(risk_similarity_matrix, dtype=np.float32)
     text_array = torch.as_tensor(text_means).detach().float().cpu().numpy()
     video_array = torch.as_tensor(video_means).detach().float().cpu().numpy()
-    raw_logits = torch.from_numpy(raw_wti).to(device)
-    text_tensor = torch.from_numpy(text_array).to(device)
-    video_tensor = torch.from_numpy(video_array).to(device)
+    raw_logits = torch.from_numpy(raw_wti)
+    text_tensor = torch.from_numpy(text_array)
+    video_tensor = torch.from_numpy(video_array)
+    contextual_sidecar = getattr(model, "contextual_risk_sidecar", None)
+    cpu_sidecar = (
+        copy.deepcopy(contextual_sidecar).cpu().eval()
+        if contextual_sidecar is not None
+        else None
+    )
+    if cpu_sidecar is None:
+        raw_logits = raw_logits.to(device)
+        text_tensor = text_tensor.to(device)
+        video_tensor = video_tensor.to(device)
     payload = {}
     failure_risk_arrays = {}
     with torch.no_grad():
         for offset, direction in enumerate(directions):
-            output = model.score_contextual_retrieval_risk(
-                raw_logits,
-                text_tensor,
-                video_tensor,
-                direction,
-            )
+            if cpu_sidecar is not None:
+                output = cpu_sidecar(
+                    raw_logits,
+                    text_tensor if direction == "t2v" else video_tensor,
+                    video_tensor if direction == "t2v" else text_tensor,
+                    direction,
+                )
+            else:
+                output = model.score_contextual_retrieval_risk(
+                    raw_logits,
+                    text_tensor,
+                    video_tensor,
+                    direction,
+                )
             failure_risk = output["failure_risk"].float().cpu().numpy()
             failure_risk_arrays[direction] = failure_risk
             scores = raw_wti if direction == "t2v" else raw_wti.T
@@ -2456,7 +2492,7 @@ def _eval_autocast_context(args):
             torch.backends.cudnn.deterministic = prior_deterministic
 
 
-def eval_epoch(
+def _eval_epoch_impl(
     args,
     model,
     eval_dataloader,
@@ -2793,30 +2829,50 @@ def eval_epoch(
             return_evidence=True,
         )
         a3_evidence = result["contextual_risk_evidence"]
-        a3_evidence["a1_failure_risk"] = {
-            direction: risk_array_digests[direction]["failure_risk_values"]
-            for direction in directions
-        }
-        a3_evidence["a1_vacuity"] = {
-            direction: risk_array_digests[direction]["vacuity_values"]
-            for direction in directions
-        }
-        a3_evidence["array_metadata"]["a1_failure_risk"] = {
-            direction: {
-                "dtype": risk_array_digests[direction]["failure_risk_dtype"],
-                "shape": risk_array_digests[direction]["failure_risk_shape"],
-                "sha256": risk_array_digests[direction]["failure_risk"],
+        contextual_sidecar = getattr(model, "contextual_risk_sidecar", None)
+        if contextual_sidecar is not None:
+            a3_evidence["contextual_head_config"] = {
+                "embed_dim": int(contextual_sidecar.embed_dim),
+                "projection_dim": int(
+                    contextual_sidecar.text_projection.out_features
+                ),
+                "hidden_dim": int(contextual_sidecar.network[0].out_features),
+                "topk": int(contextual_sidecar.topk),
+                "temperature": float(contextual_sidecar.temperature),
+                "dropout": float(contextual_sidecar.network[2].p),
             }
-            for direction in directions
-        }
-        a3_evidence["array_metadata"]["a1_vacuity"] = {
-            direction: {
-                "dtype": risk_array_digests[direction]["vacuity_dtype"],
-                "shape": risk_array_digests[direction]["vacuity_shape"],
-                "sha256": risk_array_digests[direction]["vacuity"],
+        if report_retrieval_risk:
+            a3_evidence["a1_failure_risk"] = {
+                direction: risk_array_digests[direction]["failure_risk_values"]
+                for direction in directions
             }
-            for direction in directions
-        }
+            a3_evidence["a1_vacuity"] = {
+                direction: risk_array_digests[direction]["vacuity_values"]
+                for direction in directions
+            }
+            a3_evidence["array_metadata"]["a1_failure_risk"] = {
+                direction: {
+                    "dtype": risk_array_digests[direction]["failure_risk_dtype"],
+                    "shape": risk_array_digests[direction]["failure_risk_shape"],
+                    "sha256": risk_array_digests[direction]["failure_risk"],
+                }
+                for direction in directions
+            }
+            a3_evidence["array_metadata"]["a1_vacuity"] = {
+                direction: {
+                    "dtype": risk_array_digests[direction]["vacuity_dtype"],
+                    "shape": risk_array_digests[direction]["vacuity_shape"],
+                    "sha256": risk_array_digests[direction]["vacuity"],
+                }
+                for direction in directions
+            }
+            a1_sidecar = getattr(model, "retrieval_risk_sidecar", None)
+            if a1_sidecar is not None:
+                a3_evidence["a1_head_config"] = {
+                    "feature_dim": int(a1_sidecar.network[0].in_features),
+                    "hidden_dim": int(a1_sidecar.network[0].out_features),
+                    "temperature": float(a1_sidecar.temperature),
+                }
         retrieval_score_arrays = {
             "t2v": np.asarray(metric_t2v_matrix),
             "v2t": np.asarray(metric_v2t_matrix),
@@ -2877,6 +2933,29 @@ def eval_epoch(
     return result
 
 
+def eval_epoch(
+    args,
+    model,
+    eval_dataloader,
+    device,
+    n_gpu,
+    directions=("t2v", "v2t"),
+    report_csd_logvar=None,
+):
+    """Evaluate with exact FP32 backend flags held through A3 scoring."""
+
+    with _a3_exact_fp32_backend(args):
+        return _eval_epoch_impl(
+            args,
+            model,
+            eval_dataloader,
+            device,
+            n_gpu,
+            directions=directions,
+            report_csd_logvar=report_csd_logvar,
+        )
+
+
 def _candidate_clamp_ok(metrics):
     return all(
         metrics[name]["clamp_low_fraction"]
@@ -2909,7 +2988,167 @@ def _contextual_evidence_array(evidence, name, direction=None):
     return array
 
 
-def _recompute_contextual_risk_metrics(evidence, *, bootstrap_samples):
+def _registered_retrieval_config(positive_mask, *, dsl, dsl_temperature):
+    """Derive the complete immutable retrieval configuration from inputs."""
+
+    mask = np.asarray(positive_mask, dtype=bool)
+    if mask.ndim != 2:
+        raise ValueError("A3 positive mask must be two-dimensional")
+    one_to_one = (
+        mask.shape[0] == mask.shape[1]
+        and np.array_equal(mask, np.eye(mask.shape[0], dtype=bool))
+    )
+    if one_to_one:
+        cut_off_points = "one_to_one"
+    else:
+        if not (mask.sum(axis=1) == 1).all():
+            raise ValueError("A3 multi-sentence positive mask is not canonical")
+        video_indices = mask.argmax(axis=1)
+        expected_indices = np.repeat(
+            np.arange(mask.shape[1]), mask.sum(axis=0)
+        )
+        if not np.array_equal(video_indices, expected_indices):
+            raise ValueError("A3 multi-sentence positive groups are not contiguous")
+        cut_off_points = np.cumsum(mask.sum(axis=0)).astype(int).tolist()
+    return {
+        "directions": ["t2v", "v2t"],
+        "cut_off_points": cut_off_points,
+        "independent_directions": bool(one_to_one),
+        "dsl": bool(dsl),
+        "dsl_temperature": float(dsl_temperature),
+        "score_path": "post_dsl_directional_scores",
+    }
+
+
+def _registered_a3_head_configs(args, evidence):
+    """Return immutable sidecar construction settings from registered args."""
+
+    text_means = np.asarray(evidence["text_means"])
+    if text_means.ndim != 2:
+        raise ValueError("A3 text means must be two-dimensional")
+    return {
+        "contextual": {
+            "embed_dim": int(text_means.shape[1]),
+            "projection_dim": int(
+                getattr(args, "contextual_risk_projection_dim", 128)
+            ),
+            "hidden_dim": int(
+                getattr(args, "contextual_risk_hidden_dim", 128)
+            ),
+            "topk": int(getattr(args, "contextual_risk_topk", 16)),
+            "temperature": float(
+                getattr(args, "contextual_risk_temperature", 1.0)
+            ),
+            "dropout": 0.1,
+        },
+        "a1": {
+            "feature_dim": 8,
+            "hidden_dim": int(
+                getattr(args, "retrieval_risk_hidden_dim", 32)
+            ),
+            "temperature": float(
+                getattr(args, "retrieval_risk_temperature", 1.0)
+            ),
+        },
+    }
+
+
+def _checkpoint_sidecar_state(checkpoint_path, prefix):
+    state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    if not isinstance(state, dict):
+        raise ValueError("A3 checkpoint state must be a mapping")
+    sidecar_state = {
+        name[len(prefix):]: tensor.detach().cpu().float()
+        for name, tensor in state.items()
+        if name.startswith(prefix)
+    }
+    if not sidecar_state:
+        raise ValueError(f"A3 checkpoint is missing {prefix} state")
+    return sidecar_state
+
+
+def _verify_contextual_risk_checkpoint_outputs(
+    checkpoint_path,
+    evidence,
+    *,
+    expected_head_configs,
+    verify_contextual=True,
+):
+    """Bind stored A3/A1 output arrays to the exact checkpoint head states."""
+
+    raw_wti = _contextual_evidence_array(evidence, "raw_wti")
+    text_means = _contextual_evidence_array(evidence, "text_means")
+    video_means = _contextual_evidence_array(evidence, "video_means")
+    contextual_config = evidence.get("contextual_head_config")
+    a1_config = evidence.get("a1_head_config")
+    if not isinstance(a1_config, dict) or (
+        verify_contextual and not isinstance(contextual_config, dict)
+    ):
+        raise ValueError("A3 checkpoint head configuration evidence is incomplete")
+    if a1_config != expected_head_configs["a1"] or (
+        verify_contextual
+        and contextual_config != expected_head_configs["contextual"]
+    ):
+        raise ValueError("A3 checkpoint head configuration differs from manifest")
+
+    contextual = None
+    if verify_contextual:
+        contextual = ContextualRetrievalRiskSidecar(
+            **expected_head_configs["contextual"]
+        ).cpu().eval()
+        contextual.load_state_dict(
+            _checkpoint_sidecar_state(
+                checkpoint_path, "contextual_risk_sidecar."
+            ),
+            strict=True,
+        )
+    retrieval = RetrievalRiskSidecar(**a1_config).cpu().eval()
+    retrieval.load_state_dict(
+        _checkpoint_sidecar_state(checkpoint_path, "retrieval_risk_sidecar."),
+        strict=True,
+    )
+    raw_tensor = torch.from_numpy(np.asarray(raw_wti, dtype=np.float32))
+    text_tensor = torch.from_numpy(np.asarray(text_means, dtype=np.float32))
+    video_tensor = torch.from_numpy(np.asarray(video_means, dtype=np.float32))
+    with _a3_exact_fp32_backend(
+        argparse.Namespace(contextual_risk_sidecar_only=True)
+    ), torch.inference_mode():
+        for direction in ("t2v", "v2t"):
+            if verify_contextual:
+                contextual_output = contextual(
+                    raw_tensor,
+                    text_tensor if direction == "t2v" else video_tensor,
+                    video_tensor if direction == "t2v" else text_tensor,
+                    direction,
+                )["failure_risk"].numpy()
+                stored_contextual = _contextual_evidence_array(
+                    evidence, "failure_risk", direction
+                )
+                if not np.array_equal(contextual_output, stored_contextual):
+                    raise ValueError(
+                        "A3 checkpoint-derived contextual output differs from evidence"
+                    )
+            a1_output = retrieval(raw_tensor, direction)
+            for evidence_name, output_name in (
+                ("a1_failure_risk", "failure_risk"),
+                ("a1_vacuity", "vacuity"),
+            ):
+                stored_a1 = _contextual_evidence_array(
+                    evidence, evidence_name, direction
+                )
+                derived_a1 = a1_output[output_name].numpy()
+                if not np.array_equal(derived_a1, stored_a1):
+                    raise ValueError(
+                        "A3 checkpoint-derived A1 output differs from evidence"
+                    )
+
+
+def _recompute_contextual_risk_metrics(
+    evidence,
+    *,
+    bootstrap_samples,
+    expected_retrieval_config=None,
+):
     """Rebuild registered A3 summaries solely from complete typed evidence."""
 
     config = evidence["metric_config"]
@@ -2954,6 +3193,11 @@ def _recompute_contextual_risk_metrics(evidence, *, bootstrap_samples):
             seed=expected_seeds[direction],
         )
     retrieval_config = evidence["retrieval_config"]
+    if (
+        expected_retrieval_config is not None
+        and retrieval_config != expected_retrieval_config
+    ):
+        raise ValueError("A3 retrieval configuration mismatch")
     retrieval_directions = tuple(retrieval_config["directions"])
     if retrieval_directions != ("t2v", "v2t"):
         raise ValueError("A3 retrieval evidence must contain both directions")
@@ -3015,6 +3259,8 @@ def _build_contextual_risk_candidate(
     paired_baseline,
     reference_checkpoint,
     bootstrap_samples,
+    expected_retrieval_config,
+    expected_head_configs,
 ):
     """Build one complete, validation-only A3 candidate record."""
 
@@ -3033,9 +3279,15 @@ def _build_contextual_risk_candidate(
         ("contextual_risk_sidecar.",),
     )
     evidence = validation_metrics["contextual_risk_evidence"]
+    _verify_contextual_risk_checkpoint_outputs(
+        model_path,
+        evidence,
+        expected_head_configs=expected_head_configs,
+    )
     recomputed_contextual, evidence_digests = _recompute_contextual_risk_metrics(
         evidence,
         bootstrap_samples=bootstrap_samples,
+        expected_retrieval_config=expected_retrieval_config,
     )
     if contextual != recomputed_contextual:
         raise ValueError("A3 validation metric summary differs from evidence")
@@ -3135,15 +3387,28 @@ def _contextual_risk_continuation_eligible(candidates, *, output_dir):
 
 
 def _reaudit_contextual_risk_candidate(
-    stored, *, paired_baseline, reference_checkpoint, bootstrap_samples
+    stored,
+    *,
+    paired_baseline,
+    reference_checkpoint,
+    bootstrap_samples,
+    expected_retrieval_config,
+    expected_head_configs,
 ):
     """Recompute every derivable A3 audit field without mutating its record."""
 
     candidate = dict(stored)
     contextual = candidate["metrics"]
     paired_digest = candidate["paired_digest"]
+    _verify_contextual_risk_checkpoint_outputs(
+        candidate["path"],
+        candidate["evidence"],
+        expected_head_configs=expected_head_configs,
+    )
     recomputed_contextual, evidence_digests = _recompute_contextual_risk_metrics(
-        candidate["evidence"], bootstrap_samples=bootstrap_samples
+        candidate["evidence"],
+        bootstrap_samples=bootstrap_samples,
+        expected_retrieval_config=expected_retrieval_config,
     )
     if {
         "t2v": contextual["t2v"], "v2t": contextual["v2t"]
@@ -3264,11 +3529,26 @@ def _initialize_contextual_risk_protocol(
         baseline_evidence = registration.get("evidence")
         if not isinstance(baseline_evidence, dict):
             raise ValueError("A3 continuation baseline complete evidence is missing")
+        expected_retrieval_config = _registered_retrieval_config(
+            np.asarray(baseline_evidence["positive_mask"], dtype=bool),
+            dsl=bool(getattr(args, "DSL", False)),
+            dsl_temperature=float(getattr(args, "dsl_temperature", 1.0)),
+        )
+        expected_head_configs = _registered_a3_head_configs(
+            args, baseline_evidence
+        )
+        _verify_contextual_risk_checkpoint_outputs(
+            reference_checkpoint,
+            baseline_evidence,
+            expected_head_configs=expected_head_configs,
+            verify_contextual=False,
+        )
         _, baseline_digests = _recompute_contextual_risk_metrics(
             baseline_evidence,
             bootstrap_samples=getattr(
                 args, "contextual_risk_bootstrap_samples", 1000
             ),
+            expected_retrieval_config=expected_retrieval_config,
         )
         for digest_name, digest_value in baseline_digests.items():
             if paired_baseline.get(digest_name) != digest_value:
@@ -3290,6 +3570,8 @@ def _initialize_contextual_risk_protocol(
                 bootstrap_samples=getattr(
                     args, "contextual_risk_bootstrap_samples", 1000
                 ),
+                expected_retrieval_config=expected_retrieval_config,
+                expected_head_configs=expected_head_configs,
             )
             for candidate in candidates
         ]
@@ -3340,13 +3622,35 @@ def _initialize_contextual_risk_protocol(
             report_csd_logvar=False,
         )
         paired_baseline = baseline_eval["paired_digest"]
+        baseline_evidence = baseline_eval["contextual_risk_evidence"]
+        expected_retrieval_config = _registered_retrieval_config(
+            np.asarray(baseline_evidence["positive_mask"], dtype=bool),
+            dsl=bool(getattr(args, "DSL", False)),
+            dsl_temperature=float(getattr(args, "dsl_temperature", 1.0)),
+        )
+        expected_head_configs = _registered_a3_head_configs(
+            args, baseline_evidence
+        )
+        _verify_contextual_risk_checkpoint_outputs(
+            reference_checkpoint,
+            baseline_evidence,
+            expected_head_configs=expected_head_configs,
+            verify_contextual=False,
+        )
+        _recompute_contextual_risk_metrics(
+            baseline_evidence,
+            bootstrap_samples=getattr(
+                args, "contextual_risk_bootstrap_samples", 1000
+            ),
+            expected_retrieval_config=expected_retrieval_config,
+        )
         atomic_write_json(
             baseline_path,
             {
                 "reference_checkpoint": reference_checkpoint,
                 "reference_checkpoint_sha256": reference_sha256,
                 "paired_digest": paired_baseline,
-                "evidence": baseline_eval["contextual_risk_evidence"],
+                "evidence": baseline_evidence,
             },
         )
         candidates = []
@@ -3373,6 +3677,8 @@ def _record_contextual_risk_selection(
     candidate_path,
     selection_path,
     bootstrap_samples,
+    expected_retrieval_config,
+    expected_head_configs,
 ):
     """Audit and append one A3 validation candidate, then persist its winner."""
 
@@ -3384,6 +3690,8 @@ def _record_contextual_risk_selection(
         paired_baseline=paired_baseline,
         reference_checkpoint=reference_checkpoint,
         bootstrap_samples=bootstrap_samples,
+        expected_retrieval_config=expected_retrieval_config,
+        expected_head_configs=expected_head_configs,
     )
     candidates = append_candidate_atomic(candidate_path, candidate)
     validate_candidate_artifacts(
@@ -4163,6 +4471,20 @@ def main():
                         candidate_path=contextual_protocol["candidate_path"],
                         selection_path=contextual_protocol["selection_path"],
                         bootstrap_samples=args.contextual_risk_bootstrap_samples,
+                        expected_retrieval_config=_registered_retrieval_config(
+                            np.asarray(
+                                validation_metrics["contextual_risk_evidence"][
+                                    "positive_mask"
+                                ],
+                                dtype=bool,
+                            ),
+                            dsl=bool(args.DSL),
+                            dsl_temperature=float(args.dsl_temperature),
+                        ),
+                        expected_head_configs=_registered_a3_head_configs(
+                            args,
+                            validation_metrics["contextual_risk_evidence"],
+                        ),
                     )
                     contextual_protocol["candidates"] = json.loads(
                         contextual_protocol["candidate_path"].read_text()

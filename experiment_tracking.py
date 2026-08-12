@@ -167,16 +167,28 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "path": "",
     }
     data = {
+        "datatype": getattr(args, "datatype", "msrvtt"),
         "source_train_csv": getattr(args, "source_train_csv", ""),
         "train_csv": getattr(args, "train_csv", ""),
         "val_csv": getattr(args, "val_csv", ""),
         "test_csv": getattr(args, "test_csv", ""),
         "annotation_json": getattr(args, "data_path", ""),
+        "features_path": getattr(args, "features_path", ""),
         "split_manifest": getattr(args, "split_manifest", ""),
+        "use_attributes": bool(getattr(args, "use_attributes", False)),
+        "msrvtt_attributes_path": getattr(args, "msrvtt_attributes_path", ""),
+        "msvd_attributes_path": getattr(args, "msvd_attributes_path", ""),
+        "max_words_attrs": getattr(args, "max_words_attrs", None),
+        "attr_num_blocks": int(getattr(args, "attr_num_blocks", 4)),
+        "expand_msrvtt_sentences": bool(
+            getattr(args, "expand_msrvtt_sentences", False)
+        ),
     }
     workers = int(getattr(args, "num_thread_reader", 0))
     runtime = {
         "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
+        "n_gpu": int(getattr(args, "n_gpu", 1)),
+        "world_size": int((batch_semantics or {}).get("world_size", 1)),
         "num_dataloader_workers_per_rank": workers,
         "prefetch_factor": int(getattr(args, "prefetch_factor", 2)),
         "pin_memory": bool(getattr(args, "pin_memory", False)),
@@ -327,6 +339,93 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
                 )
             ),
         },
+        "continuation_inputs": {
+            "optimizer": {
+                "lr": float(getattr(args, "lr", 1e-4)),
+                "coef_lr": float(getattr(args, "coef_lr", 1.0)),
+                "warmup_proportion": float(
+                    getattr(args, "warmup_proportion", 0.1)
+                ),
+                "schedule": "warmup_cosine",
+                "weight_decay": 0.2,
+            },
+            "epochs": {"fresh": 3, "continuation_total": 5},
+            "batch": {
+                "train": int(getattr(args, "batch_size", 256)),
+                "validation": int(getattr(args, "batch_size_val", 3500)),
+                "gradient_accumulation_steps": int(
+                    getattr(args, "gradient_accumulation_steps", 1)
+                ),
+            },
+            "input_shape": {
+                "max_words": int(getattr(args, "max_words", 20)),
+                "max_frames": int(getattr(args, "max_frames", 100)),
+                "feature_framerate": int(
+                    getattr(args, "feature_framerate", 1)
+                ),
+                "slice_framepos": int(getattr(args, "slice_framepos", 0)),
+                "train_frame_order": int(
+                    getattr(args, "train_frame_order", 0)
+                ),
+                "eval_frame_order": int(getattr(args, "eval_frame_order", 0)),
+            },
+            "model": {
+                "use_uatvr_full": bool(getattr(args, "use_uatvr_full", False)),
+                "cross_model": getattr(args, "cross_model", "cross-base"),
+                "linear_patch": getattr(args, "linear_patch", "2d"),
+                "sim_header": getattr(args, "sim_header", "meanP"),
+                "loose_type": bool(getattr(args, "loose_type", True)),
+                "text_num_hidden_layers": int(
+                    getattr(args, "text_num_hidden_layers", 12)
+                ),
+                "visual_num_hidden_layers": int(
+                    getattr(args, "visual_num_hidden_layers", 12)
+                ),
+                "cross_num_hidden_layers": int(
+                    getattr(args, "cross_num_hidden_layers", 4)
+                ),
+                "extra_video_cls_num": int(
+                    getattr(args, "extra_video_cls_num", 2)
+                ),
+                "extra_text_cls_num": int(
+                    getattr(args, "extra_text_cls_num", 2)
+                ),
+                "n_video_embeddings": int(
+                    getattr(args, "n_video_embeddings", 7)
+                ),
+                "n_text_embeddings": int(
+                    getattr(args, "n_text_embeddings", 7)
+                ),
+                "strategy": int(getattr(args, "strategy", 1)),
+                "video_dim": int(getattr(args, "video_dim", 1024)),
+                "use_ada_norm": bool(getattr(args, "use_ada_norm", False)),
+                "disable_spatial_enhancer": bool(
+                    getattr(args, "disable_spatial_enhancer", False)
+                ),
+                "rope_mode": getattr(args, "rope_mode", "2d"),
+                "fusion_mode": getattr(args, "fusion_mode", "prob_mos"),
+                "fusion_temperature": float(
+                    getattr(args, "fusion_temperature", 1.5)
+                ),
+                "freeze_layer_num": int(
+                    getattr(args, "freeze_layer_num", 0)
+                ),
+            },
+            "data_loader": {
+                "num_thread_reader": int(
+                    getattr(args, "num_thread_reader", 0)
+                ),
+                "prefetch_factor": int(getattr(args, "prefetch_factor", 2)),
+            },
+            "paired_evaluation": {
+                "directions": ["t2v", "v2t"],
+                "dsl": bool(getattr(args, "DSL", False)),
+                "dsl_temperature": float(
+                    getattr(args, "dsl_temperature", 1.0)
+                ),
+                "score_path": "post_dsl_directional_scores",
+            },
+        },
         "thresholds": {
             "directional_rho_min": 0.20,
             "directional_auroc_ci_low_strictly_greater_than": 0.50,
@@ -411,6 +510,7 @@ def validate_contextual_risk_resume_manifest(existing, requested) -> None:
             "run_final_test": manifest.get("run_final_test"),
             "backbone": manifest.get("backbone"),
             "data": manifest.get("data"),
+            "runtime": manifest.get("runtime"),
             "batch": {key: batch.get(key) for key in batch_keys},
             "retrieval_risk": {
                 key: retrieval.get(key) for key in retrieval_keys

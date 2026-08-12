@@ -320,6 +320,105 @@ def test_contextual_resume_rejects_any_immutable_manifest_change(tmp_path):
         validate_contextual_risk_resume_manifest(original, batch_changed)
 
 
+@pytest.mark.parametrize(
+    ("field", "changed_value"),
+    [
+        ("lr", 2e-4),
+        ("warmup_proportion", 0.25),
+        ("max_words", 32),
+        ("max_frames", 64),
+        ("feature_framerate", 2),
+        ("slice_framepos", 2),
+        ("batch_size", 128),
+        ("batch_size_val", 512),
+        ("num_thread_reader", 8),
+        ("cross_model", "cross-large"),
+        ("train_csv", "/different/train.csv"),
+        ("features_path", "/different/features.pkl"),
+        ("datatype", "msvd"),
+        ("expand_msrvtt_sentences", False),
+        ("use_attributes", True),
+        ("msrvtt_attributes_path", "/different/attrs.json"),
+    ],
+)
+def test_contextual_resume_rejects_material_continuation_input_change(
+    tmp_path, field, changed_value
+):
+    base_values = {
+        "aleatoric_crf_training": False,
+        "use_retrieval_risk_sidecar": True,
+        "use_contextual_risk_sidecar": True,
+        "contextual_risk_sidecar_only": True,
+        "output_dir": str(tmp_path),
+        "lr": 1e-4,
+        "coef_lr": 1.0,
+        "warmup_proportion": 0.1,
+        "lr_decay": 0.9,
+        "gradient_accumulation_steps": 1,
+        "batch_size": 256,
+        "batch_size_val": 3500,
+        "max_words": 20,
+        "max_frames": 100,
+        "feature_framerate": 1,
+        "slice_framepos": 0,
+        "num_thread_reader": 4,
+        "cross_model": "cross-base",
+        "train_csv": "/data/train.csv",
+        "features_path": "/data/features.pkl",
+        "datatype": "msrvtt",
+        "expand_msrvtt_sentences": True,
+        "use_attributes": False,
+        "msrvtt_attributes_path": "/data/attrs.json",
+        "epochs": 3,
+        "n_gpu": 4,
+    }
+    existing = build_experiment_manifest(
+        _crf_args_namespace(**base_values),
+        split_summary={"protocol_version": "trusted-v1", "manifest_sha256": "sha"},
+        batch_semantics={
+            "world_size": 4,
+            "optimizer_effective_batch": 256,
+            "gradient_accumulation_steps": 1,
+        },
+        git_state={"commit": "abc"},
+    )
+    requested = build_experiment_manifest(
+        _crf_args_namespace(**{**base_values, field: changed_value, "epochs": 5}),
+        split_summary={"protocol_version": "trusted-v1", "manifest_sha256": "sha"},
+        batch_semantics={
+            "world_size": 4,
+            "optimizer_effective_batch": 256,
+            "gradient_accumulation_steps": 1,
+        },
+        git_state={"commit": "def"},
+    )
+
+    with pytest.raises(ValueError, match="immutable A3 manifest"):
+        validate_contextual_risk_resume_manifest(existing, requested)
+
+
+def test_contextual_resume_rejects_runtime_topology_change(tmp_path, monkeypatch):
+    args = _crf_args_namespace(
+        aleatoric_crf_training=False,
+        use_retrieval_risk_sidecar=True,
+        use_contextual_risk_sidecar=True,
+        contextual_risk_sidecar_only=True,
+        output_dir=str(tmp_path),
+        n_gpu=4,
+    )
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1,2,3")
+    existing = build_experiment_manifest(
+        args, {"protocol_version": "trusted-v1"}, {"world_size": 4}, {"commit": "abc"}
+    )
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "4,5,6,7")
+    requested = build_experiment_manifest(
+        args, {"protocol_version": "trusted-v1"}, {"world_size": 4}, {"commit": "def"}
+    )
+
+    with pytest.raises(ValueError, match="immutable A3 manifest"):
+        validate_contextual_risk_resume_manifest(existing, requested)
+
+
 def test_contextual_manifest_precision_matches_disabled_training_autocast(tmp_path):
     args = _crf_args_namespace(
         aleatoric_crf_training=False,

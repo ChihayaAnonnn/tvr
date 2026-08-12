@@ -119,10 +119,12 @@ class _RecordingContextualModel(nn.Module):
     use_retrieval_risk_sidecar = True
     use_contextual_risk_sidecar = True
 
-    def __init__(self):
+    def __init__(self, *, with_a1=True):
         super().__init__()
         self.anchor = nn.Parameter(torch.zeros(()))
         self.calls = []
+        self.tf32_observations = []
+        self.use_retrieval_risk_sidecar = with_a1
 
     def get_sequence_output(self, input_ids, segment_ids, input_mask):
         del segment_ids, input_mask
@@ -137,6 +139,10 @@ class _RecordingContextualModel(nn.Module):
     def score_contextual_retrieval_risk(
         self, logits, text_means, video_means, direction
     ):
+        self.tf32_observations.append((
+            torch.backends.cuda.matmul.allow_tf32,
+            torch.backends.cudnn.allow_tf32,
+        ))
         self.calls.append(
             (
                 direction,
@@ -170,7 +176,10 @@ class _OneBatchLoader(list):
     dataset = _MultiSentenceDataset()
 
 
-def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(monkeypatch):
+@pytest.mark.parametrize("with_a1", [True, False])
+def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(
+    monkeypatch, with_a1
+):
     raw_wti = np.array(
         [[5.0, 0.0, 0.0], [5.0, 4.0, 0.0], [0.0, 0.0, 5.0], [6.0, 0.0, 5.0]],
         dtype=np.float32,
@@ -205,7 +214,7 @@ def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(monkeypatch):
         torch.ones(4, 1, 1, 1, 1, 1),
         torch.ones(4, 1, dtype=torch.long),
     )
-    model = _RecordingContextualModel()
+    model = _RecordingContextualModel(with_a1=with_a1)
     args = SimpleNamespace(
         local_rank=0,
         eval_vid_chunk_size=2,
@@ -217,15 +226,29 @@ def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(monkeypatch):
         contextual_risk_bootstrap_samples=0,
     )
 
-    result = retrieval.eval_epoch(
-        args,
-        model,
-        _OneBatchLoader([batch]),
-        torch.device("cpu"),
-        n_gpu=1,
-    )
+    original_matmul = torch.backends.cuda.matmul.allow_tf32
+    original_cudnn = torch.backends.cudnn.allow_tf32
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    try:
+        result = retrieval.eval_epoch(
+            args,
+            model,
+            _OneBatchLoader([batch]),
+            torch.device("cpu"),
+            n_gpu=1,
+        )
+        restored_tf32 = (
+            torch.backends.cuda.matmul.allow_tf32,
+            torch.backends.cudnn.allow_tf32,
+        )
+    finally:
+        torch.backends.cuda.matmul.allow_tf32 = original_matmul
+        torch.backends.cudnn.allow_tf32 = original_cudnn
 
     assert [call[0] for call in model.calls] == ["t2v", "v2t"]
+    assert model.tf32_observations == [(False, False), (False, False)]
+    assert restored_tf32 == (True, True)
     for _, seen_logits, seen_text, seen_video in model.calls:
         np.testing.assert_array_equal(seen_logits.numpy(), raw_wti)
         torch.testing.assert_close(seen_text, text_means)
@@ -256,6 +279,7 @@ def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(monkeypatch):
         "dsl_temperature": 1.0,
         "score_path": "post_dsl_directional_scores",
     }
+    assert ("a1_failure_risk" in evidence) is with_a1
     for direction in ("t2v", "v2t"):
         assert evidence["array_metadata"]["retrieval_scores"][direction][
             "shape"
