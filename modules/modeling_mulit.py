@@ -20,6 +20,10 @@ from modules.until_module import (
 )
 from query_models.module_sap import SemanticAnchorProbing
 from modules.crf_head import CRFTrainingHead, paired_visual_forward
+from prob_models.contextual_retrieval_risk import (
+    ContextualRetrievalRiskSidecar,
+    contextual_retrieval_risk_objective,
+)
 from prob_models.csd_logvar import CSDLogVarSidecar, csd_logvar_objective
 from prob_models.retrieval_risk import (
     RetrievalRiskSidecar,
@@ -195,6 +199,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         image_resolution = vision_patch_size * grid_size
 
         embed_dim = clip_state_dict["text_projection"].shape[1]
+        self.embed_dim = embed_dim
         context_length = clip_state_dict["positional_embedding"].shape[0]
         vocab_size = clip_state_dict["token_embedding.weight"].shape[0]
         transformer_width = clip_state_dict["ln_final.weight"].shape[0]
@@ -411,6 +416,34 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 ),
             )
 
+        self.use_contextual_risk_sidecar = bool(
+            getattr(self.task_config, "use_contextual_risk_sidecar", False)
+        )
+        self.contextual_risk_sidecar_only = bool(
+            getattr(self.task_config, "contextual_risk_sidecar_only", False)
+        )
+        self.w_contextual_risk_fit = float(
+            getattr(self.task_config, "w_contextual_risk_fit", 0.25)
+        )
+        self.w_contextual_risk_rank = float(
+            getattr(self.task_config, "w_contextual_risk_rank", 0.25)
+        )
+        self.contextual_risk_temperature = float(
+            getattr(self.task_config, "contextual_risk_temperature", 1.0)
+        )
+        if self.use_contextual_risk_sidecar:
+            self.contextual_risk_sidecar = ContextualRetrievalRiskSidecar(
+                embed_dim=self.embed_dim,
+                projection_dim=int(
+                    getattr(self.task_config, "contextual_risk_projection_dim", 128)
+                ),
+                hidden_dim=int(
+                    getattr(self.task_config, "contextual_risk_hidden_dim", 128)
+                ),
+                topk=int(getattr(self.task_config, "contextual_risk_topk", 16)),
+                temperature=self.contextual_risk_temperature,
+            )
+
         # Optional clamp for log-variance to stabilize sampling/KL terms
         self.log_sigma_min = getattr(self.task_config, "log_sigma_min", None)
         self.log_sigma_max = getattr(self.task_config, "log_sigma_max", None)
@@ -538,10 +571,78 @@ class UATVR(CLIP4ClipPreTrainedModel):
         )
         return terms
 
+    def _contextual_risk_terms(
+        self,
+        wti_logits,
+        text_means,
+        video_means,
+        text_group_ids,
+        video_group_ids=None,
+    ):
+        if text_group_ids is None:
+            raise ValueError(
+                "group_ids are required when contextual risk sidecar is enabled"
+            )
+        text_group_ids = torch.as_tensor(
+            text_group_ids, device=wti_logits.device
+        ).reshape(-1)
+        if video_group_ids is None:
+            video_group_ids = text_group_ids
+        else:
+            video_group_ids = torch.as_tensor(
+                video_group_ids, device=wti_logits.device
+            ).reshape(-1)
+        expected = (text_group_ids.numel(), video_group_ids.numel())
+        if tuple(wti_logits.shape) != expected:
+            raise ValueError(
+                "group_ids must align with contextual training logits: "
+                f"groups={expected} logits={tuple(wti_logits.shape)}"
+            )
+        total, output = contextual_retrieval_risk_objective(
+            self.contextual_risk_sidecar,
+            wti_logits.detach(),
+            text_means.detach(),
+            video_means.detach(),
+            positive_mask_from_group_ids(text_group_ids, video_group_ids),
+            hardness_temperature=self.contextual_risk_temperature,
+            fit_weight=self.w_contextual_risk_fit,
+            rank_weight=self.w_contextual_risk_rank,
+        )
+        terms = {
+            "contextual_risk_loss": total,
+            "contextual_risk_bce": output["bce"].detach(),
+            "contextual_risk_fit": output["fit"].detach(),
+            "contextual_risk_rank": output["rank"].detach(),
+        }
+        for direction in ("t2v", "v2t"):
+            for name in (
+                "failure_rate",
+                "prediction_mean",
+                "prediction_std",
+                "target_mean",
+                "target_std",
+                "valid_ranking_fraction",
+                "entropy",
+                "saturation_fraction",
+            ):
+                terms[f"contextual_risk_{direction}_{name}"] = output[direction][
+                    name
+                ].detach()
+        return terms
+
     def score_retrieval_risk(self, logits, direction):
         if not self.use_retrieval_risk_sidecar:
             raise RuntimeError("retrieval risk sidecar is disabled")
         return self.retrieval_risk_sidecar(logits, direction)
+
+    def score_contextual_retrieval_risk(
+        self, logits, text_means, video_means, direction
+    ):
+        if not self.use_contextual_risk_sidecar:
+            raise RuntimeError("contextual retrieval risk sidecar is disabled")
+        return self.contextual_risk_sidecar(
+            logits.detach(), text_means.detach(), video_means.detach(), direction
+        )
 
     def forward(
         self,
@@ -587,7 +688,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 group_ids=group_ids,
             )
             sim_matrix = res["retrieve_logits"]
-            if self.retrieval_risk_sidecar_only or self.csd_logvar_sidecar_only:
+            if (
+                self.retrieval_risk_sidecar_only
+                or self.csd_logvar_sidecar_only
+                or self.contextual_risk_sidecar_only
+            ):
                 sim_loss = sim_matrix.new_zeros(())
             else:
                 sim_loss1 = self.loss_fct(sim_matrix)
@@ -601,6 +706,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
             loss += res["orth_loss"]
             loss += res["retrieval_risk_loss"]
             loss += res.get("csd_logvar_loss", sim_matrix.new_zeros(()))
+            loss += res.get("contextual_risk_loss", sim_matrix.new_zeros(()))
 
             loss_dict = {
                 "total": loss,
@@ -616,6 +722,13 @@ class UATVR(CLIP4ClipPreTrainedModel):
             }
             loss_dict.update(
                 {key: value for key, value in res.items() if key.startswith("csd_logvar_")}
+            )
+            loss_dict.update(
+                {
+                    key: value
+                    for key, value in res.items()
+                    if key.startswith("contextual_risk_")
+                }
             )
             return loss_dict
         else:  # for inference
@@ -932,6 +1045,27 @@ class UATVR(CLIP4ClipPreTrainedModel):
         wti_logits = self.weighted_token_wise_intersection(
             text_token, visual_output, attention_mask, video_mask
         ) * logit_scale
+
+        if self.training and self.contextual_risk_sidecar_only:
+            contextual_terms = self._contextual_risk_terms(
+                wti_logits,
+                text_pooled,
+                F.normalize(mu_video, dim=-1),
+                global_group_ids,
+            )
+            zero = wti_logits.new_zeros(())
+            return {
+                "retrieve_logits": wti_logits,
+                "MIL_loss": zero,
+                "evidential_loss": zero,
+                "neg_reg_loss": zero,
+                "orth_loss": zero,
+                "retrieval_risk_loss": zero,
+                "retrieval_risk_edl": zero,
+                "retrieval_risk_fit": zero,
+                "retrieval_risk_rank": zero,
+                **contextual_terms,
+            }
 
         if self.training and self.csd_logvar_sidecar_only:
             csd_terms = self._csd_logvar_terms(

@@ -551,6 +551,14 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--csd_initial_shift", type=float, default=5.0)
     parser.add_argument("--csd_hardness_temperature", type=float, default=1.0)
     parser.add_argument("--csd_bootstrap_samples", type=int, default=1000)
+    parser.add_argument("--use_contextual_risk_sidecar", action="store_true")
+    parser.add_argument("--contextual_risk_sidecar_only", action="store_true")
+    parser.add_argument("--contextual_risk_topk", type=int, default=16)
+    parser.add_argument("--contextual_risk_projection_dim", type=int, default=128)
+    parser.add_argument("--contextual_risk_hidden_dim", type=int, default=128)
+    parser.add_argument("--contextual_risk_temperature", type=float, default=1.0)
+    parser.add_argument("--w_contextual_risk_fit", type=float, default=0.25)
+    parser.add_argument("--w_contextual_risk_rank", type=float, default=0.25)
     args = parser.parse_args()
 
     if args.use_retrieval_risk_sidecar and not args.use_uatvr_full:
@@ -569,6 +577,35 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         raise ValueError("retrieval_risk_hidden_dim must be positive")
     if args.retrieval_risk_bootstrap_samples < 0:
         raise ValueError("retrieval_risk_bootstrap_samples must be non-negative")
+    if args.use_contextual_risk_sidecar and not args.use_uatvr_full:
+        raise ValueError("use_contextual_risk_sidecar requires --use_uatvr_full")
+    if args.contextual_risk_sidecar_only and not args.use_contextual_risk_sidecar:
+        raise ValueError(
+            "contextual_risk_sidecar_only requires --use_contextual_risk_sidecar"
+        )
+    if args.contextual_risk_sidecar_only and not args.use_retrieval_risk_sidecar:
+        raise ValueError(
+            "contextual_risk_sidecar_only requires --use_retrieval_risk_sidecar"
+        )
+    if (
+        args.do_train
+        and args.use_contextual_risk_sidecar
+        and not args.contextual_risk_sidecar_only
+    ):
+        raise ValueError(
+            "contextual risk training requires --contextual_risk_sidecar_only"
+        )
+    _validate_exclusive_sidecar_only_modes(args)
+    if min(
+        args.contextual_risk_topk,
+        args.contextual_risk_projection_dim,
+        args.contextual_risk_hidden_dim,
+    ) <= 0:
+        raise ValueError("contextual risk dimensions must be positive")
+    if args.contextual_risk_temperature <= 0:
+        raise ValueError("contextual_risk_temperature must be positive")
+    if min(args.w_contextual_risk_fit, args.w_contextual_risk_rank) < 0:
+        raise ValueError("contextual risk loss weights must be non-negative")
     if args.use_csd_logvar_sidecar and not args.use_uatvr_full:
         raise ValueError("use_csd_logvar_sidecar requires --use_uatvr_full")
     if args.csd_logvar_sidecar_only and not args.use_csd_logvar_sidecar:
@@ -807,6 +844,24 @@ def _trainable_named_parameters(model):
     return [(name, param) for name, param in model.named_parameters() if param.requires_grad]
 
 
+_SIDECAR_ONLY_MODE_NAMES = (
+    "retrieval_risk_sidecar_only",
+    "csd_logvar_sidecar_only",
+    "contextual_risk_sidecar_only",
+    "intrinsic_concentration_only",
+)
+
+
+def _validate_exclusive_sidecar_only_modes(args):
+    active = [
+        name
+        for name in _SIDECAR_ONLY_MODE_NAMES
+        if bool(getattr(args, name, False))
+    ]
+    if len(active) > 1:
+        raise ValueError(f"at most one sidecar_only mode may be enabled: {active}")
+
+
 def configure_retrieval_risk_sidecar_training(model, args):
     """Freeze the model around a retrieval-risk sidecar-only experiment."""
 
@@ -870,6 +925,57 @@ def configure_csd_logvar_sidecar_training(model, args):
         for parameter in model.parameters()
         if parameter.requires_grad
     )
+
+
+def configure_contextual_risk_sidecar_training(model, args):
+    """Freeze every parameter except the contextual-risk sidecar."""
+
+    _validate_exclusive_sidecar_only_modes(args)
+    enabled = bool(getattr(args, "use_contextual_risk_sidecar", False))
+    sidecar_only = bool(getattr(args, "contextual_risk_sidecar_only", False))
+    if sidecar_only and not enabled:
+        raise ValueError(
+            "contextual_risk_sidecar_only requires use_contextual_risk_sidecar"
+        )
+    if not sidecar_only:
+        return
+    if not hasattr(model, "contextual_risk_sidecar"):
+        raise ValueError("model does not expose contextual_risk_sidecar")
+
+    for _, parameter in model.named_parameters():
+        parameter.requires_grad = False
+    for name, parameter in model.named_parameters():
+        if name.startswith("contextual_risk_sidecar."):
+            parameter.requires_grad = True
+
+    trainable = [
+        (name, parameter)
+        for name, parameter in model.named_parameters()
+        if parameter.requires_grad
+    ]
+    unexpected = [
+        name
+        for name, _ in trainable
+        if not name.startswith("contextual_risk_sidecar.")
+    ]
+    if unexpected:
+        raise RuntimeError(f"unexpected A3 trainable parameters: {unexpected}")
+    trainable_count = sum(parameter.numel() for _, parameter in trainable)
+    if trainable_count == 0:
+        raise RuntimeError("A3 sidecar-only mode has zero trainable parameters")
+    return trainable_count
+
+
+def _set_contextual_risk_training_mode(model):
+    """Keep only the A3 sidecar in module training mode."""
+
+    inner = model.module if hasattr(model, "module") else model
+    if not getattr(inner, "contextual_risk_sidecar_only", False):
+        return
+    model.eval()
+    model.training = True
+    inner.training = True
+    inner.contextual_risk_sidecar.train()
 
 
 def set_csd_logvar_training_mode(model):
@@ -1301,6 +1407,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     model.train()
     set_retrieval_risk_training_mode(model)
     set_csd_logvar_training_mode(model)
+    _set_contextual_risk_training_mode(model)
     log_step = args.n_display
     last_log_time = time.time()
     last_logged_dataloader_step = 0
@@ -1359,6 +1466,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                 if (
                     getattr(args, "use_retrieval_risk_sidecar", False)
                     or getattr(args, "use_csd_logvar_sidecar", False)
+                    or getattr(args, "use_contextual_risk_sidecar", False)
                 ):
                     sidecar_kwargs["group_ids"] = group_ids
                 loss_output = model(
@@ -2665,6 +2773,13 @@ def main():
     csd_trainable_count = configure_csd_logvar_sidecar_training(model, args)
     if csd_trainable_count is not None and is_global_rank_zero(args):
         logger.info("[CSD] trainable parameters: %d scalars", csd_trainable_count)
+    contextual_trainable_count = configure_contextual_risk_sidecar_training(
+        model, args
+    )
+    if contextual_trainable_count is not None and is_global_rank_zero(args):
+        logger.info(
+            "[A3] trainable parameters: %d scalars", contextual_trainable_count
+        )
 
     ## ####################################
     # dataloader loading

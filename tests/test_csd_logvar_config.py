@@ -85,6 +85,18 @@ def test_training_rejects_csd_sidecar_without_sidecar_only(monkeypatch):
         ])
 
 
+def test_a3_and_csd_sidecar_only_modes_are_mutually_exclusive(monkeypatch):
+    with pytest.raises(ValueError, match="sidecar_only"):
+        _parse(monkeypatch, [
+            "--use_uatvr_full",
+            "--use_retrieval_risk_sidecar",
+            "--use_csd_logvar_sidecar",
+            "--csd_logvar_sidecar_only",
+            "--use_contextual_risk_sidecar",
+            "--contextual_risk_sidecar_only",
+        ])
+
+
 def test_evaluation_may_report_csd_without_sidecar_only(monkeypatch):
     monkeypatch.setattr(sys, "argv", [
         "main_task_retrieval.py",
