@@ -2829,8 +2829,8 @@ def _eval_epoch_impl(
             risk_similarity_matrix,
             risk_array_digests,
             directions,
-            text_means=intrinsic["text_mu"] if intrinsic is not None else None,
-            video_means=intrinsic["video_mu"] if intrinsic is not None else None,
+            text_means=(intrinsic["text_mu"] if report_contextual_risk else None),
+            video_means=(intrinsic["video_mu"] if report_contextual_risk else None),
         )
     if report_contextual_risk:
         assert intrinsic is not None
@@ -3443,11 +3443,6 @@ def _reaudit_contextual_risk_candidate(
     candidate = dict(stored)
     contextual = candidate["metrics"]
     paired_digest = candidate["paired_digest"]
-    _verify_contextual_risk_checkpoint_outputs(
-        candidate["path"],
-        candidate["evidence"],
-        expected_head_configs=expected_head_configs,
-    )
     recomputed_contextual, evidence_digests = _recompute_contextual_risk_metrics(
         candidate["evidence"],
         bootstrap_samples=bootstrap_samples,
@@ -3467,6 +3462,12 @@ def _reaudit_contextual_risk_candidate(
         paired_digest,
         A3_REQUIRED_PAIRED_DIGEST_KEYS,
     )
+    if paired_invariance["passed"]:
+        _verify_contextual_risk_checkpoint_outputs(
+            candidate["path"],
+            candidate["evidence"],
+            expected_head_configs=expected_head_configs,
+        )
     mismatches = non_sidecar_state_dict_mismatches(
         reference_checkpoint,
         candidate["path"],
@@ -3529,6 +3530,78 @@ def _reaudit_contextual_risk_candidate(
     return audited
 
 
+def _canonical_contextual_baseline_projection(payload):
+    """Select only canonical A1-derived fields from one baseline payload."""
+
+    evidence = payload["evidence"]
+    canonical_array_names = (
+        "raw_wti",
+        "text_means",
+        "video_means",
+        "positive_mask",
+        "a1_failure_risk",
+        "a1_vacuity",
+        "retrieval_scores",
+    )
+    return {
+        "paired_digest": payload["paired_digest"],
+        "evidence": {
+            **{name: evidence[name] for name in canonical_array_names},
+            "array_metadata": {
+                name: evidence["array_metadata"][name]
+                for name in canonical_array_names
+            },
+            "retrieval_config": evidence["retrieval_config"],
+            "a1_head_config": evidence["a1_head_config"],
+        },
+    }
+
+
+def _compare_regenerated_contextual_baseline(registration, regenerated):
+    """Reject any persisted canonical baseline differing from fresh A1 eval."""
+
+    if _canonical_contextual_baseline_projection(registration) != (
+        _canonical_contextual_baseline_projection(regenerated)
+    ):
+        raise ValueError(
+            "A3 persisted baseline differs from regenerated canonical baseline"
+        )
+
+
+def _regenerate_contextual_risk_baseline(
+    args,
+    eval_dataloader,
+    device,
+    n_gpu,
+    reference_checkpoint,
+):
+    """Re-evaluate trusted validation from the exact canonical A1 checkpoint."""
+
+    canonical_model = load_model(
+        -1,
+        args,
+        n_gpu,
+        device,
+        model_file=reference_checkpoint,
+    )
+    if canonical_model is None:
+        raise FileNotFoundError("canonical A1 checkpoint could not be loaded")
+    baseline_eval = eval_epoch(
+        args,
+        canonical_model,
+        eval_dataloader,
+        device,
+        n_gpu,
+        report_csd_logvar=False,
+    )
+    return {
+        "reference_checkpoint": str(Path(reference_checkpoint).resolve()),
+        "reference_checkpoint_sha256": file_sha256(reference_checkpoint),
+        "paired_digest": baseline_eval["paired_digest"],
+        "evidence": baseline_eval["contextual_risk_evidence"],
+    }
+
+
 def _initialize_contextual_risk_protocol(
     args,
     model,
@@ -3568,6 +3641,16 @@ def _initialize_contextual_risk_protocol(
             raise ValueError("A3 registered reference SHA-256 is not canonical A1")
         if file_sha256(reference_checkpoint) != reference_sha256:
             raise ValueError("A3 reference checkpoint SHA-256 mismatch")
+        regenerated_baseline = _regenerate_contextual_risk_baseline(
+            args,
+            eval_dataloader,
+            device,
+            n_gpu,
+            reference_checkpoint,
+        )
+        _compare_regenerated_contextual_baseline(
+            registration, regenerated_baseline
+        )
         paired_baseline = registration["paired_digest"]
         baseline_evidence = registration.get("evidence")
         if not isinstance(baseline_evidence, dict):
@@ -3656,16 +3739,15 @@ def _initialize_contextual_risk_protocol(
             raise ValueError("fresh A3 reference checkpoint SHA-256 mismatch")
         if int(getattr(args, "epochs", 3)) != 3:
             raise ValueError("fresh A3 run must contain exactly three epochs")
-        baseline_eval = eval_epoch(
+        regenerated_baseline = _regenerate_contextual_risk_baseline(
             args,
-            model,
             eval_dataloader,
             device,
             n_gpu,
-            report_csd_logvar=False,
+            reference_checkpoint,
         )
-        paired_baseline = baseline_eval["paired_digest"]
-        baseline_evidence = baseline_eval["contextual_risk_evidence"]
+        paired_baseline = regenerated_baseline["paired_digest"]
+        baseline_evidence = regenerated_baseline["evidence"]
         expected_retrieval_config = _registered_retrieval_config(
             np.asarray(baseline_evidence["positive_mask"], dtype=bool),
             dsl=bool(getattr(args, "DSL", False)),

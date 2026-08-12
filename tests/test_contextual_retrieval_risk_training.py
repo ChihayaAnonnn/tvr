@@ -130,6 +130,11 @@ def _complete_evidence(rho=0.30, raw="raw"):
             "dsl_temperature": 1.0,
             "score_path": "post_dsl_directional_scores",
         },
+        "a1_head_config": {
+            "feature_dim": 2,
+            "hidden_dim": 32,
+            "temperature": 1.0,
+        },
     }
     evidence["array_metadata"]["retrieval_scores"] = {
         direction: _array_metadata(raw_wti)
@@ -415,6 +420,23 @@ def test_retrieval_evidence_config_cannot_override_registered_args():
         )
 
 
+def test_regenerated_canonical_baseline_comparison_is_exact():
+    registration = {
+        "paired_digest": _paired_digest(),
+        "evidence": _complete_evidence()[0],
+    }
+    main_task_retrieval._compare_regenerated_contextual_baseline(
+        registration, copy.deepcopy(registration)
+    )
+
+    changed = copy.deepcopy(registration)
+    changed["evidence"]["a1_vacuity"]["t2v"][0] += 0.01
+    with pytest.raises(ValueError, match="regenerated canonical baseline"):
+        main_task_retrieval._compare_regenerated_contextual_baseline(
+            registration, changed
+        )
+
+
 def test_typed_evidence_rejects_dtype_metadata_conversion_attack():
     evidence, _ = _complete_evidence()
     attacked = copy.deepcopy(evidence)
@@ -552,14 +574,26 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
             run, reference, candidates, epoch, _validation(rho=rho)
         )
         pairs.append((model, optimizer, payload))
-    main_task_retrieval.atomic_write_json(
-        run / "a3_paired_baseline.json",
-        {
+    baseline_registration = {
             "reference_checkpoint": str(reference.resolve()),
             "reference_checkpoint_sha256": reference_sha,
             "paired_digest": _paired_digest(),
             "evidence": _complete_evidence()[0],
-        },
+        }
+    main_task_retrieval.atomic_write_json(
+        run / "a3_paired_baseline.json",
+        baseline_registration,
+    )
+    regenerated = []
+
+    def regenerate(*_args, **_kwargs):
+        regenerated.append(True)
+        return copy.deepcopy(baseline_registration)
+
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "_regenerate_contextual_risk_baseline",
+        regenerate,
     )
     model, optimizer_path, optimizer_payload = pairs[2]
     protocol = _initialize_contextual_risk_protocol(
@@ -578,6 +612,7 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
     )
 
     assert protocol["resume_candidate"]["epoch"] == 2
+    assert regenerated == [True]
     opt = SimpleNamespace(load_state_dict=lambda state: None)
     scheduler = SimpleNamespace(load_state_dict=lambda state: None)
     resumed_epoch, global_step = _restore_training_checkpoint(
@@ -618,6 +653,84 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
     selection_path = run / "best_contextual_risk_checkpoint.json"
     original_candidates = json.loads(candidate_path.read_text())
     original_selection = json.loads(selection_path.read_text())
+    coherent_baseline = copy.deepcopy(baseline_registration)
+    coherent_candidates = copy.deepcopy(original_candidates)
+
+    def coherently_rewrite_means(payload):
+        changed = np.asarray(
+            payload["evidence"]["text_means"], dtype=np.float32
+        ) + 0.5
+        changed_sha = array_sha256(changed)
+        payload["evidence"]["text_means"] = changed.tolist()
+        payload["evidence"]["array_metadata"]["text_means"] = (
+            _array_metadata(changed)
+        )
+        payload["evidence"]["sha256"]["text_means"] = changed_sha
+        payload["paired_digest"]["text_means_sha256"] = changed_sha
+
+    coherently_rewrite_means(coherent_baseline)
+    for candidate in coherent_candidates:
+        coherently_rewrite_means(candidate)
+    coherent_selection = copy.deepcopy(original_selection)
+    coherent_selection["candidates"] = coherent_candidates
+    coherent_selection["winner"] = coherent_candidates[2]
+    main_task_retrieval.atomic_write_json(
+        run / "a3_paired_baseline.json", coherent_baseline
+    )
+    main_task_retrieval.atomic_write_json(candidate_path, coherent_candidates)
+    main_task_retrieval.atomic_write_json(selection_path, coherent_selection)
+    with pytest.raises(ValueError, match="regenerated canonical baseline"):
+        _initialize_contextual_risk_protocol(
+            SimpleNamespace(
+                output_dir=str(run), init_model=str(model),
+                resume_model=str(optimizer_path), epochs=5,
+                contextual_risk_bootstrap_samples=0,
+            ),
+            object(), object(), torch.device("cpu"), 1,
+            resume_payload=optimizer_payload,
+        )
+    main_task_retrieval.atomic_write_json(
+        run / "a3_paired_baseline.json", baseline_registration
+    )
+    main_task_retrieval.atomic_write_json(candidate_path, original_candidates)
+    main_task_retrieval.atomic_write_json(selection_path, original_selection)
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "_verify_contextual_risk_checkpoint_outputs",
+        lambda *_args, **_kwargs: pytest.fail(
+            "checkpoint replay must follow canonical paired-input comparison"
+        ),
+    )
+    mismatched_candidate = copy.deepcopy(original_candidates[2])
+    mismatched_means = np.asarray(
+        mismatched_candidate["evidence"]["text_means"], dtype=np.float32
+    ) + 0.125
+    mismatched_candidate["evidence"]["text_means"] = mismatched_means.tolist()
+    mismatched_candidate["evidence"]["array_metadata"]["text_means"] = (
+        _array_metadata(mismatched_means)
+    )
+    mismatched_candidate["evidence"]["sha256"]["text_means"] = array_sha256(
+        mismatched_means
+    )
+    mismatched_candidate["paired_digest"]["text_means_sha256"] = array_sha256(
+        mismatched_means
+    )
+    with pytest.raises(ValueError, match="immutable candidate audit mismatch"):
+        main_task_retrieval._reaudit_contextual_risk_candidate(
+            mismatched_candidate,
+            paired_baseline=baseline_registration["paired_digest"],
+            reference_checkpoint=reference,
+            bootstrap_samples=0,
+            expected_retrieval_config=mismatched_candidate["evidence"][
+                "retrieval_config"
+            ],
+            expected_head_configs={},
+        )
+    monkeypatch.setattr(
+        main_task_retrieval,
+        "_verify_contextual_risk_checkpoint_outputs",
+        lambda *_args, **_kwargs: None,
+    )
     mean_tamper = copy.deepcopy(original_candidates)
     changed_means = np.asarray(
         mean_tamper[2]["evidence"]["text_means"], dtype=np.float32
@@ -738,20 +851,20 @@ def test_continuation_requires_exact_epoch_two_pair_and_restores_human_epoch_fou
     retrieval_selection = copy.deepcopy(original_selection)
     retrieval_selection["candidates"] = coherent_retrieval_tamper
     retrieval_selection["winner"] = coherent_retrieval_tamper[2]
-    baseline_registration = json.loads(
+    attacked_baseline_registration = json.loads(
         (run / "a3_paired_baseline.json").read_text()
     )
-    original_baseline_registration = copy.deepcopy(baseline_registration)
-    baseline_registration["paired_digest"]["retrieval"] = forged_retrieval
-    forge_retrieval_evidence(baseline_registration["evidence"])
+    original_baseline_registration = copy.deepcopy(attacked_baseline_registration)
+    attacked_baseline_registration["paired_digest"]["retrieval"] = forged_retrieval
+    forge_retrieval_evidence(attacked_baseline_registration["evidence"])
     main_task_retrieval.atomic_write_json(
-        run / "a3_paired_baseline.json", baseline_registration
+        run / "a3_paired_baseline.json", attacked_baseline_registration
     )
     main_task_retrieval.atomic_write_json(
         candidate_path, coherent_retrieval_tamper
     )
     main_task_retrieval.atomic_write_json(selection_path, retrieval_selection)
-    with pytest.raises(ValueError, match="retrieval t2v score evidence differs"):
+    with pytest.raises(ValueError, match="regenerated canonical baseline"):
         _initialize_contextual_risk_protocol(
             SimpleNamespace(
                 output_dir=str(run), init_model=str(model),

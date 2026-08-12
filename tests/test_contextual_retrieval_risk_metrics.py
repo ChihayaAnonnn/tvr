@@ -176,6 +176,60 @@ class _OneBatchLoader(list):
     dataset = _MultiSentenceDataset()
 
 
+def test_a2_eval_paired_digest_keeps_pre_a3_schema(monkeypatch):
+    raw_wti = np.array(
+        [[5.0, 0.0, 0.0], [5.0, 4.0, 0.0], [0.0, 0.0, 5.0], [6.0, 0.0, 5.0]],
+        dtype=np.float32,
+    )
+
+    def fake_worker(*_args, **_kwargs):
+        return {
+            "similarity_rows": [raw_wti[:2], raw_wti[2:]],
+            "text_mu": torch.ones(4, 2),
+            "video_mu": torch.ones(3, 2),
+            "text_logvar": torch.arange(4, dtype=torch.float32)[:, None].repeat(1, 2),
+            "video_logvar": torch.arange(3, dtype=torch.float32)[:, None].repeat(1, 2),
+        }
+
+    monkeypatch.setattr(retrieval, "_run_on_single_gpu", fake_worker)
+    monkeypatch.setattr(
+        retrieval, "logger", logging.getLogger("test.a2.eval"), raising=False
+    )
+    monkeypatch.setattr(retrieval, "_eval_autocast_context", lambda _args: nullcontext())
+    monkeypatch.setattr(retrieval.torch.cuda, "empty_cache", lambda: None)
+    model = _RecordingContextualModel(with_a1=True)
+    model.use_contextual_risk_sidecar = False
+    args = SimpleNamespace(
+        local_rank=0,
+        eval_vid_chunk_size=2,
+        use_csd_logvar_sidecar=True,
+        use_contextual_risk_sidecar=False,
+        DSL=False,
+        dsl_temperature=1.0,
+        log_mus_scores=False,
+        retrieval_risk_bootstrap_samples=0,
+        csd_bootstrap_samples=0,
+    )
+    batch = (
+        torch.ones(4, 2, dtype=torch.long),
+        torch.ones(4, 2, dtype=torch.long),
+        torch.zeros(4, 2, dtype=torch.long),
+        torch.ones(4, 1, 1, 1, 1, 1),
+        torch.ones(4, 1, dtype=torch.long),
+    )
+
+    result = retrieval.eval_epoch(
+        args, model, _OneBatchLoader([batch]), torch.device("cpu"), n_gpu=1
+    )
+
+    assert set(result["paired_digest"]) == {
+        "raw_wti_sha256",
+        "a1_failure_risk_sha256",
+        "a1_vacuity_sha256",
+        "retrieval",
+    }
+
+
 @pytest.mark.parametrize("with_a1", [True, False])
 def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(
     monkeypatch, with_a1
