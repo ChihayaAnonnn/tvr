@@ -20,6 +20,7 @@ from modules.until_module import (
 )
 from query_models.module_sap import SemanticAnchorProbing
 from modules.crf_head import CRFTrainingHead, paired_visual_forward
+from prob_models.csd_logvar import CSDLogVarSidecar, csd_logvar_objective
 from prob_models.retrieval_risk import (
     RetrievalRiskSidecar,
     positive_mask_from_group_ids,
@@ -373,6 +374,43 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 temperature=self.retrieval_risk_temperature,
             )
 
+        self.use_csd_logvar_sidecar = bool(
+            getattr(self.task_config, "use_csd_logvar_sidecar", False)
+        )
+        self.csd_logvar_sidecar_only = bool(
+            getattr(self.task_config, "csd_logvar_sidecar_only", False)
+        )
+        self.w_csd = float(getattr(self.task_config, "w_csd", 1.0))
+        self.w_csd_grounding = float(
+            getattr(self.task_config, "w_csd_grounding", 0.05)
+        )
+        self.w_csd_vib = float(getattr(self.task_config, "w_csd_vib", 1e-4))
+        self.csd_hardness_temperature = float(
+            getattr(self.task_config, "csd_hardness_temperature", 1.0)
+        )
+        if self.use_csd_logvar_sidecar:
+            self.csd_logvar_sidecar = CSDLogVarSidecar(
+                embed_dim=embed_dim,
+                hidden_dim=int(
+                    getattr(self.task_config, "csd_logvar_hidden_dim", 128)
+                ),
+                logvar_min=float(
+                    getattr(self.task_config, "csd_logvar_min", -12.0)
+                ),
+                logvar_max=float(
+                    getattr(self.task_config, "csd_logvar_max", 4.0)
+                ),
+                init_logvar=float(
+                    getattr(self.task_config, "csd_logvar_init", -8.0)
+                ),
+                initial_scale=float(
+                    getattr(self.task_config, "csd_initial_scale", 5.0)
+                ),
+                initial_shift=float(
+                    getattr(self.task_config, "csd_initial_shift", 5.0)
+                ),
+            )
+
         # Optional clamp for log-variance to stabilize sampling/KL terms
         self.log_sigma_min = getattr(self.task_config, "log_sigma_min", None)
         self.log_sigma_max = getattr(self.task_config, "log_sigma_max", None)
@@ -405,6 +443,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.video_aleatoric = self.crf_head.video_aleatoric
 
         self.apply(self.init_weights)
+        if self.use_csd_logvar_sidecar:
+            self.csd_logvar_sidecar.reset_output_parameters()
 
     def _select_training_retrieval_logits(
         self,
@@ -450,6 +490,53 @@ class UATVR(CLIP4ClipPreTrainedModel):
             "retrieval_risk_fit": risk_output["fit"].detach(),
             "retrieval_risk_rank": risk_output["rank"].detach(),
         }
+
+    def _csd_logvar_terms(self, wti_logits, text_mu, video_mu, group_ids):
+        if group_ids is None:
+            raise ValueError(
+                "group_ids are required when CSD logvar sidecar is enabled"
+            )
+        group_ids = torch.as_tensor(
+            group_ids, device=wti_logits.device
+        ).reshape(-1)
+        if tuple(wti_logits.shape) != (group_ids.numel(), group_ids.numel()):
+            raise ValueError("group_ids must align with square training logits")
+        total, output = csd_logvar_objective(
+            self.csd_logvar_sidecar,
+            text_mu,
+            video_mu,
+            wti_logits,
+            positive_mask_from_group_ids(group_ids),
+            self.w_csd,
+            self.w_csd_grounding,
+            self.w_csd_vib,
+            self.csd_hardness_temperature,
+        )
+        names = (
+            "csd",
+            "csd_positive",
+            "csd_negative",
+            "grounding",
+            "grounding_fit",
+            "grounding_rank",
+            "vib",
+            "mean_distance",
+            "variance_distance",
+            "scale",
+            "shift",
+            "text_clamp_low",
+            "text_clamp_high",
+            "video_clamp_low",
+            "video_clamp_high",
+        )
+        terms = {"csd_logvar_loss": total}
+        terms.update(
+            {
+                f"csd_logvar_{name}": output[name].detach().mean()
+                for name in names
+            }
+        )
+        return terms
 
     def score_retrieval_risk(self, logits, direction):
         if not self.use_retrieval_risk_sidecar:
@@ -500,7 +587,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 group_ids=group_ids,
             )
             sim_matrix = res["retrieve_logits"]
-            if self.retrieval_risk_sidecar_only:
+            if self.retrieval_risk_sidecar_only or self.csd_logvar_sidecar_only:
                 sim_loss = sim_matrix.new_zeros(())
             else:
                 sim_loss1 = self.loss_fct(sim_matrix)
@@ -513,6 +600,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
             loss += res["neg_reg_loss"]
             loss += res["orth_loss"]
             loss += res["retrieval_risk_loss"]
+            loss += res.get("csd_logvar_loss", sim_matrix.new_zeros(()))
 
             loss_dict = {
                 "total": loss,
@@ -526,6 +614,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 "retrieval_risk_fit": res["retrieval_risk_fit"],
                 "retrieval_risk_rank": res["retrieval_risk_rank"],
             }
+            loss_dict.update(
+                {key: value for key, value in res.items() if key.startswith("csd_logvar_")}
+            )
             return loss_dict
         else:  # for inference
             return None
@@ -840,6 +931,27 @@ class UATVR(CLIP4ClipPreTrainedModel):
         wti_logits = self.weighted_token_wise_intersection(
             text_token, visual_output, attention_mask, video_mask
         ) * logit_scale
+
+        if self.training and self.csd_logvar_sidecar_only:
+            csd_terms = self._csd_logvar_terms(
+                wti_logits,
+                text_pooled,
+                F.normalize(mu_video, dim=-1),
+                global_group_ids,
+            )
+            zero = wti_logits.new_zeros(())
+            return {
+                "retrieve_logits": wti_logits,
+                "MIL_loss": zero,
+                "evidential_loss": zero,
+                "neg_reg_loss": zero,
+                "orth_loss": zero,
+                "retrieval_risk_loss": zero,
+                "retrieval_risk_edl": zero,
+                "retrieval_risk_fit": zero,
+                "retrieval_risk_rank": zero,
+                **csd_terms,
+            }
 
         if self.training and self.retrieval_risk_sidecar_only:
             risk_terms = self._retrieval_risk_terms(

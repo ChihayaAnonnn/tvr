@@ -816,6 +816,44 @@ def set_retrieval_risk_training_mode(model):
     inner.retrieval_risk_sidecar.train()
 
 
+def configure_csd_logvar_sidecar_training(model, args):
+    """Freeze every parameter except the CSD log-variance sidecar."""
+
+    enabled = bool(getattr(args, "use_csd_logvar_sidecar", False))
+    sidecar_only = bool(getattr(args, "csd_logvar_sidecar_only", False))
+    if sidecar_only and not enabled:
+        raise ValueError("csd_logvar_sidecar_only requires use_csd_logvar_sidecar")
+    if not sidecar_only:
+        return
+    if not hasattr(model, "csd_logvar_sidecar"):
+        raise ValueError("model does not expose csd_logvar_sidecar")
+
+    for parameter in model.parameters():
+        parameter.requires_grad = False
+    for parameter in model.csd_logvar_sidecar.parameters():
+        parameter.requires_grad = True
+
+    unexpected = [
+        name
+        for name, parameter in model.named_parameters()
+        if parameter.requires_grad and not name.startswith("csd_logvar_sidecar.")
+    ]
+    if unexpected:
+        raise RuntimeError(f"unexpected A2 trainable parameters: {unexpected}")
+
+
+def set_csd_logvar_training_mode(model):
+    """Keep only the A2 sidecar stochastic-training modules enabled."""
+
+    inner = model.module if hasattr(model, "module") else model
+    if not getattr(inner, "csd_logvar_sidecar_only", False):
+        return
+    model.eval()
+    model.training = True
+    inner.training = True
+    inner.csd_logvar_sidecar.train()
+
+
 def _should_keep_clip_parameter_trainable(name, args):
     if (
         name.find("ln_final.") == 0
@@ -1142,6 +1180,7 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     torch.cuda.empty_cache()
     model.train()
     set_retrieval_risk_training_mode(model)
+    set_csd_logvar_training_mode(model)
     log_step = args.n_display
     start_time = time.time()
     epoch_start_time = time.time()
@@ -1164,6 +1203,8 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
     crf_window: dict[str, float] = {"cf": 0.0, "cv": 0.0, "of": 0.0, "ov": 0.0,
                                     "rank_total": 0.0, "retrieval": 0.0}
     crf_window_count = 0
+    csd_window: dict[str, float] = {}
+    csd_window_count = 0
 
     for step, batch in enumerate(train_dataloader):
         if smoke_cap is not None and step >= smoke_cap:
@@ -1193,22 +1234,34 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
             )
             # A800 原生支持 bf16；autocast 内部激活走 bf16，master 参数仍 fp32，无需 GradScaler。
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                risk_kwargs = {}
-                if getattr(args, "use_retrieval_risk_sidecar", False):
-                    risk_kwargs["group_ids"] = group_ids
-                loss = model(
+                sidecar_kwargs = {}
+                if (
+                    getattr(args, "use_retrieval_risk_sidecar", False)
+                    or getattr(args, "use_csd_logvar_sidecar", False)
+                ):
+                    sidecar_kwargs["group_ids"] = group_ids
+                loss_output = model(
                     input_ids,
                     segment_ids,
                     input_mask,
                     video,
                     video_mask,
-                    **risk_kwargs,
+                    **sidecar_kwargs,
                 )
             # June arch UATVR (--use_uatvr_full) returns a dict; HEAD arch
             # returns a scalar tensor. Unpack the dict here so downstream
             # scalar-tensor semantics (mean, /accum, backward) still apply.
-            if isinstance(loss, dict):
-                loss = loss["total"]
+            if isinstance(loss_output, dict):
+                if getattr(args, "use_csd_logvar_sidecar", False):
+                    loss_terms = {
+                        key: value.detach()
+                        for key, value in loss_output.items()
+                        if key.startswith("csd_logvar_")
+                        and key != "csd_logvar_loss"
+                    }
+                loss = loss_output["total"]
+            else:
+                loss = loss_output
 
         if n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu.
@@ -1219,9 +1272,14 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
 
         total_loss += float(loss)
         if loss_terms is not None:
-            for name, tensor in loss_terms.items():
-                crf_window[name] = crf_window.get(name, 0.0) + float(tensor)
-            crf_window_count += 1
+            if any(name.startswith("csd_logvar_") for name in loss_terms):
+                for name, tensor in loss_terms.items():
+                    csd_window[name] = csd_window.get(name, 0.0) + float(tensor)
+                csd_window_count += 1
+            else:
+                for name, tensor in loss_terms.items():
+                    crf_window[name] = crf_window.get(name, 0.0) + float(tensor)
+                crf_window_count += 1
 
         if (step + 1) % args.gradient_accumulation_steps == 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
@@ -1285,6 +1343,38 @@ def train_epoch(epoch, args, model, train_dataloader, device, n_gpu, optimizer, 
                     )
                     crf_window = {k: 0.0 for k in crf_window}
                     crf_window_count = 0
+                if csd_window_count > 0 and local_rank == 0:
+                    means = {
+                        key: value / csd_window_count
+                        for key, value in csd_window.items()
+                    }
+                    logger.info(
+                        "  [CSD window] BCE pos=%.4f neg=%.4f | "
+                        "grounding fit=%.4f rank=%.4f | VIB=%.4f",
+                        means.get("csd_logvar_csd_positive", 0.0),
+                        means.get("csd_logvar_csd_negative", 0.0),
+                        means.get("csd_logvar_grounding_fit", 0.0),
+                        means.get("csd_logvar_grounding_rank", 0.0),
+                        means.get("csd_logvar_vib", 0.0),
+                    )
+                    logger.info(
+                        "  [CSD window] distance mean=%.4f variance=%.4f | "
+                        "scale=%.4f shift=%.4f",
+                        means.get("csd_logvar_mean_distance", 0.0),
+                        means.get("csd_logvar_variance_distance", 0.0),
+                        means.get("csd_logvar_scale", 0.0),
+                        means.get("csd_logvar_shift", 0.0),
+                    )
+                    logger.info(
+                        "  [CSD window] clamp text low/high=%.4f/%.4f | "
+                        "video low/high=%.4f/%.4f",
+                        means.get("csd_logvar_text_clamp_low", 0.0),
+                        means.get("csd_logvar_text_clamp_high", 0.0),
+                        means.get("csd_logvar_video_clamp_low", 0.0),
+                        means.get("csd_logvar_video_clamp_high", 0.0),
+                    )
+                    csd_window = {}
+                    csd_window_count = 0
 
     total_loss = total_loss / len(train_dataloader)
     epoch_time = time.time() - epoch_start_time
@@ -1885,6 +1975,7 @@ def main():
             if not _should_keep_clip_parameter_trainable(name, args):
                 param.requires_grad = False
     configure_retrieval_risk_sidecar_training(model, args)
+    configure_csd_logvar_sidecar_training(model, args)
 
     ## ####################################
     # dataloader loading
