@@ -10,26 +10,26 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 SCRIPT = REPOSITORY / "run_train_msrvtt_contextual_risk_bg.sh"
 
 
-def _fake_controller(tmp_path, *, wait_for_release=False):
+def _fake_controller(tmp_path, *, wait_for_output_release=False):
     marker = tmp_path / "controller-called"
     release = tmp_path / "release-controller"
     controller = tmp_path / "fake-controller.sh"
     wait = (
         """
-if [[ ! -e "${A3_TEST_CONTROLLER_MARKER}" ]]; then
-    : > "${A3_TEST_CONTROLLER_MARKER}"
-    while [[ ! -e "${A3_TEST_CONTROLLER_RELEASE}" ]]; do sleep 0.01; done
-fi
+while [[ ! -e "${A3_TEST_CONTROLLER_RELEASE}" ]]; do sleep 0.01; done
+mkdir -p "${OUTPUT_DIR}"
+sleep 0.2
 """
-        if wait_for_release
+        if wait_for_output_release
         else ""
     )
     controller.write_text(
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n"
-        f"{wait}"
         "printf '%s\\n' \"$$\" >> \"${A3_TEST_CONTROLLER_MARKER}\"\n"
         "printf '%s\\n' \"$$\" > \"${TRAIN_PID_FILE}\"\n"
+        ": > \"${A3_TEST_HANDOFF_MARKER}\"\n"
+        f"{wait}"
     )
     controller.chmod(0o755)
     return controller, marker, release
@@ -38,8 +38,10 @@ fi
 def _launcher_env(controller, marker, *, output_dir=None):
     env = os.environ.copy()
     env.update({
+        "A3_LAUNCHER_TEST_MODE": "1",
         "A3_BG_CONTROLLER": str(controller),
         "A3_TEST_CONTROLLER_MARKER": str(marker),
+        "A3_TEST_HANDOFF_MARKER": str(marker.with_name("worker-pid-written")),
     })
     if output_dir is not None:
         env["A3_TEST_OUTPUT_DIR"] = str(output_dir)
@@ -144,10 +146,15 @@ def test_registered_a3_launcher_rejects_preexisting_reservation_before_controlle
     assert not marker.exists()
 
 
-def test_registered_a3_launcher_reservation_excludes_concurrent_handoff(tmp_path):
-    controller, marker, release = _fake_controller(tmp_path, wait_for_release=True)
+def test_registered_a3_launcher_reservation_excludes_concurrent_handoff_until_output_exists(
+    tmp_path,
+):
+    controller, marker, release = _fake_controller(
+        tmp_path, wait_for_output_release=True
+    )
     output_dir = tmp_path / "concurrent-output"
     env = _launcher_env(controller, marker, output_dir=output_dir)
+    handoff = Path(env["A3_TEST_HANDOFF_MARKER"])
     env["A3_TEST_CONTROLLER_RELEASE"] = str(release)
     first = subprocess.Popen(
         ["bash", str(SCRIPT)],
@@ -158,9 +165,9 @@ def test_registered_a3_launcher_reservation_excludes_concurrent_handoff(tmp_path
     )
     try:
         deadline = time.monotonic() + 5
-        while not marker.exists() and time.monotonic() < deadline:
+        while not handoff.exists() and time.monotonic() < deadline:
             time.sleep(0.01)
-        assert marker.exists()
+        assert handoff.exists()
         assert Path(f"{output_dir}.reserve").is_dir()
 
         second = subprocess.run(
@@ -179,7 +186,78 @@ def test_registered_a3_launcher_reservation_excludes_concurrent_handoff(tmp_path
 
     assert first.returncode == 0, first_stderr
     assert marker.read_text().count("\n") == 1
+    assert output_dir.is_dir()
     assert not Path(f"{output_dir}.reserve").exists()
+
+
+def test_registered_a3_launcher_retains_reservation_when_worker_exits_before_output(
+    tmp_path,
+):
+    controller, marker, _ = _fake_controller(tmp_path)
+    output_dir = tmp_path / "worker-exited-output"
+    env = _launcher_env(controller, marker, output_dir=output_dir)
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+        timeout=5,
+    )
+
+    assert result.returncode == 2
+    assert "worker handoff is not a live PID" in result.stderr
+    assert marker.exists()
+    assert Path(f"{output_dir}.reserve").is_dir()
+
+
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER", "1"),
+        ("TVR_PYTHON", "/bin/false"),
+        ("TVR_TORCHRUN", "/bin/false"),
+    ],
+)
+def test_registered_a3_launcher_rejects_inherited_controller_execution_overrides(
+    tmp_path, name, value
+):
+    controller, marker, _ = _fake_controller(tmp_path)
+    env = _launcher_env(controller, marker)
+    env[name] = value
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert f"environment {name}" in result.stderr
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize("seam", ["A3_BG_CONTROLLER", "A3_TEST_OUTPUT_DIR"])
+def test_registered_a3_launcher_rejects_test_seams_without_test_mode(tmp_path, seam):
+    controller, marker, _ = _fake_controller(tmp_path)
+    env = os.environ.copy()
+    env["A3_BG_CONTROLLER"] = str(controller)
+    if seam == "A3_TEST_OUTPUT_DIR":
+        env["A3_TEST_OUTPUT_DIR"] = str(tmp_path / "test-output")
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "A3_LAUNCHER_TEST_MODE=1" in result.stderr
+    assert not marker.exists()
 
 
 def test_registered_a3_launcher_omits_other_sidecar_only_modes():

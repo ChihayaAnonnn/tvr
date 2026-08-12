@@ -7,13 +7,29 @@ COMMON_REPO_ROOT="$(cd "${COMMON_GIT_DIR}/.." && pwd)"
 BASE_CKPT="${COMMON_REPO_ROOT}/ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
 CONTROLLER_SCRIPT="${A3_BG_CONTROLLER:-${ROOT_DIR}/run_train_msrvtt_bg.sh}"
 
+validate_test_seams() {
+    if [[ -n "${A3_BG_CONTROLLER:-}" || -n "${A3_TEST_OUTPUT_DIR:-}" ]]; then
+        if [[ "${A3_LAUNCHER_TEST_MODE:-}" != "1" ]]; then
+            echo "A3 test seams require A3_LAUNCHER_TEST_MODE=1" >&2
+            exit 2
+        fi
+    fi
+    if [[ -n "${A3_TEST_OWNERSHIP_TIMEOUT_SECONDS:-}" && "${A3_LAUNCHER_TEST_MODE:-}" != "1" ]]; then
+        echo "A3 test timeout requires A3_LAUNCHER_TEST_MODE=1" >&2
+        exit 2
+    fi
+}
+
 reject_registered_environment_overrides() {
     local name
     for name in \
         OUTPUT_DIR RUN_ID RUN_DATE RUN_TIME RUN_TAG \
         CUDA_VISIBLE_DEVICES NPROC TRAIN_BATCH_SIZE \
         TRAIN_GRADIENT_ACCUMULATION_STEPS CLIP_LAYER_NORM_PRECISION \
-        EXPERIMENT_PROFILE TRAIN_PID_FILE; do
+        EXPERIMENT_PROFILE TRAIN_PID_FILE RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER \
+        TVR_PYTHON TVR_TORCHRUN A800_THROUGHPUT_COMPARISON \
+        CLIP_GRADIENT_CHECKPOINTING CLIP_VISUAL_CHECKPOINT_LAYERS \
+        FREEZE_LAYER_NUM; do
         if [[ -v "${name}" ]]; then
             echo "registered A3 environment ${name} cannot be overridden" >&2
             exit 2
@@ -49,6 +65,7 @@ reject_registered_argument_overrides() {
     done
 }
 
+validate_test_seams
 reject_registered_environment_overrides
 reject_registered_argument_overrides "$@"
 
@@ -84,6 +101,13 @@ if ! mkdir "${RESERVATION_DIR}"; then
 fi
 RESERVATION_HELD=1
 HANDOFF_PID_FILE="$(mktemp "${RESERVATION_DIR}/controller-pid.XXXXXX")"
+
+retain_reservation_failure() {
+    echo "$1" >&2
+    RESERVATION_HELD=0
+    trap - EXIT
+    exit 2
+}
 
 cleanup_reservation() {
     local status=$?
@@ -139,6 +163,32 @@ while [[ ! -s "${HANDOFF_PID_FILE}" ]]; do
     fi
     sleep 0.05
 done
+
+read -r WORKER_PID < "${HANDOFF_PID_FILE}"
+if ! [[ "${WORKER_PID}" =~ ^[1-9][0-9]*$ ]] || ! kill -0 "${WORKER_PID}" 2>/dev/null; then
+    retain_reservation_failure "A3 worker handoff is not a live PID; leaving reservation: ${RESERVATION_DIR}"
+fi
+
+OWNERSHIP_TIMEOUT_SECONDS=30
+if [[ -n "${A3_TEST_OWNERSHIP_TIMEOUT_SECONDS:-}" ]]; then
+    OWNERSHIP_TIMEOUT_SECONDS="${A3_TEST_OWNERSHIP_TIMEOUT_SECONDS}"
+fi
+if ! [[ "${OWNERSHIP_TIMEOUT_SECONDS}" =~ ^[1-9][0-9]*$ ]]; then
+    retain_reservation_failure "A3 ownership timeout must be a positive integer"
+fi
+OWNERSHIP_START_SECONDS=${SECONDS}
+while [[ ! -d "${OUTPUT_DIR}" ]]; do
+    if ! kill -0 "${WORKER_PID}" 2>/dev/null; then
+        retain_reservation_failure "A3 worker exited before creating output; leaving reservation: ${RESERVATION_DIR}"
+    fi
+    if (( SECONDS - OWNERSHIP_START_SECONDS >= OWNERSHIP_TIMEOUT_SECONDS )); then
+        retain_reservation_failure "A3 output ownership timed out; leaving reservation: ${RESERVATION_DIR}"
+    fi
+    sleep 0.05
+done
+if ! kill -0 "${WORKER_PID}" 2>/dev/null; then
+    retain_reservation_failure "A3 worker exited before durable output ownership; leaving reservation: ${RESERVATION_DIR}"
+fi
 
 unlink "${HANDOFF_PID_FILE}"
 rmdir "${RESERVATION_DIR}"
