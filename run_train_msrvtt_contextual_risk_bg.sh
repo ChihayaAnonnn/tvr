@@ -34,7 +34,8 @@ reject_registered_environment_overrides() {
         LOCAL_RANK GROUP_RANK ROLE_RANK OMP_NUM_THREADS MKL_NUM_THREADS \
         OPENBLAS_NUM_THREADS NUMEXPR_NUM_THREADS NCCL_P2P_LEVEL \
         NCCL_IB_DISABLE NCCL_DEBUG TORCH_WARN_ONCE PYTHONHASHSEED \
-        CUBLAS_WORKSPACE_CONFIG SMOKE_STEPS EXPERIMENT_DESC; do
+        CUBLAS_WORKSPACE_CONFIG SMOKE_STEPS EXPERIMENT_DESC \
+        REGISTERED_CLIP_ASSET_PATH REGISTERED_CLIP_ASSET_SHA256; do
         if [[ -v "${name}" ]]; then
             echo "registered A3 environment ${name} cannot be overridden" >&2
             exit 2
@@ -53,6 +54,10 @@ validate_test_seams
 reject_registered_environment_overrides
 reject_registered_argument_overrides "$@"
 
+CLIP_CACHE_DIR="${COMMON_REPO_ROOT}/.cache"
+CLIP_ASSET="${CLIP_CACHE_DIR}/ViT-B-16.pt"
+CLIP_ASSET_SHA256="5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f"
+
 if [[ "${A3_LAUNCHER_TEST_MODE:-0}" != "1" ]]; then
     if ! git -C "${ROOT_DIR}" diff --quiet -- || \
        ! git -C "${ROOT_DIR}" diff --cached --quiet --; then
@@ -63,6 +68,15 @@ fi
 
 if [[ ! -f "${BASE_CKPT}" ]]; then
     echo "Missing canonical A1 checkpoint BASE_CKPT=${BASE_CKPT}" >&2
+    exit 2
+fi
+if [[ ! -f "${CLIP_ASSET}" ]]; then
+    echo "Missing registered CLIP asset CLIP_ASSET=${CLIP_ASSET}" >&2
+    exit 2
+fi
+ACTUAL_CLIP_ASSET_SHA256="$(sha256sum -- "${CLIP_ASSET}" | awk '{print $1}')"
+if [[ "${ACTUAL_CLIP_ASSET_SHA256}" != "${CLIP_ASSET_SHA256}" ]]; then
+    echo "Registered CLIP asset SHA-256 mismatch: ${CLIP_ASSET}" >&2
     exit 2
 fi
 
@@ -133,11 +147,34 @@ RUN_TAG="${RUN_TAG}" \
 RUN_ID="${RUN_ID}" \
 OUTPUT_DIR="${OUTPUT_DIR}" \
 TRAIN_PID_FILE="${HANDOFF_PID_FILE}" \
+TVR_PYTHON=/home/xujie/.conda/envs/tvr/bin/python \
+TVR_TORCHRUN=/home/xujie/.conda/envs/tvr/bin/torchrun \
 CUDA_VISIBLE_DEVICES="0,2,3,4" \
 NPROC=4 \
 TRAIN_BATCH_SIZE=256 \
 TRAIN_GRADIENT_ACCUMULATION_STEPS=1 \
+TRAIN_NUM_WORKERS=12 \
+TRAIN_PREFETCH_FACTOR=4 \
 CLIP_LAYER_NORM_PRECISION=fp32 \
+CLIP_GRADIENT_CHECKPOINTING=1 \
+CLIP_VISUAL_CHECKPOINT_LAYERS=4 \
+CLIP_CACHE_DIR="${COMMON_REPO_ROOT}/.cache" \
+REGISTERED_CLIP_ASSET_PATH="${CLIP_ASSET}" \
+REGISTERED_CLIP_ASSET_SHA256="${CLIP_ASSET_SHA256}" \
+FREEZE_LAYER_NUM=-1 \
+A800_THROUGHPUT_COMPARISON=0 \
+CUBLAS_WORKSPACE_CONFIG=":4096:8" \
+OMP_NUM_THREADS=1 \
+MKL_NUM_THREADS=1 \
+OPENBLAS_NUM_THREADS=1 \
+NUMEXPR_NUM_THREADS=1 \
+NCCL_P2P_LEVEL=NVL \
+NCCL_IB_DISABLE=1 \
+NCCL_DEBUG=WARN \
+TORCH_WARN_ONCE=1 \
+MASTER_ADDR=127.0.0.9 \
+MASTER_PORT=29547 \
+DATA_PATH=/data2/hxj/data/MSRVTT \
 PYTHONHASHSEED=0 \
 EXPERIMENT_PROFILE=hygiene \
 EXPERIMENT_DESC="A3 contextual retrieval-risk sidecar" \
@@ -150,6 +187,8 @@ bash "${CONTROLLER_SCRIPT}" \
     --use_contextual_risk_sidecar \
     --contextual_risk_sidecar_only \
     --registered_contextual_risk_a3 \
+    --registered_clip_asset_path "${CLIP_ASSET}" \
+    --registered_clip_asset_sha256 "${CLIP_ASSET_SHA256}" \
     --contextual_risk_topk 16 \
     --contextual_risk_projection_dim 128 \
     --contextual_risk_hidden_dim 128 \

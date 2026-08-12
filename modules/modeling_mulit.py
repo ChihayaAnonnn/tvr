@@ -72,7 +72,16 @@ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
             state_dict = {}
         if hasattr(task_config, "pretrained_clip_name"):
             pretrained_clip_name = task_config.pretrained_clip_name
-        clip_state_dict = CLIP.get_config(pretrained_clip_name=pretrained_clip_name)
+        registered_clip_path = (
+            getattr(task_config, "registered_clip_asset_path", "")
+            if task_config is not None
+            and bool(getattr(task_config, "registered_contextual_risk_a3", False))
+            else None
+        )
+        clip_state_dict = CLIP.get_config(
+            pretrained_clip_name=pretrained_clip_name,
+            model_path=registered_clip_path or None,
+        )
         for key, val in clip_state_dict.items():
             new_key = "clip." + key
             if new_key not in state_dict:

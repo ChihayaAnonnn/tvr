@@ -47,10 +47,32 @@ def _contextual_risk_canonical_a1_checkpoint() -> Path:
     return local
 
 
+def _contextual_risk_common_repo_root() -> Path:
+    project_root = Path(__file__).resolve().parent
+    dot_git = project_root / ".git"
+    if dot_git.is_file():
+        prefix = "gitdir:"
+        registration = dot_git.read_text().strip()
+        if registration.startswith(prefix):
+            git_dir = Path(registration[len(prefix):].strip()).resolve()
+            if git_dir.parent.name == "worktrees":
+                return git_dir.parents[2]
+    return project_root
+
+
 CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT = (
     _contextual_risk_canonical_a1_checkpoint()
 )
 CONTEXTUAL_RISK_CANONICAL_A1_SHA256 = CSD_LOGVAR_CANONICAL_A1_SHA256
+REGISTERED_A3_CLIP_CACHE_DIR = (
+    _contextual_risk_common_repo_root() / ".cache"
+).resolve()
+REGISTERED_A3_CLIP_ASSET_PATH = (
+    REGISTERED_A3_CLIP_CACHE_DIR / "ViT-B-16.pt"
+).resolve()
+REGISTERED_A3_CLIP_ASSET_SHA256 = (
+    "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f"
+)
 
 _BATCH_STATS = (
     "unique_video_count",
@@ -171,6 +193,13 @@ def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
         "name": pretrained_clip_name,
         "path": "",
     }
+    if bool(getattr(args, "contextual_risk_sidecar_only", False)):
+        backbone["asset_path"] = str(
+            Path(getattr(args, "registered_clip_asset_path", "")).resolve()
+        )
+        backbone["asset_sha256"] = getattr(
+            args, "registered_clip_asset_sha256", ""
+        )
     data = {
         "datatype": getattr(args, "datatype", "msrvtt"),
         "source_train_csv": getattr(args, "source_train_csv", ""),
@@ -297,6 +326,14 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
             "path": str(CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT),
             "sha256": CONTEXTUAL_RISK_CANONICAL_A1_SHA256,
         },
+        "canonical_clip": {
+            "path": str(
+                Path(
+                    getattr(args, "registered_clip_asset_path", "")
+                ).resolve()
+            ),
+            "sha256": getattr(args, "registered_clip_asset_sha256", ""),
+        },
         "architecture": {
             "topk": int(getattr(args, "contextual_risk_topk", 16)),
             "projection_dim": int(
@@ -332,6 +369,7 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
             "seed": split.get("seed"),
             "manifest_path": str(split_manifest),
             "manifest_sha256": split.get("manifest_sha256"),
+            "generated_csv": split.get("generated_csv"),
         },
         "training": {
             "seed": getattr(args, "seed", None),

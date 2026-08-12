@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
 import os
 import random
@@ -376,6 +377,77 @@ def _atomic_csv(path, fieldnames, rows):
         writer.writeheader()
         writer.writerows(rows)
     os.replace(temporary_path, path)
+
+
+def _canonical_csv_bytes(fieldnames, rows):
+    buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(rows)
+    return buffer.getvalue().encode("utf-8")
+
+
+def validate_generated_split_files(manifest, annotation_json, train_csv, val_csv):
+    """Reject generated train/val CSVs that are not exact canonical outputs."""
+
+    _validate_manifest_shape(manifest)
+    _, captions = _annotation_index(annotation_json)
+    expected_captions = manifest["expected_captions_per_video"]
+    for video_id in manifest["val_video_ids"]:
+        count = len(captions.get(video_id, []))
+        if count != expected_captions:
+            raise ValueError(
+                f"video_id={video_id} expected {expected_captions} captions, got {count}"
+            )
+
+    expected_train = _canonical_csv_bytes(
+        ["video_id"],
+        ({"video_id": video_id} for video_id in manifest["train_video_ids"]),
+    )
+    expected_val = _canonical_csv_bytes(
+        ["video_id", "sentence"],
+        (
+            {"video_id": video_id, "sentence": caption}
+            for video_id in manifest["val_video_ids"]
+            for caption in captions[video_id]
+        ),
+    )
+    resolved_train = Path(train_csv).resolve()
+    resolved_val = Path(val_csv).resolve()
+    try:
+        actual_train = resolved_train.read_bytes()
+    except OSError as exc:
+        raise ValueError("generated train CSV is unavailable") from exc
+    try:
+        actual_val = resolved_val.read_bytes()
+    except OSError as exc:
+        raise ValueError("generated val CSV is unavailable") from exc
+    if actual_train != expected_train:
+        raise ValueError("generated train CSV differs from canonical trusted split")
+    if actual_val != expected_val:
+        raise ValueError("generated val CSV differs from canonical trusted split")
+
+    return {
+        "train_csv": {
+            "path": str(resolved_train),
+            "sha256": sha256_file(resolved_train),
+            "row_count": len(manifest["train_video_ids"]),
+        },
+        "val_csv": {
+            "path": str(resolved_val),
+            "sha256": sha256_file(resolved_val),
+            "row_count": sum(
+                len(captions[video_id]) for video_id in manifest["val_video_ids"]
+            ),
+        },
+        "derivation": {
+            "protocol_version": manifest["protocol_version"],
+            "algorithm": manifest["algorithm"],
+            "seed": manifest["seed"],
+            "manifest_sha256": _manifest_sha256(manifest),
+            "annotation_sha256": sha256_file(annotation_json),
+        },
+    }
 
 
 def write_generated_split_files(manifest, annotation_json, output_dir):

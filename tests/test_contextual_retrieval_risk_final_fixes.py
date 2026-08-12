@@ -12,6 +12,7 @@ import torch
 
 import experiment_tracking
 import main_task_retrieval as retrieval
+import dataloaders.msrvtt_protocol as msrvtt_protocol
 from prob_models.uncertainty_protocol import file_sha256
 
 
@@ -23,11 +24,11 @@ def _rng_draws():
     )
 
 
-def _tiny_optimizer():
+def _tiny_optimizer(total_steps=10):
     model = torch.nn.Linear(2, 1)
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.1)
     scheduler = retrieval._build_warmup_cosine_scheduler(
-        optimizer, warmup_proportion=0.1, total_steps=10
+        optimizer, warmup_proportion=0.1, total_steps=total_steps
     )
     return model, optimizer, scheduler
 
@@ -63,6 +64,10 @@ def test_registered_scheduler_is_one_five_epoch_trajectory_across_resume():
         scheduler_total_steps=10,
         optimizer_steps_per_epoch=2,
         rng_state_by_rank={0: retrieval._capture_local_rng_state()},
+        contextual_risk_diagnostic_window={
+            "term_sums": {}, "term_count": 0, "gradient_total": 0.0,
+            "optimizer_steps": 0, "zero_gradient_windows": 0,
+        },
     )
 
     continued_model, continued_opt, continued_sched = _tiny_optimizer()
@@ -76,6 +81,7 @@ def test_registered_scheduler_is_one_five_epoch_trajectory_across_resume():
         expected_scheduler_total_steps=10,
         expected_optimizer_steps_per_epoch=2,
         restore_rng=False,
+        model=torch.nn.Module(),
     )
     second_lrs = _take_steps(continued_model, continued_opt, continued_sched, 4)
 
@@ -354,9 +360,226 @@ def test_registered_a3_initial_environment_is_checked_before_seed_normalization(
 ):
     args = SimpleNamespace(contextual_risk_sidecar_only=True)
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
-    monkeypatch.setenv("PYTHONHASHSEED", "0")
+    expected_environment = retrieval._registered_a3_expected_environment()
+    for name, value in expected_environment.items():
+        monkeypatch.setenv(name, value)
+    for name in ("RANK", "LOCAL_RANK", "ROLE_RANK"):
+        monkeypatch.setenv(name, "0")
     retrieval._assert_registered_a3_initial_environment(args)
 
     monkeypatch.setenv("PYTHONHASHSEED", "9")
     with pytest.raises(ValueError, match="initial environment"):
         retrieval._assert_registered_a3_initial_environment(args)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "CLIP_CACHE_DIR",
+        "REGISTERED_CLIP_ASSET_SHA256",
+        "CUBLAS_WORKSPACE_CONFIG",
+        "NCCL_IB_DISABLE",
+        "OMP_NUM_THREADS",
+        "TVR_PYTHON",
+    ],
+)
+def test_registered_a3_initial_environment_rejects_missing_material_value(
+    monkeypatch, name
+):
+    args = SimpleNamespace(contextual_risk_sidecar_only=True)
+    for env_name, value in retrieval._registered_a3_expected_environment().items():
+        monkeypatch.setenv(env_name, value)
+    for env_name in ("RANK", "LOCAL_RANK", "ROLE_RANK"):
+        monkeypatch.setenv(env_name, "0")
+    monkeypatch.delenv(name)
+
+    with pytest.raises(ValueError, match="initial environment"):
+        retrieval._assert_registered_a3_initial_environment(args)
+
+
+def test_registered_clip_asset_preflight_rejects_path_hash_and_cache_drift(
+    tmp_path, monkeypatch
+):
+    asset = tmp_path / "ViT-B-16.pt"
+    asset.write_bytes(b"clip-fixture")
+    digest = msrvtt_protocol.sha256_file(asset)
+    monkeypatch.setattr(retrieval, "REGISTERED_A3_CLIP_ASSET_PATH", asset)
+    monkeypatch.setattr(retrieval, "REGISTERED_A3_CLIP_ASSET_SHA256", digest)
+    monkeypatch.setattr(retrieval, "REGISTERED_A3_CLIP_CACHE_DIR", tmp_path)
+    monkeypatch.setenv("CLIP_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("REGISTERED_CLIP_ASSET_PATH", str(asset))
+    monkeypatch.setenv("REGISTERED_CLIP_ASSET_SHA256", digest)
+    args = SimpleNamespace(
+        registered_contextual_risk_a3=True,
+        contextual_risk_sidecar_only=True,
+        registered_clip_asset_path=str(asset),
+        registered_clip_asset_sha256=digest,
+    )
+    assert retrieval._preflight_registered_a3_clip_asset(
+        args, verify_load=False
+    )["sha256"] == digest
+
+    args.registered_clip_asset_sha256 = "0" * 64
+    with pytest.raises(ValueError, match="CLI SHA-256"):
+        retrieval._preflight_registered_a3_clip_asset(args, verify_load=False)
+    args.registered_clip_asset_sha256 = digest
+    monkeypatch.setenv("CLIP_CACHE_DIR", str(tmp_path / "other"))
+    with pytest.raises(ValueError, match="CLIP_CACHE_DIR"):
+        retrieval._preflight_registered_a3_clip_asset(args, verify_load=False)
+    monkeypatch.setenv("CLIP_CACHE_DIR", str(tmp_path))
+    asset.write_bytes(b"tampered")
+    with pytest.raises(ValueError, match="asset SHA-256"):
+        retrieval._preflight_registered_a3_clip_asset(args, verify_load=False)
+
+
+def _tiny_split_manifest():
+    return {
+        "protocol_version": "trusted-v1",
+        "seed": 0,
+        "algorithm": "fixture deterministic split",
+        "val_size": 1,
+        "expected_captions_per_video": 2,
+        "source_sha256": {
+            "train_csv": "a" * 64,
+            "annotation_json": "b" * 64,
+            "test_csv": "c" * 64,
+        },
+        "counts": {
+            "source_train_videos": 2, "train_videos": 1,
+            "val_videos": 1, "val_sentences": 2,
+            "test_csv_rows": 0, "test_videos": 0,
+        },
+        "overlap_counts": {"train_val": 0, "train_test": 0, "val_test": 0},
+        "test_video_ids_sha256": "d" * 64,
+        "train_video_ids": ["video1"],
+        "val_video_ids": ["video2"],
+    }
+
+
+def test_generated_split_validation_binds_exact_csv_bytes(tmp_path):
+    annotation = tmp_path / "annotation.json"
+    annotation.write_text(json.dumps({
+        "videos": [{"video_id": "video1"}, {"video_id": "video2"}],
+        "sentences": [
+            {"video_id": "video2", "caption": "first"},
+            {"video_id": "video2", "caption": "second"},
+        ],
+    }))
+    generated = tmp_path / "generated"
+    paths = msrvtt_protocol.write_generated_split_files(
+        _tiny_split_manifest(), annotation, generated
+    )
+    summary = msrvtt_protocol.validate_generated_split_files(
+        _tiny_split_manifest(),
+        annotation,
+        paths["train_csv"],
+        paths["val_csv"],
+    )
+
+    assert summary["train_csv"]["path"] == str(
+        Path(paths["train_csv"]).resolve()
+    )
+    assert summary["train_csv"]["sha256"] == msrvtt_protocol.sha256_file(
+        paths["train_csv"]
+    )
+    assert summary["val_csv"]["sha256"] == msrvtt_protocol.sha256_file(
+        paths["val_csv"]
+    )
+    assert summary["derivation"]["protocol_version"] == "trusted-v1"
+
+    Path(paths["val_csv"]).write_text(
+        Path(paths["val_csv"]).read_text() + "video2,tampered\n"
+    )
+    with pytest.raises(ValueError, match="generated val CSV"):
+        msrvtt_protocol.validate_generated_split_files(
+            _tiny_split_manifest(),
+            annotation,
+            paths["train_csv"],
+            paths["val_csv"],
+        )
+
+
+def _advance_diagnostic_steps(model, start, stop, *, gradient):
+    emitted = []
+    for step in range(start, stop):
+        retrieval._accumulate_contextual_risk_window(
+            model, {"contextual_risk_loss": float(step)}
+        )
+        emitted.append(
+            retrieval._finish_contextual_risk_window_step(model, gradient)
+        )
+    return emitted
+
+
+def test_a3_diagnostic_window_checkpoint_resume_matches_uninterrupted():
+    uninterrupted = torch.nn.Module()
+    # Six optimizer steps per epoch makes this an exact 3-epoch + 2-epoch
+    # continuation boundary while also crossing the 20-step diagnostic window.
+    _advance_diagnostic_steps(uninterrupted, 0, 18, gradient=1.0)
+    snapshot = retrieval._snapshot_contextual_risk_diagnostic_window(
+        uninterrupted
+    )
+    model, optimizer, scheduler = _tiny_optimizer(total_steps=30)
+    payload = retrieval._build_training_checkpoint_payload(
+        epoch=2, optimizer=optimizer, scheduler=scheduler, tr_loss=0.5,
+        global_step=18, scheduler_horizon_epochs=5,
+        scheduler_total_steps=30, optimizer_steps_per_epoch=6,
+        rng_state_by_rank={0: retrieval._capture_local_rng_state()},
+        contextual_risk_diagnostic_window=snapshot,
+    )
+
+    expected = _advance_diagnostic_steps(uninterrupted, 18, 30, gradient=1.0)
+    resumed = torch.nn.Module()
+    _, restored_opt, restored_sched = _tiny_optimizer(total_steps=30)
+    retrieval._restore_training_checkpoint(
+        payload, restored_opt, restored_sched, require_complete=True,
+        expected_scheduler_horizon_epochs=5,
+        expected_scheduler_total_steps=30,
+        expected_optimizer_steps_per_epoch=6,
+        restore_rng=False,
+        model=resumed,
+    )
+    actual = _advance_diagnostic_steps(resumed, 18, 30, gradient=1.0)
+
+    assert actual == expected
+    assert retrieval._snapshot_contextual_risk_diagnostic_window(resumed) == (
+        retrieval._snapshot_contextual_risk_diagnostic_window(uninterrupted)
+    )
+
+    zero_source = torch.nn.Module()
+    _advance_diagnostic_steps(zero_source, 0, 20, gradient=0.0)
+    zero_snapshot = retrieval._snapshot_contextual_risk_diagnostic_window(
+        zero_source
+    )
+    zero_restored = torch.nn.Module()
+    retrieval._restore_contextual_risk_diagnostic_window(
+        zero_restored, zero_snapshot
+    )
+    assert retrieval._snapshot_contextual_risk_diagnostic_window(
+        zero_restored
+    )["zero_gradient_windows"] == 1
+    assert retrieval._snapshot_contextual_risk_diagnostic_window(
+        zero_restored
+    ) == zero_snapshot
+
+
+@pytest.mark.parametrize(
+    "bad_state",
+    [
+        {"term_sums": {}, "term_count": -1, "gradient_total": 0.0,
+         "optimizer_steps": 0, "zero_gradient_windows": 0},
+        {"term_sums": {"contextual_risk_loss": float("nan")},
+         "term_count": 1, "gradient_total": 1.0,
+         "optimizer_steps": 1, "zero_gradient_windows": 0},
+        {"term_sums": {}, "term_count": 0, "gradient_total": 0.0,
+         "optimizer_steps": 20, "zero_gradient_windows": 0},
+        {"term_sums": {"contextual_risk_loss": "invalid"},
+         "term_count": 1, "gradient_total": 1.0,
+         "optimizer_steps": 1, "zero_gradient_windows": 0},
+    ],
+)
+def test_a3_diagnostic_window_restore_rejects_invalid_schema(bad_state):
+    with pytest.raises(ValueError, match="diagnostic window"):
+        retrieval._restore_contextual_risk_diagnostic_window(
+            torch.nn.Module(), bad_state
+        )

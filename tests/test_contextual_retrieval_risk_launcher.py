@@ -79,6 +79,21 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
 
     assert 'CLIP_LAYER_NORM_PRECISION=fp32' in text
     assert 'PYTHONHASHSEED=0' in text
+    assert 'CLIP_CACHE_DIR="${COMMON_REPO_ROOT}/.cache"' in text
+    assert 'ViT-B-16.pt' in text
+    assert '5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f' in text
+    for binding in (
+        'CUBLAS_WORKSPACE_CONFIG=":4096:8"',
+        'OMP_NUM_THREADS=1', 'MKL_NUM_THREADS=1',
+        'OPENBLAS_NUM_THREADS=1', 'NUMEXPR_NUM_THREADS=1',
+        'NCCL_P2P_LEVEL=NVL', 'NCCL_IB_DISABLE=1', 'NCCL_DEBUG=WARN',
+        'MASTER_PORT=29547', 'TORCH_WARN_ONCE=1',
+        'TVR_PYTHON=/home/xujie/.conda/envs/tvr/bin/python',
+        'TVR_TORCHRUN=/home/xujie/.conda/envs/tvr/bin/torchrun',
+    ):
+        assert binding in text
+    assert '--registered_clip_asset_path "${CLIP_ASSET}"' in text
+    assert '--registered_clip_asset_sha256 "${CLIP_ASSET_SHA256}"' in text
     assert 'EXPERIMENT_PROFILE=hygiene' in text
     assert 'TRAIN_BATCH_SIZE=256' in text
     assert 'TRAIN_GRADIENT_ACCUMULATION_STEPS=1' in text
@@ -230,6 +245,7 @@ def test_registered_a3_launcher_retains_reservation_when_worker_exits_before_out
         ("MASTER_PORT", "29999"),
         ("SMOKE_STEPS", "1"),
         ("PYTHONHASHSEED", "9"),
+        ("REGISTERED_CLIP_ASSET_SHA256", "0" * 64),
     ],
 )
 def test_registered_a3_launcher_rejects_inherited_controller_execution_overrides(

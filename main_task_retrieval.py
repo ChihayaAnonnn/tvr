@@ -18,12 +18,19 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from dataloaders.data_dataloaders import DATALOADER_DICT
-from dataloaders.msrvtt_protocol import load_trusted_manifest, validate_trusted_manifest
+from dataloaders.msrvtt_protocol import (
+    load_trusted_manifest,
+    validate_generated_split_files,
+    validate_trusted_manifest,
+)
 from experiment_tracking import (
     CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT,
     CONTEXTUAL_RISK_CANONICAL_A1_SHA256,
     CSD_LOGVAR_CANONICAL_A1_CHECKPOINT,
     CSD_LOGVAR_CANONICAL_A1_SHA256,
+    REGISTERED_A3_CLIP_ASSET_PATH,
+    REGISTERED_A3_CLIP_ASSET_SHA256,
+    REGISTERED_A3_CLIP_CACHE_DIR,
     atomic_write_json,
     build_experiment_manifest,
     collect_git_state,
@@ -578,6 +585,8 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         action="store_true",
         help="Assert the complete immutable registered A3 worker contract.",
     )
+    parser.add_argument("--registered_clip_asset_path", type=str, default="")
+    parser.add_argument("--registered_clip_asset_sha256", type=str, default="")
     parser.add_argument("--contextual_risk_topk", type=int, default=16)
     parser.add_argument("--contextual_risk_projection_dim", type=int, default=128)
     parser.add_argument("--contextual_risk_hidden_dim", type=int, default=128)
@@ -900,6 +909,8 @@ def _normalize_registered_a3_model_fp32(model):
 
 
 def init_model(args, device, n_gpu, local_rank):
+    if bool(getattr(args, "registered_contextual_risk_a3", False)):
+        _preflight_registered_a3_clip_asset(args, verify_load=False)
     if args.init_model:
         model_state_dict = torch.load(args.init_model, map_location="cpu")
         # Older ckpts (e.g. June bin.4) mix fp16 and fp32 params. Fused AdamW
@@ -1017,6 +1028,8 @@ def _registered_a3_expected_config():
         "visual_num_hidden_layers": 12,
         "cross_num_hidden_layers": 4,
         "pretrained_clip_name": "ViT-B/16",
+        "registered_clip_asset_path": str(REGISTERED_A3_CLIP_ASSET_PATH),
+        "registered_clip_asset_sha256": REGISTERED_A3_CLIP_ASSET_SHA256,
         "clip_layer_norm_precision": "fp32",
         "clip_gradient_checkpointing": True,
         "clip_visual_checkpoint_layers": 4,
@@ -1072,6 +1085,105 @@ def _registered_a3_expected_config():
         "world_size": 4,
         "n_gpu": 4,
         "pin_memory": True,
+    }
+
+
+def _registered_a3_expected_environment():
+    """Return deterministic process values fixed by the registered launcher."""
+
+    return {
+        "CUDA_VISIBLE_DEVICES": "0,2,3,4",
+        "PYTHONHASHSEED": "0",
+        "CLIP_CACHE_DIR": str(REGISTERED_A3_CLIP_CACHE_DIR),
+        "REGISTERED_CLIP_ASSET_PATH": str(REGISTERED_A3_CLIP_ASSET_PATH),
+        "REGISTERED_CLIP_ASSET_SHA256": REGISTERED_A3_CLIP_ASSET_SHA256,
+        "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "NCCL_P2P_LEVEL": "NVL",
+        "NCCL_IB_DISABLE": "1",
+        "NCCL_DEBUG": "WARN",
+        "TORCH_WARN_ONCE": "1",
+        "MASTER_ADDR": "127.0.0.9",
+        "MASTER_PORT": "29547",
+        "WORLD_SIZE": "4",
+        "LOCAL_WORLD_SIZE": "4",
+        "GROUP_WORLD_SIZE": "1",
+        "ROLE_WORLD_SIZE": "4",
+        "GROUP_RANK": "0",
+        "NPROC": "4",
+        "TRAIN_BATCH_SIZE": "256",
+        "TRAIN_GRADIENT_ACCUMULATION_STEPS": "1",
+        "TRAIN_NUM_WORKERS": "12",
+        "TRAIN_PREFETCH_FACTOR": "4",
+        "CLIP_LAYER_NORM_PRECISION": "fp32",
+        "CLIP_GRADIENT_CHECKPOINTING": "1",
+        "CLIP_VISUAL_CHECKPOINT_LAYERS": "4",
+        "FREEZE_LAYER_NUM": "-1",
+        "A800_THROUGHPUT_COMPARISON": "0",
+        "DATA_PATH": "/data2/hxj/data/MSRVTT",
+        "EXPERIMENT_PROFILE": "hygiene",
+        "EXPERIMENT_DESC": "A3 contextual retrieval-risk sidecar",
+        "TVR_PYTHON": "/home/xujie/.conda/envs/tvr/bin/python",
+        "TVR_TORCHRUN": "/home/xujie/.conda/envs/tvr/bin/torchrun",
+    }
+
+
+def _preflight_registered_a3_clip_asset(args, *, verify_load):
+    """Bind A3 to one exact CLIP file and optionally parse it through CLIP."""
+
+    if not bool(getattr(args, "registered_contextual_risk_a3", False)):
+        return None
+    cli_path = Path(getattr(args, "registered_clip_asset_path", "")).resolve()
+    cli_sha256 = getattr(args, "registered_clip_asset_sha256", "")
+    cache_value = os.environ.get("CLIP_CACHE_DIR")
+    mismatches = []
+    if cli_path != REGISTERED_A3_CLIP_ASSET_PATH:
+        mismatches.append(
+            f"CLI asset path {cli_path} is not {REGISTERED_A3_CLIP_ASSET_PATH}"
+        )
+    if cli_sha256 != REGISTERED_A3_CLIP_ASSET_SHA256:
+        mismatches.append("CLI SHA-256 is not the registered CLIP SHA-256")
+    if not cache_value or Path(cache_value).resolve() != REGISTERED_A3_CLIP_CACHE_DIR:
+        mismatches.append(
+            f"CLIP_CACHE_DIR={cache_value!r} is not "
+            f"{str(REGISTERED_A3_CLIP_CACHE_DIR)!r}"
+        )
+    env_asset_path = os.environ.get("REGISTERED_CLIP_ASSET_PATH")
+    if (
+        not env_asset_path
+        or Path(env_asset_path).resolve() != REGISTERED_A3_CLIP_ASSET_PATH
+    ):
+        mismatches.append("REGISTERED_CLIP_ASSET_PATH is not the registered path")
+    if os.environ.get("REGISTERED_CLIP_ASSET_SHA256") != (
+        REGISTERED_A3_CLIP_ASSET_SHA256
+    ):
+        mismatches.append("REGISTERED_CLIP_ASSET_SHA256 is not the registered hash")
+    if mismatches:
+        raise ValueError("registered A3 CLIP preflight mismatch: " + "; ".join(mismatches))
+    if not cli_path.is_file():
+        raise ValueError(f"registered A3 CLIP asset is missing: {cli_path}")
+    actual_sha256 = file_sha256(cli_path)
+    if actual_sha256 != REGISTERED_A3_CLIP_ASSET_SHA256:
+        raise ValueError("registered A3 CLIP asset SHA-256 mismatch")
+    tensor_count = None
+    if verify_load:
+        from modules.module_clip import CLIP
+
+        state_dict = CLIP.get_config(
+            getattr(args, "pretrained_clip_name", "ViT-B/16"),
+            model_path=str(cli_path),
+        )
+        if not isinstance(state_dict, dict) or not state_dict:
+            raise ValueError("registered A3 CLIP asset did not load a state dictionary")
+        tensor_count = len(state_dict)
+    return {
+        "cache_dir": str(REGISTERED_A3_CLIP_CACHE_DIR),
+        "path": str(cli_path),
+        "sha256": actual_sha256,
+        "tensor_count": tensor_count,
     }
 
 
@@ -1149,10 +1261,7 @@ def _assert_registered_a3_initial_environment(args):
 
     if not bool(getattr(args, "contextual_risk_sidecar_only", False)):
         return
-    expected = {
-        "CUDA_VISIBLE_DEVICES": "0,2,3,4",
-        "PYTHONHASHSEED": "0",
-    }
+    expected = _registered_a3_expected_environment()
     mismatches = [
         f"{name}={os.environ.get(name)!r} (registered {value!r})"
         for name, value in expected.items()
@@ -1171,6 +1280,17 @@ def _assert_registered_a3_initial_environment(args):
         for name in forbidden
         if name in os.environ
     )
+    dynamic_ranks = {}
+    for name in ("RANK", "LOCAL_RANK", "ROLE_RANK"):
+        try:
+            dynamic_ranks[name] = int(os.environ[name])
+        except (KeyError, ValueError):
+            mismatches.append(f"{name} must be an integer in [0, 3]")
+    if len(dynamic_ranks) == 3:
+        if any(not 0 <= value < 4 for value in dynamic_ranks.values()):
+            mismatches.append("registered A3 rank values must be in [0, 3]")
+        if len(set(dynamic_ranks.values())) != 1:
+            mismatches.append("RANK, LOCAL_RANK, and ROLE_RANK must agree")
     if mismatches:
         raise ValueError(
             "registered A3 initial environment mismatch: "
@@ -1498,6 +1618,7 @@ def _build_training_checkpoint_payload(
     scheduler_total_steps=None,
     optimizer_steps_per_epoch=None,
     rng_state_by_rank=None,
+    contextual_risk_diagnostic_window=None,
 ):
     payload = {
         "epoch": int(epoch),
@@ -1515,6 +1636,12 @@ def _build_training_checkpoint_payload(
         payload["optimizer_steps_per_epoch"] = int(optimizer_steps_per_epoch)
     if rng_state_by_rank is not None:
         payload["rng_state_by_rank"] = rng_state_by_rank
+    if contextual_risk_diagnostic_window is not None:
+        payload["contextual_risk_diagnostic_window"] = (
+            _validate_contextual_risk_diagnostic_window(
+                contextual_risk_diagnostic_window
+            )
+        )
     return payload
 
 
@@ -1600,6 +1727,7 @@ def _restore_training_checkpoint(
     expected_scheduler_total_steps=None,
     expected_optimizer_steps_per_epoch=None,
     restore_rng=True,
+    model=None,
 ):
     if require_complete:
         missing = [
@@ -1619,6 +1747,7 @@ def _restore_training_checkpoint(
             expected_optimizer_steps_per_epoch,
         )
     )
+    validated_diagnostic_window = None
     if registered_a3:
         expected = {
             "scheduler_horizon_epochs": expected_scheduler_horizon_epochs,
@@ -1631,6 +1760,8 @@ def _restore_training_checkpoint(
         )
         if "rng_state_by_rank" not in checkpoint:
             missing.append("rng_state_by_rank")
+        if "contextual_risk_diagnostic_window" not in checkpoint:
+            missing.append("contextual_risk_diagnostic_window")
         if missing:
             raise ValueError(
                 "registered A3 resume checkpoint missing " + ", ".join(missing)
@@ -1638,6 +1769,13 @@ def _restore_training_checkpoint(
         for name, value in expected.items():
             if value is not None and int(checkpoint[name]) != int(value):
                 raise ValueError(f"registered A3 resume {name} mismatch")
+        if model is None:
+            raise ValueError(
+                "registered A3 resume requires a model for diagnostic window restore"
+            )
+        validated_diagnostic_window = _validate_contextual_risk_diagnostic_window(
+            checkpoint["contextual_risk_diagnostic_window"]
+        )
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     if "scheduler_state_dict" in checkpoint:
         if scheduler is None:
@@ -1645,6 +1783,10 @@ def _restore_training_checkpoint(
         scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
     if registered_a3 and restore_rng:
         _restore_rng_state_for_current_rank(checkpoint["rng_state_by_rank"])
+    if registered_a3:
+        _restore_contextual_risk_diagnostic_window(
+            model, validated_diagnostic_window
+        )
     return int(checkpoint["epoch"]) + 1, int(checkpoint.get("global_step", 0))
 
 
@@ -1772,6 +1914,11 @@ def save_model(
         scheduler_total_steps=scheduler_total_steps,
         optimizer_steps_per_epoch=optimizer_steps_per_epoch,
         rng_state_by_rank=rng_state_by_rank,
+        contextual_risk_diagnostic_window=(
+            _snapshot_contextual_risk_diagnostic_window(model)
+            if a3_only
+            else None
+        ),
     )
     if a3_only:
         missing_registration = [
@@ -2053,6 +2200,81 @@ def _contextual_risk_window_state(model):
         }
         inner._contextual_risk_diagnostic_window = state
     return state
+
+
+def _validate_contextual_risk_diagnostic_window(state):
+    """Validate and normalize the complete continuation-sensitive A3 window."""
+
+    required = {
+        "term_sums",
+        "term_count",
+        "gradient_total",
+        "optimizer_steps",
+        "zero_gradient_windows",
+    }
+    if not isinstance(state, dict) or set(state) != required:
+        raise ValueError("A3 diagnostic window has an invalid schema")
+    term_sums = state["term_sums"]
+    if not isinstance(term_sums, dict) or any(
+        not isinstance(name, str) or not name.startswith("contextual_risk_")
+        for name in term_sums
+    ):
+        raise ValueError("A3 diagnostic window term_sums is invalid")
+    normalized_sums = {}
+    for name, value in term_sums.items():
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                "A3 diagnostic window term_sums contains a non-numeric value"
+            ) from exc
+        if not math.isfinite(numeric) or numeric < 0.0:
+            raise ValueError("A3 diagnostic window term_sums is non-finite or negative")
+        normalized_sums[name] = numeric
+
+    normalized = {"term_sums": normalized_sums}
+    for name in ("term_count", "optimizer_steps", "zero_gradient_windows"):
+        value = state[name]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"A3 diagnostic window {name} is invalid")
+        normalized[name] = int(value)
+    try:
+        gradient_total = float(state["gradient_total"])
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            "A3 diagnostic window gradient_total is non-numeric"
+        ) from exc
+    if not math.isfinite(gradient_total) or gradient_total < 0.0:
+        raise ValueError("A3 diagnostic window gradient_total is invalid")
+    normalized["gradient_total"] = gradient_total
+    if normalized["optimizer_steps"] >= 20:
+        raise ValueError("A3 diagnostic window optimizer_steps must be below 20")
+    if normalized["zero_gradient_windows"] > 1:
+        raise ValueError("A3 diagnostic window consecutive zero count is invalid")
+    if normalized["term_count"] == 0 and normalized_sums:
+        raise ValueError("A3 diagnostic window has sums without terms")
+    if normalized["term_count"] > 0 and not normalized_sums:
+        raise ValueError("A3 diagnostic window has terms without sums")
+    if normalized["term_count"] != normalized["optimizer_steps"]:
+        raise ValueError("A3 diagnostic window term and optimizer counts differ")
+    if normalized["optimizer_steps"] == 0 and gradient_total != 0.0:
+        raise ValueError("A3 diagnostic window has gradients without steps")
+    return normalized
+
+
+def _snapshot_contextual_risk_diagnostic_window(model):
+    return copy.deepcopy(
+        _validate_contextual_risk_diagnostic_window(
+            _contextual_risk_window_state(model)
+        )
+    )
+
+
+def _restore_contextual_risk_diagnostic_window(model, state):
+    inner = model.module if hasattr(model, "module") else model
+    inner._contextual_risk_diagnostic_window = copy.deepcopy(
+        _validate_contextual_risk_diagnostic_window(state)
+    )
 
 
 def _accumulate_contextual_risk_window(model, terms):
@@ -4884,6 +5106,8 @@ def main():
     import torch.distributed as dist
 
     args = get_args()
+    _assert_registered_a3_initial_environment(args)
+    _preflight_registered_a3_clip_asset(args, verify_load=False)
     initial_git_state = collect_git_state(Path(__file__).resolve().parent)
     if bool(getattr(args, "contextual_risk_sidecar_only", False)) and bool(
         initial_git_state.get("dirty", False)
@@ -4906,6 +5130,14 @@ def main():
             args.data_path,
             args.test_csv,
         )
+        if bool(getattr(args, "contextual_risk_sidecar_only", False)):
+            generated_csv = validate_generated_split_files(
+                manifest,
+                args.data_path,
+                args.train_csv,
+                args.val_csv,
+            )
+            split_summary = {**split_summary, "generated_csv": generated_csv}
 
     if "LOCAL_RANK" in os.environ:
         args.local_rank = int(os.environ["LOCAL_RANK"])
@@ -4918,7 +5150,6 @@ def main():
         dist.init_process_group(backend="nccl", timeout=datetime.timedelta(minutes=120))
         pass  # process group initialized
 
-    _assert_registered_a3_initial_environment(args)
     args = set_seed_logger(args)
     device, n_gpu = init_device(args, args.local_rank)
     args.pin_memory = torch.cuda.is_available()
@@ -5115,6 +5346,7 @@ def main():
                     if a3_only
                     else None
                 ),
+                model=model if a3_only else None,
             )
 
         if args.local_rank == 0:

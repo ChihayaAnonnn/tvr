@@ -216,6 +216,10 @@ def test_experiment_manifest_records_complete_contextual_risk_contract(tmp_path)
         output_dir=str(tmp_path / "run"),
         seed=0,
         fp16=False,
+        registered_clip_asset_path="/common/.cache/ViT-B-16.pt",
+        registered_clip_asset_sha256=(
+            "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f"
+        ),
     )
     split = {
         "protocol_version": "trusted-v1",
@@ -255,6 +259,15 @@ def test_experiment_manifest_records_complete_contextual_risk_contract(tmp_path)
         "optimizer_steps_per_epoch": 10,
         "scheduler_total_optimizer_steps": 50,
     }
+    assert a3["canonical_clip"] == {
+        "path": "/common/.cache/ViT-B-16.pt",
+        "sha256": (
+            "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f"
+        ),
+    }
+    assert a3["split_identity"]["generated_csv"] == split.get(
+        "generated_csv"
+    )
     assert a3["thresholds"] == {
         "directional_rho_min": 0.20,
         "directional_auroc_ci_low_strictly_greater_than": 0.50,
@@ -323,6 +336,13 @@ def test_contextual_resume_rejects_any_immutable_manifest_change(tmp_path):
     batch_changed["batch"]["world_size"] = 8
     with pytest.raises(ValueError, match="immutable A3 manifest"):
         validate_contextual_risk_resume_manifest(original, batch_changed)
+
+    csv_changed = copy.deepcopy(original)
+    csv_changed["split"]["generated_csv"] = {
+        "val_csv": {"path": "/data/val.csv", "sha256": "0" * 64}
+    }
+    with pytest.raises(ValueError, match="immutable A3 manifest"):
+        validate_contextual_risk_resume_manifest(original, csv_changed)
 
 
 @pytest.mark.parametrize(

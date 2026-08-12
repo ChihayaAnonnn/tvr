@@ -510,20 +510,24 @@ class CLIP(nn.Module):
             nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
 
     @staticmethod
-    def get_config(pretrained_clip_name):
+    def get_config(pretrained_clip_name, model_path=None):
         # model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "RN50.pt")
-        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), _PT_NAME[pretrained_clip_name])
+        explicit_model_path = model_path
+        model_path = model_path or os.path.join(os.path.dirname(os.path.abspath(__file__)), _PT_NAME[pretrained_clip_name])
 
         # import pdb; pdb.set_trace()
 
 
-        if pretrained_clip_name in _MODELS and pretrained_clip_name in _PT_NAME:
+        if explicit_model_path is None and pretrained_clip_name in _MODELS and pretrained_clip_name in _PT_NAME:
             model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), _PT_NAME[pretrained_clip_name])
 
 
         # import pdb; pdb.set_trace()
 
-        if pretrained_clip_name in ["ViT-B/32", "ViT-B/16", "ViT-L/14", "ViT-L/14-336"] and os.path.exists(model_path):
+        if explicit_model_path is not None:
+            if not os.path.isfile(model_path):
+                raise RuntimeError(f"Explicit CLIP model path is not a file: {model_path}")
+        elif pretrained_clip_name in ["ViT-B/32", "ViT-B/16", "ViT-L/14", "ViT-L/14-336"] and os.path.exists(model_path):
             pass
         else:
             if pretrained_clip_name in _MODELS:
