@@ -36,7 +36,11 @@ test_sealed:
   default: true
   datasets: [msrvtt, msvd]
   authorize_only_after: final_configuration_frozen
-  retry_policy: identical_manifest_after_recorded_infrastructure_failure
+  retry_policy:
+    terminal_in_place_retry: forbidden
+    authorized_successor: subsequent_phase_with_new_unique_run_id
+    predecessor_lineage: parent_run_ids
+    authorization_reason: selection_lineage
 
 hardware_policy:
   required_gpu_model: A800
