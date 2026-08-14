@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Experiment scalar metrics",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "split", "metrics", "array_references"],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1}, "split": {"type": "string", "enum": ["train", "validation", "test"]},
+    "metrics": {"type": "object", "additionalProperties": {"type": "number"}},
+    "array_references": {"type": "array", "items": {"$ref": "#/$defs/arrayReference"}}
+  },
+  "$defs": {"arrayReference": {"type": "object", "additionalProperties": false, "required": ["path", "key", "shape", "dtype", "sha256"], "properties": {"path": {"type": "string", "pattern": "^arrays/"}, "key": {"type": "string"}, "shape": {"type": "array", "items": {"type": "integer", "minimum": 0}}, "dtype": {"type": "string"}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}}
+}

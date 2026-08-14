@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Experiment runtime status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "state", "timestamp_utc", "worker_pid", "host", "manifest_sha256", "exit_code"],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "state": {"type": "string", "enum": ["reserved", "running", "validating", "completed", "failed", "cancelled"]},
+    "timestamp_utc": {"type": "string", "format": "date-time"},
+    "worker_pid": {"type": "integer", "minimum": 0}, "host": {"type": "string", "minLength": 1},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "exit_code": {"type": ["integer", "null"]}
+  }
+}
