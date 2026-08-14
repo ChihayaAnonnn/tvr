@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+import json
 import logging
 from types import SimpleNamespace
 
@@ -8,6 +9,7 @@ import torch
 from torch import nn
 
 import main_task_retrieval as retrieval
+from experiment_artifacts import ArtifactArrayStore, validate_artifact_json_payload
 from modules.modeling_mulit import UATVR as FullUATVR
 from prob_models.contextual_retrieval_risk import (
     ContextualRetrievalRiskSidecar,
@@ -176,6 +178,36 @@ class _OneBatchLoader(list):
     dataset = _MultiSentenceDataset()
 
 
+def test_a3_artifact_evidence_externalizes_every_query_array(tmp_path):
+    raw_wti = np.array(
+        [[5.0, 0.0, 0.0], [5.0, 4.0, 0.0], [0.0, 0.0, 5.0], [6.0, 0.0, 5.0]],
+        dtype=np.float32,
+    )
+    store = ArtifactArrayStore(tmp_path / "arrays")
+
+    _, evidence = retrieval._compute_contextual_retrieval_risk_metrics(
+        model=_RecordingContextualModel(with_a1=True),
+        risk_similarity_matrix=raw_wti,
+        positive_mask=np.asarray(
+            [[True, False, False], [False, True, False], [False, False, True], [False, False, True]]
+        ),
+        text_means=torch.ones(4, 2),
+        video_means=torch.ones(3, 2),
+        directions=("t2v", "v2t"),
+        device=torch.device("cpu"),
+        bootstrap_samples=0,
+        return_evidence=True,
+        artifact_array_store=store,
+    )
+
+    assert "path" in evidence["raw_wti"]
+    assert "path" in evidence["failure_risk"]["t2v"]
+    assert evidence["array_metadata"]["raw_wti"] == evidence["raw_wti"]
+    assert "failure_risk_arrays" not in evidence
+    assert len(json.dumps(evidence).encode()) < 1_048_576
+    validate_artifact_json_payload(evidence)
+
+
 def test_a2_eval_paired_digest_keeps_pre_a3_schema(monkeypatch):
     raw_wti = np.array(
         [[5.0, 0.0, 0.0], [5.0, 4.0, 0.0], [0.0, 0.0, 5.0], [6.0, 0.0, 5.0]],
@@ -232,7 +264,7 @@ def test_a2_eval_paired_digest_keeps_pre_a3_schema(monkeypatch):
 
 @pytest.mark.parametrize("with_a1", [True, False])
 def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(
-    monkeypatch, with_a1
+    monkeypatch, with_a1, tmp_path
 ):
     raw_wti = np.array(
         [[5.0, 0.0, 0.0], [5.0, 4.0, 0.0], [0.0, 0.0, 5.0], [6.0, 0.0, 5.0]],
@@ -341,6 +373,26 @@ def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(
     assert set(result["contextual_risk"]) == {"t2v", "v2t"}
     assert result["contextual_risk"]["t2v"]["num_failures"] == 2
     assert result["contextual_risk"]["v2t"]["num_failures"] == 1
+
+    artifact_result = retrieval.eval_epoch(
+        args,
+        model,
+        _OneBatchLoader([batch]),
+        torch.device("cpu"),
+        n_gpu=1,
+        artifact_array_store=ArtifactArrayStore(tmp_path / "arrays"),
+    )
+    artifact_evidence = artifact_result["contextual_risk_evidence"]
+    for name in ("raw_wti", "text_means", "video_means", "positive_mask"):
+        assert "path" in artifact_evidence[name]
+        assert artifact_evidence[name] == artifact_evidence["array_metadata"][name]
+    for name in ("failure_risk", "retrieval_scores"):
+        assert "path" in artifact_evidence[name]["t2v"]
+    if with_a1:
+        for name in ("a1_failure_risk", "a1_vacuity"):
+            assert "path" in artifact_evidence[name]["t2v"]
+    assert len(json.dumps(artifact_evidence).encode()) < 1_048_576
+    validate_artifact_json_payload(artifact_evidence)
 
 
 def test_full_model_contextual_aux_is_independent_of_csd_and_legacy_is_unchanged():

@@ -17,6 +17,8 @@ import subprocess
 import tempfile
 from typing import Mapping
 
+import numpy as np
+
 
 ALLOWED_STAGES: frozenset[str] = frozenset(
     {
@@ -138,6 +140,299 @@ class RunManifest:
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+_MAX_ARTIFACT_JSON_BYTES = 1024 * 1024
+
+
+@dataclass(frozen=True)
+class ArrayReference:
+    """Small, JSON-safe pointer to an immutable numeric artifact."""
+
+    path: str
+    key: str
+    shape: tuple[int, ...]
+    dtype: str
+    byte_size: int
+    format: str
+    sha256: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "path": self.path,
+            "key": self.key,
+            "shape": list(self.shape),
+            "dtype": self.dtype,
+            "byte_size": self.byte_size,
+            "format": self.format,
+            "sha256": self.sha256,
+        }
+
+
+def _array_sha256(array: object) -> str:
+    """Hash dtype, shape, and contiguous bytes (the protocol convention)."""
+
+    value = np.ascontiguousarray(np.asarray(array))
+    digest = hashlib.sha256()
+    digest.update(str(value.dtype).encode("ascii"))
+    digest.update(np.asarray(value.shape, dtype=np.int64).tobytes())
+    digest.update(value.tobytes())
+    return digest.hexdigest()
+
+
+def _validate_numeric_array(value: object) -> np.ndarray:
+    array = np.ascontiguousarray(np.asarray(value))
+    if array.dtype.hasobject:
+        raise ValueError("artifact arrays must reject object dtype")
+    if not (np.issubdtype(array.dtype, np.number) or np.issubdtype(array.dtype, np.bool_)):
+        raise ValueError("artifact arrays must have numeric or boolean dtype")
+    if np.issubdtype(array.dtype, np.inexact) and not bool(np.isfinite(array).all()):
+        raise ValueError("artifact arrays must reject non-finite values")
+    return array
+
+
+def _safe_array_key(value: object) -> str:
+    if not isinstance(value, str) or not _SAFE_NAME.fullmatch(value) or ".." in value:
+        raise ValueError("array key must be a safe semantic name")
+    return value
+
+
+def _array_reference_from_mapping(value: ArrayReference | Mapping[str, object]) -> ArrayReference:
+    if isinstance(value, ArrayReference):
+        return value
+    if not isinstance(value, Mapping):
+        raise ValueError("array reference must be an object")
+    expected = {"path", "key", "shape", "dtype", "byte_size", "format", "sha256"}
+    if set(value) != expected:
+        raise ValueError("array reference has unexpected fields")
+    path = value["path"]
+    if not isinstance(path, str) or not path:
+        raise ValueError("array reference path must be a non-empty relative path")
+    _safe_array_key(value["key"])
+    shape = value["shape"]
+    if not isinstance(shape, list) or any(
+        isinstance(item, bool) or not isinstance(item, int) or item < 0
+        for item in shape
+    ):
+        raise ValueError("array reference shape must contain non-negative integers")
+    dtype = value["dtype"]
+    try:
+        parsed_dtype = np.dtype(dtype)
+    except TypeError as exc:
+        raise ValueError("array reference dtype is invalid") from exc
+    if parsed_dtype.hasobject or not (
+        np.issubdtype(parsed_dtype, np.number) or np.issubdtype(parsed_dtype, np.bool_)
+    ):
+        raise ValueError("array reference dtype is unsafe")
+    byte_size = value["byte_size"]
+    if isinstance(byte_size, bool) or not isinstance(byte_size, int) or byte_size < 0:
+        raise ValueError("array reference byte_size must be a non-negative integer")
+    if value["format"] != "npy":
+        raise ValueError("array reference format must be npy")
+    _require_sha256(value["sha256"], "array reference sha256")
+    return ArrayReference(
+        path=path,
+        key=str(value["key"]),
+        shape=tuple(shape),
+        dtype=str(parsed_dtype),
+        byte_size=byte_size,
+        format="npy",
+        sha256=str(value["sha256"]),
+    )
+
+
+class ArtifactArrayStore:
+    """Content-addressed NPY store rooted at one artifact run's arrays dir."""
+
+    def __init__(self, array_dir: PathLike[str] | str):
+        root = _canonical_absolute_path(array_dir, "array_dir")
+        if root.name != "arrays":
+            raise ValueError("array_dir must be the canonical arrays directory")
+        self.root = root
+        self.root.mkdir(parents=True, exist_ok=True)
+        _assert_no_symlink_components(self.root)
+        root_info = self.root.lstat()
+        if not stat.S_ISDIR(root_info.st_mode) or stat.S_ISLNK(root_info.st_mode):
+            raise ValueError("array_dir must be a real directory")
+
+    def _reference_for(self, key: str, array: np.ndarray) -> ArrayReference:
+        digest = _array_sha256(array)
+        return ArrayReference(
+            path=(Path(self.root.name) / "sha256" / digest[:2] / f"{digest}.npy").as_posix(),
+            key=key,
+            shape=tuple(int(item) for item in array.shape),
+            dtype=str(array.dtype),
+            byte_size=int(array.nbytes),
+            format="npy",
+            sha256=digest,
+        )
+
+    def write(self, key: str, values: object) -> ArrayReference:
+        """Atomically publish one finite numeric array, deduplicated by content."""
+
+        key = _safe_array_key(key)
+        array = _validate_numeric_array(values)
+        reference = self._reference_for(key, array)
+        target = self.root / "sha256" / reference.sha256[:2] / f"{reference.sha256}.npy"
+        _assert_no_symlink_components(target.parent)
+        if target.exists():
+            verify_array_reference(self.root.parent, reference)
+            return reference
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _assert_no_symlink_components(target.parent)
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=target.parent, prefix=f".{target.name}.", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                np.save(handle, array, allow_pickle=False)
+                handle.flush()
+                os.fsync(handle.fileno())
+            # The content address makes replacement idempotent.  A reader sees
+            # either a complete old NPY or this complete fsynced NPY, never a part.
+            os.replace(temporary_name, target)
+            _fsync_directory(target.parent)
+        except BaseException:
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
+            raise
+        verify_array_reference(self.root.parent, reference)
+        return reference
+
+
+def _reference_file_path(artifact_root: PathLike[str] | str, reference: ArrayReference) -> Path:
+    try:
+        root = _canonical_absolute_path(artifact_root, "artifact root")
+        _assert_no_symlink_components(root)
+    except ValueError as exc:
+        raise ValueError("artifact root must be an existing real absolute directory") from exc
+    if not root.exists() or root.is_symlink():
+        raise ValueError("artifact root must be an existing real absolute directory")
+    parts = Path(reference.path).parts
+    if not parts or Path(reference.path).is_absolute() or ".." in parts:
+        raise ValueError("array reference path traversal is forbidden")
+    relative = Path(reference.path)
+    expected = Path("arrays") / "sha256" / reference.sha256[:2] / f"{reference.sha256}.npy"
+    if root.name == "arrays":
+        if parts[0] != "arrays":
+            raise ValueError("array reference path must be rooted at arrays")
+        relative = Path(*parts[1:])
+        expected = expected.relative_to("arrays")
+    if relative != expected:
+        raise ValueError("array reference path is not canonical content-addressed storage")
+    candidate = root / relative
+    _assert_no_symlink_components(candidate)
+    try:
+        info = candidate.lstat()
+    except FileNotFoundError as exc:
+        raise ValueError("array reference file is missing") from exc
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_nlink != 1:
+        raise ValueError("array reference file is not a private regular file")
+    return candidate
+
+
+def verify_array_reference(
+    artifact_root: PathLike[str] | str, reference: ArrayReference | Mapping[str, object]
+) -> np.ndarray:
+    """Load a referenced NPY without pickle and fail closed on any mismatch."""
+
+    normalized = _array_reference_from_mapping(reference)
+    path = _reference_file_path(artifact_root, normalized)
+    expected_bytes = int(np.prod(normalized.shape, dtype=object)) * np.dtype(normalized.dtype).itemsize
+    if expected_bytes != normalized.byte_size:
+        raise ValueError("array reference shape and byte_size disagree")
+    file_size = path.stat().st_size
+    if file_size < normalized.byte_size or file_size > normalized.byte_size + 10_000:
+        raise ValueError("array reference file size is inconsistent with safe NPY storage")
+    try:
+        with path.open("rb") as handle:
+            array = np.load(handle, allow_pickle=False, max_header_size=10_000)
+    except (OSError, ValueError) as exc:
+        raise ValueError("array reference is not a safe NPY payload") from exc
+    if not isinstance(array, np.ndarray):
+        raise ValueError("array reference NPY did not contain an array")
+    array = _validate_numeric_array(array)
+    if str(array.dtype) != normalized.dtype:
+        raise ValueError("array reference dtype mismatch")
+    if tuple(array.shape) != normalized.shape:
+        raise ValueError("array reference shape mismatch")
+    if int(array.nbytes) != normalized.byte_size:
+        raise ValueError("array reference byte_size mismatch")
+    if _array_sha256(array) != normalized.sha256:
+        raise ValueError("array reference SHA-256 mismatch")
+    return array
+
+
+def _tensor_to_numpy(value: object) -> np.ndarray | None:
+    detach = getattr(value, "detach", None)
+    if not callable(detach):
+        return None
+    cpu = detach().cpu()
+    numpy = getattr(cpu, "numpy", None)
+    return np.asarray(numpy()) if callable(numpy) else None
+
+
+def externalize_numeric_payload(
+    payload: object,
+    store: ArtifactArrayStore,
+    *,
+    semantic_key: str = "payload",
+) -> object:
+    """Copy a JSON-shaped payload while replacing numeric arrays with pointers."""
+
+    _safe_array_key(semantic_key)
+
+    def visit(value: object, path: tuple[str, ...]) -> object:
+        array = _tensor_to_numpy(value)
+        if array is None and isinstance(value, np.ndarray):
+            array = value
+        if array is not None:
+            key = ".".join(path) if path else semantic_key
+            return store.write(key, array).as_dict()
+        if isinstance(value, Mapping):
+            converted: dict[str, object] = {}
+            for key, child in value.items():
+                if not isinstance(key, str):
+                    raise ValueError("artifact JSON mapping keys must be strings")
+                converted[key] = visit(child, path + (key,))
+            return converted
+        if isinstance(value, (list, tuple)):
+            return [visit(child, path + (str(index),)) for index, child in enumerate(value)]
+        if isinstance(value, np.generic):
+            return value.item()
+        return value
+
+    return visit(payload, (semantic_key,))
+
+
+def validate_artifact_json_payload(payload: object) -> None:
+    """Reject in-memory payloads that cannot safely be a small artifact JSON."""
+
+    def visit(value: object, path: str) -> None:
+        if isinstance(value, np.ndarray) or _tensor_to_numpy(value) is not None:
+            raise ValueError(f"artifact JSON cannot embed numeric array at {path}")
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            if len(value) > _MAX_ARTIFACT_JSON_BYTES:
+                raise ValueError(f"artifact JSON byte string over 1 MiB at {path}")
+            raise ValueError(f"artifact JSON cannot embed byte strings at {path}")
+        if isinstance(value, Mapping):
+            for key, child in value.items():
+                if not isinstance(key, str):
+                    raise ValueError(f"artifact JSON key at {path} must be a string")
+                visit(child, f"{path}.{key}" if path else key)
+        elif isinstance(value, (list, tuple)):
+            for index, child in enumerate(value):
+                visit(child, f"{path}[{index}]")
+
+    visit(payload, "")
+    try:
+        encoded = json.dumps(payload, ensure_ascii=True, allow_nan=False, separators=(",", ":")).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("artifact JSON payload is not strict JSON") from exc
+    if len(encoded) >= _MAX_ARTIFACT_JSON_BYTES:
+        raise ValueError("artifact JSON document must remain below 1 MiB")
 
 
 _RUN_PATH_RELATIVE_NAMES = {

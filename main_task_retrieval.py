@@ -24,6 +24,10 @@ from dataloaders.msrvtt_protocol import (
     validate_generated_split_files,
     validate_trusted_manifest,
 )
+from experiment_artifacts import (
+    validate_artifact_json_payload,
+    verify_array_reference,
+)
 from experiment_tracking import (
     CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT,
     CONTEXTUAL_RISK_CANONICAL_A1_SHA256,
@@ -3203,6 +3207,7 @@ def _compute_retrieval_risk_metrics(
     return_array_digests=False,
     return_array_evidence=False,
     canonical_cpu_replay=False,
+    artifact_array_store=None,
 ):
     """Score the complete candidate matrix without mutating retrieval inputs."""
 
@@ -3252,14 +3257,28 @@ def _compute_retrieval_risk_metrics(
                 "vacuity": array_sha256(vacuity),
             }
             if return_array_evidence:
-                array_digests[direction].update({
-                    "failure_risk_values": failure_risk.tolist(),
-                    "failure_risk_dtype": str(failure_risk.dtype),
-                    "failure_risk_shape": list(failure_risk.shape),
-                    "vacuity_values": vacuity.tolist(),
-                    "vacuity_dtype": str(vacuity.dtype),
-                    "vacuity_shape": list(vacuity.shape),
-                })
+                if artifact_array_store is not None:
+                    failure_reference = artifact_array_store.write(
+                        f"a1_failure_risk.{direction}", failure_risk
+                    ).as_dict()
+                    vacuity_reference = artifact_array_store.write(
+                        f"a1_vacuity.{direction}", vacuity
+                    ).as_dict()
+                    array_digests[direction].update({
+                        "failure_risk_values": failure_reference,
+                        "failure_risk_metadata": failure_reference,
+                        "vacuity_values": vacuity_reference,
+                        "vacuity_metadata": vacuity_reference,
+                    })
+                else:
+                    array_digests[direction].update({
+                        "failure_risk_values": failure_risk.tolist(),
+                        "failure_risk_dtype": str(failure_risk.dtype),
+                        "failure_risk_shape": list(failure_risk.shape),
+                        "vacuity_values": vacuity.tolist(),
+                        "vacuity_dtype": str(vacuity.dtype),
+                        "vacuity_shape": list(vacuity.shape),
+                    })
     if return_array_digests:
         return payload, array_digests
     return payload
@@ -3276,6 +3295,7 @@ def _compute_contextual_retrieval_risk_metrics(
     device,
     bootstrap_samples=1000,
     return_evidence=False,
+    artifact_array_store=None,
 ):
     """Score A3 once per direction on the complete raw candidate matrix."""
 
@@ -3374,6 +3394,26 @@ def _compute_contextual_retrieval_risk_metrics(
             },
         },
     }
+    if artifact_array_store is not None:
+        evidence["artifact_array_root"] = str(
+            artifact_array_store.root.parent.resolve()
+        )
+        for name, value in (
+            ("raw_wti", raw_wti),
+            ("text_means", text_array),
+            ("video_means", video_array),
+            ("positive_mask", mask_array),
+        ):
+            reference = artifact_array_store.write(name, value).as_dict()
+            evidence[name] = reference
+            evidence["array_metadata"][name] = reference
+        for direction in directions:
+            reference = artifact_array_store.write(
+                f"failure_risk.{direction}", failure_risk_arrays[direction]
+            ).as_dict()
+            evidence["failure_risk"][direction] = reference
+            evidence["array_metadata"]["failure_risk"][direction] = reference
+        validate_artifact_json_payload(evidence)
     return payload, evidence
 
 
@@ -3518,6 +3558,7 @@ def _eval_epoch_impl(
     n_gpu,
     directions=("t2v", "v2t"),
     report_csd_logvar=None,
+    artifact_array_store=None,
 ):
     directions = _normalize_eval_directions(directions)
     if report_csd_logvar is None:
@@ -3812,6 +3853,7 @@ def _eval_epoch_impl(
                 return_array_digests=True,
                 return_array_evidence=report_contextual_risk,
                 canonical_cpu_replay=report_contextual_risk,
+                artifact_array_store=artifact_array_store,
             )
         )
         for direction in directions:
@@ -3848,6 +3890,7 @@ def _eval_epoch_impl(
                 args, "contextual_risk_bootstrap_samples", 1000
             ),
             return_evidence=True,
+            artifact_array_store=artifact_array_store,
         )
         a3_evidence = result["contextual_risk_evidence"]
         contextual_sidecar = getattr(model, "contextual_risk_sidecar", None)
@@ -3871,20 +3914,24 @@ def _eval_epoch_impl(
                 direction: risk_array_digests[direction]["vacuity_values"]
                 for direction in directions
             }
-            a3_evidence["array_metadata"]["a1_failure_risk"] = {
-                direction: {
-                    "dtype": risk_array_digests[direction]["failure_risk_dtype"],
-                    "shape": risk_array_digests[direction]["failure_risk_shape"],
-                    "sha256": risk_array_digests[direction]["failure_risk"],
+
+            def _a1_array_metadata(direction, name):
+                stored = risk_array_digests[direction]
+                reference = stored.get(f"{name}_metadata")
+                if reference is not None:
+                    return reference
+                return {
+                    "dtype": stored[f"{name}_dtype"],
+                    "shape": stored[f"{name}_shape"],
+                    "sha256": stored[name],
                 }
+
+            a3_evidence["array_metadata"]["a1_failure_risk"] = {
+                direction: _a1_array_metadata(direction, "failure_risk")
                 for direction in directions
             }
             a3_evidence["array_metadata"]["a1_vacuity"] = {
-                direction: {
-                    "dtype": risk_array_digests[direction]["vacuity_dtype"],
-                    "shape": risk_array_digests[direction]["vacuity_shape"],
-                    "sha256": risk_array_digests[direction]["vacuity"],
-                }
+                direction: _a1_array_metadata(direction, "vacuity")
                 for direction in directions
             }
             a1_sidecar = getattr(model, "retrieval_risk_sidecar", None)
@@ -3898,18 +3945,28 @@ def _eval_epoch_impl(
             "t2v": np.asarray(metric_t2v_matrix),
             "v2t": np.asarray(metric_v2t_matrix),
         }
-        a3_evidence["retrieval_scores"] = {
-            direction: retrieval_score_arrays[direction].tolist()
-            for direction in directions
-        }
-        a3_evidence["array_metadata"]["retrieval_scores"] = {
-            direction: {
-                "dtype": str(retrieval_score_arrays[direction].dtype),
-                "shape": list(retrieval_score_arrays[direction].shape),
-                "sha256": array_sha256(retrieval_score_arrays[direction]),
+        if artifact_array_store is None:
+            a3_evidence["retrieval_scores"] = {
+                direction: retrieval_score_arrays[direction].tolist()
+                for direction in directions
             }
-            for direction in directions
-        }
+            a3_evidence["array_metadata"]["retrieval_scores"] = {
+                direction: {
+                    "dtype": str(retrieval_score_arrays[direction].dtype),
+                    "shape": list(retrieval_score_arrays[direction].shape),
+                    "sha256": array_sha256(retrieval_score_arrays[direction]),
+                }
+                for direction in directions
+            }
+        else:
+            references = {
+                direction: artifact_array_store.write(
+                    f"retrieval_scores.{direction}", retrieval_score_arrays[direction]
+                ).as_dict()
+                for direction in directions
+            }
+            a3_evidence["retrieval_scores"] = references
+            a3_evidence["array_metadata"]["retrieval_scores"] = references
         a3_evidence["retrieval_config"] = {
             "directions": list(directions),
             "cut_off_points": (
@@ -3931,6 +3988,8 @@ def _eval_epoch_impl(
                 contextual_metrics["failure_auroc"]["value"],
                 contextual_metrics["aurc"],
             )
+        if artifact_array_store is not None:
+            validate_artifact_json_payload(a3_evidence)
     if report_csd_logvar:
         assert intrinsic is not None
         result["csd_logvar"] = _compute_csd_logvar_metrics(
@@ -3962,6 +4021,7 @@ def eval_epoch(
     n_gpu,
     directions=("t2v", "v2t"),
     report_csd_logvar=None,
+    artifact_array_store=None,
 ):
     """Evaluate with exact FP32 backend flags held through A3 scoring."""
 
@@ -3974,6 +4034,7 @@ def eval_epoch(
             n_gpu,
             directions=directions,
             report_csd_logvar=report_csd_logvar,
+            artifact_array_store=artifact_array_store,
         )
 
 
@@ -4008,6 +4069,23 @@ def _contextual_evidence_array(evidence, name, direction=None):
         "retrieval_scores": np.dtype("float32"),
     }
     expected_dtype = expected_dtypes[name]
+    if isinstance(values, dict) and "path" in values:
+        artifact_root = evidence.get("artifact_array_root")
+        if not isinstance(artifact_root, str):
+            raise ValueError("A3 external array evidence is missing its artifact root")
+        array = verify_array_reference(artifact_root, values)
+        if values != metadata:
+            raise ValueError("A3 external array metadata differs from its reference")
+        if array.dtype != expected_dtype:
+            raise ValueError(
+                f"A3 evidence {name} dtype must be {expected_dtype}, got {array.dtype}"
+            )
+        legacy_sha = evidence.get("sha256", {}).get(name)
+        if direction is not None and isinstance(legacy_sha, dict):
+            legacy_sha = legacy_sha.get(direction)
+        if legacy_sha is not None and legacy_sha != array_sha256(array):
+            raise ValueError(f"A3 evidence {name} legacy SHA-256 mismatch")
+        return array
     dtype = np.dtype(metadata["dtype"])
     if dtype != expected_dtype:
         raise ValueError(
@@ -4059,7 +4137,7 @@ def _registered_retrieval_config(positive_mask, *, dsl, dsl_temperature):
 def _registered_a3_head_configs(args, evidence):
     """Return immutable sidecar construction settings from registered args."""
 
-    text_means = np.asarray(evidence["text_means"])
+    text_means = _contextual_evidence_array(evidence, "text_means")
     if text_means.ndim != 2:
         raise ValueError("A3 text means must be two-dimensional")
     return {
@@ -4592,6 +4670,7 @@ def _regenerate_contextual_risk_baseline(
         device,
         n_gpu,
         report_csd_logvar=False,
+        artifact_array_store=getattr(args, "artifact_array_store", None),
     )
     return {
         "reference_checkpoint": str(Path(reference_checkpoint).resolve()),
@@ -4717,7 +4796,7 @@ def _initialize_contextual_risk_protocol(
         if not isinstance(baseline_evidence, dict):
             raise ValueError("A3 continuation baseline complete evidence is missing")
         expected_retrieval_config = _registered_retrieval_config(
-            np.asarray(baseline_evidence["positive_mask"], dtype=bool),
+            _contextual_evidence_array(baseline_evidence, "positive_mask"),
             dsl=bool(getattr(args, "DSL", False)),
             dsl_temperature=float(getattr(args, "dsl_temperature", 1.0)),
         )
@@ -4814,7 +4893,7 @@ def _initialize_contextual_risk_protocol(
         paired_baseline = regenerated_baseline["paired_digest"]
         baseline_evidence = regenerated_baseline["evidence"]
         expected_retrieval_config = _registered_retrieval_config(
-            np.asarray(baseline_evidence["positive_mask"], dtype=bool),
+            _contextual_evidence_array(baseline_evidence, "positive_mask"),
             dsl=bool(getattr(args, "DSL", False)),
             dsl_temperature=float(getattr(args, "dsl_temperature", 1.0)),
         )
@@ -4834,15 +4913,15 @@ def _initialize_contextual_risk_protocol(
             ),
             expected_retrieval_config=expected_retrieval_config,
         )
-        atomic_write_json(
-            baseline_path,
-            {
-                "reference_checkpoint": reference_checkpoint,
-                "reference_checkpoint_sha256": reference_sha256,
-                "paired_digest": paired_baseline,
-                "evidence": baseline_evidence,
-            },
-        )
+        baseline_payload = {
+            "reference_checkpoint": reference_checkpoint,
+            "reference_checkpoint_sha256": reference_sha256,
+            "paired_digest": paired_baseline,
+            "evidence": baseline_evidence,
+        }
+        if "artifact_array_root" in baseline_evidence:
+            validate_artifact_json_payload(baseline_payload)
+        atomic_write_json(baseline_path, baseline_payload)
         candidates = []
         resume_candidate = None
     return {
@@ -4895,6 +4974,8 @@ def _record_contextual_risk_selection(
     )
     candidate["publication_marker"] = str(marker_path.resolve())
     candidate["publication_marker_sha256"] = file_sha256(marker_path)
+    if "artifact_array_root" in candidate["evidence"]:
+        validate_artifact_json_payload(candidate)
     candidates = append_candidate_atomic(candidate_path, candidate)
     validate_candidate_artifacts(
         candidates,
@@ -4909,10 +4990,10 @@ def _record_contextual_risk_selection(
         if "no valid contextual risk checkpoint" not in str(exc):
             raise
         winner = None
-    atomic_write_json(
-        selection_path,
-        _contextual_risk_selection_payload(candidates, winner),
-    )
+    selection_payload = _contextual_risk_selection_payload(candidates, winner)
+    if "artifact_array_root" in candidate["evidence"]:
+        validate_artifact_json_payload(selection_payload)
+    atomic_write_json(selection_path, selection_payload)
     if candidate["non_a3_mismatches"]:
         raise RuntimeError(
             "terminal A3 invariance violation recorded; training is aborted"
@@ -5006,6 +5087,8 @@ def _maybe_run_contextual_risk_final_test(
         os.fsync(handle.fileno())
     try:
         result = run_selected_jsfusion_once(selected)
+        if "artifact_array_root" in selected.get("evidence", {}):
+            validate_artifact_json_payload(result)
         atomic_write_json(final_path, result)
     except Exception as exc:
         atomic_write_json(

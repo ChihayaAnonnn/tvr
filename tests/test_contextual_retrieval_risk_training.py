@@ -9,6 +9,7 @@ import torch
 import numpy as np
 
 import main_task_retrieval
+from experiment_artifacts import ArtifactArrayStore
 from main_task_retrieval import (
     _a3_exact_fp32_backend,
     _a3_training_autocast_enabled,
@@ -142,6 +143,39 @@ def _complete_evidence(rho=0.30, raw="raw"):
         for direction in ("t2v", "v2t")
     }
     return evidence, metrics
+
+
+def test_externalized_a3_evidence_recomputes_from_hash_verified_references(tmp_path):
+    evidence, expected = _complete_evidence()
+    store = ArtifactArrayStore(tmp_path / "arrays")
+    externalized = copy.deepcopy(evidence)
+    externalized["artifact_array_root"] = str(tmp_path)
+    for name in ("raw_wti", "text_means", "video_means", "positive_mask"):
+        reference = store.write(
+            name,
+            np.asarray(evidence[name], dtype=evidence["array_metadata"][name]["dtype"]),
+        ).as_dict()
+        externalized[name] = reference
+        externalized["array_metadata"][name] = reference
+    for name in ("failure_risk", "a1_failure_risk", "a1_vacuity", "retrieval_scores"):
+        for direction in ("t2v", "v2t"):
+            reference = store.write(
+                f"{name}.{direction}",
+                np.asarray(
+                    evidence[name][direction],
+                    dtype=evidence["array_metadata"][name][direction]["dtype"],
+                ),
+            ).as_dict()
+            externalized[name][direction] = reference
+            externalized["array_metadata"][name][direction] = reference
+
+    actual, _ = main_task_retrieval._recompute_contextual_risk_metrics(
+        externalized,
+        bootstrap_samples=0,
+        expected_retrieval_config=externalized["retrieval_config"],
+    )
+
+    assert actual == expected
 
 
 def _paired_digest(raw="raw"):

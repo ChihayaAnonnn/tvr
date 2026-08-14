@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 
+import numpy as np
 import pytest
 from jsonschema import Draft202012Validator
 
@@ -24,6 +25,68 @@ from experiment_artifacts import (
 
 
 REGISTRY = Path("experiments/contextual-risk-v2/registry.jsonl")
+
+
+def test_large_arrays_are_externalized_and_deduplicated(tmp_path):
+    """Array references remain small while content lives once on disk."""
+
+    store = experiment_artifacts.ArtifactArrayStore(tmp_path / "arrays")
+    values = np.arange(2_000_000, dtype=np.float32)
+
+    first = store.write("raw_wti", values)
+    second = store.write("raw_wti_copy", values)
+
+    assert first.sha256 == second.sha256
+    assert first.path == second.path
+    assert len(json.dumps(first.as_dict()).encode()) < 1024
+    np.testing.assert_array_equal(
+        experiment_artifacts.verify_array_reference(tmp_path, first), values
+    )
+
+
+@pytest.mark.parametrize(
+    "values, message",
+    [
+        (np.asarray([1.0, np.nan], dtype=np.float32), "non-finite"),
+        (np.asarray(["unsafe"], dtype=object), "object"),
+    ],
+)
+def test_array_store_rejects_untrusted_array_encodings(tmp_path, values, message):
+    store = experiment_artifacts.ArtifactArrayStore(tmp_path / "arrays")
+
+    with pytest.raises(ValueError, match=message):
+        store.write("raw_wti", values)
+
+
+def test_externalized_payload_rejects_embedded_arrays_and_large_json(tmp_path):
+    store = experiment_artifacts.ArtifactArrayStore(tmp_path / "arrays")
+    payload = {
+        "evidence": {"risk": np.arange(8, dtype=np.float32)},
+        "scalar": 1.0,
+    }
+
+    externalized = experiment_artifacts.externalize_numeric_payload(payload, store)
+
+    assert "path" in externalized["evidence"]["risk"]
+    assert payload["evidence"]["risk"].dtype == np.float32
+    experiment_artifacts.validate_artifact_json_payload(externalized)
+    with pytest.raises(ValueError, match=r"evidence\.risk"):
+        experiment_artifacts.validate_artifact_json_payload(payload)
+    with pytest.raises(ValueError, match="1 MiB"):
+        experiment_artifacts.validate_artifact_json_payload({"large": "x" * (1024 * 1024)})
+
+
+def test_array_reference_rejects_traversal_partial_writes_and_hash_mismatch(tmp_path):
+    store = experiment_artifacts.ArtifactArrayStore(tmp_path / "arrays")
+    reference = store.write("raw_wti", np.arange(32, dtype=np.float32))
+    traversal = reference.as_dict() | {"path": "../escape.npy"}
+    with pytest.raises(ValueError, match="traversal"):
+        experiment_artifacts.verify_array_reference(tmp_path, traversal)
+
+    path = tmp_path / reference.path
+    path.write_bytes(path.read_bytes()[:20])
+    with pytest.raises(ValueError, match="file size"):
+        experiment_artifacts.verify_array_reference(tmp_path, reference)
 
 
 def _manifest_sha256(payload):
