@@ -361,6 +361,26 @@ def test_transition_run_requires_exact_committed_identity(campaign_repo):
     assert "start-run" in bypass.stderr
 
 
+def test_verify_rejects_clean_later_source_commit(campaign_repo):
+    repo, _phase, _artifact_root, payload = _reserve(campaign_repo)
+    run = payload["runs"][0]
+    run_dir = Path(run["artifact_path"])
+    subprocess.run(["git", "add", REGISTRY], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "reserve phase"], cwd=repo, check=True)
+    (repo / "changed_worker.py").write_text("CHANGED = True\n", encoding="utf-8")
+    subprocess.run(["git", "add", "changed_worker.py"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "change worker source"], cwd=repo, check=True)
+
+    failed = _run(
+        repo, "verify-run", "--repo-root", repo, "--registry", REGISTRY,
+        "--run-dir", run_dir, "--run-id", run["run_id"],
+        "--manifest-sha256", run["manifest_sha256"], check=False,
+    )
+
+    assert failed.returncode != 0
+    assert "source" in failed.stderr.lower() or "git_sha" in failed.stderr.lower()
+
+
 def test_verify_run_rejects_command_tampering(campaign_repo):
     repo, _phase, _artifact_root, payload = _reserve(campaign_repo)
     run = payload["runs"][0]
@@ -676,6 +696,104 @@ def test_start_run_repairs_status_written_before_audit_commit(
     assert result["state"] == "running"
     verified = manage.verify_run(args)
     assert verified["state"] == "running"
+
+
+def test_transition_cannot_advance_past_pending_audit_commit(
+    campaign_repo, monkeypatch
+):
+    import experiment_artifacts
+    import scripts.manage_experiment_run as manage
+
+    repo, _phase, _artifact_root, payload = _reserve(campaign_repo)
+    run = payload["runs"][0]
+    subprocess.run(["git", "add", REGISTRY], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "reserve"], cwd=repo, check=True)
+    identity = dict(
+        repo_root=repo, registry=REGISTRY, run_dir=run["artifact_path"],
+        run_id=run["run_id"], manifest_sha256=run["manifest_sha256"],
+    )
+    manage.start_run(SimpleNamespace(**identity))
+    pending_args = SimpleNamespace(
+        **identity, expected="running", next_state="validating",
+        exit_code=None, output=None,
+    )
+    real_append = experiment_artifacts._append_audit_record
+
+    def fail_validating_commit(paths, record):
+        if (
+            record.get("event") == "transition_commit"
+            and record.get("to_state") == "validating"
+        ):
+            raise OSError("validating commit crash")
+        return real_append(paths, record)
+
+    monkeypatch.setattr(
+        experiment_artifacts, "_append_audit_record", fail_validating_commit
+    )
+    with pytest.raises(OSError, match="validating commit crash"):
+        manage.transition_run(pending_args)
+    monkeypatch.setattr(experiment_artifacts, "_append_audit_record", real_append)
+
+    advance_args = SimpleNamespace(
+        **identity, expected="validating", next_state="completed",
+        exit_code=0, output=None,
+    )
+    with pytest.raises(ValueError, match="pending"):
+        manage.transition_run(advance_args)
+
+    repaired = manage.transition_run(pending_args)
+    assert repaired["state"] == "validating"
+    completed = manage.transition_run(advance_args)
+    assert completed["state"] == "completed"
+    assert manage.verify_run(SimpleNamespace(**identity))["state"] == "completed"
+
+
+def test_terminal_transition_repairs_status_written_before_commit(
+    campaign_repo, monkeypatch
+):
+    import experiment_artifacts
+    import scripts.manage_experiment_run as manage
+
+    repo, _phase, _artifact_root, payload = _reserve(campaign_repo)
+    run = payload["runs"][0]
+    subprocess.run(["git", "add", REGISTRY], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "reserve"], cwd=repo, check=True)
+    identity = dict(
+        repo_root=repo, registry=REGISTRY, run_dir=run["artifact_path"],
+        run_id=run["run_id"], manifest_sha256=run["manifest_sha256"],
+    )
+    manage.start_run(SimpleNamespace(**identity))
+    manage.transition_run(SimpleNamespace(
+        **identity, expected="running", next_state="validating",
+        exit_code=None, output=None,
+    ))
+    terminal_args = SimpleNamespace(
+        **identity, expected="validating", next_state="completed",
+        exit_code=0, output=None,
+    )
+    real_append = experiment_artifacts._append_audit_record
+
+    def fail_terminal_commit(paths, record):
+        if (
+            record.get("event") == "transition_commit"
+            and record.get("to_state") == "completed"
+        ):
+            raise OSError("terminal commit crash")
+        return real_append(paths, record)
+
+    monkeypatch.setattr(
+        experiment_artifacts, "_append_audit_record", fail_terminal_commit
+    )
+    with pytest.raises(OSError, match="terminal commit crash"):
+        manage.transition_run(terminal_args)
+    monkeypatch.setattr(experiment_artifacts, "_append_audit_record", real_append)
+
+    with pytest.raises(ValueError, match="matching commit"):
+        manage.verify_run(SimpleNamespace(**identity))
+    repaired = manage.transition_run(terminal_args)
+
+    assert repaired["state"] == "completed"
+    assert manage.verify_run(SimpleNamespace(**identity))["state"] == "completed"
 
 
 def test_finalize_recovers_exact_registry_append_crash_without_duplicate_event(

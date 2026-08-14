@@ -51,7 +51,8 @@ reject_registered_environment_overrides() {
         NCCL_IB_DISABLE NCCL_DEBUG TORCH_WARN_ONCE PYTHONHASHSEED \
         CUBLAS_WORKSPACE_CONFIG SMOKE_STEPS EXPERIMENT_DESC \
         REGISTERED_CLIP_ASSET_PATH REGISTERED_CLIP_ASSET_SHA256 \
-        ARTIFACT_MANIFEST_SHA256; do
+        ARTIFACT_MANIFEST_SHA256 WORKER_GROUP_DRAIN_TIMEOUT_SECONDS \
+        WORKER_GROUP_TERM_TIMEOUT_SECONDS WORKER_GROUP_KILL_TIMEOUT_SECONDS; do
         if [[ -v "${name}" ]]; then
             echo "registered A3 environment ${name} cannot be overridden" >&2
             exit 2
@@ -257,6 +258,12 @@ trap cleanup_reservation EXIT
 publish_artifact_terminal() {
     local controller_status="$1"
     [[ "${ARTIFACT_MODE}" == "1" ]] || return 0
+    if [[ -f "${LOG_FILE}.process-group-drain.txt" ]] \
+       && grep -q 'UNRESOLVED:live-process-group' \
+            "${LOG_FILE}.process-group-drain.txt"; then
+        echo "A3 refuses terminal hashing with an unresolved worker process group" >&2
+        return 2
+    fi
     local verify_json source_state terminal_state
     if [[ "${controller_status}" == "0" ]]; then
         source_state="validating"
@@ -357,6 +364,9 @@ NCCL_IB_DISABLE=1 \
 NCCL_DEBUG=WARN \
 NCCL_ASYNC_ERROR_HANDLING=1 \
 TORCH_WARN_ONCE=1 \
+WORKER_GROUP_DRAIN_TIMEOUT_SECONDS=30 \
+WORKER_GROUP_TERM_TIMEOUT_SECONDS=10 \
+WORKER_GROUP_KILL_TIMEOUT_SECONDS=5 \
 MASTER_ADDR=127.0.0.9 \
 MASTER_PORT=29547 \
 DATA_PATH=/data2/hxj/data/MSRVTT \

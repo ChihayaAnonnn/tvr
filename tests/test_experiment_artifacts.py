@@ -456,7 +456,17 @@ def test_worker_requires_exact_committed_reservation(tmp_path):
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _init_git_repo(repo_root)
-    manifest = _manifest(artifact_path=str(tmp_path / "artifact"))
+    source_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    manifest = _manifest(
+        artifact_path=str(tmp_path / "artifact"), git_sha=source_sha,
+        run_id=(
+            "msrvtt-baseline-reference-seed000-20260814T020304Z-"
+            f"{source_sha[:12]}"
+        ),
+    )
     _write_run_local_manifest(manifest)
     append_registry_records(repo_root / REGISTRY, [_reservation_record(manifest)])
     subprocess.run(["git", "add", REGISTRY.as_posix()], cwd=repo_root, check=True)
@@ -476,7 +486,17 @@ def test_worker_rejects_missing_or_uncommitted_reservation(tmp_path):
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _init_git_repo(repo_root)
-    manifest = _manifest(artifact_path=str(tmp_path / "artifact"))
+    source_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    manifest = _manifest(
+        artifact_path=str(tmp_path / "artifact"), git_sha=source_sha,
+        run_id=(
+            "msrvtt-baseline-reference-seed000-20260814T020304Z-"
+            f"{source_sha[:12]}"
+        ),
+    )
     _write_run_local_manifest(manifest)
 
     with pytest.raises(ValueError, match="committed reservation"):

@@ -82,6 +82,95 @@ def test_artifact_campaign_launcher_requires_registered_run_identity(tmp_path):
     assert not marker.exists()
 
 
+def test_base_controller_waits_for_entire_worker_process_group(tmp_path):
+    base_script = REPOSITORY / "run_train_msrvtt_bg.sh"
+    no_op_python = tmp_path / "no-op-python.sh"
+    no_op_python.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    no_op_python.chmod(0o755)
+    descendant_marker = tmp_path / "descendant-finished"
+    fake_torchrun = tmp_path / "forking-torchrun.py"
+    fake_torchrun.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, time\n"
+        "pid = os.fork()\n"
+        "if pid == 0:\n"
+        "    time.sleep(2.5)\n"
+        "    with open(os.environ['DESCENDANT_LOG'], 'a') as handle:\n"
+        "        handle.write('descendant-final-line\\n')\n"
+        "    open(os.environ['DESCENDANT_MARKER'], 'w').close()\n"
+        "    os._exit(0)\n"
+        "os._exit(0)\n",
+        encoding="utf-8",
+    )
+    fake_torchrun.chmod(0o755)
+    log_file = tmp_path / "train.log"
+    env = os.environ.copy()
+    env.update({
+        "TVR_PYTHON": str(no_op_python),
+        "TVR_TORCHRUN": str(fake_torchrun),
+        "LOG_FILE": str(log_file),
+        "OUTPUT_DIR": str(tmp_path / "checkpoints"),
+        "TRAIN_PID_FILE": str(tmp_path / "worker.pid"),
+        "DESCENDANT_LOG": str(log_file),
+        "DESCENDANT_MARKER": str(descendant_marker),
+        "WORKER_GROUP_DRAIN_TIMEOUT_SECONDS": "4",
+    })
+
+    result = subprocess.run(
+        ["bash", str(base_script)], cwd=REPOSITORY, env=env,
+        text=True, capture_output=True, check=False, timeout=8,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert descendant_marker.exists()
+    assert "descendant-final-line" in log_file.read_text(encoding="utf-8")
+
+
+def test_base_controller_escalates_stuck_worker_group_and_records_evidence(tmp_path):
+    base_script = REPOSITORY / "run_train_msrvtt_bg.sh"
+    no_op_python = tmp_path / "no-op-python.sh"
+    no_op_python.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    no_op_python.chmod(0o755)
+    fake_torchrun = tmp_path / "stuck-torchrun.py"
+    fake_torchrun.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, signal, time\n"
+        "pid = os.fork()\n"
+        "if pid == 0:\n"
+        "    signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "    time.sleep(30)\n"
+        "    os._exit(0)\n"
+        "os._exit(0)\n",
+        encoding="utf-8",
+    )
+    fake_torchrun.chmod(0o755)
+    log_file = tmp_path / "train.log"
+    env = os.environ.copy()
+    env.update({
+        "TVR_PYTHON": str(no_op_python),
+        "TVR_TORCHRUN": str(fake_torchrun),
+        "LOG_FILE": str(log_file),
+        "OUTPUT_DIR": str(tmp_path / "checkpoints"),
+        "TRAIN_PID_FILE": str(tmp_path / "worker.pid"),
+        "WORKER_GROUP_DRAIN_TIMEOUT_SECONDS": "1",
+        "WORKER_GROUP_TERM_TIMEOUT_SECONDS": "1",
+        "WORKER_GROUP_KILL_TIMEOUT_SECONDS": "1",
+    })
+
+    result = subprocess.run(
+        ["bash", str(base_script)], cwd=REPOSITORY, env=env,
+        text=True, capture_output=True, check=False, timeout=8,
+    )
+
+    assert result.returncode == 124, result.stderr
+    evidence = Path(f"{log_file}.process-group-drain.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "timeout:SIGTERM" in evidence
+    assert "timeout:SIGKILL" in evidence
+    assert "UNRESOLVED" not in evidence
+
+
 def test_legacy_layout_seam_is_rejected_outside_launcher_test_mode(tmp_path):
     controller, marker, _ = _fake_controller(tmp_path)
     env = os.environ.copy()

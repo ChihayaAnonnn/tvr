@@ -1132,6 +1132,23 @@ def verify_committed_reservation(
         raise ValueError("committed reservation requires a valid run-local manifest") from exc
     if manifest_sha256(disk_manifest) != expected_digest:
         raise ValueError("committed reservation does not match the run-local manifest")
+    source_commit = str(normalized_manifest["git_sha"])
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", source_commit, "HEAD"],
+        cwd=root, check=False, capture_output=True,
+    )
+    if ancestor.returncode != 0:
+        raise ValueError("committed reservation git_sha is not an ancestor of HEAD")
+    source_changes = subprocess.run(
+        ["git", "diff", "--name-only", f"{source_commit}..HEAD", "--"],
+        cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.splitlines()
+    forbidden_source_changes = set(source_changes) - {registry_path.as_posix()}
+    if forbidden_source_changes:
+        raise ValueError(
+            "committed reservation source differs from manifest.git_sha: "
+            + ", ".join(sorted(forbidden_source_changes))
+        )
     for command in (["git", "diff", "--quiet"], ["git", "diff", "--cached", "--quiet"]):
         result = subprocess.run(command, cwd=root, check=False, capture_output=True)
         if result.returncode != 0:
@@ -1660,6 +1677,36 @@ def load_validated_run_lifecycle(
             embedded_exit, embedded_hashes,
         ) != audit_id:
             raise ValueError("audit transition identity is invalid")
+    if not audits or audits[0].get("event") != "reservation_commit":
+        raise ValueError("audit chain must begin with one reservation commit")
+    chain_status = audits[0]["status"]
+    chain_state = "reserved"
+    pending_intent = None
+    audit_index = 1
+    while audit_index < len(audits):
+        intent = audits[audit_index]
+        if intent.get("event") != "transition_intent":
+            raise ValueError("audit chain requires intent/commit ordering")
+        if intent.get("from_state") != chain_state:
+            raise ValueError("audit state chain is not contiguous")
+        if audit_index + 1 < len(audits):
+            commit = audits[audit_index + 1]
+            expected_commit = {**intent, "event": "transition_commit"}
+            if commit != expected_commit:
+                raise ValueError("every audit intent requires its matching commit")
+            chain_status = intent["status"]
+            chain_state = str(intent["to_state"])
+            audit_index += 2
+            continue
+        if not allow_pending_commit:
+            raise ValueError("every audit intent requires its matching commit")
+        pending_intent = intent
+        audit_index += 1
+    if pending_intent is None:
+        if status != chain_status:
+            raise ValueError("current status differs from the committed audit chain")
+    elif status not in (chain_status, pending_intent["status"]):
+        raise ValueError("current status is unrelated to the pending audit transition")
     if state == "reserved":
         matches = [
             record for record in audits
@@ -1707,3 +1754,22 @@ def load_validated_run_lifecycle(
         if len(matching_intents) != 1:
             raise ValueError("run status lacks one matching transition audit intent")
     return manifest, status, audits
+
+
+def pending_audit_transition(
+    audits: list[Mapping[str, object]],
+) -> dict[str, object] | None:
+    """Return the single validated trailing intent without a commit, if any."""
+
+    committed = {
+        record.get("transition_id") for record in audits
+        if record.get("event") == "transition_commit"
+    }
+    pending = [
+        dict(record) for record in audits
+        if record.get("event") == "transition_intent"
+        and record.get("transition_id") not in committed
+    ]
+    if len(pending) > 1:
+        raise ValueError("audit contains multiple pending transitions")
+    return pending[0] if pending else None

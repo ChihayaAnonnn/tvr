@@ -240,6 +240,9 @@ def _verify_artifact_runtime_bindings(
             "NCCL_P2P_LEVEL": "NVL", "NCCL_IB_DISABLE": "1",
             "NCCL_DEBUG": "WARN", "NCCL_ASYNC_ERROR_HANDLING": "1",
             "TORCH_WARN_ONCE": "1", "PYTHONHASHSEED": "0",
+            "WORKER_GROUP_DRAIN_TIMEOUT_SECONDS": "30",
+            "WORKER_GROUP_TERM_TIMEOUT_SECONDS": "10",
+            "WORKER_GROUP_KILL_TIMEOUT_SECONDS": "5",
             "MASTER_ADDR": "127.0.0.9", "MASTER_PORT": "29547",
             "WORLD_SIZE": "4",
         }
@@ -331,66 +334,6 @@ def _start_artifact_run(context):
     if context is None:
         return
     transition_run_status(context.paths, "reserved", "running")
-
-
-def _artifact_output_hashes(paths):
-    outputs = {}
-    for directory in (
-        paths.logs, paths.checkpoints, paths.metrics, paths.arrays, paths.plots,
-        paths.provenance,
-    ):
-        for current, directory_names, file_names, descriptor in os.fwalk(
-            directory, follow_symlinks=False
-        ):
-            for name in directory_names:
-                info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
-                if not stat.S_ISDIR(info.st_mode):
-                    raise ValueError(
-                        f"artifact output directory is unsafe: {Path(current) / name}"
-                    )
-            for name in sorted(file_names):
-                if directory == paths.provenance and (
-                    name == "audit.jsonl" or name.endswith(".lock")
-                    or name.startswith("controller-pid.")
-                ):
-                    continue
-                flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-                file_descriptor = os.open(name, flags, dir_fd=descriptor)
-                try:
-                    info = os.fstat(file_descriptor)
-                    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-                        raise ValueError(
-                            f"artifact output must be a private file: {Path(current) / name}"
-                        )
-                    digest = hashlib.sha256()
-                    while True:
-                        chunk = os.read(file_descriptor, 1024 * 1024)
-                        if not chunk:
-                            break
-                        digest.update(chunk)
-                finally:
-                    os.close(file_descriptor)
-                path = Path(current) / name
-                outputs[path.relative_to(paths.root).as_posix()] = digest.hexdigest()
-    if paths.command.exists():
-        descriptor = os.open(
-            paths.command, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-        )
-        try:
-            info = os.fstat(descriptor)
-            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-                raise ValueError("artifact command must be a private regular file")
-            command_digest = hashlib.sha256()
-            while True:
-                chunk = os.read(descriptor, 1024 * 1024)
-                if not chunk:
-                    break
-                command_digest.update(chunk)
-            digest = command_digest.hexdigest()
-        finally:
-            os.close(descriptor)
-        outputs[paths.command.relative_to(paths.root).as_posix()] = digest
-    return outputs
 
 
 def _complete_artifact_run(context):

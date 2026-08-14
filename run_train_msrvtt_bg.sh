@@ -21,13 +21,79 @@ run_controller() {
     mkdir -p "$(dirname "${LOG_FILE}")"
     TRAIN_PID_FILE="${TRAIN_PID_FILE:-}"
     TRAIN_PID=""
+    TAIL_PID=""
+    WORKER_GROUP_DRAIN_TIMEOUT_SECONDS="${WORKER_GROUP_DRAIN_TIMEOUT_SECONDS:-30}"
+    WORKER_GROUP_TERM_TIMEOUT_SECONDS="${WORKER_GROUP_TERM_TIMEOUT_SECONDS:-10}"
+    WORKER_GROUP_KILL_TIMEOUT_SECONDS="${WORKER_GROUP_KILL_TIMEOUT_SECONDS:-5}"
+    for timeout_value in \
+        "${WORKER_GROUP_DRAIN_TIMEOUT_SECONDS}" \
+        "${WORKER_GROUP_TERM_TIMEOUT_SECONDS}" \
+        "${WORKER_GROUP_KILL_TIMEOUT_SECONDS}"; do
+        if ! [[ "${timeout_value}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "worker process-group drain timeouts must be positive integers" >&2
+            return 2
+        fi
+    done
+    GROUP_DRAIN_EVIDENCE="${LOG_FILE}.process-group-drain.txt"
+
+    worker_group_alive() {
+        [[ "${TRAIN_PID}" =~ ^[1-9][0-9]*$ ]] \
+            && kill -0 -- "-${TRAIN_PID}" 2>/dev/null
+    }
+
+    wait_for_worker_group() {
+        local timeout_seconds="$1"
+        local deadline=$((SECONDS + timeout_seconds))
+        while worker_group_alive; do
+            if (( SECONDS >= deadline )); then
+                return 1
+            fi
+            sleep 0.05
+        done
+    }
+
+    record_group_drain() {
+        printf '%s\tpgid=%s\t%s\n' "$(date --iso-8601=seconds)" \
+            "${TRAIN_PID}" "$1" >> "${GROUP_DRAIN_EVIDENCE}"
+    }
+
+    drain_worker_group() {
+        local send_initial_term="$1"
+        if [[ "${send_initial_term}" == "1" ]] && worker_group_alive; then
+            record_group_drain "signal:SIGTERM"
+            kill -TERM -- "-${TRAIN_PID}" 2>/dev/null || true
+        fi
+        if wait_for_worker_group "${WORKER_GROUP_DRAIN_TIMEOUT_SECONDS}"; then
+            return 0
+        fi
+        record_group_drain "timeout:SIGTERM"
+        kill -TERM -- "-${TRAIN_PID}" 2>/dev/null || true
+        if wait_for_worker_group "${WORKER_GROUP_TERM_TIMEOUT_SECONDS}"; then
+            return 124
+        fi
+        record_group_drain "timeout:SIGKILL"
+        kill -KILL -- "-${TRAIN_PID}" 2>/dev/null || true
+        if wait_for_worker_group "${WORKER_GROUP_KILL_TIMEOUT_SECONDS}"; then
+            return 124
+        fi
+        record_group_drain "UNRESOLVED:live-process-group"
+        return 125
+    }
 
     terminate_controller() {
         local exit_status="$1"
         trap - INT TERM
+        if [[ "${TAIL_PID}" =~ ^[1-9][0-9]*$ ]]; then
+            kill -TERM "${TAIL_PID}" 2>/dev/null || true
+            wait "${TAIL_PID}" 2>/dev/null || true
+        fi
         if [[ "${TRAIN_PID}" =~ ^[1-9][0-9]*$ ]]; then
-            kill -TERM -- "-${TRAIN_PID}" 2>/dev/null || true
+            local drain_status=0
+            drain_worker_group 1 || drain_status=$?
             wait "${TRAIN_PID}" 2>/dev/null || true
+            if [[ "${drain_status}" == "125" ]]; then
+                exit 125
+            fi
         fi
         exit "${exit_status}"
     }
@@ -54,12 +120,21 @@ run_controller() {
 
     # Keep the controller alive until the detached worker has closed its log.
     # The outer registered launcher may only seal hashes after this returns.
-    tail --pid="${TRAIN_PID}" -n 50 -F "${LOG_FILE}" || true
+    tail --pid="${TRAIN_PID}" -n 50 -F "${LOG_FILE}" &
+    TAIL_PID=$!
+    wait "${TAIL_PID}" || true
+    local worker_status=0
     if wait "${TRAIN_PID}"; then
-        return 0
+        worker_status=0
     else
-        return $?
+        worker_status=$?
     fi
+    local drain_status=0
+    drain_worker_group 0 || drain_status=$?
+    if [[ "${drain_status}" != "0" ]]; then
+        return "${drain_status}"
+    fi
+    return "${worker_status}"
 }
 
 

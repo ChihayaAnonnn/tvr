@@ -31,6 +31,7 @@ from experiment_artifacts import (
     make_run_paths,
     manifest_sha256,
     parse_registry_text,
+    pending_audit_transition,
     reserve_run_directory,
     transition_run_status,
     validate_artifact_json_payload,
@@ -453,9 +454,20 @@ def verify_run(args: argparse.Namespace) -> dict[str, object]:
 def start_run(args: argparse.Namespace) -> dict[str, object]:
     result = _verify_run_identity(args, allow_pending_commit=True)
     run_dir = Path(args.run_dir)
+    paths = make_run_paths_from_dir(run_dir, allow_pending_commit=True)
+    _manifest, _status, audits = load_validated_run_lifecycle(
+        paths, allow_pending_commit=True
+    )
+    pending = pending_audit_transition(audits)
+    if pending is not None and (
+        pending.get("from_state") != "reserved"
+        or pending.get("to_state") != "running"
+        or pending.get("status", {}).get("exit_code") is not None
+        or pending.get("output_hashes") != {}
+    ):
+        raise ValueError("pending lifecycle transition must be repaired before start-run")
     status = transition_run_status(
-        make_run_paths_from_dir(run_dir, allow_pending_commit=True),
-        "reserved", "running"
+        paths, "reserved", "running"
     )
     return {**result, "state": status["state"]}
 
@@ -484,6 +496,21 @@ def transition_run(args: argparse.Namespace) -> dict[str, object]:
             if complete_inventory.get(relative) != digest:
                 raise ValueError(f"terminal output changed while hashing: {relative}")
         hashes = complete_inventory
+    _manifest, _status, audits = load_validated_run_lifecycle(
+        paths, allow_pending_commit=True
+    )
+    pending = pending_audit_transition(audits)
+    if pending is not None:
+        pending_status = pending.get("status", {})
+        if (
+            pending.get("from_state") != args.expected
+            or pending.get("to_state") != args.next_state
+            or pending_status.get("exit_code") != args.exit_code
+            or pending.get("output_hashes") != hashes
+        ):
+            raise ValueError(
+                "pending lifecycle transition must be repaired before advancing"
+            )
     return transition_run_status(
         paths, args.expected, args.next_state,
         exit_code=args.exit_code, output_hashes=hashes,
