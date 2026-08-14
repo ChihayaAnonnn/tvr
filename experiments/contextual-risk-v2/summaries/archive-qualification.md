@@ -2,9 +2,17 @@
 
 ## Decision
 
-**Stage 0: PASS.** The run-centric archive is qualified for the validation-only
-scientific campaign. This decision authorizes the campaign controller and does
-not authorize test access or make the fixture run a scientific candidate.
+**Stage 0: FAIL pending corrected production qualification.** Independent
+review found that the earlier four-rank evidence used a test-only torchrun
+worker, bypassing the registered production launcher, controller, artifact
+binding, rank-zero lifecycle, and controller-owned process-group drain. Its
+registered artifacts were also rooted in a disposable worktree. The old
+evidence remains immutable; it does not authorize the scientific campaign.
+
+A human-approved corrective phase now defines exactly four new production-path
+runs: success, non-owner failure, owner failure during a collective, and
+SIGTERM while ranks occupy different collective states. No fifth run or silent
+retry is authorized.
 
 Qualification was completed on node `node199` with four NVIDIA A800 80 GB PCIe
 GPUs (`CUDA_VISIBLE_DEVICES=0,2,3,4`). The successful worker used one real NCCL
