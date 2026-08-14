@@ -2,133 +2,107 @@
 
 ## Decision
 
-**Stage 0: FAIL pending corrected production qualification.** Independent
-review found that the earlier four-rank evidence used a test-only torchrun
-worker, bypassing the registered production launcher, controller, artifact
-binding, rank-zero lifecycle, and controller-owned process-group drain. Its
-registered artifacts were also rooted in a disposable worktree. The old
-evidence remains immutable; it does not authorize the scientific campaign.
+**Stage 0: PASS.** The corrected qualification exercised the real production
+path end to end:
 
-A human-approved corrective phase now defines exactly four new production-path
-runs: success, non-owner failure, owner failure during a collective, and
-SIGTERM while ranks occupy different collective states. No fifth run or silent
-retry is authorized.
+```text
+run_train_msrvtt_contextual_risk_bg.sh
+  -> run_train_msrvtt_bg.sh controller and whole-PGID drain
+  -> main_task_retrieval.py committed artifact binding
+  -> rank-zero lifecycle ownership
+```
 
-Qualification was completed on node `node199` with four NVIDIA A800 80 GB PCIe
-GPUs (`CUDA_VISIBLE_DEVICES=0,2,3,4`). The successful worker used one real NCCL
-step in FP32, four ranks, and no dataset loader or model checkpoint.
+This authorizes validation-only campaign work. It does not authorize a final
+test, JSFUSION access, or treat qualification fixtures as scientific results.
 
-## Fresh verification
+## Corrective lineage
 
-- Focused E2E command:
-  `/home/xujie/.conda/envs/tvr/bin/python -m pytest -q tests/test_experiment_archive_e2e.py`
-  — `2 passed in 8.74s`.
-- Full command:
-  `/home/xujie/.conda/envs/tvr/bin/python -m pytest -q tests`
-  — `606 passed, 1 skipped, 1 warning in 79.37s`.
-- The warning is the existing PyTorch `TypedStorage` deprecation warning.
-- `git diff --check`, the tracked worktree diff, and the staged diff were clean
-  after terminal phase publication. The only untracked control-plane file is
-  the administrative `registry.jsonl.lock` created by the registry API.
+Independent review rejected the earlier test-only torchrun qualification. Both
+old registered runs and all three old probes remain unchanged. They were
+copied without overwrite to the long-lived canonical root and verified by
+relative path, size, and SHA-256; their originals remain in the worktree.
 
-The CPU E2E fixture independently exercised phase reservation and commit,
-exact reservation verification, `reserved -> running -> validating ->
-completed`, one optimization step, a 2 MiB array reference, scalar validation
-metrics, terminal phase publication, and immutable root `logs/`/`ckpts/`
-sentinels.
+The corrected design/plan is commit `f68bf78`; portable locator support is
+`f9c7505`; production qualification code is `fd0f721`; the phase definition is
+`5d9f2ba`; the four reservations were committed together in `ce11ffd`; terminal
+records and phase summary are `4e5bf38`. A post-run parser completeness fix is
+`e11bd33` and does not alter the executed qualification state machine.
 
-## Registered run lineage
+All new manifests name both earlier registered attempts in `parent_run_ids`
+and record the human authorization and independent review in
+`selection_lineage`. Every artifact uses a normalized repo-relative
+`artifact_locator` resolving under `/data2/hxj/project/UATVR/artifacts`.
 
-The first attempt is preserved and was never modified or retried in place:
+## Registered production runs
 
-- Run ID:
-  `msrvtt-baseline-archive_qualification_4gpu-seed000-20260814T090705Z-e6fddd50c4ec`
-- Manifest SHA-256:
-  `cd8c3049d861ee659266b3bc22326d75e539d8a7e5b7a9f3624e214ba9e402f1`
-- Terminal state: `cancelled`, exit code `1`.
-- Failure: all ranks exited before model construction because the directly
-  executed fixture entrypoint could not import the repository-root
-  `experiment_artifacts` module.
-- Evidence: run-local `logs/train.log`, `provenance/failure.json`, atomic
-  status, and audit chain. The failure terminal publication is commit
-  `d98e426`.
+| Scenario | Run ID | Manifest digest | Terminal |
+|---|---|---|---|
+| success | `msrvtt-baseline-archive_prod_success-seed000-20260815T070000Z-5d9f2ba35ffa` | `d9151491979e19f4e5d6ef7805a75e12bbe7eeff335f74f2dbcfb7216a3bd933` | `completed`, exit 0 |
+| non-owner rank failure | `msrvtt-baseline-archive_prod_nonowner_fail-seed000-20260815T070100Z-5d9f2ba35ffa` | `6e91a3f7a0530ae3ddab442b88e348e46d9219744e6a7f86b42f9a81e4d605fd` | `cancelled`, exit 1 |
+| owner collective failure | `msrvtt-baseline-archive_prod_owner_collective_fail-seed000-20260815T070200Z-5d9f2ba35ffa` | `91be56d1394b2dbfe15ce85d3343dfff956050fd0e64201804e5d6bb56a8bc0c` | `cancelled`, exit 1 |
+| SIGTERM, different collectives | `msrvtt-baseline-archive_prod_sigterm_mismatch-seed000-20260815T070300Z-5d9f2ba35ffa` | `b050fa1d6caf4443600bda3cd46c23515bdb95732e392372b90634fd0b9cf6f1` | `cancelled`, exit 143 |
 
-The directly executable CLI and worker paths were fixed with regression tests
-in commits `e6fddd5` and `41ff854`. After explicit human authorization, a new
-phase reserved this unique successor rather than reusing the failed identity:
+Each run used the exact sealed command
+`env ARTIFACT_RUN_ID=<id> bash run_train_msrvtt_contextual_risk_bg.sh`.
+Each retained raw combined worker stdout/stderr in `logs/train.log` from
+process start.
 
-- Run ID:
-  `msrvtt-baseline-archive_qualification_4gpu_retry1-seed000-20260814T164421Z-82830a3ab21d`
-- Parent run ID: the cancelled run above.
-- Source SHA: `82830a3ab21d8f7fba8bb6dc2553811ef566b0a9`.
-- Reservation commit: `63726c6`.
-- Manifest contract SHA-256:
-  `9eedfc3eb1336de9d83ac5de78d6176fa2e3eb65dcbb2e93838eedce3317a7b3`.
-- Manifest file SHA-256:
-  `15d52810798d1ed6f044096ac770c90b0d121f05133c8f8986dc6a6b130b7c5a`.
-- Terminal state: `completed`, exit code `0`.
-- Terminal phase commit: `fb491ee`.
+The success run performed a real four-rank CUDA/NCCL optimization step. Its
+finite `qualification_loss` is `7.5`; `selected_validation.json` is 468 bytes.
+The numeric payload is a `(524288,)` float32 NPY containing 2,097,152 bytes,
+with protocol digest
+`908251af60385de2b211f1fd4281d4e69cc3ece66815e1ccd2e019d24cace430`
+and file digest
+`647092735d0f83096419a07a203198e8caba708bd1effbd1b0ff903c75fb910a`.
 
-The successor manifest's `parent_run_ids` and `selection_lineage` record the
-predecessor, import-path defect, fixing commit, and human authorization reason.
-Both reserved and terminal records carry the same manifest digest.
+The non-owner run preserves rank 2's planned traceback and torchrun's sibling
+termination. The owner run preserves rank zero's planned failure while ranks
+1-3 had marked entry to all-reduce, plus `worker_failure.json`. For SIGTERM,
+ranks 0/2 marked all-reduce and ranks 1/3 marked broadcast before PID 3027873,
+the outer production wrapper, received SIGTERM. The controller recorded TERM,
+the bounded TERM timeout, KILL escalation, and complete PGID drain; no
+`UNRESOLVED:live-process-group` record exists.
 
-## Successful four-rank evidence
+## Safety and integrity
 
-- Four rank markers exist for ranks `0,1,2,3`, each reporting world size 4 and
-  an A800 CUDA device.
-- Exactly one lifecycle-owner marker exists, owned by rank 0.
-- Mean fixture loss is finite: `4.1768999099731445`.
-- The externalized array contains `2,097,152` numeric bytes. Its reference
-  digest is
-  `908251af60385de2b211f1fd4281d4e69cc3ece66815e1ccd2e019d24cace430`;
-  its immutable NPY file digest is
-  `647092735d0f83096419a07a203198e8caba708bd1effbd1b0ff903c75fb910a`.
-- `metrics/selected_validation.json` is 500 bytes and has SHA-256
-  `61f65c79af6c88280be5ca9862f2db97d9d3027b7696163fb9b13c14eb4e4831`.
-- The run contains no `test.log`, `final_test.json`, JSFUSION path, test CSV,
-  or `run_final_test` argument. Its manifest has `test_authorized=false` and
-  the metric split is `validation`.
-- Every qualification JSON file is below 1 MiB. The 2 MiB payload appears only
-  in content-addressed NPY storage.
+- All qualification JSON files are below 1 MiB; the large numeric payload is
+  only in content-addressed NPY storage.
+- Every manifest is validation-authorized and test-unauthorized, has no input
+  checkpoint or dataset split, and records `run_final_test=false`.
+- No new run opened MSRVTT data, test CSVs, final-test artifacts, or JSFUSION.
+- All terminal output hashes, manifest digests, audit chains, four-rank marker
+  sets, registry transitions, and locators recomputed successfully.
+- Task 6's 340 legacy files compare with the canonical inventory at
+  missing=0, changed size/mtime=0, extra=0. The established fingerprint
+  remains `441ae072e07c4a4683342ae2249c511143e5d2f5cf43f560c6f9ca0f964d7866`.
+- No qualification process, worker PGID, GPU process, or listener on port
+  29547 remained after the runs.
 
-The successful output tree consists of the sealed command, train log, manifest,
-status/audit chain, four rank markers, one owner marker, one scalar metric JSON,
-and one content-addressed NPY. Terminal hashing covered every non-administrative
-output.
+Old-evidence replica inventory digests were:
 
-## Four-rank failure and signal probes
+- first cancelled run: `6cc536925ff11bd8a50f572926398f5593272481a5d02e97c5e242ecf02e8a88`;
+- old successor: `386ebbf213ad942e893db8ef72844c5a8c8836cd5afd09c7b35f23d8e52f5b42`;
+- non-owner probe: `ae53ac7d07b93d90d9696024ff78b382b623ba9ab24dbc3339fcee39086bf58d`;
+- collective probe: `8943c1dfbebd67ddcbb8d7c7b9af3c92690945d199ad2852a82ae110769fc8b8`;
+- SIGTERM probe: `cfbb70f409dde4a01246e9d0c13de8ecc5eb41f3ed9ef97732859a9a0b097245`.
 
-Three independent ignored probes were intentionally non-registered and are not
-scientific candidates. Each used a unique artifact path and retained its log,
-four rank markers, and `provenance/result.json`:
+## Verification
 
-1. `archive_probe_rank_failure`: rank 2 raised intentionally before a barrier;
-   torchrun returned nonzero, propagated SIGTERM to ranks 0, 1, and 3, and left
-   no worker process.
-2. `archive_probe_collective_fault`: rank 3 exited with code 17 while the other
-   ranks entered an NCCL all-reduce; torchrun returned nonzero, terminated the
-   remaining ranks, and left no worker process.
-3. `archive_probe_sigterm_drain`: SIGTERM was sent to the isolated torchrun
-   process group after all four rank markers existed; the bounded drain found
-   no remaining process in the PGID.
+Focused archive/launcher/legacy suite passed. The first full-suite run exposed
+one parser-schema completeness regression introduced by the new option; a
+focused RED/GREEN fix added the inert normal-A3 field to the dynamic contract
+and required qualification to carry a complete artifact identity. Fresh full
+verification then completed:
 
-No probe accessed a dataset or test split. A final `nvidia-smi`/process audit
-found no qualification GPU process or worker PGID.
+```text
+611 passed, 1 skipped, 1 warning in 78.64s
+```
 
-## Archive and legacy integrity
+The warning is the existing PyTorch `TypedStorage` deprecation warning.
 
-- Registry SHA-256 after terminal publication:
-  `4291e811c2a5bd9b70ca241c47a34a61b8b8ab188b0dcceec021bb08fa638e46`.
-- Successor phase SHA-256:
-  `f48bfb04a59c9b6dce2fad32ecdba47bfbee56f621bfc3c78487f955ef24e998`.
-- Successor phase-summary SHA-256:
-  `8bff15961ba37ede8ca914b8504bec96754c566bb1531987d3fd80f1d2012e7a`.
-- The real legacy `logs/` and `ckpts/` roots contained 340 files before and
-  after qualification. Their path/size/nanosecond-mtime fingerprint remained
-  `441ae072e07c4a4683342ae2249c511143e5d2f5cf43f560c6f9ca0f964d7866`.
-- All new outputs are below `artifacts/contextual-risk-v2/`; no legacy file was
-  deleted, moved, or overwritten.
-
-Stage 1 may now be prepared under the committed-reservation and validation-only
-rules. Held-out MSRVTT/MSVD test access remains sealed.
+Registry SHA-256 is
+`cd13b6cde1e81acf9000b7a164aeb7a050f00b96097c2185e84993f09041b55b`;
+phase SHA-256 is
+`2aad8a7cfe4bf4acb63611db0849a803ecec384aeee9a51bdf399dc60065cc3c`;
+terminal summary SHA-256 is
+`c5b1297caad55456681b3bcb48a5b3f733afb5bb096fa9781e59b8d7a0eebadd`.
