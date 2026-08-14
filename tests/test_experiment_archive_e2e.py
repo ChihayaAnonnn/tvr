@@ -14,6 +14,10 @@ import subprocess
 import sys
 import time
 
+REPOSITORY = Path(__file__).resolve().parents[1]
+if str(REPOSITORY) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY))
+
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -26,7 +30,6 @@ from experiment_artifacts import (
 )
 
 
-REPOSITORY = Path(__file__).resolve().parents[1]
 MANAGER = REPOSITORY / "scripts" / "manage_experiment_run.py"
 REGISTRY = Path("experiments/contextual-risk-v2/registry.jsonl")
 PHASE = Path("experiments/contextual-risk-v2/phases/stage0-e2e-fixture.json")
@@ -114,6 +117,21 @@ validate_artifact_json_payload(payload)
 metric_path = run_dir / "metrics" / "selected_validation.json"
 metric_path.write_bytes(artifact_json_bytes(payload))
 '''
+
+
+def test_four_rank_worker_entry_resolves_repository_modules_without_pythonpath():
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    completed = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()), "--help"],
+        cwd=REPOSITORY,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "--four-rank-worker" in completed.stdout
 
 
 def test_archive_phase_round_trip_externalizes_arrays_without_legacy_outputs(tmp_path):
