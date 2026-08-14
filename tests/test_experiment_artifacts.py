@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from experiment_artifacts import (
     ALLOWED_STAGES,
@@ -14,7 +15,7 @@ from experiment_artifacts import (
 
 def _manifest(**overrides):
     payload = {
-        "run_id": "msrvtt-baseline-reference-seed000-20260814T020304Z-0123456789ab",
+        "run_id": "msrvtt-baseline-reference-seed000-20260814T020304Z-000000000000",
         "study": "contextual-risk-v2",
         "dataset": "msrvtt",
         "stage": "baseline",
@@ -101,8 +102,20 @@ def test_manifest_rejects_unknown_fields_and_unauthorized_test_access():
         validate_manifest(_manifest(test_authorized=True))
 
 
+@pytest.mark.parametrize(
+    "field, value, message",
+    [
+        ("run_id", "msrvtt-baseline-reference-seed000-20261314T020304Z-000000000000", "UTC"),
+        ("git_sha", "f" * 40, "git_sha"),
+    ],
+)
+def test_manifest_rejects_invalid_or_mismatched_embedded_run_identity(field, value, message):
+    with pytest.raises(ValueError, match=message):
+        validate_manifest(_manifest(**{field: value}))
+
+
 def test_manifest_requires_parent_lineage_for_derived_runs():
-    derived_run_id = "msrvtt-feature_ablation-reference-seed000-20260814T020304Z-0123456789ab"
+    derived_run_id = "msrvtt-feature_ablation-reference-seed000-20260814T020304Z-000000000000"
     with pytest.raises(ValueError, match="parent"):
         validate_manifest(_manifest(stage="feature_ablation", run_id=derived_run_id))
     assert validate_manifest(
@@ -121,3 +134,14 @@ def test_schemas_match_canonical_enums():
     status = json.loads((schema_dir / "status.schema.json").read_text())
     assert set(manifest["properties"]["stage"]["enum"]) == ALLOWED_STAGES
     assert set(status["properties"]["state"]["enum"]) == ALLOWED_STATES
+
+
+def test_manifest_schema_rejects_duplicate_separators_and_nonfinal_test_access():
+    schema = json.loads(Path("experiments/contextual-risk-v2/schemas/manifest.schema.json").read_text())
+    validator = Draft202012Validator(schema)
+    duplicate_separator = _manifest(
+        variant="reference--copy",
+        run_id="msrvtt-baseline-reference--copy-seed000-20260814T020304Z-000000000000",
+    )
+    assert not validator.is_valid(duplicate_separator)
+    assert not validator.is_valid(_manifest(test_authorized=True))

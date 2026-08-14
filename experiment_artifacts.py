@@ -218,19 +218,24 @@ def validate_manifest(payload: Mapping[str, object]) -> dict[str, object]:
     if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= 999:
         raise ValueError("seed must be an integer from 0 through 999")
     run_id = normalized["run_id"]
-    if not isinstance(run_id, str) or _RUN_ID.fullmatch(run_id) is None or "--" in run_id:
+    match = _RUN_ID.fullmatch(run_id) if isinstance(run_id, str) else None
+    if match is None or "--" in run_id:
         raise ValueError("run_id must be a canonical archive run ID")
     expected_prefix = f"{normalized['dataset']}-{stage}-{normalized['variant']}-seed{seed:03d}-"
     if not run_id.startswith(expected_prefix):
         raise ValueError("run_id must agree with dataset, stage, variant, and seed")
+    _validate_utc_timestamp(match.group("timestamp"))
     artifact_path = normalized["artifact_path"]
     if not isinstance(artifact_path, str) or not Path(artifact_path).is_absolute():
         raise ValueError("artifact_path must be absolute")
     registry_path = normalized["registry_path"]
     if not isinstance(registry_path, str) or Path(registry_path).is_absolute() or ".." in Path(registry_path).parts:
         raise ValueError("registry_path must be repository-relative and traversal-free")
-    if not isinstance(normalized["git_sha"], str) or not re.fullmatch(r"[0-9a-f]{40}", normalized["git_sha"]):
+    git_sha = normalized["git_sha"]
+    if not isinstance(git_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", git_sha):
         raise ValueError("git_sha must be a 40-character lowercase commit SHA")
+    if match.group("git_sha") != git_sha[:12]:
+        raise ValueError("run_id git SHA-12 must match git_sha")
     if not isinstance(normalized["tracked_clean"], bool):
         raise ValueError("tracked_clean must be a boolean")
     source_patch_sha256 = normalized["source_patch_sha256"]
