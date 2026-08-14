@@ -6,11 +6,26 @@ COMMON_GIT_DIR="$(git -C "${ROOT_DIR}" rev-parse --path-format=absolute --git-co
 COMMON_REPO_ROOT="$(cd "${COMMON_GIT_DIR}/.." && pwd)"
 BASE_CKPT="${COMMON_REPO_ROOT}/ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
 CONTROLLER_SCRIPT="${A3_BG_CONTROLLER:-${ROOT_DIR}/run_train_msrvtt_bg.sh}"
+MANAGE_RUN_SCRIPT="${A3_TEST_MANAGE_CLI:-${ROOT_DIR}/scripts/manage_experiment_run.py}"
 
 validate_test_seams() {
+    if [[ -v LEGACY_A3_LAYOUT && "${A3_LAUNCHER_TEST_MODE:-}" != "1" ]]; then
+        echo "LEGACY_A3_LAYOUT requires A3_LAUNCHER_TEST_MODE=1" >&2
+        exit 2
+    fi
+    if [[ "${LEGACY_A3_LAYOUT:-0}" != "0" && "${LEGACY_A3_LAYOUT:-0}" != "1" ]]; then
+        echo "LEGACY_A3_LAYOUT must be 0 or 1" >&2
+        exit 2
+    fi
     if [[ -n "${A3_BG_CONTROLLER:-}" || -n "${A3_TEST_OUTPUT_DIR:-}" ]]; then
         if [[ "${A3_LAUNCHER_TEST_MODE:-}" != "1" ]]; then
             echo "A3 test seams require A3_LAUNCHER_TEST_MODE=1" >&2
+            exit 2
+        fi
+    fi
+    if [[ -n "${A3_TEST_MANAGE_CLI:-}" || -n "${A3_TEST_ARTIFACT_ROOT:-}" || -n "${A3_TEST_REPO_ROOT:-}" ]]; then
+        if [[ "${A3_LAUNCHER_TEST_MODE:-}" != "1" ]]; then
+            echo "A3 artifact test seams require A3_LAUNCHER_TEST_MODE=1" >&2
             exit 2
         fi
     fi
@@ -23,7 +38,7 @@ validate_test_seams() {
 reject_registered_environment_overrides() {
     local name
     for name in \
-        OUTPUT_DIR RUN_ID RUN_DATE RUN_TIME RUN_TAG \
+        OUTPUT_DIR RUN_ID RUN_DATE RUN_TIME RUN_TAG LOG_FILE ARTIFACT_RUN_DIR \
         CUDA_VISIBLE_DEVICES NPROC TRAIN_BATCH_SIZE \
         TRAIN_GRADIENT_ACCUMULATION_STEPS CLIP_LAYER_NORM_PRECISION \
         EXPERIMENT_PROFILE TRAIN_PID_FILE RUN_TRAIN_MSRVTT_BG_INTERNAL_WORKER \
@@ -35,7 +50,8 @@ reject_registered_environment_overrides() {
         OPENBLAS_NUM_THREADS NUMEXPR_NUM_THREADS NCCL_P2P_LEVEL \
         NCCL_IB_DISABLE NCCL_DEBUG TORCH_WARN_ONCE PYTHONHASHSEED \
         CUBLAS_WORKSPACE_CONFIG SMOKE_STEPS EXPERIMENT_DESC \
-        REGISTERED_CLIP_ASSET_PATH REGISTERED_CLIP_ASSET_SHA256; do
+        REGISTERED_CLIP_ASSET_PATH REGISTERED_CLIP_ASSET_SHA256 \
+        ARTIFACT_MANIFEST_SHA256; do
         if [[ -v "${name}" ]]; then
             echo "registered A3 environment ${name} cannot be overridden" >&2
             exit 2
@@ -98,29 +114,93 @@ RUN_TIME="$(date +%H%M%S)"
 RUN_TAG="contextual_risk_a3"
 RUN_SUFFIX="${RUN_TIME}${RUN_TAG:+_${RUN_TAG}}"
 RUN_ID="${RUN_DATE}_${RUN_SUFFIX}"
-if [[ -n "${A3_TEST_OUTPUT_DIR:-}" ]]; then
+ARTIFACT_ARGS=()
+ARTIFACT_MODE=1
+if [[ "${LEGACY_A3_LAYOUT:-0}" == "1" ]]; then
+    ARTIFACT_MODE=0
+fi
+if [[ "${ARTIFACT_MODE}" == "0" && -n "${A3_TEST_OUTPUT_DIR:-}" ]]; then
     if [[ -z "${A3_BG_CONTROLLER:-}" ]]; then
         echo "A3_TEST_OUTPUT_DIR requires A3_BG_CONTROLLER" >&2
         exit 2
     fi
     OUTPUT_DIR="${A3_TEST_OUTPUT_DIR}"
-else
+elif [[ "${ARTIFACT_MODE}" == "0" ]]; then
     OUTPUT_DIR="${ROOT_DIR}/ckpts/ckpt_msrvtt_${RUN_ID}"
+else
+    if [[ -z "${ARTIFACT_RUN_ID:-}" ]]; then
+        echo "registered A3 requires ARTIFACT_RUN_ID" >&2
+        exit 2
+    fi
+    ARTIFACT_REPO_ROOT="${A3_TEST_REPO_ROOT:-${ROOT_DIR}}"
+    ARTIFACT_ROOT="${A3_TEST_ARTIFACT_ROOT:-${COMMON_REPO_ROOT}/artifacts}"
+    REGISTRY_PATH="experiments/contextual-risk-v2/registry.jsonl"
+    EXPECTED_RUN_DIR="$(
+        /home/xujie/.conda/envs/tvr/bin/python - "${ARTIFACT_ROOT}" "${ARTIFACT_RUN_ID}" <<'PY'
+import sys
+from experiment_artifacts import make_run_paths
+print(make_run_paths(sys.argv[1], "contextual-risk-v2", sys.argv[2]).root)
+PY
+    )" || exit 2
+    # The CLI is the single authority for the committed manifest and clean
+    # source check.  Parse only its small machine-readable identity response.
+    VERIFY_JSON="$(
+        /home/xujie/.conda/envs/tvr/bin/python "${MANAGE_RUN_SCRIPT}" verify-run \
+            --repo-root "${ARTIFACT_REPO_ROOT}" \
+            --registry "${REGISTRY_PATH}" \
+            --run-dir "${EXPECTED_RUN_DIR}" \
+            --run-id "${ARTIFACT_RUN_ID}" \
+            --manifest-sha256 "$(
+                /home/xujie/.conda/envs/tvr/bin/python - "${EXPECTED_RUN_DIR}/manifest.json" <<'PY'
+import json, sys
+from experiment_artifacts import manifest_sha256
+with open(sys.argv[1], encoding="utf-8") as handle:
+    print(manifest_sha256(json.load(handle)))
+PY
+            )"
+    )" || exit 2
+    mapfile -t ARTIFACT_IDENTITY < <(
+        /home/xujie/.conda/envs/tvr/bin/python - "${VERIFY_JSON}" <<'PY'
+import json, sys
+payload = json.loads(sys.argv[1])
+print(payload["run_dir"])
+print(payload["manifest_sha256"])
+print(payload["state"])
+PY
+    )
+    ARTIFACT_RUN_DIR="${ARTIFACT_IDENTITY[0]}"
+    ARTIFACT_MANIFEST_SHA256="${ARTIFACT_IDENTITY[1]}"
+    if [[ "${ARTIFACT_IDENTITY[2]}" != "reserved" ]]; then
+        echo "registered A3 run must be in reserved state" >&2
+        exit 2
+    fi
+    OUTPUT_DIR="${ARTIFACT_RUN_DIR}/checkpoints"
+    LOG_FILE="${ARTIFACT_RUN_DIR}/logs/train.log"
+    RUN_ID="${ARTIFACT_RUN_ID}"
+    ARTIFACT_ARGS=(
+        --artifact_run_dir "${ARTIFACT_RUN_DIR}"
+        --artifact_run_id "${ARTIFACT_RUN_ID}"
+        --artifact_manifest_sha256 "${ARTIFACT_MANIFEST_SHA256}"
+    )
 fi
 
-if [[ -e "${OUTPUT_DIR}" ]]; then
+if [[ "${ARTIFACT_MODE}" == "0" && -e "${OUTPUT_DIR}" ]]; then
     echo "A3 output directory already exists: ${OUTPUT_DIR}" >&2
     exit 2
 fi
 
 RESERVATION_DIR="${OUTPUT_DIR}.reserve"
-if ! mkdir "${RESERVATION_DIR}"; then
+if [[ "${ARTIFACT_MODE}" == "0" ]] && ! mkdir "${RESERVATION_DIR}"; then
     echo "A3 output reservation already exists or cannot be created: ${RESERVATION_DIR}" >&2
     exit 2
 fi
-RESERVATION_HELD=1
+RESERVATION_HELD=$((1 - ARTIFACT_MODE))
 CONTROLLER_MAY_HAVE_SPAWNED=0
-HANDOFF_PID_FILE="$(mktemp "${RESERVATION_DIR}/controller-pid.XXXXXX")"
+if [[ "${ARTIFACT_MODE}" == "1" ]]; then
+    HANDOFF_PID_FILE="$(mktemp "${ARTIFACT_RUN_DIR}/provenance/controller-pid.XXXXXX")"
+else
+    HANDOFF_PID_FILE="$(mktemp "${RESERVATION_DIR}/controller-pid.XXXXXX")"
+fi
 
 retain_reservation_failure() {
     echo "$1" >&2
@@ -144,7 +224,11 @@ retain_reservation_on_signal() {
     local exit_status="$2"
     trap - INT TERM
     if [[ "${CONTROLLER_MAY_HAVE_SPAWNED}" == "1" ]]; then
-        echo "A3 ${signal_name} received after controller start; retaining reservation: ${RESERVATION_DIR}" >&2
+        if [[ "${ARTIFACT_MODE}" == "1" ]]; then
+            echo "A3 ${signal_name} received after controller start; retaining run evidence: ${ARTIFACT_RUN_DIR}" >&2
+        else
+            echo "A3 ${signal_name} received after controller start; retaining reservation: ${RESERVATION_DIR}" >&2
+        fi
         RESERVATION_HELD=0
         trap - EXIT
     fi
@@ -159,6 +243,7 @@ RUN_TIME="${RUN_TIME}" \
 RUN_TAG="${RUN_TAG}" \
 RUN_ID="${RUN_ID}" \
 OUTPUT_DIR="${OUTPUT_DIR}" \
+LOG_FILE="${LOG_FILE:-}" \
 TRAIN_PID_FILE="${HANDOFF_PID_FILE}" \
 TVR_PYTHON=/home/xujie/.conda/envs/tvr/bin/python \
 TVR_TORCHRUN=/home/xujie/.conda/envs/tvr/bin/torchrun \
@@ -213,6 +298,7 @@ bash "${CONTROLLER_SCRIPT}" \
     --seed 0 \
     --epochs 3 \
     --run_final_test \
+    "${ARTIFACT_ARGS[@]}" \
     "$@" &
 CONTROLLER_PID=$!
 
@@ -255,6 +341,8 @@ if ! kill -0 "${WORKER_PID}" 2>/dev/null; then
 fi
 
 unlink "${HANDOFF_PID_FILE}"
-rmdir "${RESERVATION_DIR}"
+if [[ "${ARTIFACT_MODE}" == "0" ]]; then
+    rmdir "${RESERVATION_DIR}"
+fi
 RESERVATION_HELD=0
 wait "${CONTROLLER_PID}"

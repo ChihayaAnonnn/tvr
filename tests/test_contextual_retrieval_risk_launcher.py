@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 import time
 from pathlib import Path
@@ -35,6 +36,10 @@ sleep 0.2
         "\"${TORCH_NCCL_ASYNC_ERROR_HANDLING-<absent>}\" "
         "> \"${A3_TEST_CONTROLLER_ENV_MARKER}\"\n"
         "fi\n"
+        "if [[ -n \"${A3_TEST_CAPTURE_FILE:-}\" ]]; then\n"
+        "  printf '%s\\n' \"${OUTPUT_DIR}\" \"${LOG_FILE}\" > \"${A3_TEST_CAPTURE_FILE}\"\n"
+        "  printf '%s\\n' \"$@\" >> \"${A3_TEST_CAPTURE_FILE}\"\n"
+        "fi\n"
         f"{wait}"
     )
     controller.chmod(0o755)
@@ -51,6 +56,7 @@ def _launcher_env(controller, marker, *, output_dir=None):
             env.pop(name)
     env.update({
         "A3_LAUNCHER_TEST_MODE": "1",
+        "LEGACY_A3_LAYOUT": "1",
         "A3_BG_CONTROLLER": str(controller),
         "A3_TEST_CONTROLLER_MARKER": str(marker),
         "A3_TEST_HANDOFF_MARKER": str(marker.with_name("worker-pid-written")),
@@ -58,6 +64,97 @@ def _launcher_env(controller, marker, *, output_dir=None):
     if output_dir is not None:
         env["A3_TEST_OUTPUT_DIR"] = str(output_dir)
     return env
+
+
+def test_artifact_campaign_launcher_requires_registered_run_identity(tmp_path):
+    controller, marker, _ = _fake_controller(tmp_path)
+    env = _launcher_env(controller, marker)
+    env.pop("LEGACY_A3_LAYOUT")
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)], text=True, capture_output=True, env=env, check=False
+    )
+
+    assert result.returncode == 2
+    assert "ARTIFACT_RUN_ID" in result.stderr
+    assert not marker.exists()
+
+
+def test_legacy_layout_seam_is_rejected_outside_launcher_test_mode(tmp_path):
+    controller, marker, _ = _fake_controller(tmp_path)
+    env = os.environ.copy()
+    env["LEGACY_A3_LAYOUT"] = "1"
+    env["A3_BG_CONTROLLER"] = str(controller)
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)], text=True, capture_output=True, env=env, check=False
+    )
+
+    assert result.returncode == 2
+    assert "LEGACY_A3_LAYOUT" in result.stderr
+    assert not marker.exists()
+
+
+def test_campaign_launcher_routes_every_output_to_artifact_run(tmp_path):
+    run_id = "msrvtt-baseline-smoke-seed000-20260814T020304Z-0123456789ab"
+    artifact_root = tmp_path / "artifacts"
+    run_dir = artifact_root / "contextual-risk-v2" / "msrvtt" / "baseline" / run_id
+    for relative in ("logs", "checkpoints", "metrics", "arrays", "plots", "provenance"):
+        (run_dir / relative).mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "run_id": run_id, "study": "contextual-risk-v2", "dataset": "msrvtt",
+        "stage": "baseline", "variant": "smoke", "seed": 0,
+        "artifact_path": str(run_dir),
+        "registry_path": "experiments/contextual-risk-v2/registry.jsonl",
+        "git_sha": "0123456789abcdef0123456789abcdef01234567",
+        "tracked_clean": True, "source_patch_sha256": None,
+        "environment": {
+            "python": "3.10", "pytorch": "2.0", "cuda": "12.0",
+            "gpu_model": "test", "gpu_count": 4, "precision": "fp32",
+            "distributed_topology": "torchrun-4",
+        },
+        "input_checkpoints": [], "dataset_splits": [],
+        "config": {name: {} for name in ("model", "loss", "optimizer", "scheduler", "evaluation")},
+        "parent_run_ids": [], "selection_lineage": [],
+        "validation_authorized": True, "test_authorized": False,
+        "expected_scalar_outputs": [], "array_references": [],
+    }
+    (run_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    manage = tmp_path / "fake-manage.py"
+    manage.write_text(
+        "import hashlib, json, sys\n"
+        "p=json.load(open(sys.argv[sys.argv.index('--run-dir')+1]+'/manifest.json'))\n"
+        "raw=json.dumps(p,sort_keys=True,separators=(',',':')).encode()\n"
+        "print(json.dumps({'run_dir':p['artifact_path'],'manifest_sha256':hashlib.sha256(raw).hexdigest(),'state':'reserved'}))\n",
+        encoding="utf-8",
+    )
+    controller, marker, release = _fake_controller(tmp_path, wait_for_output_release=True)
+    capture = tmp_path / "capture.txt"
+    env = _launcher_env(controller, marker)
+    env.pop("LEGACY_A3_LAYOUT")
+    env.update({
+        "ARTIFACT_RUN_ID": run_id,
+        "A3_TEST_ARTIFACT_ROOT": str(artifact_root),
+        "A3_TEST_REPO_ROOT": str(tmp_path),
+        "A3_TEST_MANAGE_CLI": str(manage),
+        "A3_TEST_CAPTURE_FILE": str(capture),
+        "A3_TEST_CONTROLLER_RELEASE": str(release),
+    })
+    release.touch()
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)], text=True, capture_output=True, env=env,
+        check=False, timeout=5,
+    )
+
+    assert result.returncode == 0, result.stderr
+    captured = capture.read_text().splitlines()
+    assert Path(captured[0]) == run_dir / "checkpoints"
+    assert Path(captured[1]) == run_dir / "logs" / "train.log"
+    assert "--artifact_run_dir" in captured[2:]
+    assert str(run_dir) in captured[2:]
+    assert not Path(captured[0]).is_relative_to(REPOSITORY / "ckpts")
+    assert not Path(captured[1]).is_relative_to(REPOSITORY / "logs")
 
 
 def test_registered_a3_launcher_preserves_the_fresh_training_contract():

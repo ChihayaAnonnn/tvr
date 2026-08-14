@@ -434,8 +434,9 @@ def test_exact_a3_args_are_composed_by_the_real_shell_launchers(tmp_path):
     env = _clean_registered_launcher_environment()
     env.update(
         {
-            "A3_LAUNCHER_TEST_MODE": "1",
-            "A3_BG_CONTROLLER": str(controller),
+                "A3_LAUNCHER_TEST_MODE": "1",
+                "LEGACY_A3_LAYOUT": "1",
+                "A3_BG_CONTROLLER": str(controller),
             "A3_TEST_OUTPUT_DIR": str(contextual_output),
             "A3_ARGV_CAPTURE": str(tail_capture),
         }

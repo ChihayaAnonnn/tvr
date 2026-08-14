@@ -3,10 +3,14 @@ from __future__ import division, print_function, unicode_literals
 import argparse
 import copy
 import datetime
+import hashlib
 import json
 import math
 import os
 import random
+import signal
+import stat
+import sys
 import tempfile
 import time
 from contextlib import contextmanager
@@ -25,8 +29,15 @@ from dataloaders.msrvtt_protocol import (
     validate_trusted_manifest,
 )
 from experiment_artifacts import (
+    ArtifactArrayStore,
+    RunPaths,
+    make_run_paths,
+    manifest_sha256,
+    transition_run_status,
     validate_artifact_json_payload,
+    validate_manifest,
     verify_array_reference,
+    verify_committed_reservation,
 )
 from experiment_tracking import (
     CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT,
@@ -101,6 +112,190 @@ from modules.tokenization_clip import SimpleTokenizer as ClipTokenizer
 from util import get_logger, parallel_apply
 
 global logger
+
+
+@dataclass(frozen=True)
+class _ArtifactRunContext:
+    paths: RunPaths
+    manifest: dict[str, object]
+
+
+class _ArtifactSignal(KeyboardInterrupt):
+    def __init__(self, signum):
+        super().__init__(f"artifact worker received signal {signum}")
+        self.signum = signum
+
+
+def _prepare_artifact_run(args, *, repo_root=None):
+    """Bind one worker invocation to its exact committed archive reservation."""
+
+    if not getattr(args, "artifact_run_dir", None):
+        return None
+    root = Path(args.artifact_run_dir)
+    if not root.is_absolute() or str(root) != os.path.normpath(str(root)):
+        raise ValueError("artifact run directory must be an absolute canonical path")
+    try:
+        payload = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("artifact run manifest is unavailable or invalid") from exc
+    manifest = validate_manifest(payload)
+    if manifest["run_id"] != args.artifact_run_id:
+        raise ValueError("artifact run ID differs from manifest")
+    digest = manifest_sha256(manifest)
+    if digest != args.artifact_manifest_sha256:
+        raise ValueError("artifact manifest SHA-256 differs from manifest")
+    if Path(str(manifest["artifact_path"])) != root:
+        raise ValueError("artifact run directory differs from manifest artifact_path")
+    paths = make_run_paths(root.parents[3], str(manifest["study"]), str(manifest["run_id"]))
+    if paths.root != root:
+        raise ValueError("artifact run directory is not canonical")
+    expected_output = paths.checkpoints.resolve()
+    if Path(args.output_dir).resolve() != expected_output:
+        raise ValueError("artifact output_dir must be the canonical checkpoints directory")
+    repository = (
+        Path(repo_root).resolve()
+        if repo_root is not None
+        else Path(__file__).resolve().parent
+    )
+    verify_committed_reservation(repository, str(manifest["registry_path"]), manifest)
+    if (getattr(args, "run_final_test", False) or getattr(args, "eval_split", "val") == "test") and not manifest["test_authorized"]:
+        raise ValueError("artifact manifest does not authorize test evaluation")
+    args.artifact_array_store = ArtifactArrayStore(paths.arrays)
+    args.artifact_metrics_dir = paths.metrics
+    args._artifact_eval_sequence = 0
+    return _ArtifactRunContext(paths=paths, manifest=manifest)
+
+
+def _start_artifact_run(context):
+    if context is None:
+        return
+    transition_run_status(context.paths, "reserved", "running")
+
+
+def _artifact_output_hashes(paths):
+    outputs = {}
+    for directory in (
+        paths.logs, paths.checkpoints, paths.metrics, paths.arrays, paths.plots,
+        paths.provenance,
+    ):
+        for current, directory_names, file_names, descriptor in os.fwalk(
+            directory, follow_symlinks=False
+        ):
+            for name in directory_names:
+                info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+                if not stat.S_ISDIR(info.st_mode):
+                    raise ValueError(
+                        f"artifact output directory is unsafe: {Path(current) / name}"
+                    )
+            for name in sorted(file_names):
+                if directory == paths.provenance and (
+                    name == "audit.jsonl" or name.endswith(".lock")
+                    or name.startswith("controller-pid.")
+                ):
+                    continue
+                flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                file_descriptor = os.open(name, flags, dir_fd=descriptor)
+                try:
+                    info = os.fstat(file_descriptor)
+                    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                        raise ValueError(
+                            f"artifact output must be a private file: {Path(current) / name}"
+                        )
+                    digest = hashlib.sha256()
+                    while True:
+                        chunk = os.read(file_descriptor, 1024 * 1024)
+                        if not chunk:
+                            break
+                        digest.update(chunk)
+                finally:
+                    os.close(file_descriptor)
+                path = Path(current) / name
+                outputs[path.relative_to(paths.root).as_posix()] = digest.hexdigest()
+    if paths.command.exists():
+        descriptor = os.open(
+            paths.command, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        )
+        try:
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise ValueError("artifact command must be a private regular file")
+            command_digest = hashlib.sha256()
+            while True:
+                chunk = os.read(descriptor, 1024 * 1024)
+                if not chunk:
+                    break
+                command_digest.update(chunk)
+            digest = command_digest.hexdigest()
+        finally:
+            os.close(descriptor)
+        outputs[paths.command.relative_to(paths.root).as_posix()] = digest
+    return outputs
+
+
+def _complete_artifact_run(context):
+    if context is None:
+        return
+    status = json.loads(context.paths.status.read_text(encoding="utf-8"))
+    state = status.get("state")
+    if state == "running":
+        transition_run_status(context.paths, "running", "validating")
+    transition_run_status(
+        context.paths, "validating", "completed", exit_code=0,
+        output_hashes=_artifact_output_hashes(context.paths),
+    )
+
+
+def _fail_artifact_run(context, *, exit_code):
+    if context is None:
+        return
+    status = json.loads(context.paths.status.read_text(encoding="utf-8"))
+    state = status.get("state")
+    if state in {"completed", "failed", "cancelled"}:
+        return
+    target = "failed" if state == "validating" else "cancelled"
+    transition_run_status(
+        context.paths, str(state), target, exit_code=exit_code,
+        output_hashes=_artifact_output_hashes(context.paths),
+    )
+
+
+def _publish_artifact_eval_metrics(args, payload):
+    metrics_dir = getattr(args, "artifact_metrics_dir", None)
+    if metrics_dir is None or getattr(args, "local_rank", 0) != 0:
+        return None
+    validate_artifact_json_payload(payload)
+    sequence = int(getattr(args, "_artifact_eval_sequence", 0))
+    split = str(getattr(args, "eval_split", "val"))
+    path = Path(metrics_dir) / f"{split}_eval_{sequence:03d}.json"
+    if path.exists():
+        raise FileExistsError(f"artifact metric already exists: {path}")
+    encoded = (
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    ).encode("utf-8")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            descriptor = -1
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    args._artifact_eval_sequence = sequence + 1
+    return path
+
+
+def _run_metadata_dir(args):
+    return Path(getattr(args, "artifact_metrics_dir", args.output_dir))
+
+
+def _run_provenance_dir(args):
+    artifact_run_dir = getattr(args, "artifact_run_dir", None)
+    if artifact_run_dir:
+        return Path(artifact_run_dir) / "provenance"
+    return Path(args.output_dir)
 
 
 def validate_trusted_cli(args):
@@ -234,6 +429,14 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         required=True,
         help="The output directory where the model predictions and checkpoints will be written.",
     )
+    parser.add_argument(
+        "--artifact_run_dir",
+        default=None,
+        type=str,
+        help="Canonical reserved archive run directory for a registered run.",
+    )
+    parser.add_argument("--artifact_run_id", default=None, type=str)
+    parser.add_argument("--artifact_manifest_sha256", default=None, type=str)
     parser.add_argument("--cross_model", default="cross-base", type=str, required=False, help="Cross module")
     parser.add_argument("--init_model", default=None, type=str, required=False, help="Initial model.")
     parser.add_argument("--resume_model", default=None, type=str, required=False, help="Resume train model.")
@@ -602,6 +805,19 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--w_contextual_risk_rank", type=float, default=0.25)
     args = parser.parse_args()
 
+    artifact_identity = (
+        args.artifact_run_dir,
+        args.artifact_run_id,
+        args.artifact_manifest_sha256,
+    )
+    if any(value is not None for value in artifact_identity) and not all(
+        value is not None for value in artifact_identity
+    ):
+        raise ValueError(
+            "--artifact_run_dir, --artifact_run_id, and "
+            "--artifact_manifest_sha256 must be provided together"
+        )
+
     if args.use_retrieval_risk_sidecar and not args.use_uatvr_full:
         raise ValueError(
             "use_retrieval_risk_sidecar requires --use_uatvr_full"
@@ -807,7 +1023,12 @@ def set_seed_logger(args):
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir, exist_ok=True)
 
-    logger = get_logger(os.path.join(args.output_dir, "log.txt"))
+    log_directory = (
+        Path(args.artifact_run_dir) / "logs"
+        if getattr(args, "artifact_run_dir", None)
+        else Path(args.output_dir)
+    )
+    logger = get_logger(str(log_directory / "runtime.log"))
 
     if args.local_rank == 0:
         logger.info("Effective parameters:")
@@ -1131,6 +1352,10 @@ _REGISTERED_A3_DYNAMIC_NAMESPACE_FIELDS = {
     # Owned by the registered lifecycle and torchrun topology gates.
     "output_dir",
     "rank",
+    # Bound to the committed archive manifest before contract validation.
+    "artifact_run_dir",
+    "artifact_run_id",
+    "artifact_manifest_sha256",
 }
 
 
@@ -1832,7 +2057,7 @@ def _publish_experiment_manifest(
         if not resume_a3:
             atomic_write_json(manifest_path, tracking_payload)
         _write_training_args_json(
-            args, Path(args.output_dir) / "training_args.json"
+            args, _run_provenance_dir(args) / "training_args.json"
         )
         for key, value in batch_semantics.items():
             logger.info("  Batch semantics | %s=%s", key, value)
@@ -1850,8 +2075,12 @@ def _write_training_args_json(args, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {}
     for key, value in vars(args).items():
+        if key.startswith("_") or key == "artifact_array_store":
+            continue
         if isinstance(value, (str, int, float, bool)) or value is None:
             payload[key] = value
+        elif isinstance(value, os.PathLike):
+            payload[key] = os.fspath(value)
         elif isinstance(value, (list, tuple)):
             try:
                 json.dumps(list(value))
@@ -4070,7 +4299,7 @@ def eval_epoch(
     """Evaluate with exact FP32 backend flags held through A3 scoring."""
 
     with _a3_exact_fp32_backend(args):
-        return _eval_epoch_impl(
+        result = _eval_epoch_impl(
             args,
             model,
             eval_dataloader,
@@ -4081,6 +4310,8 @@ def eval_epoch(
             artifact_array_store=artifact_array_store,
             artifact_run_dir=artifact_run_dir,
         )
+    _publish_artifact_eval_metrics(args, result)
+    return result
 
 
 def _candidate_clamp_ok(metrics):
@@ -4892,11 +5123,12 @@ def _initialize_contextual_risk_protocol(
     """Register a fresh canonical A1 baseline or validate one A3 continuation."""
 
     output_dir = Path(args.output_dir)
+    metadata_dir = _run_metadata_dir(args)
     artifact_run_dir = getattr(args, "artifact_run_dir", None)
     _validate_a3_publication_directory(output_dir)
-    baseline_path = output_dir / "a3_paired_baseline.json"
-    candidate_path = output_dir / "contextual_risk_candidates.json"
-    selection_path = output_dir / "best_contextual_risk_checkpoint.json"
+    baseline_path = metadata_dir / "a3_paired_baseline.json"
+    candidate_path = metadata_dir / "contextual_risk_candidates.json"
+    selection_path = metadata_dir / "best_contextual_risk_checkpoint.json"
     continuing = bool(getattr(args, "resume_model", ""))
     protocol_paths = (baseline_path, candidate_path, selection_path)
     if continuing:
@@ -5099,10 +5331,11 @@ def _record_contextual_risk_selection(
     expected_retrieval_config,
     expected_head_configs,
     artifact_run_dir=None,
+    checkpoint_output_dir=None,
 ):
     """Audit and append one A3 validation candidate, then persist its winner."""
 
-    output_dir = Path(selection_path).parent
+    output_dir = Path(checkpoint_output_dir or Path(selection_path).parent)
     marker_path = _checkpoint_publication_marker_path(
         epoch, argparse.Namespace(output_dir=str(output_dir))
     )
@@ -5134,12 +5367,12 @@ def _record_contextual_risk_selection(
         validate_artifact_json_payload(prospective_candidates, ensure_ascii=True)
     validate_candidate_artifacts(
         prospective_candidates,
-        output_dir=Path(selection_path).parent,
+        output_dir=output_dir,
         method_name="A3",
     )
     try:
         prospective_winner = choose_contextual_risk_checkpoint(
-            prospective_candidates, output_dir=Path(selection_path).parent
+            prospective_candidates, output_dir=output_dir
         )
     except ValueError as exc:
         if "no valid contextual risk checkpoint" not in str(exc):
@@ -5163,7 +5396,7 @@ def _record_contextual_risk_selection(
     )
     validate_candidate_artifacts(
         candidates,
-        output_dir=Path(selection_path).parent,
+        output_dir=output_dir,
         method_name="A3",
     )
     if candidates != prospective_candidates:
@@ -5215,8 +5448,8 @@ def _maybe_run_contextual_risk_final_test(
         output_dir=args.output_dir,
         method_name="A3",
     )
-    claim_path = Path(args.output_dir) / "a3_final_test_claim.json"
-    final_path = Path(args.output_dir) / "final_test.json"
+    claim_path = _run_metadata_dir(args) / "a3_final_test_claim.json"
+    final_path = _run_metadata_dir(args) / "final_test.json"
     if claim_path.exists():
         existing_claim = json.loads(claim_path.read_text())
         status = existing_claim.get("status")
@@ -5376,8 +5609,8 @@ def _initialize_csd_logvar_protocol(
 ):
     """Register fresh A1 evidence or restore one continuation lineage."""
 
-    baseline_path = Path(args.output_dir) / "a1_paired_baseline.json"
-    selection_path = Path(args.output_dir) / "best_csd_logvar_checkpoint.json"
+    baseline_path = _run_metadata_dir(args) / "a1_paired_baseline.json"
+    selection_path = _run_metadata_dir(args) / "best_csd_logvar_checkpoint.json"
     continuing = bool(args.resume_model)
     if continuing and not baseline_path.exists():
         raise FileNotFoundError(
@@ -5424,6 +5657,8 @@ def _initialize_csd_logvar_protocol(
             device,
             n_gpu,
             report_csd_logvar=False,
+            artifact_array_store=getattr(args, "artifact_array_store", None),
+            artifact_run_dir=getattr(args, "artifact_run_dir", None),
         )
         paired_baseline = baseline_eval["paired_digest"]
         atomic_write_json(
@@ -5485,6 +5720,7 @@ def _record_csd_logvar_selection(
     reference_checkpoint,
     candidates,
     selection_path,
+    checkpoint_output_dir=None,
 ):
     """Append, audit, select, and atomically persist one A2 candidate."""
 
@@ -5507,7 +5743,7 @@ def _record_csd_logvar_selection(
     candidates.append(candidate)
     validate_csd_logvar_candidate_artifacts(
         candidates,
-        output_dir=Path(selection_path).parent,
+        output_dir=Path(checkpoint_output_dir or Path(selection_path).parent),
     )
     try:
         winner = choose_csd_logvar_checkpoint(candidates)
@@ -5568,6 +5804,8 @@ def _evaluate_selected_test_checkpoints(
             device,
             n_gpu,
             directions=("t2v", "v2t"),
+            artifact_array_store=getattr(args, "artifact_array_store", None),
+            artifact_run_dir=getattr(args, "artifact_run_dir", None),
         )
         return {
             "test_split": "test",
@@ -5597,6 +5835,8 @@ def _evaluate_selected_test_checkpoints(
                 device,
                 n_gpu,
                 directions=(direction,),
+                artifact_array_store=getattr(args, "artifact_array_store", None),
+                artifact_run_dir=getattr(args, "artifact_run_dir", None),
             )
         final_test_payload[direction] = {
             **selection,
@@ -5608,11 +5848,10 @@ def _evaluate_selected_test_checkpoints(
     }
 
 
-def main():
+def _run_main(args):
     global logger
     import torch.distributed as dist
 
-    args = get_args()
     _assert_registered_a3_initial_environment(args)
     _preflight_registered_a3_clip_asset(args, verify_load=False)
     initial_git_state = collect_git_state(Path(__file__).resolve().parent)
@@ -5717,7 +5956,7 @@ def main():
             batch_semantics=batch_semantics,
             git_state=git_state,
         )
-        manifest_path = Path(args.output_dir) / "experiment_manifest.json"
+        manifest_path = _run_provenance_dir(args) / "training_manifest.json"
         _publish_experiment_manifest(
             args,
             tracking_payload=tracking_payload,
@@ -5923,7 +6162,7 @@ def main():
                     })
                     winner = choose_checkpoint(crf_dev_candidates)
                     write_dev_selection(
-                        Path(args.output_dir) / "best_crf_checkpoint.json",
+                        _run_metadata_dir(args) / "best_crf_checkpoint.json",
                         winner,
                     )
                     logger.info(
@@ -5960,6 +6199,7 @@ def main():
                         ],
                         candidates=csd_protocol["candidates"],
                         selection_path=csd_protocol["selection_path"],
+                        checkpoint_output_dir=args.output_dir,
                     )
                     if winner is None:
                         logger.warning(
@@ -6010,6 +6250,7 @@ def main():
                                 ),
                             ),
                             artifact_run_dir=getattr(args, "artifact_run_dir", None),
+                            checkpoint_output_dir=args.output_dir,
                         )
                     except RuntimeError as exc:
                         if "terminal A3 invariance violation" not in str(exc):
@@ -6135,7 +6376,7 @@ def main():
                     },
                 }
                 atomic_write_json(
-                    Path(args.output_dir) / "best_validation_checkpoints.json",
+                    _run_metadata_dir(args) / "best_validation_checkpoints.json",
                     selection_payload,
                 )
 
@@ -6203,13 +6444,67 @@ def main():
                     args.eval_split = previous_eval_split
 
                 atomic_write_json(
-                    Path(args.output_dir) / "final_test.json",
+                    _run_metadata_dir(args) / "final_test.json",
                     final_test_payload,
                 )
 
     elif args.do_eval:
         if args.local_rank == 0:
-            eval_epoch(args, model, eval_dataloader, device, n_gpu)
+            eval_epoch(
+                args, model, eval_dataloader, device, n_gpu,
+                artifact_array_store=getattr(args, "artifact_array_store", None),
+                artifact_run_dir=getattr(args, "artifact_run_dir", None),
+            )
+
+
+def main():
+    """Run retrieval with optional committed archive lifecycle ownership."""
+
+    args = get_args()
+    if "LOCAL_RANK" in os.environ:
+        args.local_rank = int(os.environ["LOCAL_RANK"])
+    else:
+        args.local_rank = 0
+    rank = int(os.environ.get("RANK", args.local_rank))
+    context = _prepare_artifact_run(args)
+    owner = context is not None and rank == 0
+    previous_handlers = {}
+
+    def interrupt(signum, _frame):
+        raise _ArtifactSignal(signum)
+
+    if owner:
+        _start_artifact_run(context)
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            previous_handlers[signum] = signal.getsignal(signum)
+            signal.signal(signum, interrupt)
+    try:
+        _run_main(args)
+        if context is not None:
+            import torch.distributed as dist
+
+            if dist.is_available() and dist.is_initialized():
+                dist.barrier()
+        if owner:
+            _complete_artifact_run(context)
+    except BaseException as exc:
+        if owner:
+            exit_code = 1
+            if isinstance(exc, _ArtifactSignal):
+                exit_code = 128 + int(exc.signum)
+            elif isinstance(exc, KeyboardInterrupt):
+                exit_code = 130
+            try:
+                _fail_artifact_run(context, exit_code=exit_code)
+            except BaseException as lifecycle_error:
+                print(
+                    f"artifact terminal publication failed: {lifecycle_error}",
+                    file=sys.stderr,
+                )
+        raise
+    finally:
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
 
 
 if __name__ == "__main__":

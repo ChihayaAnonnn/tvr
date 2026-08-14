@@ -8,8 +8,6 @@ TVR_TORCHRUN=${TVR_TORCHRUN:-/home/xujie/.conda/envs/tvr/bin/torchrun}
 cd "${ROOT_DIR}"
 
 run_controller() {
-    mkdir -p logs
-
     RUN_DATE="${RUN_DATE:-$(date +%Y%m%d)}"
     RUN_TIME="${RUN_TIME:-$(date +%H%M%S)}"
     RUN_TAG="${RUN_TAG:-}"
@@ -19,9 +17,8 @@ run_controller() {
     fi
     RUN_SUFFIX="${RUN_TIME}${RUN_TAG:+_${RUN_TAG}}"
     RUN_ID="${RUN_ID:-${RUN_DATE}_${RUN_SUFFIX}}"
-    LOG_DIR="logs/${RUN_DATE}"
-    mkdir -p "${LOG_DIR}"
-    LOG_FILE="${LOG_DIR}/${RUN_SUFFIX}_train_msrvtt.log"
+    LOG_FILE="${LOG_FILE:-logs/${RUN_DATE}/${RUN_SUFFIX}_train_msrvtt.log}"
+    mkdir -p "$(dirname "${LOG_FILE}")"
     TRAIN_PID_FILE="${TRAIN_PID_FILE:-}"
 
     echo "[run_train_msrvtt_bg] RUN_DATE=${RUN_DATE} RUN_TIME=${RUN_TIME} RUN_TAG=${RUN_TAG}"
