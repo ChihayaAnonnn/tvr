@@ -8,6 +8,20 @@
 
 **Tech Stack:** Python 3, Bash, pytest, PyTorch distributed/NCCL, JSON/JSONL, Git.
 
+## Delivered path mapping
+
+This plan preserves its pre-implementation filenames as historical intent. The
+delivered locations are:
+
+- `tools/experiment_artifacts.py` -> `experiment_artifacts.py`
+- `schemas/experiment_manifest.schema.json` -> `experiments/contextual-risk-v2/schemas/manifest.schema.json`
+- `schemas/experiment_registry_record.schema.json` -> `experiments/contextual-risk-v2/schemas/registry.schema.json`
+- `tools/archive_qualification.py` -> `main_task_retrieval.py`
+
+The qualification body was deliberately kept in the existing production entry
+point so the evidence exercises the sealed launcher path rather than a helper
+that production training does not import.
+
 ## Global Constraints
 
 - Use exactly four new run identities: success, non-owner-rank failure, owner-collective failure, and SIGTERM/different-collectives.

@@ -40,13 +40,22 @@ manifest 的既有 `parent_run_ids` 必须链接 predecessor，`selection_lineag
 source SHA 改变时也必须新预留 run。路径/哈希/审计无法验证时停止并请求人工处理，绝不静默重试
 或覆盖既有目录。
 
+新 phase 必须用 `scheduled_timestamp_utc` 显式表示 run ID 中预定的 UTC 身份时间；
+`timestamp_utc` 只为旧 phase 和已存证据保留的兼容别名。若没有预定启动时间，应在
+预留时间生成当时 UTC 值，不得用计划文档的创建时间冒充实际执行时间。
+`selection_lineage` 必须引用受 Git 跟踪的报告或 commit；不得引用 worktree Git
+管理状态中的 `sdd/` 路径。
+
+`--artifact-root` 接收父级数据面根目录，管理器会再追加 phase 的 study 名；不要把
+`contextual-risk-v2` 重复写进该参数。
+
 ## 常用命令
 
 ```bash
 PYTHONPATH=. /home/xujie/.conda/envs/tvr/bin/python scripts/manage_experiment_run.py reserve-phase \
   --repo-root "$PWD" --phase <committed-phase.json> \
   --registry experiments/contextual-risk-v2/registry.jsonl \
-  --artifact-root "$PWD/artifacts/contextual-risk-v2"
+  --artifact-root "$PWD/artifacts"
 
 PYTHONPATH=. /home/xujie/.conda/envs/tvr/bin/python scripts/manage_experiment_run.py verify-run \
   --repo-root "$PWD" --registry experiments/contextual-risk-v2/registry.jsonl \

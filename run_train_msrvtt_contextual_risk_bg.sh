@@ -104,6 +104,14 @@ RUN_SUFFIX="${RUN_TIME}${RUN_TAG:+_${RUN_TAG}}"
 RUN_ID="${RUN_DATE}_${RUN_SUFFIX}"
 ARTIFACT_ARGS=()
 QUALIFICATION_SCENARIO=""
+REGISTERED_VARIANT_ARGS=(
+    --contextual_risk_feature_set full
+    --contextual_risk_topk 16
+    --w_contextual_risk_fit 0.25
+    --w_contextual_risk_rank 0.25
+    --seed 0
+    --epochs 3
+)
 ARTIFACT_MODE=1
 if [[ "${LEGACY_A3_LAYOUT:-0}" == "1" ]]; then
     ARTIFACT_MODE=0
@@ -158,6 +166,7 @@ print(payload["state"])
 print("1" if payload["test_authorized"] else "0")
 print(payload["stage"])
 print(json.dumps(payload["command_argv"], separators=(",", ":")))
+print(json.dumps(payload["registered_a3_variant_argv"], separators=(",", ":")))
 PY
     )
     ARTIFACT_RUN_DIR="${ARTIFACT_IDENTITY[0]}"
@@ -169,6 +178,18 @@ with open(sys.argv[1], encoding="utf-8") as handle:
 print(manifest["config"]["evaluation"].get("archive_qualification_scenario", ""))
 PY
     )" || exit 2
+    if [[ "${QUALIFICATION_SCENARIO}" == "none" ]]; then
+        QUALIFICATION_SCENARIO=""
+    fi
+    mapfile -t REGISTERED_VARIANT_ARGS < <(
+        /home/xujie/.conda/envs/tvr/bin/python - "${ARTIFACT_IDENTITY[6]}" <<'PY'
+import json, sys
+values = json.loads(sys.argv[1])
+if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+    raise SystemExit("registered A3 variant argv must be a string list")
+print("\n".join(values))
+PY
+    ) || exit 2
     if ! /home/xujie/.conda/envs/tvr/bin/python - "${ARTIFACT_IDENTITY[5]}" "${ARTIFACT_RUN_ID}" <<'PY'
 import json, sys
 actual = json.loads(sys.argv[1])
@@ -343,18 +364,33 @@ trap 'retain_reservation_on_signal SIGTERM 143' TERM
 CONTROLLER_MAY_HAVE_SPAWNED=1
 CONTROLLER_ARGS=("${ARTIFACT_ARGS[@]}")
 if [[ -z "${QUALIFICATION_SCENARIO}" ]]; then
-    CONTROLLER_ARGS=(
-        --use_uatvr_full --use_ada_norm --init_model "${BASE_CKPT}"
-        --use_retrieval_risk_sidecar --w_retrieval_risk 0.0
-        --use_contextual_risk_sidecar --contextual_risk_sidecar_only
-        --registered_contextual_risk_a3
-        --registered_clip_asset_path "${CLIP_ASSET}"
-        --registered_clip_asset_sha256 "${CLIP_ASSET_SHA256}"
-        --contextual_risk_topk 16 --contextual_risk_projection_dim 128
-        --contextual_risk_hidden_dim 128 --contextual_risk_temperature 1.0
-        --w_contextual_risk_fit 0.25 --w_contextual_risk_rank 0.25
-        --seed 0 --epochs 3 "${FINAL_TEST_ARGS[@]}" "${ARTIFACT_ARGS[@]}"
-    )
+    if [[ "${ARTIFACT_MODE}" == "0" ]]; then
+        CONTROLLER_ARGS=(
+            --use_uatvr_full --use_ada_norm --init_model "${BASE_CKPT}"
+            --use_retrieval_risk_sidecar --w_retrieval_risk 0.0
+            --use_contextual_risk_sidecar --contextual_risk_sidecar_only
+            --registered_contextual_risk_a3
+            --registered_clip_asset_path "${CLIP_ASSET}"
+            --registered_clip_asset_sha256 "${CLIP_ASSET_SHA256}"
+            --contextual_risk_topk 16 --contextual_risk_projection_dim 128
+            --contextual_risk_hidden_dim 128 --contextual_risk_temperature 1.0
+            --w_contextual_risk_fit 0.25 --w_contextual_risk_rank 0.25
+            --seed 0 --epochs 3 "${FINAL_TEST_ARGS[@]}" "${ARTIFACT_ARGS[@]}"
+        )
+    else
+        CONTROLLER_ARGS=(
+            --use_uatvr_full --use_ada_norm --init_model "${BASE_CKPT}"
+            --use_retrieval_risk_sidecar --w_retrieval_risk 0.0
+            --use_contextual_risk_sidecar --contextual_risk_sidecar_only
+            --registered_contextual_risk_a3
+            --registered_clip_asset_path "${CLIP_ASSET}"
+            --registered_clip_asset_sha256 "${CLIP_ASSET_SHA256}"
+            --contextual_risk_projection_dim 128
+            --contextual_risk_hidden_dim 128 --contextual_risk_temperature 1.0
+            "${REGISTERED_VARIANT_ARGS[@]}"
+            "${FINAL_TEST_ARGS[@]}" "${ARTIFACT_ARGS[@]}"
+        )
+    fi
 fi
 RUN_DATE="${RUN_DATE}" \
 RUN_TIME="${RUN_TIME}" \

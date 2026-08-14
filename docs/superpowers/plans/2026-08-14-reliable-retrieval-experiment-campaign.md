@@ -98,6 +98,15 @@ git commit -m "feat: add retrieval risk baselines and paired statistics"
 - Adds `--contextual_risk_feature_set` with exact choices `full`, `score_only`, `semantic_only`, `no_context`, `no_score_geometry`.
 - Reuses `--w_contextual_risk_fit` and `--w_contextual_risk_rank` for objective ablations.
 - Produces manifest fields `feature_set`, `active_feature_blocks`, `fit_weight`, `rank_weight`, and `topk`.
+- Modifies `run_train_msrvtt_contextual_risk_bg.sh`: its sealed command remains
+  `env ARTIFACT_RUN_ID=<run-id> bash run_train_msrvtt_contextual_risk_bg.sh`.
+  The verified manifest is the sole source for a manifest-derived allowlist:
+  `config.model.contextual_risk_feature_set`,
+  `config.model.contextual_risk_topk`,
+  `config.loss.w_contextual_risk_fit`,
+  `config.loss.w_contextual_risk_rank`, `config.optimizer.seed`, and
+  `config.scheduler.epochs`. The wrapper 不得接受任意 trailing argv or
+  environment override for these values.
 
 - [ ] **Step 1: Write failing feature-mask tests**
 
@@ -137,6 +146,12 @@ Construct the full 426-dimensional tensor, then multiply named slices by constan
 - [ ] **Step 4: Validate configuration and manifests**
 
 Reject unsupported combinations, require full A3 for final stage, and include feature/loss/K values in immutable resume and archive manifests. Checkpoint replay must reconstruct the exact feature set.
+
+The launcher accepts only the values frozen in `study.yaml`: five feature
+sets, four loss pairs, K in `{1,4,8,16,32}`, seeds `{0,1,2}`, and epochs
+`{3,5}`. Tests must cover committed manifest -> wrapper argv ->
+`_verify_artifact_runtime_bindings()` and reject category duplication or an
+out-of-allowlist value before model/data setup.
 
 - [ ] **Step 5: Run compatibility tests and commit**
 
@@ -209,7 +224,7 @@ Encode the exact approved thresholds. Return a serializable decision containing 
 
 - [ ] **Step 5: Write concrete phase specifications**
 
-Stage 2 variants are exactly `score_only`, `semantic_only`, `no_context`, `no_score_geometry`, `full`. Stage 3 losses are `bce`, `bce_fit`, `bce_rank`, `full`; K values are `1,4,8,16,32`. Stage 4 seeds are `0,1,2`. Every run states dataset, parent checkpoint, seed, epochs, continuation rule, feature set, losses, K, precision, hardware, and validation-only flag.
+Stage 2 variants are exactly `score_only`, `semantic_only`, `no_context`, `no_score_geometry`, `full`. Stage 3 losses are `bce`, `bce_fit`, `bce_rank`, `full`; K values are `1,4,8,16,32`. Stage 4 seeds are `0,1,2`. Every run states dataset, parent checkpoint, seed, epochs, continuation rule, feature set, losses, K, precision, hardware, validation-only flag, and an explicit `scheduled_timestamp_utc` used only as the run-identity schedule. If no start is scheduled, generate it at reservation time.
 
 - [ ] **Step 6: Run tests and commit**
 

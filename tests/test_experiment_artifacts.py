@@ -4,10 +4,10 @@ import os
 from dataclasses import replace
 from pathlib import Path
 import subprocess
+import sys
 
 import numpy as np
 import pytest
-from jsonschema import Draft202012Validator
 
 import experiment_artifacts
 from experiment_artifacts import (
@@ -15,6 +15,7 @@ from experiment_artifacts import (
     ALLOWED_STATES,
     RunPaths,
     append_registry_records,
+    artifact_schema_validator,
     build_run_id,
     load_registry,
     make_run_paths,
@@ -26,6 +27,24 @@ from experiment_artifacts import (
 
 
 REGISTRY = Path("experiments/contextual-risk-v2/registry.jsonl")
+
+
+def test_archive_schema_runtime_dependency_is_declared_and_importable():
+    requirements = Path("requirements.txt").read_text().splitlines()
+    assert "jsonschema==4.23.0" in requirements
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from experiment_artifacts import artifact_schema_validator; "
+            "assert callable(artifact_schema_validator)",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_large_arrays_are_externalized_and_deduplicated(tmp_path):
@@ -356,9 +375,228 @@ def test_schemas_match_canonical_enums():
     assert set(status["properties"]["state"]["enum"]) == ALLOWED_STATES
 
 
+def test_metrics_schema_and_python_validator_accept_production_archive_payload():
+    payload = {
+        "split": "validation",
+        "summary_metrics": {"qualification_loss": 7.5},
+        "array_references": [{
+            "path": "arrays/sha256/99/" + "9" * 64 + ".npy",
+            "key": "qualification_values",
+            "shape": [524288],
+            "dtype": "float32",
+            "byte_size": 2097152,
+            "format": "npy",
+            "sha256": "9" * 64,
+        }],
+    }
+    schema = json.loads(
+        Path("experiments/contextual-risk-v2/schemas/metrics.schema.json").read_text()
+    )
+
+    assert artifact_schema_validator(schema).is_valid(payload)
+    assert experiment_artifacts.validate_metrics_document(payload) == payload
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda payload: payload | {"metrics": payload["summary_metrics"]},
+        lambda payload: payload | {"summary_metrics": {"loss": float("nan")}},
+        lambda payload: payload | {"array_references": [
+            payload["array_references"][0] | {"byte_size": "2097152"}
+        ]},
+    ],
+)
+def test_metrics_contract_rejects_unknown_nonfinite_and_malformed_documents(mutate):
+    payload = {
+        "split": "validation",
+        "summary_metrics": {"loss": 1.0},
+        "array_references": [{
+            "path": "arrays/sha256/aa/" + "a" * 64 + ".npy",
+            "key": "values",
+            "shape": [1],
+            "dtype": "float32",
+            "byte_size": 4,
+            "format": "npy",
+            "sha256": "a" * 64,
+        }],
+    }
+
+    with pytest.raises(ValueError):
+        experiment_artifacts.validate_metrics_document(mutate(payload))
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda payload: payload | {"run_id": "../unsafe"},
+        lambda payload: payload | {"array_references": [
+            payload["array_references"][0] | {"key": "unsafe..key"}
+        ]},
+        lambda payload: payload | {"array_references": [
+            payload["array_references"][0] | {"dtype": "object"}
+        ]},
+        lambda payload: payload | {"array_references": [
+            payload["array_references"][0] | {"dtype": "f4"}
+        ]},
+        lambda payload: payload | {"array_references": [
+            payload["array_references"][0] | {
+                "path": "arrays/sha256/bb/" + "a" * 64 + ".npy"
+            }
+        ]},
+        lambda payload: payload | {"array_references": [
+            payload["array_references"][0] | {"sha256": "b" * 64}
+        ]},
+        lambda payload: payload | {"array_references": [
+            payload["array_references"][0] | {"sha256": "aa" + "b" * 62}
+        ]},
+    ],
+)
+def test_metrics_schema_and_python_reject_the_same_unsafe_syntax(mutate):
+    payload = {
+        "split": "validation",
+        "summary_metrics": {"loss": 1.0},
+        "array_references": [{
+            "path": "arrays/sha256/aa/" + "a" * 64 + ".npy",
+            "key": "values",
+            "shape": [1],
+            "dtype": "float32",
+            "byte_size": 4,
+            "format": "npy",
+            "sha256": "a" * 64,
+        }],
+    }
+    invalid = mutate(payload)
+    schema = json.loads(
+        Path("experiments/contextual-risk-v2/schemas/metrics.schema.json").read_text()
+    )
+
+    assert not artifact_schema_validator(schema).is_valid(invalid)
+    with pytest.raises(ValueError):
+        experiment_artifacts.validate_metrics_document(invalid)
+
+
+def test_status_schema_requires_null_exit_code_until_terminal():
+    schema = json.loads(
+        Path("experiments/contextual-risk-v2/schemas/status.schema.json").read_text()
+    )
+    status = {
+        "run_id": _manifest()["run_id"],
+        "state": "running",
+        "timestamp_utc": "2026-08-15T00:00:00Z",
+        "worker_pid": 1,
+        "host": "fixture",
+        "manifest_sha256": "a" * 64,
+        "exit_code": None,
+        "output_hashes": {},
+        "transition_id": "b" * 64,
+    }
+
+    validator = artifact_schema_validator(schema)
+    assert validator.is_valid(status)
+    assert not validator.is_valid(status | {"exit_code": 1})
+    assert validator.is_valid(
+        status | {"state": "cancelled", "exit_code": 1}
+    )
+
+
+@pytest.mark.parametrize("path", ["/absolute.json", "metrics/../escape.json"])
+def test_status_schema_and_python_reject_unsafe_output_hash_paths(path):
+    schema = json.loads(
+        Path("experiments/contextual-risk-v2/schemas/status.schema.json").read_text()
+    )
+    status = {
+        "run_id": _manifest()["run_id"],
+        "state": "completed",
+        "timestamp_utc": "2026-08-15T00:00:00Z",
+        "worker_pid": 1,
+        "host": "fixture",
+        "manifest_sha256": "a" * 64,
+        "exit_code": 0,
+        "output_hashes": {path: "b" * 64},
+        "transition_id": "c" * 64,
+    }
+
+    assert not artifact_schema_validator(schema).is_valid(status)
+    with pytest.raises(ValueError, match="output_hashes"):
+        experiment_artifacts._validate_output_hashes(status["output_hashes"])
+
+
+def test_registry_schema_and_python_validator_have_strict_selected_metric_contract():
+    record = _reservation_record(_manifest())
+    terminal = record | {
+        "event": "completed",
+        "state": "completed",
+        "selected_validation": {
+            "path": "metrics/selected_validation.json",
+            "sha256": "a" * 64,
+        },
+        "summary_metrics": {"loss": 1.0},
+    }
+    schema = json.loads(
+        Path("experiments/contextual-risk-v2/schemas/registry.schema.json").read_text()
+    )
+    validator = artifact_schema_validator(schema)
+
+    assert validator.is_valid(terminal)
+    assert experiment_artifacts.parse_registry_text(json.dumps(terminal) + "\n") == [terminal]
+    for invalid in (
+        terminal | {"state": "failed"},
+        terminal | {"selected_validation": {"values": [1, 2, 3]}},
+        terminal | {"summary_metrics": {"loss": float("inf")}},
+        record | {"selected_validation": terminal["selected_validation"]},
+        record | {"summary_metrics": {"premature": 1.0}},
+    ):
+        assert not validator.is_valid(invalid) or invalid["summary_metrics"] == {"loss": float("inf")}
+        with pytest.raises(ValueError):
+            experiment_artifacts.parse_registry_text(json.dumps(invalid) + "\n")
+
+
+@pytest.mark.parametrize(
+    "path", ["metrics//selected_validation.json", "metrics/./selected_validation.json"]
+)
+def test_registry_schema_and_python_reject_noncanonical_metric_paths(path):
+    record = _reservation_record(_manifest()) | {
+        "event": "completed",
+        "state": "completed",
+        "selected_validation": {"path": path, "sha256": "a" * 64},
+        "summary_metrics": {"loss": 1.0},
+    }
+    schema = json.loads(
+        Path("experiments/contextual-risk-v2/schemas/registry.schema.json").read_text()
+    )
+
+    assert not artifact_schema_validator(schema).is_valid(record)
+    with pytest.raises(ValueError, match="selected_validation.path"):
+        experiment_artifacts.parse_registry_text(json.dumps(record) + "\n")
+
+
+def test_registry_schema_and_python_reject_unsafe_run_id():
+    record = _reservation_record(_manifest()) | {"run_id": "bad/name"}
+    schema = json.loads(
+        Path("experiments/contextual-risk-v2/schemas/registry.schema.json").read_text()
+    )
+
+    assert not artifact_schema_validator(schema).is_valid(record)
+    with pytest.raises(ValueError, match="run_id"):
+        experiment_artifacts.parse_registry_text(json.dumps(record) + "\n")
+
+
+def test_registry_schema_requires_correction_target_and_matching_event_state():
+    schema = json.loads(
+        Path("experiments/contextual-risk-v2/schemas/registry.schema.json").read_text()
+    )
+    validator = artifact_schema_validator(schema)
+    reservation = _reservation_record(_manifest())
+    assert not validator.is_valid(reservation | {"state": "completed"})
+    assert not validator.is_valid(
+        reservation | {"event": "correction", "state": "reserved"}
+    )
+
+
 def test_manifest_schema_rejects_duplicate_separators_and_nonfinal_test_access():
     schema = json.loads(Path("experiments/contextual-risk-v2/schemas/manifest.schema.json").read_text())
-    validator = Draft202012Validator(schema)
+    validator = artifact_schema_validator(schema)
     duplicate_separator = _manifest(
         variant="reference--copy",
         run_id="msrvtt-baseline-reference--copy-seed000-20260814T020304Z-000000000000",
@@ -380,7 +618,7 @@ def test_portable_artifact_locator_is_optional_normalized_and_schema_valid():
     schema = json.loads(
         Path("experiments/contextual-risk-v2/schemas/manifest.schema.json").read_text()
     )
-    assert Draft202012Validator(schema).is_valid(located)
+    assert artifact_schema_validator(schema).is_valid(located)
 
     for invalid in ("/absolute/path", "artifacts/../escape", "artifacts//run", "./artifacts/run"):
         with pytest.raises(ValueError, match="artifact_locator"):
@@ -402,7 +640,7 @@ def test_registry_accepts_and_preserves_optional_artifact_locator(tmp_path):
     schema = json.loads(
         Path("experiments/contextual-risk-v2/schemas/registry.schema.json").read_text()
     )
-    assert Draft202012Validator(schema).is_valid(record)
+    assert artifact_schema_validator(schema).is_valid(record)
 
 
 def test_registry_is_append_only_and_rejects_duplicate_events(tmp_path):
@@ -518,6 +756,38 @@ def test_worker_requires_exact_committed_reservation(tmp_path):
     }
     with pytest.raises(ValueError, match="committed reservation"):
         verify_committed_reservation(repo_root, REGISTRY, changed)
+
+
+@pytest.mark.parametrize("locator", [None, "artifacts/contextual-risk-v2/wrong"])
+def test_worker_rejects_reservation_with_missing_or_mismatched_locator(
+    tmp_path, locator
+):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_git_repo(repo_root)
+    source_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    artifact_path = repo_root / "artifacts/contextual-risk-v2/msrvtt/baseline/run"
+    manifest = _manifest(
+        artifact_path=str(artifact_path), git_sha=source_sha,
+        run_id=(
+            "msrvtt-baseline-reference-seed000-20260814T020304Z-"
+            f"{source_sha[:12]}"
+        ),
+        artifact_locator=artifact_path.relative_to(repo_root).as_posix(),
+    )
+    _write_run_local_manifest(manifest)
+    record = _reservation_record(manifest)
+    if locator is not None:
+        record["artifact_locator"] = locator
+    append_registry_records(repo_root / REGISTRY, [record])
+    subprocess.run(["git", "add", REGISTRY], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-qm", "malformed reservation"], cwd=repo_root, check=True)
+
+    with pytest.raises(ValueError, match="exact committed reservation"):
+        verify_committed_reservation(repo_root, REGISTRY, manifest)
 
 
 def test_worker_rejects_missing_or_uncommitted_reservation(tmp_path):

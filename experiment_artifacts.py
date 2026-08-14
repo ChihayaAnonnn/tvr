@@ -19,6 +19,7 @@ import tempfile
 from typing import Mapping
 
 import numpy as np
+from jsonschema import Draft202012Validator, ValidationError, validators
 
 
 ALLOWED_STAGES: frozenset[str] = frozenset(
@@ -40,6 +41,9 @@ ALLOWED_STATES: frozenset[str] = frozenset(
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_CANONICAL_NUMERIC_DTYPE = re.compile(
+    r"^(?:bool|u?int(?:8|16|32|64)|float(?:16|32|64)|complex(?:64|128))$"
+)
 _GIT_SHA = re.compile(r"^[0-9a-f]{12,40}$")
 _RUN_ID = re.compile(
     r"^(?P<dataset>[A-Za-z0-9][A-Za-z0-9._-]*)-"
@@ -47,6 +51,43 @@ _RUN_ID = re.compile(
     r"(?P<variant>[A-Za-z0-9][A-Za-z0-9._-]*)-"
     r"seed(?P<seed>\d{3})-(?P<timestamp>\d{8}T\d{6}Z)-(?P<git_sha>[0-9a-f]{12})$"
 )
+
+
+def _validate_canonical_content_address(
+    validator: object,
+    enabled: object,
+    instance: object,
+    schema: Mapping[str, object],
+):
+    """Implement the cross-field invariant JSON Schema cannot express itself."""
+
+    del validator, schema
+    if not enabled or not isinstance(instance, Mapping):
+        return
+    path = instance.get("path")
+    digest = instance.get("sha256")
+    if not isinstance(path, str) or not isinstance(digest, str):
+        return
+    expected_path = f"arrays/sha256/{digest[:2]}/{digest}.npy"
+    if path != expected_path:
+        yield ValidationError(
+            "path must equal the canonical content-address derived from sha256"
+        )
+
+
+ArtifactSchemaValidator = validators.extend(
+    Draft202012Validator,
+    {"x-canonical-content-address": _validate_canonical_content_address},
+)
+
+
+def artifact_schema_validator(
+    schema: Mapping[str, object],
+) -> Draft202012Validator:
+    """Build the required validator for archive schemas and custom invariants."""
+
+    ArtifactSchemaValidator.check_schema(schema)
+    return ArtifactSchemaValidator(schema)
 
 _MANIFEST_FIELDS = frozenset(
     {
@@ -232,6 +273,8 @@ def _array_reference_from_mapping(value: ArrayReference | Mapping[str, object]) 
     ):
         raise ValueError("array reference shape must contain non-negative integers")
     dtype = value["dtype"]
+    if not isinstance(dtype, str) or not _CANONICAL_NUMERIC_DTYPE.fullmatch(dtype):
+        raise ValueError("array reference dtype must use a canonical numeric name")
     try:
         parsed_dtype = np.dtype(dtype)
     except TypeError as exc:
@@ -833,6 +876,100 @@ def manifest_sha256(payload: Mapping[str, object]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def reservation_record(manifest: Mapping[str, object]) -> dict[str, object]:
+    """Return the one canonical registry authorization for a manifest."""
+
+    normalized = validate_manifest(manifest)
+    record: dict[str, object] = {
+        "run_id": normalized["run_id"],
+        "event": "reserved",
+        "artifact_path": normalized["artifact_path"],
+        "manifest_sha256": manifest_sha256(normalized),
+        "state": "reserved",
+        "parent_run_ids": normalized["parent_run_ids"],
+        "selected_validation": None,
+        "test_authorized": normalized["test_authorized"],
+        "summary_metrics": {},
+    }
+    if "artifact_locator" in normalized:
+        record["artifact_locator"] = normalized["artifact_locator"]
+    return _validate_registry_record(record)
+
+
+def _validate_summary_metrics(value: object, field: str) -> dict[str, int | float]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{field} must be an object")
+    metrics: dict[str, int | float] = {}
+    for name, metric in value.items():
+        if not isinstance(name, str) or not _SAFE_NAME.fullmatch(name):
+            raise ValueError(f"{field} names must be safe strings")
+        if (
+            isinstance(metric, bool)
+            or not isinstance(metric, (int, float))
+            or not np.isfinite(metric)
+        ):
+            raise ValueError(f"{field} must map names to finite numeric scalars")
+        metrics[name] = metric
+    return metrics
+
+
+def _validate_selected_validation(value: object) -> dict[str, str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping) or set(value) != {"path", "sha256"}:
+        raise ValueError(
+            "registry.selected_validation must be null or an exact path/hash reference"
+        )
+    path = value["path"]
+    if (
+        not isinstance(path, str)
+        or Path(path).is_absolute()
+        or Path(path).parts[:1] != ("metrics",)
+        or ".." in Path(path).parts
+        or path != Path(path).as_posix()
+        or not path.endswith(".json")
+    ):
+        raise ValueError("registry.selected_validation.path must name canonical metrics JSON")
+    digest = _require_sha256(value["sha256"], "registry.selected_validation.sha256")
+    return {"path": path, "sha256": digest}
+
+
+def validate_metrics_document(payload: Mapping[str, object]) -> dict[str, object]:
+    """Validate the scalar/array-reference document written below ``metrics/``."""
+
+    if not isinstance(payload, Mapping):
+        raise ValueError("metrics document must be an object")
+    allowed = {"run_id", "split", "summary_metrics", "array_references"}
+    required = {"split", "summary_metrics", "array_references"}
+    if set(payload) - allowed:
+        raise ValueError("metrics document has unknown fields")
+    if required - set(payload):
+        raise ValueError("metrics document is missing required fields")
+    normalized = dict(payload)
+    if "run_id" in normalized:
+        _require_safe_name(normalized["run_id"], "metrics.run_id")
+    if normalized["split"] not in {"train", "validation", "test"}:
+        raise ValueError("metrics.split must be train, validation, or test")
+    normalized["summary_metrics"] = _validate_summary_metrics(
+        normalized["summary_metrics"], "metrics.summary_metrics"
+    )
+    references = _require_list(normalized["array_references"], "metrics.array_references")
+    normalized_references = []
+    for index, reference in enumerate(references):
+        parsed = _array_reference_from_mapping(reference)
+        expected_path = (
+            f"arrays/sha256/{parsed.sha256[:2]}/{parsed.sha256}.npy"
+        )
+        if parsed.path != expected_path:
+            raise ValueError(
+                f"metrics.array_references[{index}].path is not canonical content-addressed storage"
+            )
+        normalized_references.append(parsed.as_dict())
+    normalized["array_references"] = normalized_references
+    validate_artifact_json_payload(normalized)
+    return normalized
+
+
 def registry_record_sha256(payload: Mapping[str, object]) -> str:
     """Return the canonical digest used by correction records to name prior lines."""
 
@@ -870,21 +1007,23 @@ def _validate_registry_record(payload: Mapping[str, object]) -> dict[str, object
     parents = _require_list(record["parent_run_ids"], "registry.parent_run_ids")
     if any(not isinstance(parent, str) or not parent for parent in parents):
         raise ValueError("registry.parent_run_ids must contain non-empty run IDs")
-    selected_validation = record["selected_validation"]
-    if selected_validation is not None and not isinstance(selected_validation, Mapping):
-        raise ValueError("registry.selected_validation must be an object or null")
+    selected_validation = _validate_selected_validation(record["selected_validation"])
+    record["selected_validation"] = selected_validation
     if not isinstance(record["test_authorized"], bool):
         raise ValueError("registry.test_authorized must be a boolean")
-    summary_metrics = record["summary_metrics"]
-    if not isinstance(summary_metrics, Mapping) or any(
-        isinstance(value, bool) or not isinstance(value, (int, float))
-        for value in summary_metrics.values()
-    ):
-        raise ValueError("registry.summary_metrics must map names to numeric scalars")
+    summary_metrics = _validate_summary_metrics(
+        record["summary_metrics"], "registry.summary_metrics"
+    )
+    record["summary_metrics"] = summary_metrics
+    if event == "reserved" and (selected_validation is not None or summary_metrics):
+        raise ValueError(
+            "reserved registry records require empty selection and summary metrics"
+        )
     if event == "correction":
         _require_sha256(record.get("supersedes_sha256"), "registry.supersedes_sha256")
     elif "supersedes_sha256" in record:
         raise ValueError("only correction records may include supersedes_sha256")
+    validate_artifact_json_payload(record, ensure_ascii=True, indent=None)
     return record
 
 
@@ -1195,15 +1334,8 @@ def verify_committed_reservation(
     except subprocess.CalledProcessError as exc:
         raise ValueError("committed reservation registry is unavailable at HEAD") from exc
     records = _parse_registry_text(result.stdout)
-    matches = [
-        record for record in records
-        if record["event"] == "reserved"
-        and record["run_id"] == normalized_manifest["run_id"]
-        and record["manifest_sha256"] == expected_digest
-        and record["artifact_path"] == normalized_manifest["artifact_path"]
-        and record["parent_run_ids"] == normalized_manifest["parent_run_ids"]
-        and record["test_authorized"] == normalized_manifest["test_authorized"]
-    ]
+    expected_record = reservation_record(normalized_manifest)
+    matches = [record for record in records if record == expected_record]
     if len(matches) != 1:
         raise ValueError("worker requires one exact committed reservation")
 

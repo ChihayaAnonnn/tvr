@@ -25,6 +25,26 @@ CSD_LOGVAR_CANONICAL_A1_SHA256 = (
     "a2c074e3988b0e4a115d054c352785271712ffdfb4e4c2da8b372bde424e2607"
 )
 
+_ALL_CONTEXTUAL_FEATURE_BLOCKS = frozenset(
+    {
+        "query_semantics", "top1_semantics", "context_semantics",
+        "score_distribution", "topk_scores", "score_gaps", "direction",
+    }
+)
+_CONTEXTUAL_FEATURE_BLOCKS = {
+    "full": _ALL_CONTEXTUAL_FEATURE_BLOCKS,
+    "score_only": frozenset(
+        {"score_distribution", "topk_scores", "score_gaps", "direction"}
+    ),
+    "semantic_only": frozenset(
+        {"query_semantics", "top1_semantics", "direction"}
+    ),
+    "no_context": _ALL_CONTEXTUAL_FEATURE_BLOCKS - {"context_semantics"},
+    "no_score_geometry": frozenset(
+        {"query_semantics", "top1_semantics", "context_semantics", "direction"}
+    ),
+}
+
 
 def _contextual_risk_canonical_a1_checkpoint() -> Path:
     """Resolve ignored checkpoints from a linked worktree's common repository."""
@@ -311,6 +331,9 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
 
     split = split_summary or {}
     batch = batch_semantics or {}
+    feature_set = str(getattr(args, "contextual_risk_feature_set", "full"))
+    if feature_set not in _CONTEXTUAL_FEATURE_BLOCKS:
+        raise ValueError("contextual risk feature set is not registered")
     split_manifest = Path(getattr(args, "split_manifest", "")).resolve()
     output_dir = Path(getattr(args, "output_dir", "")).resolve()
     return {
@@ -335,6 +358,10 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
             "sha256": getattr(args, "registered_clip_asset_sha256", ""),
         },
         "architecture": {
+            "feature_set": feature_set,
+            "active_feature_blocks": sorted(
+                _CONTEXTUAL_FEATURE_BLOCKS[feature_set]
+            ),
             "topk": int(getattr(args, "contextual_risk_topk", 16)),
             "projection_dim": int(
                 getattr(args, "contextual_risk_projection_dim", 128)
@@ -411,6 +438,10 @@ def _contextual_risk_manifest_section(args, split_summary, batch_semantics) -> d
                 "fresh_stop_after": 3,
                 "scheduler_horizon": 5,
                 "continuation_total": 5,
+                "current_run_total": int(getattr(args, "epochs", 5)),
+                "run_mode": (
+                    "resume" if bool(getattr(args, "resume_model", "")) else "fresh"
+                ),
             },
             "batch": {
                 "train": int(getattr(args, "batch_size", 256)),
@@ -577,6 +608,27 @@ def validate_contextual_risk_resume_manifest(existing, requested) -> None:
         retrieval = manifest.get("retrieval_risk")
         if not isinstance(a3, dict) or not isinstance(retrieval, dict):
             raise ValueError("immutable A3 manifest dependencies are missing")
+        normalized_a3 = dict(a3)
+        architecture = dict(normalized_a3.get("architecture") or {})
+        feature_set = architecture.get("feature_set", "full")
+        architecture["feature_set"] = feature_set
+        if feature_set in _CONTEXTUAL_FEATURE_BLOCKS:
+            architecture.setdefault(
+                "active_feature_blocks",
+                sorted(_CONTEXTUAL_FEATURE_BLOCKS[feature_set]),
+            )
+        normalized_a3["architecture"] = architecture
+        training = dict(normalized_a3.get("training") or {})
+        training.pop("scheduler_horizon_epochs", None)
+        normalized_a3["training"] = training
+        continuation_inputs = dict(
+            normalized_a3.get("continuation_inputs") or {}
+        )
+        epochs = dict(continuation_inputs.get("epochs") or {})
+        epochs.pop("current_run_total", None)
+        epochs.pop("run_mode", None)
+        continuation_inputs["epochs"] = epochs
+        normalized_a3["continuation_inputs"] = continuation_inputs
         batch = manifest.get("batch") or {}
         return {
             "protocol_version": manifest.get("protocol_version"),
@@ -591,7 +643,7 @@ def validate_contextual_risk_resume_manifest(existing, requested) -> None:
             "retrieval_risk": {
                 key: retrieval.get(key) for key in retrieval_keys
             },
-            "contextual_risk": a3,
+            "contextual_risk": normalized_a3,
         }
 
     if immutable_contract(existing) != immutable_contract(requested):

@@ -2,6 +2,7 @@ import os
 import json
 import hashlib
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -187,26 +188,32 @@ def test_legacy_layout_seam_is_rejected_outside_launcher_test_mode(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "stage,test_authorized,expects_final_test,controller_exit,terminal_state,creates_output,expected_return",
+    (
+        "stage,test_authorized,expects_final_test,controller_exit,terminal_state,"
+        "creates_output,expected_return,feature_set,topk,fit_weight,rank_weight,"
+        "seed,epochs,explicit_none"
+    ),
     [
-        ("baseline", False, False, 0, "completed", True, 0),
-        ("final", True, True, 0, "completed", True, 0),
-        ("baseline", False, False, 7, "cancelled", True, 7),
-        ("baseline", False, False, 7, "cancelled", False, 2),
+        ("baseline", False, False, 0, "completed", True, 0, "score_only", 1, 0.0, 0.0, 0, 3, False),
+        ("final", True, True, 0, "completed", True, 0, "full", 16, 0.25, 0.25, 1, 5, True),
+        ("baseline", False, False, 7, "cancelled", True, 7, "semantic_only", 4, 0.25, 0.0, 1, 5, False),
+        ("baseline", False, False, 7, "cancelled", False, 2, "no_context", 8, 0.0, 0.25, 2, 3, True),
+        ("baseline", False, False, 0, "completed", True, 0, "no_score_geometry", 32, 0.25, 0.25, 0, 3, True),
     ],
 )
 def test_campaign_launcher_routes_every_output_to_artifact_run(
     tmp_path, stage, test_authorized, expects_final_test, controller_exit,
-    terminal_state, creates_output, expected_return,
+    terminal_state, creates_output, expected_return, feature_set, topk,
+    fit_weight, rank_weight, seed, epochs, explicit_none,
 ):
-    run_id = f"msrvtt-{stage}-smoke-seed000-20260814T020304Z-0123456789ab"
+    run_id = f"msrvtt-{stage}-smoke-seed{seed:03d}-20260814T020304Z-0123456789ab"
     artifact_root = tmp_path / "artifacts"
     run_dir = artifact_root / "contextual-risk-v2" / "msrvtt" / stage / run_id
     for relative in ("logs", "checkpoints", "metrics", "arrays", "plots", "provenance"):
         (run_dir / relative).mkdir(parents=True, exist_ok=True)
     manifest = {
         "run_id": run_id, "study": "contextual-risk-v2", "dataset": "msrvtt",
-        "stage": stage, "variant": "smoke", "seed": 0,
+        "stage": stage, "variant": "smoke", "seed": seed,
         "artifact_path": str(run_dir),
         "registry_path": "experiments/contextual-risk-v2/registry.jsonl",
         "git_sha": "0123456789abcdef0123456789abcdef01234567",
@@ -217,7 +224,22 @@ def test_campaign_launcher_routes_every_output_to_artifact_run(
             "distributed_topology": "torchrun-4",
         },
         "input_checkpoints": [], "dataset_splits": [],
-        "config": {name: {} for name in ("model", "loss", "optimizer", "scheduler", "evaluation")},
+        "config": {
+            "model": {
+                "contextual_risk_feature_set": feature_set,
+                "contextual_risk_topk": topk,
+            },
+            "loss": {
+                "w_contextual_risk_fit": fit_weight,
+                "w_contextual_risk_rank": rank_weight,
+            },
+            "optimizer": {"seed": seed},
+            "scheduler": {"epochs": epochs},
+            "evaluation": (
+                {"archive_qualification_scenario": "none"}
+                if explicit_none else {}
+            ),
+        },
         "parent_run_ids": [] if stage == "baseline" else ["parent-run"],
         "selection_lineage": [],
         "validation_authorized": True, "test_authorized": test_authorized,
@@ -239,7 +261,9 @@ def test_campaign_launcher_routes_every_output_to_artifact_run(
         " digest=hashlib.sha256(open(log,'rb').read() if os.path.exists(log) else b'').hexdigest()\n"
         " open(os.environ['A3_TEST_TERMINAL_CAPTURE'],'a').write(sys.argv[sys.argv.index('--next')+1]+' '+digest+'\\n')\n"
         "raw=json.dumps(p,sort_keys=True,separators=(',',':')).encode()\n"
-        "print(json.dumps({'run_dir':p['artifact_path'],'manifest_sha256':hashlib.sha256(raw).hexdigest(),'state':'reserved','test_authorized':p['test_authorized'],'stage':p['stage'],'command_argv':['env','ARTIFACT_RUN_ID='+p['run_id'],'bash','run_train_msrvtt_contextual_risk_bg.sh']}))\n",
+        "c=p['config']\n"
+        "variant=['--contextual_risk_feature_set',c['model']['contextual_risk_feature_set'],'--contextual_risk_topk',str(c['model']['contextual_risk_topk']),'--w_contextual_risk_fit',str(c['loss']['w_contextual_risk_fit']),'--w_contextual_risk_rank',str(c['loss']['w_contextual_risk_rank']),'--seed',str(c['optimizer']['seed']),'--epochs',str(c['scheduler']['epochs'])]\n"
+        "print(json.dumps({'run_dir':p['artifact_path'],'manifest_sha256':hashlib.sha256(raw).hexdigest(),'state':'reserved','test_authorized':p['test_authorized'],'stage':p['stage'],'command_argv':['env','ARTIFACT_RUN_ID='+p['run_id'],'bash','run_train_msrvtt_contextual_risk_bg.sh'],'registered_a3_variant_argv':variant}))\n",
         encoding="utf-8",
     )
     controller, marker, release = _fake_controller(
@@ -272,6 +296,16 @@ def test_campaign_launcher_routes_every_output_to_artifact_run(
     assert "--artifact_run_dir" in captured[2:]
     assert str(run_dir) in captured[2:]
     assert ("--run_final_test" in captured[2:]) is expects_final_test
+    for flag, value in (
+        ("--contextual_risk_feature_set", feature_set),
+        ("--contextual_risk_topk", topk),
+        ("--w_contextual_risk_fit", fit_weight),
+        ("--w_contextual_risk_rank", rank_weight),
+        ("--seed", seed),
+        ("--epochs", epochs),
+    ):
+        position = captured.index(flag, 2)
+        assert captured[position + 1] == str(value)
     assert not Path(captured[0]).is_relative_to(REPOSITORY / "ckpts")
     assert not Path(captured[1]).is_relative_to(REPOSITORY / "logs")
     captured_terminal_state, sealed_log_digest = terminal_capture.read_text().split()
@@ -299,14 +333,10 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
         "--use_contextual_risk_sidecar",
         "--contextual_risk_sidecar_only",
         "--registered_contextual_risk_a3",
-        "--contextual_risk_topk 16",
         "--contextual_risk_projection_dim 128",
         "--contextual_risk_hidden_dim 128",
         "--contextual_risk_temperature 1.0",
-        "--w_contextual_risk_fit 0.25",
-        "--w_contextual_risk_rank 0.25",
-        "--seed 0",
-        "--epochs 3",
+        "REGISTERED_VARIANT_ARGS",
     ):
         assert flag in text
 
@@ -338,6 +368,25 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
     assert 'RUN_TIME="$(date +%H%M%S)"' in text
     assert 'git -C "${ROOT_DIR}" diff --quiet --' in text
     assert 'git -C "${ROOT_DIR}" diff --cached --quiet --' in text
+
+
+@pytest.mark.parametrize(
+    "feature_set",
+    ["full", "score_only", "semantic_only", "no_context", "no_score_geometry"],
+)
+def test_retrieval_parser_accepts_only_registered_feature_sets(
+    monkeypatch, tmp_path, feature_set
+):
+    import main_task_retrieval
+
+    monkeypatch.setattr(
+        sys, "argv", [
+            "prog", "--output_dir", str(tmp_path), "--do_train",
+            "--datatype", "fixture",
+            "--contextual_risk_feature_set", feature_set,
+        ],
+    )
+    assert main_task_retrieval.get_args().contextual_risk_feature_set == feature_set
 
 
 def test_registered_launcher_qualification_is_manifest_bound_and_uses_controller():

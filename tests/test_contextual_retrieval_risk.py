@@ -3,9 +3,45 @@ import torch
 import torch.nn.functional as F
 
 from prob_models.contextual_retrieval_risk import (
+    CONTEXTUAL_FEATURE_SETS,
     ContextualRetrievalRiskSidecar,
     contextual_topk_features,
 )
+
+
+@pytest.mark.parametrize("feature_set", sorted(CONTEXTUAL_FEATURE_SETS))
+def test_feature_ablation_masks_named_blocks_without_changing_capacity(feature_set):
+    torch.manual_seed(7)
+    full = ContextualRetrievalRiskSidecar(
+        embed_dim=4, projection_dim=3, hidden_dim=7, topk=2,
+        dropout=0.0, feature_set="full",
+    )
+    variant = ContextualRetrievalRiskSidecar(
+        embed_dim=4, projection_dim=3, hidden_dim=7, topk=2,
+        dropout=0.0, feature_set=feature_set,
+    )
+    variant.load_state_dict(full.state_dict())
+    logits = torch.tensor([[4.0, 3.0, 1.0], [0.0, 2.0, 5.0]])
+    text = torch.randn(2, 4)
+    video = torch.randn(3, 4)
+
+    full_features = full(logits, text, video, "t2v")["features"]
+    variant_features = variant(logits, text, video, "t2v")["features"]
+
+    assert sum(parameter.numel() for parameter in variant.parameters()) == sum(
+        parameter.numel() for parameter in full.parameters()
+    )
+    assert variant_features.shape == full_features.shape
+    for block, feature_slice in variant.feature_slices.items():
+        if block in CONTEXTUAL_FEATURE_SETS[feature_set]:
+            torch.testing.assert_close(
+                variant_features[:, feature_slice], full_features[:, feature_slice]
+            )
+        else:
+            torch.testing.assert_close(
+                variant_features[:, feature_slice],
+                torch.zeros_like(variant_features[:, feature_slice]),
+            )
 
 
 def test_topk_features_follow_direction_and_pad_to_registered_width():

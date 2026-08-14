@@ -86,6 +86,150 @@ def _phase_payload():
     }
 
 
+@pytest.mark.parametrize(
+    "feature_set,fit_weight,rank_weight,topk,seed,epochs",
+    [
+        ("full", 0.0, 0.0, 1, 0, 3),
+        ("score_only", 0.25, 0.0, 4, 1, 5),
+        ("semantic_only", 0.0, 0.25, 8, 2, 3),
+        ("no_context", 0.25, 0.25, 16, 0, 5),
+        ("no_score_geometry", 0.25, 0.25, 32, 1, 3),
+    ],
+)
+def test_registered_a3_variant_argv_is_derived_from_allowlisted_manifest_config(
+    feature_set, fit_weight, rank_weight, topk, seed, epochs
+):
+    import scripts.manage_experiment_run as manage
+
+    manifest = {
+        "stage": "feature_ablation",
+        "seed": seed,
+        "config": {
+            "model": {
+                "contextual_risk_feature_set": feature_set,
+                "contextual_risk_topk": topk,
+            },
+            "loss": {
+                "w_contextual_risk_fit": fit_weight,
+                "w_contextual_risk_rank": rank_weight,
+            },
+            "optimizer": {"seed": seed},
+            "scheduler": {"epochs": epochs},
+            "evaluation": {},
+        },
+    }
+
+    assert manage.registered_a3_variant_argv(manifest) == [
+        "--contextual_risk_feature_set", feature_set,
+        "--contextual_risk_topk", str(topk),
+        "--w_contextual_risk_fit", str(fit_weight),
+        "--w_contextual_risk_rank", str(rank_weight),
+        "--seed", str(seed),
+        "--epochs", str(epochs),
+    ]
+
+
+@pytest.mark.parametrize(
+    "category,name,value",
+    [
+        ("model", "contextual_risk_feature_set", "arbitrary"),
+        ("model", "contextual_risk_topk", 2),
+        ("loss", "w_contextual_risk_fit", 0.1),
+        ("optimizer", "seed", 9),
+        ("scheduler", "epochs", 99),
+    ],
+)
+def test_registered_a3_variant_argv_rejects_values_outside_frozen_allowlist(
+    category, name, value
+):
+    import scripts.manage_experiment_run as manage
+
+    manifest = {
+        "stage": "feature_ablation",
+        "seed": 0,
+        "config": {
+            "model": {
+                "contextual_risk_feature_set": "full",
+                "contextual_risk_topk": 16,
+            },
+            "loss": {
+                "w_contextual_risk_fit": 0.25,
+                "w_contextual_risk_rank": 0.25,
+            },
+            "optimizer": {"seed": 0},
+            "scheduler": {"epochs": 3},
+            "evaluation": {},
+        },
+    }
+    manifest["config"][category][name] = value
+
+    with pytest.raises(ValueError, match="allowlist|allowed|seed"):
+        manage.registered_a3_variant_argv(manifest)
+
+
+@pytest.mark.parametrize(
+    "feature_set,fit_weight,rank_weight,topk,seed,epochs",
+    [
+        ("full", 0.0, 0.0, 1, 0, 3),
+        ("score_only", 0.25, 0.0, 4, 1, 5),
+        ("semantic_only", 0.0, 0.25, 8, 2, 3),
+        ("no_context", 0.25, 0.25, 16, 0, 5),
+        ("no_score_geometry", 0.25, 0.25, 32, 1, 3),
+    ],
+)
+def test_allowlisted_variant_config_matches_effective_worker_bindings(
+    monkeypatch, feature_set, fit_weight, rank_weight, topk, seed, epochs
+):
+    import main_task_retrieval as retrieval
+
+    manifest = {
+        "config": {
+            "model": {
+                "contextual_risk_feature_set": feature_set,
+                "contextual_risk_topk": topk,
+            },
+            "loss": {
+                "w_contextual_risk_fit": fit_weight,
+                "w_contextual_risk_rank": rank_weight,
+            },
+            "optimizer": {"seed": seed},
+            "scheduler": {"epochs": epochs},
+            "evaluation": {},
+        },
+        "input_checkpoints": [],
+        "dataset_splits": [],
+        "environment": {
+            "python": platform.python_version(),
+            "pytorch": str(torch.__version__),
+            "cuda": str(torch.version.cuda or "none"),
+            "gpu_model": "none",
+            "gpu_count": 0,
+            "precision": "fp32",
+            "distributed_topology": "single-process",
+        },
+    }
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 0)
+    args = SimpleNamespace(
+        contextual_risk_feature_set=feature_set,
+        contextual_risk_topk=topk,
+        w_contextual_risk_fit=fit_weight,
+        w_contextual_risk_rank=rank_weight,
+        seed=seed,
+        epochs=epochs,
+        clip_layer_norm_precision="fp32",
+        archive_qualification_scenario="none",
+    )
+
+    retrieval._verify_artifact_runtime_bindings(
+        args, manifest, REPOSITORY, registered_a3_contract=False
+    )
+    args.seed = (seed + 1) % 3
+    with pytest.raises(ValueError, match="optimizer.seed"):
+        retrieval._verify_artifact_runtime_bindings(
+            args, manifest, REPOSITORY, registered_a3_contract=False
+        )
+
+
 @pytest.fixture
 def campaign_repo(tmp_path):
     repo = tmp_path / "repo"
@@ -162,6 +306,27 @@ def test_reserve_phase_adds_portable_locator_for_repo_canonical_artifacts(campai
     reservation = json.loads((repo / REGISTRY).read_text().splitlines()[-1])
     assert reservation["artifact_locator"] == manifest["artifact_locator"]
 
+
+def test_future_phase_uses_explicit_scheduled_timestamp_for_run_identity(campaign_repo):
+    repo, phase, artifact_root = campaign_repo
+    phase_payload = _phase_payload()
+    scheduled = phase_payload["runs"][0].pop("timestamp_utc")
+    phase_payload["runs"][0]["scheduled_timestamp_utc"] = scheduled
+    (repo / phase).write_text(json.dumps(phase_payload), encoding="utf-8")
+    subprocess.run(["git", "add", phase], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "schedule phase"], cwd=repo, check=True)
+
+    result = _run(
+        repo, "reserve-phase", "--repo-root", repo, "--phase", phase,
+        "--registry", REGISTRY, "--artifact-root", artifact_root,
+    )
+
+    run = json.loads(result.stdout)["runs"][0]
+    assert f"-{scheduled}-" in run["run_id"]
+    manifest = json.loads((Path(run["artifact_path"]) / "manifest.json").read_text())
+    assert "scheduled_timestamp_utc" not in manifest
+    assert "timestamp_utc" not in manifest
+
 def test_lifecycle_cli_finalizes_only_terminal_runs_and_verifies_output_hashes(campaign_repo):
     repo, phase, _artifact_root, payload = _reserve(campaign_repo)
     run = payload["runs"][0]
@@ -184,7 +349,11 @@ def test_lifecycle_cli_finalizes_only_terminal_runs_and_verifies_output_hashes(c
     assert "terminal" in premature.stderr
 
     metric = run_dir / "metrics" / "selected_validation.json"
-    metric.write_text(json.dumps({"summary_metrics": {"t2v_r1": 52.6}}), encoding="utf-8")
+    metric.write_text(json.dumps({
+        "split": "validation",
+        "summary_metrics": {"t2v_r1": 52.6},
+        "array_references": [],
+    }), encoding="utf-8")
     digest = hashlib.sha256(metric.read_bytes()).hexdigest()
     identity = ["--repo-root", repo, "--registry", REGISTRY, "--run-dir", run_dir,
                 "--run-id", run["run_id"], "--manifest-sha256", run["manifest_sha256"]]
@@ -213,6 +382,25 @@ def test_lifecycle_cli_finalizes_only_terminal_runs_and_verifies_output_hashes(c
     assert terminal["selected_validation"] == {
         "path": "metrics/selected_validation.json", "sha256": digest
     }
+
+
+def test_selected_validation_summary_uses_the_public_metrics_contract(tmp_path):
+    import scripts.manage_experiment_run as manage
+
+    metrics = tmp_path / "metrics"
+    metrics.mkdir()
+    (metrics / "selected_validation.json").write_text(
+        json.dumps({
+            "split": "validation",
+            "summary_metrics": {"loss": 1.0},
+            "array_references": [],
+            "embedded_query_values": [1, 2, 3],
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="unknown"):
+        manage._summary_metrics(tmp_path)
 
 
 def test_finalize_rejects_output_tampering(campaign_repo):
@@ -882,3 +1070,97 @@ def test_finalize_recovers_exact_registry_append_crash_without_duplicate_event(
 
     assert result["terminal_counts"] == {"completed": 1}
     assert len((repo / REGISTRY).read_text().splitlines()) == 2
+
+
+def test_finalize_rejects_terminal_registry_committed_without_phase_summary(
+    campaign_repo,
+):
+    repo, phase, artifact_root, payload = _reserve(campaign_repo)
+    run = payload["runs"][0]
+    subprocess.run(["git", "add", REGISTRY], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "reserve"], cwd=repo, check=True)
+    identity = [
+        "--repo-root", repo, "--registry", REGISTRY,
+        "--run-dir", run["artifact_path"], "--run-id", run["run_id"],
+        "--manifest-sha256", run["manifest_sha256"],
+    ]
+    _run(repo, "start-run", *identity)
+    _run(repo, "transition-run", *identity,
+         "--expected", "running", "--next", "validating")
+    _run(repo, "transition-run", *identity,
+         "--expected", "validating", "--next", "completed", "--exit-code", "0")
+    summary = Path("experiments/contextual-risk-v2/summaries/stage0-smoke.json")
+    _run(
+        repo, "finalize-phase", "--repo-root", repo, "--phase", phase,
+        "--registry", REGISTRY, "--artifact-root", artifact_root,
+        "--summary", summary,
+    )
+    (repo / summary).unlink()
+    subprocess.run(["git", "add", REGISTRY], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "invalid terminal-only publication"],
+        cwd=repo, check=True,
+    )
+
+    failed = _run(
+        repo, "finalize-phase", "--repo-root", repo, "--phase", phase,
+        "--registry", REGISTRY, "--artifact-root", artifact_root,
+        "--summary", summary, check=False,
+    )
+
+    assert failed.returncode != 0
+    assert "phase summary" in failed.stderr.lower()
+    assert not (repo / summary).exists()
+
+
+def test_finalize_rejects_committed_terminal_subset_of_a_multi_run_phase(campaign_repo):
+    repo, phase, artifact_root = campaign_repo
+    phase_payload = json.loads((repo / phase).read_text(encoding="utf-8"))
+    second = dict(phase_payload["runs"][0])
+    second.update({"variant": "second", "timestamp_utc": "20260814T020305Z"})
+    phase_payload["runs"].append(second)
+    (repo / phase).write_text(json.dumps(phase_payload), encoding="utf-8")
+    subprocess.run(["git", "add", phase], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "two-run phase"], cwd=repo, check=True)
+
+    payload = json.loads(_run(
+        repo, "reserve-phase", "--repo-root", repo, "--phase", phase,
+        "--registry", REGISTRY, "--artifact-root", artifact_root,
+    ).stdout)
+    subprocess.run(["git", "add", REGISTRY], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "reserve both"], cwd=repo, check=True)
+    for run in payload["runs"]:
+        identity = [
+            "--repo-root", repo, "--registry", REGISTRY,
+            "--run-dir", run["artifact_path"], "--run-id", run["run_id"],
+            "--manifest-sha256", run["manifest_sha256"],
+        ]
+        _run(repo, "start-run", *identity)
+        _run(repo, "transition-run", *identity,
+             "--expected", "running", "--next", "validating")
+        _run(repo, "transition-run", *identity,
+             "--expected", "validating", "--next", "completed",
+             "--exit-code", "0")
+
+    summary = Path("experiments/contextual-risk-v2/summaries/two-run.json")
+    _run(
+        repo, "finalize-phase", "--repo-root", repo, "--phase", phase,
+        "--registry", REGISTRY, "--artifact-root", artifact_root,
+        "--summary", summary,
+    )
+    lines = (repo / REGISTRY).read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 4
+    (repo / REGISTRY).write_text("\n".join(lines[:3]) + "\n", encoding="utf-8")
+    (repo / summary).unlink()
+    subprocess.run(["git", "add", REGISTRY], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "invalid partial terminal batch"], cwd=repo, check=True)
+
+    failed = _run(
+        repo, "finalize-phase", "--repo-root", repo, "--phase", phase,
+        "--registry", REGISTRY, "--artifact-root", artifact_root,
+        "--summary", summary, check=False,
+    )
+
+    assert failed.returncode != 0
+    assert "partial terminal" in failed.stderr.lower()
+    assert len((repo / REGISTRY).read_text(encoding="utf-8").splitlines()) == 3

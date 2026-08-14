@@ -18,6 +18,27 @@ from prob_models.retrieval_risk import (
 )
 
 
+_ALL_CONTEXTUAL_FEATURE_BLOCKS = frozenset(
+    {
+        "query_semantics", "top1_semantics", "context_semantics",
+        "score_distribution", "topk_scores", "score_gaps", "direction",
+    }
+)
+CONTEXTUAL_FEATURE_SETS = {
+    "full": _ALL_CONTEXTUAL_FEATURE_BLOCKS,
+    "score_only": frozenset(
+        {"score_distribution", "topk_scores", "score_gaps", "direction"}
+    ),
+    "semantic_only": frozenset(
+        {"query_semantics", "top1_semantics", "direction"}
+    ),
+    "no_context": _ALL_CONTEXTUAL_FEATURE_BLOCKS - {"context_semantics"},
+    "no_score_geometry": frozenset(
+        {"query_semantics", "top1_semantics", "context_semantics", "direction"}
+    ),
+}
+
+
 def _validate_embeddings(
     query_means: torch.Tensor,
     candidate_means: torch.Tensor,
@@ -116,6 +137,7 @@ class ContextualRetrievalRiskSidecar(nn.Module):
         topk: int = 16,
         temperature: float = 1.0,
         dropout: float = 0.1,
+        feature_set: str = "full",
     ) -> None:
         super().__init__()
         if embed_dim <= 0 or projection_dim <= 0 or hidden_dim <= 0:
@@ -126,10 +148,33 @@ class ContextualRetrievalRiskSidecar(nn.Module):
             raise ValueError("temperature must be positive")
         if not 0.0 <= dropout < 1.0:
             raise ValueError("dropout must be in [0, 1)")
+        if feature_set not in CONTEXTUAL_FEATURE_SETS:
+            raise ValueError(
+                f"feature_set must be one of {sorted(CONTEXTUAL_FEATURE_SETS)}"
+            )
 
         self.embed_dim = int(embed_dim)
         self.topk = int(topk)
         self.temperature = float(temperature)
+        self.feature_set = feature_set
+        self.active_feature_blocks = tuple(
+            sorted(CONTEXTUAL_FEATURE_SETS[feature_set])
+        )
+        score_start = 3 * projection_dim
+        self.feature_slices = {
+            "query_semantics": slice(0, projection_dim),
+            "top1_semantics": slice(projection_dim, 2 * projection_dim),
+            "context_semantics": slice(2 * projection_dim, score_start),
+            "score_distribution": slice(score_start, score_start + 8),
+            "topk_scores": slice(score_start + 8, score_start + 8 + topk),
+            "score_gaps": slice(score_start + 8 + topk, score_start + 8 + 2 * topk),
+            "direction": slice(score_start + 8 + 2 * topk, score_start + 10 + 2 * topk),
+        }
+        feature_mask = torch.ones(score_start + 10 + 2 * topk)
+        for block, feature_slice in self.feature_slices.items():
+            if block not in CONTEXTUAL_FEATURE_SETS[feature_set]:
+                feature_mask[feature_slice] = 0.0
+        self.register_buffer("feature_mask", feature_mask, persistent=False)
         self.text_projection = nn.Linear(embed_dim, projection_dim)
         self.video_projection = nn.Linear(embed_dim, projection_dim)
         self.network = nn.Sequential(
@@ -177,6 +222,9 @@ class ContextualRetrievalRiskSidecar(nn.Module):
                 features["direction_code"],
             ),
             dim=1,
+        )
+        network_features = network_features * self.feature_mask.to(
+            device=network_features.device, dtype=network_features.dtype
         )
         failure_logit = self.network(network_features).squeeze(1)
         return {

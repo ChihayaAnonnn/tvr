@@ -13,6 +13,9 @@
 批量提交终态记录与摘要。大于 1 MiB 的数组必须外置，失败证据不可删除。
 `failed/cancelled` 不可原地重试或复用 run ID；人工授权的新尝试必须在后续 phase 使用新的唯一
 run ID，并通过 manifest 的 `parent_run_ids` 和 `selection_lineage` 保留 predecessor 与审核理由。
+程序化校验这些 schema 必须使用 `experiment_artifacts.artifact_schema_validator`；普通
+`Draft202012Validator` 不执行 `x-canonical-content-address` 跨字段关键字，不能证明数组路径中的
+完整文件名与 `sha256` 相等。
 
 ## 生命周期命令
 

@@ -248,6 +248,11 @@ def test_experiment_manifest_records_complete_contextual_risk_contract(tmp_path)
     assert a3["architecture"] == {
         "topk": 16, "projection_dim": 128, "hidden_dim": 128,
         "temperature": 1.0, "dropout": 0.1, "shared_directional_head": True,
+        "feature_set": "full",
+        "active_feature_blocks": [
+            "context_semantics", "direction", "query_semantics", "score_distribution",
+            "score_gaps", "top1_semantics", "topk_scores",
+        ],
     }
     assert a3["loss"]["weights"] == {"bce": 1.0, "fit": 0.25, "rank": 0.25}
     assert a3["split_identity"]["protocol_version"] == "trusted-v1"
@@ -322,6 +327,12 @@ def test_contextual_resume_rejects_any_immutable_manifest_change(tmp_path):
     )
 
     assert validate_contextual_risk_resume_manifest(original, original) is None
+
+    legacy_full = copy.deepcopy(original)
+    del legacy_full["contextual_risk"]["architecture"]["feature_set"]
+    del legacy_full["contextual_risk"]["architecture"]["active_feature_blocks"]
+    assert validate_contextual_risk_resume_manifest(legacy_full, original) is None
+
     with pytest.raises(ValueError, match="immutable A3 manifest"):
         validate_contextual_risk_resume_manifest(original, changed)
 
@@ -343,6 +354,41 @@ def test_contextual_resume_rejects_any_immutable_manifest_change(tmp_path):
     }
     with pytest.raises(ValueError, match="immutable A3 manifest"):
         validate_contextual_risk_resume_manifest(original, csv_changed)
+
+
+def test_contextual_manifest_records_actual_allowlisted_epoch_and_resume_mode(tmp_path):
+    common = dict(
+        aleatoric_crf_training=False,
+        use_retrieval_risk_sidecar=True,
+        use_contextual_risk_sidecar=True,
+        contextual_risk_sidecar_only=True,
+        output_dir=str(tmp_path),
+        fp16=False,
+    )
+    kwargs = dict(
+        split_summary={"protocol_version": "trusted-v1", "manifest_sha256": "sha"},
+        batch_semantics={"world_size": 4, "optimizer_effective_batch": 256},
+        git_state={"commit": "abc"},
+    )
+    fresh = build_experiment_manifest(
+        _crf_args_namespace(**common, epochs=3, resume_model=""), **kwargs
+    )
+    resumed = build_experiment_manifest(
+        _crf_args_namespace(**common, epochs=5, resume_model="checkpoint.bin.3"),
+        **kwargs,
+    )
+
+    assert fresh["contextual_risk"]["training"]["scheduler_horizon_epochs"] == 5
+    assert fresh["contextual_risk"]["continuation_inputs"]["epochs"] == {
+        "fresh_stop_after": 3,
+        "scheduler_horizon": 5,
+        "continuation_total": 5,
+        "current_run_total": 3,
+        "run_mode": "fresh",
+    }
+    assert resumed["contextual_risk"]["training"]["scheduler_horizon_epochs"] == 5
+    assert resumed["contextual_risk"]["continuation_inputs"]["epochs"]["run_mode"] == "resume"
+    assert validate_contextual_risk_resume_manifest(fresh, resumed) is None
 
 
 @pytest.mark.parametrize(

@@ -16,12 +16,15 @@ sed -n '1,240p' experiments/contextual-risk-v2/registry.jsonl
 
 控制面命令由 `scripts/manage_experiment_run.py` 提供。以下命令只展示流程；
 `<phase.json>` 必须已提交，且预留、启动和终结之间必须保持干净的受跟踪源码。
+`--artifact-root` 的语义是父级数据面根目录；管理器会自行追加 manifest 中的
+study 名，因此这里传入 `$PWD/artifacts`，最终路径才是
+`artifacts/contextual-risk-v2/<dataset>/<stage>/<run-id>/`。
 
 ```bash
 PYTHONPATH=. /home/xujie/.conda/envs/tvr/bin/python scripts/manage_experiment_run.py \
   reserve-phase --repo-root "$PWD" --phase <phase.json> \
   --registry experiments/contextual-risk-v2/registry.jsonl \
-  --artifact-root "$PWD/artifacts/contextual-risk-v2"
+  --artifact-root "$PWD/artifacts"
 
 PYTHONPATH=. /home/xujie/.conda/envs/tvr/bin/python scripts/manage_experiment_run.py \
   verify-run --repo-root "$PWD" \

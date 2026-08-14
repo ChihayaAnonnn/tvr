@@ -18,11 +18,22 @@ stages:
 
 variants:
   stage1_baselines: [raw_score, top1_top2_margin, entropy, energy, score_variance, sap, a2_logvar, a1, a3]
-  stage2_features: [score_only, semantics_only, no_context, no_score_geometry, full_a3]
+  stage2_features: [score_only, semantic_only, no_context, no_score_geometry, full]
   stage3_losses: [bce_only, bce_fit, bce_rank, full_loss]
   stage3_topk: [1, 4, 8, 16, 32]
 
 seeds: [0, 1, 2]
+registered_a3_launcher:
+  feature_sets: [full, score_only, semantic_only, no_context, no_score_geometry]
+  topk: [1, 4, 8, 16, 32]
+  seeds: [0, 1, 2]
+  epochs: [3, 5]
+  loss_weights:
+    bce: {fit: 0.0, rank: 0.0}
+    bce_fit: {fit: 0.25, rank: 0.0}
+    bce_rank: {fit: 0.0, rank: 0.25}
+    full: {fit: 0.25, rank: 0.25}
+  arbitrary_trailing_argv: forbidden
 bootstrap:
   samples: 10000
   seed: 0

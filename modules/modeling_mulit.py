@@ -451,6 +451,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 ),
                 topk=int(getattr(self.task_config, "contextual_risk_topk", 16)),
                 temperature=self.contextual_risk_temperature,
+                feature_set=str(
+                    getattr(self.task_config, "contextual_risk_feature_set", "full")
+                ),
             )
 
         # Optional clamp for log-variance to stabilize sampling/KL terms

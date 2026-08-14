@@ -1026,6 +1026,14 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument("--registered_clip_asset_path", type=str, default="")
     parser.add_argument("--registered_clip_asset_sha256", type=str, default="")
     parser.add_argument("--contextual_risk_topk", type=int, default=16)
+    parser.add_argument(
+        "--contextual_risk_feature_set",
+        choices=[
+            "full", "score_only", "semantic_only", "no_context",
+            "no_score_geometry",
+        ],
+        default="full",
+    )
     parser.add_argument("--contextual_risk_projection_dim", type=int, default=128)
     parser.add_argument("--contextual_risk_hidden_dim", type=int, default=128)
     parser.add_argument("--contextual_risk_temperature", type=float, default=1.0)
@@ -1122,8 +1130,11 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
                     "fresh A3-only runs require --init_model to resolve to "
                     f"{CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT}"
                 )
-            if args.epochs != 3:
-                raise ValueError("fresh A3-only runs require --epochs=3")
+            allowed_epochs = {3, 5} if args.artifact_run_dir else {3}
+            if args.epochs not in allowed_epochs:
+                raise ValueError(
+                    "fresh registered A3 runs require an allowlisted epoch count"
+                )
     if args.use_csd_logvar_sidecar and not args.use_uatvr_full:
         raise ValueError("use_csd_logvar_sidecar requires --use_uatvr_full")
     if args.csd_logvar_sidecar_only and not args.use_csd_logvar_sidecar:
@@ -1534,6 +1545,7 @@ def _registered_a3_expected_values():
         "use_contextual_risk_sidecar": True,
         "contextual_risk_sidecar_only": True,
         "contextual_risk_topk": 16,
+        "contextual_risk_feature_set": "full",
         "contextual_risk_projection_dim": 128,
         "contextual_risk_hidden_dim": 128,
         "contextual_risk_temperature": 1.0,
@@ -1587,6 +1599,13 @@ _REGISTERED_A3_DYNAMIC_NAMESPACE_FIELDS = {
     "artifact_run_id",
     "artifact_manifest_sha256",
     "run_final_test",
+    # Frozen scientific allowlists; exact values come from the committed
+    # manifest and are checked by _verify_artifact_runtime_bindings().
+    "contextual_risk_feature_set",
+    "contextual_risk_topk",
+    "w_contextual_risk_fit",
+    "w_contextual_risk_rank",
+    "seed",
     # The production qualification contract validates this independently;
     # ordinary registered A3 parses the inert value ``none``.
     "archive_qualification_scenario",
@@ -1720,7 +1739,10 @@ def _registered_a3_schema_mismatches(args):
         except TypeError as exc:
             mismatches.append(f"{field.name}={actual!r} {exc}")
             continue
-        if normalized != expected:
+        manifest_bound = bool(getattr(args, "artifact_run_dir", None))
+        if normalized != expected and not (
+            manifest_bound and field.name in _REGISTERED_A3_DYNAMIC_NAMESPACE_FIELDS
+        ):
             mismatches.append(
                 f"{field.name}={normalized!r} (registered {expected!r})"
             )
@@ -1839,11 +1861,33 @@ def _assert_registered_a3_contract(args, batch_semantics=None):
     mismatches = _registered_a3_schema_mismatches(args)
 
     continuing = bool(getattr(args, "resume_model", ""))
-    expected_epochs = 5 if continuing else 3
+    manifest_bound = bool(getattr(args, "artifact_run_dir", None))
+    if manifest_bound:
+        allowed_feature_sets = {
+            "full", "score_only", "semantic_only", "no_context",
+            "no_score_geometry",
+        }
+        if getattr(args, "contextual_risk_feature_set", None) not in allowed_feature_sets:
+            mismatches.append("contextual_risk_feature_set is outside the registered allowlist")
+        if getattr(args, "contextual_risk_topk", None) not in {1, 4, 8, 16, 32}:
+            mismatches.append("contextual_risk_topk is outside the registered allowlist")
+        loss_pair = (
+            getattr(args, "w_contextual_risk_fit", None),
+            getattr(args, "w_contextual_risk_rank", None),
+        )
+        if loss_pair not in {
+            (0.0, 0.0), (0.25, 0.0), (0.0, 0.25), (0.25, 0.25)
+        }:
+            mismatches.append("contextual risk loss setting is outside the registered allowlist")
+        if getattr(args, "seed", None) not in {0, 1, 2}:
+            mismatches.append("seed is outside the registered allowlist")
+    expected_epochs = None if manifest_bound else (5 if continuing else 3)
     actual_epochs = getattr(args, "epochs", _REGISTERED_A3_MISSING)
     if type(actual_epochs) is not int:
         mismatches.append(f"epochs={actual_epochs!r} must be an integer")
-    elif actual_epochs != expected_epochs:
+    elif manifest_bound and actual_epochs not in {3, 5}:
+        mismatches.append("epochs is outside the registered allowlist")
+    elif not manifest_bound and actual_epochs != expected_epochs:
         mismatches.append(
             f"epochs={actual_epochs!r} (registered {expected_epochs!r})"
         )
@@ -4405,6 +4449,10 @@ def _eval_epoch_impl(
                 "temperature": float(contextual_sidecar.temperature),
                 "dropout": float(contextual_sidecar.network[2].p),
             }
+            if contextual_sidecar.feature_set != "full":
+                a3_evidence["contextual_head_config"]["feature_set"] = (
+                    contextual_sidecar.feature_set
+                )
         if report_retrieval_risk:
             a3_evidence["a1_failure_risk"] = {
                 direction: risk_array_digests[direction]["failure_risk_values"]
@@ -4668,8 +4716,7 @@ def _registered_a3_head_configs(args, evidence, *, artifact_run_dir=None):
     )
     if text_means.ndim != 2:
         raise ValueError("A3 text means must be two-dimensional")
-    return {
-        "contextual": {
+    contextual = {
             "embed_dim": int(text_means.shape[1]),
             "projection_dim": int(
                 getattr(args, "contextual_risk_projection_dim", 128)
@@ -4682,7 +4729,12 @@ def _registered_a3_head_configs(args, evidence, *, artifact_run_dir=None):
                 getattr(args, "contextual_risk_temperature", 1.0)
             ),
             "dropout": 0.1,
-        },
+        }
+    feature_set = str(getattr(args, "contextual_risk_feature_set", "full"))
+    if feature_set != "full":
+        contextual["feature_set"] = feature_set
+    return {
+        "contextual": contextual,
         "a1": {
             "feature_dim": 8,
             "hidden_dim": int(

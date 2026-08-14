@@ -33,6 +33,14 @@ and record the human authorization and independent review in
 `selection_lineage`. Every artifact uses a normalized repo-relative
 `artifact_locator` resolving under `/data2/hxj/project/UATVR/artifacts`.
 
+The immutable qualification manifests literally retain the historical
+`sdd/task-7-review.md` reference, but that file is worktree Git-administrative
+state rather than a durable tracked citation. This tracked summary and commits
+`f68bf78` through `4e5bf38` are the durable lineage for that decision. Future
+manifests must cite a Git-tracked report or commit and must not cite worktree
+Git administrative state such as `sdd/`; the old manifests and registry
+digests remain unchanged.
+
 ## Registered production runs
 
 | Scenario | Run ID | Manifest digest | Terminal |
