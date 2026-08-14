@@ -29,6 +29,21 @@ def _run(repo, *arguments, check=True):
     )
 
 
+def test_manager_script_resolves_repository_modules_without_pythonpath():
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "--help"],
+        cwd=REPOSITORY,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "reserve-phase" in completed.stdout
+
+
 def _phase_payload():
     gpu_count = torch.cuda.device_count()
     return {
