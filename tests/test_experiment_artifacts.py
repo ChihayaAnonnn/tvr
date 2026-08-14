@@ -513,3 +513,74 @@ def test_reservation_retry_repairs_missing_audit_after_status_write(tmp_path, mo
     assert '"event":"reservation_commit"' in audit
     with pytest.raises(FileExistsError, match="already exists"):
         reserve_run_directory(paths, manifest)
+
+
+def test_reservation_rejects_symlinked_run_root_without_writing_outside(tmp_path):
+    paths = make_run_paths(tmp_path, "contextual-risk-v2", _manifest()["run_id"])
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    paths.root.parent.mkdir(parents=True)
+    os.symlink(outside, paths.root, target_is_directory=True)
+    manifest = _manifest(artifact_path=str(paths.root))
+
+    with pytest.raises(ValueError, match="safe run path"):
+        reserve_run_directory(paths, manifest)
+
+    assert list(outside.iterdir()) == []
+
+
+def test_committed_verification_rejects_symlinked_run_root(tmp_path):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_git_repo(repo_root)
+    paths = make_run_paths(tmp_path, "contextual-risk-v2", _manifest()["run_id"])
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    paths.root.parent.mkdir(parents=True)
+    os.symlink(outside, paths.root, target_is_directory=True)
+    manifest = _manifest(artifact_path=str(paths.root))
+    (outside / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    append_registry_records(repo_root / REGISTRY, [_reservation_record(manifest)])
+    subprocess.run(["git", "add", REGISTRY.as_posix()], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-qm", "reserve phase"], cwd=repo_root, check=True)
+
+    with pytest.raises(ValueError, match="run-local manifest"):
+        verify_committed_reservation(repo_root, REGISTRY, manifest)
+
+
+def test_lifecycle_rejects_symlinked_run_child_and_audit_file(tmp_path):
+    paths = make_run_paths(tmp_path, "contextual-risk-v2", _manifest()["run_id"])
+    manifest = _manifest(artifact_path=str(paths.root))
+    reserve_run_directory(paths, manifest)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    paths.logs.rmdir()
+    os.symlink(outside, paths.logs, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="safe run path"):
+        transition_run_status(paths, "reserved", "running")
+
+    paths.logs.unlink()
+    paths.logs.mkdir()
+    audit_target = outside / "audit.jsonl"
+    audit_target.write_text("external evidence\n", encoding="utf-8")
+    (paths.provenance / "audit.jsonl").unlink()
+    os.symlink(audit_target, paths.provenance / "audit.jsonl")
+
+    with pytest.raises(ValueError, match="safe run path"):
+        transition_run_status(paths, "reserved", "running")
+    assert audit_target.read_text(encoding="utf-8") == "external evidence\n"
+
+
+def test_lifecycle_rejects_hardlinked_status_file(tmp_path):
+    paths = make_run_paths(tmp_path, "contextual-risk-v2", _manifest()["run_id"])
+    manifest = _manifest(artifact_path=str(paths.root))
+    reserve_run_directory(paths, manifest)
+    outside = tmp_path / "outside-status.json"
+    outside.write_text(paths.status.read_text(encoding="utf-8"), encoding="utf-8")
+    paths.status.unlink()
+    os.link(outside, paths.status)
+
+    with pytest.raises(ValueError, match="safe run path"):
+        transition_run_status(paths, "reserved", "running")
+    assert json.loads(outside.read_text(encoding="utf-8"))["state"] == "reserved"

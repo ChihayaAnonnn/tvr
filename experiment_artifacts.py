@@ -140,6 +140,21 @@ class RunManifest:
         return asdict(self)
 
 
+_RUN_PATH_RELATIVE_NAMES = {
+    "manifest": Path("manifest.json"),
+    "status": Path("status.json"),
+    "command": Path("command.sh"),
+    "logs": Path("logs"),
+    "checkpoints": Path("checkpoints"),
+    "metrics": Path("metrics"),
+    "arrays": Path("arrays"),
+    "plots": Path("plots"),
+    "provenance": Path("provenance"),
+}
+_RUN_DIRECTORY_FIELDS = frozenset({"logs", "checkpoints", "metrics", "arrays", "plots", "provenance"})
+_RUN_FILE_FIELDS = frozenset({"manifest", "status", "command"})
+
+
 def _require_safe_name(value: object, field: str) -> str:
     if not isinstance(value, str) or not _SAFE_NAME.fullmatch(value) or "--" in value:
         raise ValueError(f"{field} must be a safe archive name")
@@ -214,6 +229,77 @@ def make_run_paths(artifact_root: PathLike[str] | str, study: str, run_id: str) 
         arrays=run_root / "arrays",
         plots=run_root / "plots",
         provenance=run_root / "provenance",
+    )
+
+
+def _unsafe_run_path(message: str) -> ValueError:
+    return ValueError(f"unsafe run path: {message}")
+
+
+def _assert_no_symlink_components(path: Path) -> None:
+    if not path.is_absolute():
+        raise _unsafe_run_path("path must be absolute")
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            break
+        if stat.S_ISLNK(info.st_mode):
+            raise _unsafe_run_path(f"symlink component: {current}")
+
+
+def _validate_run_paths(paths: RunPaths, *, require_root: bool = False) -> None:
+    """Fail closed unless every existing run member is a private canonical child."""
+
+    if not paths.root.is_absolute():
+        raise _unsafe_run_path("run root must be absolute")
+    for field, relative_path in _RUN_PATH_RELATIVE_NAMES.items():
+        if getattr(paths, field) != paths.root / relative_path:
+            raise _unsafe_run_path(f"non-canonical {field} member")
+    _assert_no_symlink_components(paths.root)
+    try:
+        root_info = paths.root.lstat()
+    except FileNotFoundError:
+        if require_root:
+            raise _unsafe_run_path("missing run root")
+        return
+    if not stat.S_ISDIR(root_info.st_mode) or stat.S_ISLNK(root_info.st_mode):
+        raise _unsafe_run_path("run root is not a real directory")
+    for field in _RUN_DIRECTORY_FIELDS | _RUN_FILE_FIELDS:
+        path = getattr(paths, field)
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(info.st_mode):
+            raise _unsafe_run_path(f"symlinked {field}")
+        if field in _RUN_DIRECTORY_FIELDS and not stat.S_ISDIR(info.st_mode):
+            raise _unsafe_run_path(f"{field} is not a directory")
+        if field in _RUN_FILE_FIELDS and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
+            raise _unsafe_run_path(f"{field} is not a private regular file")
+    audit_path = paths.provenance / "audit.jsonl"
+    try:
+        audit_info = audit_path.lstat()
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(audit_info.st_mode) or not stat.S_ISREG(audit_info.st_mode) or audit_info.st_nlink != 1:
+        raise _unsafe_run_path("audit.jsonl is not a private regular file")
+
+
+def _run_paths_from_root(root: Path) -> RunPaths:
+    return RunPaths(
+        root=root,
+        manifest=root / "manifest.json",
+        status=root / "status.json",
+        command=root / "command.sh",
+        logs=root / "logs",
+        checkpoints=root / "checkpoints",
+        metrics=root / "metrics",
+        arrays=root / "arrays",
+        plots=root / "plots",
+        provenance=root / "provenance",
     )
 
 
@@ -493,6 +579,22 @@ def _load_manifest_without_leaf_symlink(path: Path) -> object:
             os.close(descriptor)
 
 
+def _open_private_regular_file(path: Path, flags: int, mode: int = 0o600) -> int:
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags | nofollow, mode)
+    info = os.fstat(descriptor)
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        os.close(descriptor)
+        raise _unsafe_run_path(f"{path.name} is not a private regular file")
+    return descriptor
+
+
+def _read_private_json(path: Path) -> object:
+    descriptor = _open_private_regular_file(path, os.O_RDONLY)
+    with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
 def verify_committed_reservation(
     repo_root: PathLike[str] | str,
     registry_relative_path: PathLike[str] | str,
@@ -510,7 +612,13 @@ def verify_committed_reservation(
     if normalized_manifest["registry_path"] != registry_path.as_posix():
         raise ValueError("committed reservation must name the manifest's declared registry path")
     try:
-        disk_manifest = _load_manifest_without_leaf_symlink(Path(normalized_manifest["artifact_path"]) / "manifest.json")
+        artifact_path = Path(normalized_manifest["artifact_path"])
+        _assert_no_symlink_components(artifact_path)
+        artifact_info = artifact_path.lstat()
+        if not stat.S_ISDIR(artifact_info.st_mode) or stat.S_ISLNK(artifact_info.st_mode):
+            raise _unsafe_run_path("artifact path is not a real directory")
+        _validate_run_paths(_run_paths_from_root(artifact_path), require_root=True)
+        disk_manifest = _load_manifest_without_leaf_symlink(artifact_path / "manifest.json")
         disk_manifest = validate_manifest(disk_manifest)
     except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError) as exc:
         raise ValueError("committed reservation requires a valid run-local manifest") from exc
@@ -559,8 +667,9 @@ def _validate_worker_identity(worker_pid: int | None, host: str | None) -> tuple
 
 
 def _load_run_manifest(paths: RunPaths) -> tuple[dict[str, object], str]:
+    _validate_run_paths(paths, require_root=True)
     try:
-        payload = json.loads(paths.manifest.read_text(encoding="utf-8"))
+        payload = _read_private_json(paths.manifest)
     except FileNotFoundError:
         raise
     except json.JSONDecodeError as exc:
@@ -572,14 +681,18 @@ def _load_run_manifest(paths: RunPaths) -> tuple[dict[str, object], str]:
 
 
 def _append_audit_record(paths: RunPaths, record: Mapping[str, object]) -> None:
+    _validate_run_paths(paths, require_root=True)
     audit_path = paths.provenance / "audit.jsonl"
-    audit_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = audit_path.with_name(f"{audit_path.name}.lock")
     encoded = json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
-    with lock_path.open("a+", encoding="utf-8") as lock_handle:
+    lock_descriptor = _open_private_regular_file(lock_path, os.O_RDWR | os.O_CREAT)
+    with os.fdopen(lock_descriptor, "a+", encoding="utf-8") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         try:
-            with audit_path.open("a", encoding="utf-8") as audit_handle:
+            audit_descriptor = _open_private_regular_file(
+                audit_path, os.O_WRONLY | os.O_APPEND | os.O_CREAT
+            )
+            with os.fdopen(audit_descriptor, "a", encoding="utf-8") as audit_handle:
                 audit_handle.write(encoded)
                 audit_handle.flush()
                 os.fsync(audit_handle.fileno())
@@ -588,11 +701,15 @@ def _append_audit_record(paths: RunPaths, record: Mapping[str, object]) -> None:
 
 
 def _load_audit_records(paths: RunPaths) -> list[dict[str, object]]:
+    _validate_run_paths(paths, require_root=True)
     audit_path = paths.provenance / "audit.jsonl"
     if not audit_path.exists():
         return []
     records: list[dict[str, object]] = []
-    for line_number, line in enumerate(audit_path.read_text(encoding="utf-8").splitlines(), start=1):
+    descriptor = _open_private_regular_file(audit_path, os.O_RDONLY)
+    with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    for line_number, line in enumerate(lines, start=1):
         try:
             record = json.loads(line)
         except json.JSONDecodeError as exc:
@@ -653,6 +770,7 @@ def reserve_run_directory(
     """Create one exclusive run directory in the immutable ``reserved`` state."""
 
     normalized = validate_manifest(manifest)
+    _validate_run_paths(paths)
     if Path(normalized["artifact_path"]).resolve() != paths.root.resolve():
         raise ValueError("manifest artifact_path must match canonical run directory")
     worker_pid, host = _validate_worker_identity(worker_pid, host)
@@ -684,21 +802,26 @@ def reserve_run_directory(
         }
 
     lock_path = paths.root.parent / f".{normalized['run_id']}.reservation.lock"
-    with lock_path.open("a+", encoding="utf-8") as lock_handle:
+    lock_descriptor = _open_private_regular_file(lock_path, os.O_RDWR | os.O_CREAT)
+    with os.fdopen(lock_descriptor, "a+", encoding="utf-8") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         try:
+            _validate_run_paths(paths)
             if paths.root.exists():
                 try:
                     existing_manifest, existing_digest = _load_run_manifest(paths)
                     if existing_manifest != normalized or existing_digest != digest:
                         raise FileExistsError(f"run directory already exists: {paths.root}")
                     if paths.status.exists():
-                        existing_status = json.loads(paths.status.read_text(encoding="utf-8"))
+                        existing_status = _read_private_json(paths.status)
                         if (
                             existing_status.get("state") != "reserved"
                             or existing_status.get("transition_id") != reservation_id
                         ):
                             raise FileExistsError(f"run directory already exists: {paths.root}")
+                        for directory in (paths.logs, paths.checkpoints, paths.metrics, paths.arrays, paths.plots, paths.provenance):
+                            directory.mkdir(exist_ok=True)
+                        _validate_run_paths(paths, require_root=True)
                         audit = reservation_audit(existing_status)
                         if any(
                             item.get("transition_id") == reservation_id
@@ -752,10 +875,11 @@ def _transition_run_status_locked(
 ) -> dict[str, object]:
     """Transition a run while the caller owns its lifecycle lock."""
 
+    _validate_run_paths(paths, require_root=True)
     if expected_state not in ALLOWED_STATES or next_state not in ALLOWED_STATES:
         raise ValueError("expected_state and next_state must be canonical lifecycle states")
     try:
-        current = json.loads(paths.status.read_text(encoding="utf-8"))
+        current = _read_private_json(paths.status)
     except FileNotFoundError:
         raise
     except json.JSONDecodeError as exc:
@@ -859,9 +983,10 @@ def transition_run_status(
 ) -> dict[str, object]:
     """Atomically transition a live run while preserving an administrative audit trail."""
 
+    _validate_run_paths(paths, require_root=True)
     lock_path = paths.status.with_name(f"{paths.status.name}.lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as lock_handle:
+    lock_descriptor = _open_private_regular_file(lock_path, os.O_RDWR | os.O_CREAT)
+    with os.fdopen(lock_descriptor, "a+", encoding="utf-8") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         try:
             return _transition_run_status_locked(
