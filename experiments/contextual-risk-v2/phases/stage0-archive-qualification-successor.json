@@ -1,0 +1,66 @@
+{
+  "phase": "stage0-archive-qualification-successor",
+  "study": "contextual-risk-v2",
+  "runs": [
+    {
+      "dataset": "msrvtt",
+      "stage": "baseline",
+      "variant": "archive_qualification_4gpu_retry1",
+      "seed": 0,
+      "timestamp_utc": "20260814T164421Z",
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "gpu_count": 4,
+        "precision": "fp32",
+        "distributed_topology": "single-node-4-rank-nccl"
+      },
+      "input_checkpoints": [],
+      "dataset_splits": [],
+      "config": {
+        "model": {
+          "fixture": "linear-4x2",
+          "train_steps": 1
+        },
+        "loss": {
+          "name": "mse"
+        },
+        "optimizer": {
+          "name": "sgd",
+          "lr": 0.01
+        },
+        "scheduler": {},
+        "evaluation": {
+          "split": "validation",
+          "test_access": false
+        }
+      },
+      "parent_run_ids": [
+        "msrvtt-baseline-archive_qualification_4gpu-seed000-20260814T090705Z-e6fddd50c4ec"
+      ],
+      "selection_lineage": [
+        "Human-authorized successor after the parent run was terminally cancelled because the test fixture entrypoint could not import repository-root modules.",
+        "The import-path defect is fixed by commit 41ff854; the parent run and its failure evidence remain immutable."
+      ],
+      "validation_authorized": true,
+      "test_authorized": false,
+      "expected_scalar_outputs": [
+        "fixture_loss"
+      ],
+      "array_references": [],
+      "command": [
+        "/home/xujie/.conda/envs/tvr/bin/torchrun",
+        "--standalone",
+        "--nproc_per_node=4",
+        "tests/test_experiment_archive_e2e.py",
+        "--four-rank-worker",
+        "--mode",
+        "success",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ]
+    }
+  ]
+}
