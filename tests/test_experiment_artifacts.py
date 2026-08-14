@@ -136,6 +136,52 @@ def test_zero_dimensional_array_reference_preserves_its_shape(tmp_path):
     assert experiment_artifacts.verify_array_reference(tmp_path, reference).shape == ()
 
 
+def test_zero_dimensional_and_vector_arrays_have_distinct_content_addresses(tmp_path):
+    store = experiment_artifacts.ArtifactArrayStore(tmp_path / "arrays")
+
+    scalar = store.write("scalar", np.asarray(1.5, dtype=np.float32))
+    vector = store.write("vector", np.asarray([1.5], dtype=np.float32))
+
+    assert scalar.sha256 != vector.sha256
+    assert scalar.path != vector.path
+    assert experiment_artifacts.verify_array_reference(tmp_path, scalar).shape == ()
+    assert experiment_artifacts.verify_array_reference(tmp_path, vector).shape == (1,)
+
+
+def test_array_store_write_does_not_escape_after_prefix_symlink_swap(tmp_path, monkeypatch):
+    store = experiment_artifacts.ArtifactArrayStore(tmp_path / "arrays")
+    values = np.arange(4, dtype=np.float32)
+    reference = store._reference_for("safe", values)
+    prefix = tmp_path / "arrays" / "sha256" / reference.sha256[:2]
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    original = experiment_artifacts._open_safe_directory
+    swapped = False
+
+    def swap_after_open(root, components):
+        nonlocal swapped
+        descriptor = original(root, components)
+        if not swapped and components == ("sha256", reference.sha256[:2]):
+            swapped = True
+            held = prefix.with_name(f".{prefix.name}.held")
+            prefix.rename(held)
+            prefix.symlink_to(outside, target_is_directory=True)
+        return descriptor
+
+    monkeypatch.setattr(experiment_artifacts, "_open_safe_directory", swap_after_open)
+    try:
+        with pytest.raises(ValueError, match="symlink|unsafe"):
+            store.write("safe", values)
+    finally:
+        if prefix.is_symlink():
+            prefix.unlink()
+        held = prefix.with_name(f".{prefix.name}.held")
+        if held.exists():
+            held.rename(prefix)
+
+    assert not list(outside.iterdir())
+
+
 def test_array_reference_dataclass_is_validated_like_a_mapping(tmp_path):
     store = experiment_artifacts.ArtifactArrayStore(tmp_path / "arrays")
     reference = store.write("safe", np.arange(4, dtype=np.float32))

@@ -169,6 +169,38 @@ def _externalize_a3_evidence(evidence, run_dir):
     return externalized
 
 
+def _add_externalized_rank_bootstrap_evidence(evidence, source_evidence, run_dir):
+    store = ArtifactArrayStore(run_dir / "arrays")
+    raw = np.asarray(source_evidence["raw_wti"], dtype=np.float32)
+    mask = np.asarray(source_evidence["positive_mask"], dtype=bool)
+    for prefix, risk_name, vacuity_name in (
+        ("", "failure_risk", None),
+        ("a1_", "a1_failure_risk", "a1_vacuity"),
+    ):
+        for direction, seed in (("t2v", 0), ("v2t", 1)):
+            scores = raw if direction == "t2v" else raw.T
+            direction_mask = mask if direction == "t2v" else mask.T
+            result = evaluate_retrieval_risk(
+                scores,
+                direction_mask,
+                np.asarray(source_evidence[risk_name][direction], dtype=np.float32),
+                None if vacuity_name is None else np.asarray(
+                    source_evidence[vacuity_name][direction], dtype=np.float32
+                ),
+                bootstrap_samples=0,
+                seed=seed,
+                return_array_evidence=True,
+            )
+            for name, values in result["_array_evidence"].items():
+                evidence.setdefault(f"{prefix}{name}", {})[direction] = store.write(
+                    f"{prefix}{name}.{direction}", values
+                ).as_dict()
+                evidence["array_metadata"].setdefault(f"{prefix}{name}", {})[
+                    direction
+                ] = evidence[f"{prefix}{name}"][direction]
+    return evidence
+
+
 def test_externalized_a3_evidence_recomputes_from_hash_verified_references(tmp_path):
     evidence, expected = _complete_evidence()
     externalized = _externalize_a3_evidence(evidence, tmp_path)
@@ -187,6 +219,35 @@ def test_externalized_a3_evidence_recomputes_from_hash_verified_references(tmp_p
             externalized,
             "raw_wti",
             artifact_run_dir=tmp_path / "other-run",
+        )
+
+
+@pytest.mark.parametrize(
+    ("name", "tampered_values"),
+    (
+        ("query_ranks", np.full(8, 99, dtype=np.int64)),
+        ("bootstrap_auroc", np.asarray([0.0], dtype=np.float64)),
+    ),
+)
+def test_externalized_rank_evidence_must_match_deterministic_recomputation(
+    tmp_path, name, tampered_values
+):
+    evidence, _ = _complete_evidence()
+    externalized = _add_externalized_rank_bootstrap_evidence(
+        _externalize_a3_evidence(evidence, tmp_path), evidence, tmp_path
+    )
+    tampered = ArtifactArrayStore(tmp_path / "arrays").write(
+        f"tampered_{name}", tampered_values
+    ).as_dict()
+    externalized[name]["t2v"] = tampered
+    externalized["array_metadata"][name]["t2v"] = tampered
+
+    with pytest.raises(ValueError, match=f"{name} differs from recomputation"):
+        main_task_retrieval._recompute_contextual_risk_metrics(
+            externalized,
+            bootstrap_samples=0,
+            expected_retrieval_config=externalized["retrieval_config"],
+            artifact_run_dir=tmp_path,
         )
 
 
@@ -211,6 +272,53 @@ def test_artifact_mode_candidate_registration_loads_positive_mask_reference(tmp_
     )
 
     assert candidates[0]["evidence"]["positive_mask"]["path"].startswith("arrays/")
+
+
+def test_selection_preflight_rejection_leaves_no_candidate_partial_state(
+    tmp_path, monkeypatch
+):
+    run = tmp_path / "run"
+    run.mkdir()
+    reference = tmp_path / "a1.pt"
+    torch.save({"backbone": torch.tensor([1.0])}, reference)
+    metrics = _validation()
+    metrics["contextual_risk_evidence"] = _externalize_a3_evidence(
+        metrics["contextual_risk_evidence"], run
+    )
+    model, optimizer, _ = _write_pair(run, reference, 0)
+    original_validate = main_task_retrieval.validate_artifact_json_payload
+
+    def reject_selection(payload, *args, **kwargs):
+        if isinstance(payload, dict) and "winner" in payload:
+            raise ValueError("selection capacity")
+        return original_validate(payload, *args, **kwargs)
+
+    monkeypatch.setattr(
+        main_task_retrieval, "validate_artifact_json_payload", reject_selection
+    )
+    with mock.patch.object(
+        main_task_retrieval, "_verify_contextual_risk_checkpoint_outputs"
+    ):
+        with pytest.raises(ValueError, match="selection capacity"):
+            _record_contextual_risk_selection(
+                epoch=0,
+                checkpoint_path=model,
+                optimizer_checkpoint_path=optimizer,
+                validation_metrics=metrics,
+                paired_baseline=_paired_digest(),
+                reference_checkpoint=reference,
+                candidate_path=run / "contextual_risk_candidates.json",
+                selection_path=run / "best_contextual_risk_checkpoint.json",
+                bootstrap_samples=0,
+                expected_retrieval_config=metrics[
+                    "contextual_risk_evidence"
+                ]["retrieval_config"],
+                expected_head_configs={},
+                artifact_run_dir=run,
+            )
+
+    assert not (run / "contextual_risk_candidates.json").exists()
+    assert not (run / "best_contextual_risk_checkpoint.json").exists()
 
 
 def _paired_digest(raw="raw"):

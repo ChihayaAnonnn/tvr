@@ -38,7 +38,9 @@ A3_REQUIRED_PAIRED_DIGEST_KEYS = (
 def array_sha256(array) -> str:
     """Hash array dtype, shape, and contiguous value bytes."""
 
-    value = np.ascontiguousarray(np.asarray(array))
+    value = np.asarray(array)
+    if value.ndim and not value.flags.c_contiguous:
+        value = np.ascontiguousarray(value)
     digest = hashlib.sha256()
     digest.update(str(value.dtype).encode("ascii"))
     digest.update(np.asarray(value.shape, dtype=np.int64).tobytes())
@@ -388,13 +390,10 @@ def compare_paired_invariance(
     return {"passed": all(checks.values()), "checks": checks}
 
 
-def append_candidate_atomic(
-    path: PathLike,
-    candidate: Mapping,
-    *,
-    validate_payload: Callable[[object], None] | None = None,
-) -> list[dict]:
-    """Append one unique, increasing-epoch candidate using atomic replacement."""
+def prepare_candidate_append(
+    path: PathLike, candidate: Mapping
+) -> tuple[Path, list[dict]]:
+    """Validate and return, without publishing, the next candidate document."""
 
     target = Path(path)
     if target.exists():
@@ -436,6 +435,18 @@ def append_candidate_atomic(
     ):
         raise ValueError("candidate artifact paths must be unique")
     appended = [*candidates, _json_safe(dict(candidate))]
+    return target, appended
+
+
+def append_candidate_atomic(
+    path: PathLike,
+    candidate: Mapping,
+    *,
+    validate_payload: Callable[[object], None] | None = None,
+) -> list[dict]:
+    """Append one unique, increasing-epoch candidate using atomic replacement."""
+
+    target, appended = prepare_candidate_append(path, candidate)
     if validate_payload is not None:
         validate_payload(appended)
     target.parent.mkdir(parents=True, exist_ok=True)

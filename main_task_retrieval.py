@@ -67,6 +67,7 @@ from prob_models.uncertainty_protocol import (
     contextual_risk_candidate_is_valid,
     contextual_risk_selection_tuple,
     non_sidecar_state_dict_mismatches,
+    prepare_candidate_append,
     validate_candidate_artifacts,
     validate_resume_lineage,
     validate_selected_checkpoint,
@@ -3257,6 +3258,9 @@ def _compute_retrieval_risk_metrics(
                 "failure_risk": array_sha256(failure_risk),
                 "vacuity": array_sha256(vacuity),
             }
+            array_evidence = None
+            if artifact_array_store is not None:
+                array_evidence = payload[direction].pop("_array_evidence")
             if return_array_evidence:
                 if artifact_array_store is not None:
                     failure_reference = artifact_array_store.write(
@@ -3271,9 +3275,7 @@ def _compute_retrieval_risk_metrics(
                         "vacuity_values": vacuity_reference,
                         "vacuity_metadata": vacuity_reference,
                     })
-                    for name, values in payload[direction].pop(
-                        "_array_evidence"
-                    ).items():
+                    for name, values in array_evidence.items():
                         reference = artifact_array_store.write(
                             f"a1_{name}.{direction}", values
                         ).as_dict()
@@ -3582,7 +3584,11 @@ def _eval_epoch_impl(
     artifact_array_store=None,
     artifact_run_dir=None,
 ):
-    if artifact_array_store is not None and artifact_run_dir is not None:
+    if (artifact_array_store is None) != (artifact_run_dir is None):
+        raise ValueError(
+            "artifact_array_store and artifact_run_dir must be provided together"
+        )
+    if artifact_array_store is not None:
         expected_run = Path(artifact_run_dir).resolve()
         if expected_run != artifact_array_store.run_root.resolve():
             raise ValueError("artifact array store is not bound to the expected run directory")
@@ -4375,30 +4381,54 @@ def _recompute_contextual_risk_metrics(
         a1_vacuity = _contextual_evidence_array(
             evidence, "a1_vacuity", direction, artifact_run_dir=artifact_run_dir
         )
-        for optional_name in (
-            "query_ranks",
-            "bootstrap_auroc",
-            "a1_query_ranks",
-            "a1_bootstrap_auroc",
-        ):
-            if optional_name in evidence:
-                _contextual_evidence_array(
-                    evidence,
-                    optional_name,
-                    direction,
-                    artifact_run_dir=artifact_run_dir,
-                )
         digests["a1_failure_risk_sha256"][direction] = array_sha256(a1_risk)
         digests["a1_vacuity_sha256"][direction] = array_sha256(a1_vacuity)
         scores = raw_wti if direction == "t2v" else raw_wti.T
         mask = positive_mask if direction == "t2v" else positive_mask.T
-        metrics[direction] = evaluate_retrieval_risk(
+        verify_contextual_arrays = (
+            "query_ranks" in evidence or "bootstrap_auroc" in evidence
+        )
+        contextual_result = evaluate_retrieval_risk(
             scores,
             mask,
             risk,
             bootstrap_samples=int(bootstrap_samples),
             seed=expected_seeds[direction],
+            return_array_evidence=verify_contextual_arrays,
         )
+        if verify_contextual_arrays:
+            expected_arrays = contextual_result.pop("_array_evidence")
+            for name, expected in expected_arrays.items():
+                stored = _contextual_evidence_array(
+                    evidence, name, direction, artifact_run_dir=artifact_run_dir
+                )
+                if not np.array_equal(stored, expected):
+                    raise ValueError(f"A3 evidence {name} differs from recomputation")
+        metrics[direction] = contextual_result
+        verify_a1_arrays = (
+            "a1_query_ranks" in evidence or "a1_bootstrap_auroc" in evidence
+        )
+        if verify_a1_arrays:
+            a1_result = evaluate_retrieval_risk(
+                scores,
+                mask,
+                a1_risk,
+                a1_vacuity,
+                bootstrap_samples=int(bootstrap_samples),
+                seed=expected_seeds[direction],
+                return_array_evidence=True,
+            )
+            for name, expected in a1_result.pop("_array_evidence").items():
+                stored = _contextual_evidence_array(
+                    evidence,
+                    f"a1_{name}",
+                    direction,
+                    artifact_run_dir=artifact_run_dir,
+                )
+                if not np.array_equal(stored, expected):
+                    raise ValueError(
+                        f"A3 evidence a1_{name} differs from recomputation"
+                    )
     retrieval_config = evidence["retrieval_config"]
     if (
         expected_retrieval_config is not None
@@ -4703,7 +4733,7 @@ def _canonical_contextual_baseline_projection(payload):
     """Select only canonical A1-derived fields from one baseline payload."""
 
     evidence = payload["evidence"]
-    canonical_array_names = (
+    canonical_array_names = [
         "raw_wti",
         "text_means",
         "video_means",
@@ -4711,6 +4741,16 @@ def _canonical_contextual_baseline_projection(payload):
         "a1_failure_risk",
         "a1_vacuity",
         "retrieval_scores",
+    ]
+    canonical_array_names.extend(
+        name
+        for name in (
+            "query_ranks",
+            "bootstrap_auroc",
+            "a1_query_ranks",
+            "a1_bootstrap_auroc",
+        )
+        if name in evidence
     )
     return {
         "paired_digest": payload["paired_digest"],
@@ -5080,8 +5120,30 @@ def _record_contextual_risk_selection(
     )
     candidate["publication_marker"] = str(marker_path.resolve())
     candidate["publication_marker_sha256"] = file_sha256(marker_path)
-    if _has_external_contextual_arrays(candidate["evidence"]):
+    external_arrays = _has_external_contextual_arrays(candidate["evidence"])
+    if external_arrays:
         validate_artifact_json_payload(candidate)
+    _, prospective_candidates = prepare_candidate_append(candidate_path, candidate)
+    if external_arrays:
+        validate_artifact_json_payload(prospective_candidates, ensure_ascii=True)
+    validate_candidate_artifacts(
+        prospective_candidates,
+        output_dir=Path(selection_path).parent,
+        method_name="A3",
+    )
+    try:
+        prospective_winner = choose_contextual_risk_checkpoint(
+            prospective_candidates, output_dir=Path(selection_path).parent
+        )
+    except ValueError as exc:
+        if "no valid contextual risk checkpoint" not in str(exc):
+            raise
+        prospective_winner = None
+    selection_payload = _contextual_risk_selection_payload(
+        prospective_candidates, prospective_winner
+    )
+    if external_arrays:
+        validate_artifact_json_payload(selection_payload)
     candidates = append_candidate_atomic(
         candidate_path,
         candidate,
@@ -5098,17 +5160,9 @@ def _record_contextual_risk_selection(
         output_dir=Path(selection_path).parent,
         method_name="A3",
     )
-    try:
-        winner = choose_contextual_risk_checkpoint(
-            candidates, output_dir=Path(selection_path).parent
-        )
-    except ValueError as exc:
-        if "no valid contextual risk checkpoint" not in str(exc):
-            raise
-        winner = None
-    selection_payload = _contextual_risk_selection_payload(candidates, winner)
-    if _has_external_contextual_arrays(candidate["evidence"]):
-        validate_artifact_json_payload(selection_payload)
+    if candidates != prospective_candidates:
+        raise RuntimeError("candidate publication changed after preflight")
+    winner = prospective_winner
     atomic_write_json(selection_path, selection_payload)
     if candidate["non_a3_mismatches"]:
         raise RuntimeError(

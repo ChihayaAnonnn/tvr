@@ -11,6 +11,7 @@ import os
 from os import PathLike
 from pathlib import Path
 import re
+import secrets
 import socket
 import stat
 import subprocess
@@ -172,7 +173,9 @@ class ArrayReference:
 def _array_sha256(array: object) -> str:
     """Hash dtype, shape, and contiguous bytes (the protocol convention)."""
 
-    value = np.ascontiguousarray(np.asarray(array))
+    value = np.asarray(array)
+    if value.ndim and not value.flags.c_contiguous:
+        value = np.ascontiguousarray(value)
     digest = hashlib.sha256()
     digest.update(str(value.dtype).encode("ascii"))
     digest.update(np.asarray(value.shape, dtype=np.int64).tobytes())
@@ -283,25 +286,40 @@ class ArtifactArrayStore:
             verify_array_reference(self.root.parent, reference)
             return reference
         _ensure_safe_directory_chain(target.parent)
-        _assert_no_symlink_components(target.parent)
-        descriptor, temporary_name = tempfile.mkstemp(
-            dir=target.parent, prefix=f".{target.name}.", suffix=".tmp"
+        parent_descriptor = _open_safe_directory(
+            self.root, ("sha256", reference.sha256[:2])
         )
+        temporary_name = f".{target.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+        descriptor = -1
         try:
+            descriptor = os.open(
+                temporary_name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+                dir_fd=parent_descriptor,
+            )
             with os.fdopen(descriptor, "wb") as handle:
+                descriptor = -1
                 np.save(handle, array, allow_pickle=False)
                 handle.flush()
                 os.fsync(handle.fileno())
-            # The content address makes replacement idempotent.  A reader sees
-            # either a complete old NPY or this complete fsynced NPY, never a part.
-            os.replace(temporary_name, target)
-            _fsync_directory(target.parent)
+            os.replace(
+                temporary_name,
+                target.name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+            )
+            os.fsync(parent_descriptor)
         except BaseException:
             try:
-                os.unlink(temporary_name)
+                os.unlink(temporary_name, dir_fd=parent_descriptor)
             except FileNotFoundError:
                 pass
             raise
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            os.close(parent_descriptor)
         verify_array_reference(self.root.parent, reference)
         return reference
 
@@ -334,22 +352,8 @@ def _reference_file_path(
 def _open_reference_file(root: Path, relative: Path) -> tuple[int, os.stat_result]:
     """Open a canonical referenced file through no-follow directory FDs."""
 
-    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    current = _open_safe_directory(root, relative.parts[:-1])
     try:
-        current = os.open(root, directory_flags)
-    except OSError as exc:
-        raise ValueError("artifact root is not a safe directory") from exc
-    try:
-        root_info = os.fstat(current)
-        if not stat.S_ISDIR(root_info.st_mode):
-            raise ValueError("artifact root is not a directory")
-        for component in relative.parts[:-1]:
-            child = os.open(component, directory_flags, dir_fd=current)
-            os.close(current)
-            current = child
-            info = os.fstat(current)
-            if not stat.S_ISDIR(info.st_mode):
-                raise ValueError("array reference directory is unsafe")
         descriptor = os.open(
             relative.name,
             os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
@@ -366,6 +370,32 @@ def _open_reference_file(root: Path, relative: Path) -> tuple[int, os.stat_resul
         raise ValueError("array reference path is unsafe") from exc
     finally:
         os.close(current)
+
+
+def _open_safe_directory(root: Path, components: tuple[str, ...]) -> int:
+    """Return a held no-follow FD for a child directory chain."""
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        current = os.open(root, flags)
+    except OSError as exc:
+        raise ValueError("artifact root is not a safe directory") from exc
+    try:
+        for component in components:
+            child = os.open(component, flags, dir_fd=current)
+            os.close(current)
+            current = child
+            if not stat.S_ISDIR(os.fstat(current).st_mode):
+                raise ValueError("array reference directory is unsafe")
+        return current
+    except FileNotFoundError as exc:
+        os.close(current)
+        raise ValueError("array reference file is missing") from exc
+    except (OSError, ValueError) as exc:
+        os.close(current)
+        if isinstance(exc, ValueError):
+            raise
+        raise ValueError("array reference path is unsafe") from exc
 
 
 def verify_array_reference(

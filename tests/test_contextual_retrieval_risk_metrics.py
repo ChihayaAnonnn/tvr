@@ -211,6 +211,38 @@ def test_a3_artifact_evidence_externalizes_every_query_array(tmp_path):
     validate_artifact_json_payload(evidence)
 
 
+def test_a1_only_artifact_metrics_do_not_embed_array_evidence(tmp_path):
+    raw_wti = _scores_with_two_failures()
+    payload = retrieval._compute_retrieval_risk_metrics(
+        model=_RecordingContextualModel(with_a1=True),
+        risk_similarity_matrix=raw_wti,
+        metric_t2v_matrix=raw_wti,
+        metric_v2t_matrix=raw_wti,
+        positive_mask=np.eye(4, dtype=bool),
+        directions=("t2v", "v2t"),
+        device=torch.device("cpu"),
+        bootstrap_samples=0,
+        artifact_array_store=ArtifactArrayStore(tmp_path / "arrays"),
+    )
+
+    assert all("_array_evidence" not in payload[direction] for direction in payload)
+    validate_artifact_json_payload(payload)
+
+
+def test_eval_epoch_requires_artifact_store_and_run_directory_together(
+    monkeypatch, tmp_path
+):
+    with pytest.raises(ValueError, match="provided together"):
+        retrieval._eval_epoch_impl(
+            SimpleNamespace(),
+            object(),
+            [],
+            torch.device("cpu"),
+            n_gpu=1,
+            artifact_array_store=ArtifactArrayStore(tmp_path / "arrays"),
+        )
+
+
 def test_a2_eval_paired_digest_keeps_pre_a3_schema(monkeypatch):
     raw_wti = np.array(
         [[5.0, 0.0, 0.0], [5.0, 4.0, 0.0], [0.0, 0.0, 5.0], [6.0, 0.0, 5.0]],
@@ -384,6 +416,7 @@ def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(
         torch.device("cpu"),
         n_gpu=1,
         artifact_array_store=ArtifactArrayStore(tmp_path / "arrays"),
+        artifact_run_dir=tmp_path,
     )
     artifact_evidence = artifact_result["contextual_risk_evidence"]
     for name in ("raw_wti", "text_means", "video_means", "positive_mask"):

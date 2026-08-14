@@ -84,7 +84,7 @@ def _bootstrap_auroc(
         raise ValueError("bootstrap_samples must be non-negative")
     value = _binary_auroc(failure, risk)
     if samples == 0:
-        bootstrap = np.asarray([value], dtype=np.float64)
+        bootstrap = np.empty(0, dtype=np.float64)
         return (value, value, bootstrap) if return_samples else (value, value)
 
     rng = np.random.default_rng(seed)
