@@ -77,12 +77,15 @@ def _bootstrap_auroc(
     risk: np.ndarray,
     samples: int,
     seed: int,
-) -> tuple[float, float]:
+    *,
+    return_samples: bool = False,
+) -> tuple[float, float] | tuple[float, float, np.ndarray]:
     if samples < 0:
         raise ValueError("bootstrap_samples must be non-negative")
     value = _binary_auroc(failure, risk)
     if samples == 0:
-        return value, value
+        bootstrap = np.asarray([value], dtype=np.float64)
+        return (value, value, bootstrap) if return_samples else (value, value)
 
     rng = np.random.default_rng(seed)
     positive = np.flatnonzero(failure)
@@ -100,6 +103,8 @@ def _bootstrap_auroc(
             failure[selected], risk[selected]
         )
     low, high = np.percentile(bootstrapped, [2.5, 97.5])
+    if return_samples:
+        return float(low), float(high), bootstrapped
     return float(low), float(high)
 
 
@@ -141,6 +146,7 @@ def evaluate_retrieval_risk(
     vacuity: np.ndarray | None = None,
     bootstrap_samples: int = 1000,
     seed: int = 0,
+    return_array_evidence: bool = False,
 ) -> dict[str, object]:
     """Aggregate risk quality without altering the retrieval scores."""
 
@@ -159,9 +165,17 @@ def evaluate_retrieval_risk(
 
     failure = ranks > 0
     auroc = _binary_auroc(failure, risk)
-    ci_low, ci_high = _bootstrap_auroc(
-        failure, risk, int(bootstrap_samples), int(seed)
+    bootstrap_result = _bootstrap_auroc(
+        failure,
+        risk,
+        int(bootstrap_samples),
+        int(seed),
+        return_samples=return_array_evidence,
     )
+    if return_array_evidence:
+        ci_low, ci_high, bootstrap_values = bootstrap_result
+    else:
+        ci_low, ci_high = bootstrap_result
     spearman = spearmanr(risk, ranks).statistic
     if not np.isfinite(spearman):
         raise ValueError("Spearman correlation requires non-constant inputs")
@@ -184,6 +198,11 @@ def evaluate_retrieval_risk(
     }
     if vacuity is not None:
         result["vacuity_stats"] = _summary(vacuity)
+    if return_array_evidence:
+        result["_array_evidence"] = {
+            "query_ranks": ranks,
+            "bootstrap_auroc": bootstrap_values,
+        }
     return result
 
 

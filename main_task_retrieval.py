@@ -3251,6 +3251,7 @@ def _compute_retrieval_risk_metrics(
                 vacuity,
                 bootstrap_samples=bootstrap_samples,
                 seed=offset,
+                return_array_evidence=artifact_array_store is not None,
             )
             array_digests[direction] = {
                 "failure_risk": array_sha256(failure_risk),
@@ -3270,6 +3271,14 @@ def _compute_retrieval_risk_metrics(
                         "vacuity_values": vacuity_reference,
                         "vacuity_metadata": vacuity_reference,
                     })
+                    for name, values in payload[direction].pop(
+                        "_array_evidence"
+                    ).items():
+                        reference = artifact_array_store.write(
+                            f"a1_{name}.{direction}", values
+                        ).as_dict()
+                        array_digests[direction][f"{name}_values"] = reference
+                        array_digests[direction][f"{name}_metadata"] = reference
                 else:
                     array_digests[direction].update({
                         "failure_risk_values": failure_risk.tolist(),
@@ -3318,6 +3327,7 @@ def _compute_contextual_retrieval_risk_metrics(
         video_tensor = video_tensor.to(device)
     payload = {}
     failure_risk_arrays = {}
+    evidence_arrays = {}
     with torch.no_grad():
         for offset, direction in enumerate(directions):
             if cpu_sidecar is not None:
@@ -3344,7 +3354,12 @@ def _compute_contextual_retrieval_risk_metrics(
                 failure_risk,
                 bootstrap_samples=bootstrap_samples,
                 seed=offset,
+                return_array_evidence=artifact_array_store is not None,
             )
+            if artifact_array_store is not None:
+                evidence_arrays[direction] = payload[direction].pop(
+                    "_array_evidence"
+                )
 
     if not return_evidence:
         return payload
@@ -3395,9 +3410,6 @@ def _compute_contextual_retrieval_risk_metrics(
         },
     }
     if artifact_array_store is not None:
-        evidence["artifact_array_root"] = str(
-            artifact_array_store.root.parent.resolve()
-        )
         for name, value in (
             ("raw_wti", raw_wti),
             ("text_means", text_array),
@@ -3413,6 +3425,15 @@ def _compute_contextual_retrieval_risk_metrics(
             ).as_dict()
             evidence["failure_risk"][direction] = reference
             evidence["array_metadata"]["failure_risk"][direction] = reference
+        for name in ("query_ranks", "bootstrap_auroc"):
+            evidence[name] = {}
+            evidence["array_metadata"][name] = {}
+            for direction in directions:
+                reference = artifact_array_store.write(
+                    f"{name}.{direction}", evidence_arrays[direction][name]
+                ).as_dict()
+                evidence[name][direction] = reference
+                evidence["array_metadata"][name][direction] = reference
         validate_artifact_json_payload(evidence)
     return payload, evidence
 
@@ -3559,7 +3580,12 @@ def _eval_epoch_impl(
     directions=("t2v", "v2t"),
     report_csd_logvar=None,
     artifact_array_store=None,
+    artifact_run_dir=None,
 ):
+    if artifact_array_store is not None and artifact_run_dir is not None:
+        expected_run = Path(artifact_run_dir).resolve()
+        if expected_run != artifact_array_store.run_root.resolve():
+            raise ValueError("artifact array store is not bound to the expected run directory")
     directions = _normalize_eval_directions(directions)
     if report_csd_logvar is None:
         report_csd_logvar = bool(
@@ -3934,6 +3960,17 @@ def _eval_epoch_impl(
                 direction: _a1_array_metadata(direction, "vacuity")
                 for direction in directions
             }
+            if artifact_array_store is not None:
+                for name in ("query_ranks", "bootstrap_auroc"):
+                    evidence_name = f"a1_{name}"
+                    a3_evidence[evidence_name] = {
+                        direction: risk_array_digests[direction][f"{name}_values"]
+                        for direction in directions
+                    }
+                    a3_evidence["array_metadata"][evidence_name] = {
+                        direction: risk_array_digests[direction][f"{name}_metadata"]
+                        for direction in directions
+                    }
             a1_sidecar = getattr(model, "retrieval_risk_sidecar", None)
             if a1_sidecar is not None:
                 a3_evidence["a1_head_config"] = {
@@ -4022,6 +4059,7 @@ def eval_epoch(
     directions=("t2v", "v2t"),
     report_csd_logvar=None,
     artifact_array_store=None,
+    artifact_run_dir=None,
 ):
     """Evaluate with exact FP32 backend flags held through A3 scoring."""
 
@@ -4035,6 +4073,7 @@ def eval_epoch(
             directions=directions,
             report_csd_logvar=report_csd_logvar,
             artifact_array_store=artifact_array_store,
+            artifact_run_dir=artifact_run_dir,
         )
 
 
@@ -4047,7 +4086,9 @@ def _candidate_clamp_ok(metrics):
     )
 
 
-def _contextual_evidence_array(evidence, name, direction=None):
+def _contextual_evidence_array(
+    evidence, name, direction=None, *, artifact_run_dir=None
+):
     """Reconstruct one registered evidence array and verify its typed digest."""
 
     values = evidence[name]
@@ -4067,13 +4108,16 @@ def _contextual_evidence_array(evidence, name, direction=None):
         "a1_failure_risk": np.dtype("float32"),
         "a1_vacuity": np.dtype("float32"),
         "retrieval_scores": np.dtype("float32"),
+        "query_ranks": np.dtype("int64"),
+        "bootstrap_auroc": np.dtype("float64"),
+        "a1_query_ranks": np.dtype("int64"),
+        "a1_bootstrap_auroc": np.dtype("float64"),
     }
     expected_dtype = expected_dtypes[name]
     if isinstance(values, dict) and "path" in values:
-        artifact_root = evidence.get("artifact_array_root")
-        if not isinstance(artifact_root, str):
-            raise ValueError("A3 external array evidence is missing its artifact root")
-        array = verify_array_reference(artifact_root, values)
+        if artifact_run_dir is None:
+            raise ValueError("A3 external array evidence requires its expected run directory")
+        array = verify_array_reference(artifact_run_dir, values)
         if values != metadata:
             raise ValueError("A3 external array metadata differs from its reference")
         if array.dtype != expected_dtype:
@@ -4100,6 +4144,12 @@ def _contextual_evidence_array(evidence, name, direction=None):
     if legacy_sha is not None and legacy_sha != digest:
         raise ValueError(f"A3 evidence {name} legacy SHA-256 mismatch")
     return array
+
+
+def _has_external_contextual_arrays(evidence) -> bool:
+    return isinstance(evidence, dict) and isinstance(
+        evidence.get("raw_wti"), dict
+    ) and "path" in evidence["raw_wti"]
 
 
 def _registered_retrieval_config(positive_mask, *, dsl, dsl_temperature):
@@ -4134,10 +4184,12 @@ def _registered_retrieval_config(positive_mask, *, dsl, dsl_temperature):
     }
 
 
-def _registered_a3_head_configs(args, evidence):
+def _registered_a3_head_configs(args, evidence, *, artifact_run_dir=None):
     """Return immutable sidecar construction settings from registered args."""
 
-    text_means = _contextual_evidence_array(evidence, "text_means")
+    text_means = _contextual_evidence_array(
+        evidence, "text_means", artifact_run_dir=artifact_run_dir
+    )
     if text_means.ndim != 2:
         raise ValueError("A3 text means must be two-dimensional")
     return {
@@ -4187,12 +4239,19 @@ def _verify_contextual_risk_checkpoint_outputs(
     *,
     expected_head_configs,
     verify_contextual=True,
+    artifact_run_dir=None,
 ):
     """Bind stored A3/A1 output arrays to the exact checkpoint head states."""
 
-    raw_wti = _contextual_evidence_array(evidence, "raw_wti")
-    text_means = _contextual_evidence_array(evidence, "text_means")
-    video_means = _contextual_evidence_array(evidence, "video_means")
+    raw_wti = _contextual_evidence_array(
+        evidence, "raw_wti", artifact_run_dir=artifact_run_dir
+    )
+    text_means = _contextual_evidence_array(
+        evidence, "text_means", artifact_run_dir=artifact_run_dir
+    )
+    video_means = _contextual_evidence_array(
+        evidence, "video_means", artifact_run_dir=artifact_run_dir
+    )
     contextual_config = evidence.get("contextual_head_config")
     a1_config = evidence.get("a1_head_config")
     if not isinstance(a1_config, dict) or (
@@ -4236,7 +4295,8 @@ def _verify_contextual_risk_checkpoint_outputs(
                     direction,
                 )["failure_risk"].numpy()
                 stored_contextual = _contextual_evidence_array(
-                    evidence, "failure_risk", direction
+                    evidence, "failure_risk", direction,
+                    artifact_run_dir=artifact_run_dir,
                 )
                 if not np.array_equal(contextual_output, stored_contextual):
                     raise ValueError(
@@ -4248,7 +4308,8 @@ def _verify_contextual_risk_checkpoint_outputs(
                 ("a1_vacuity", "vacuity"),
             ):
                 stored_a1 = _contextual_evidence_array(
-                    evidence, evidence_name, direction
+                    evidence, evidence_name, direction,
+                    artifact_run_dir=artifact_run_dir,
                 )
                 derived_a1 = a1_output[output_name].numpy()
                 if not np.array_equal(derived_a1, stored_a1):
@@ -4262,6 +4323,7 @@ def _recompute_contextual_risk_metrics(
     *,
     bootstrap_samples,
     expected_retrieval_config=None,
+    artifact_run_dir=None,
 ):
     """Rebuild registered A3 summaries solely from complete typed evidence."""
 
@@ -4272,10 +4334,18 @@ def _recompute_contextual_risk_metrics(
     if config.get("seed_by_direction") != expected_seeds:
         raise ValueError("A3 evidence seed configuration mismatch")
 
-    raw_wti = _contextual_evidence_array(evidence, "raw_wti")
-    positive_mask = _contextual_evidence_array(evidence, "positive_mask")
-    _contextual_evidence_array(evidence, "text_means")
-    _contextual_evidence_array(evidence, "video_means")
+    raw_wti = _contextual_evidence_array(
+        evidence, "raw_wti", artifact_run_dir=artifact_run_dir
+    )
+    positive_mask = _contextual_evidence_array(
+        evidence, "positive_mask", artifact_run_dir=artifact_run_dir
+    )
+    _contextual_evidence_array(
+        evidence, "text_means", artifact_run_dir=artifact_run_dir
+    )
+    _contextual_evidence_array(
+        evidence, "video_means", artifact_run_dir=artifact_run_dir
+    )
     if raw_wti.shape != positive_mask.shape:
         raise ValueError("A3 raw WTI and positive-mask shapes differ")
 
@@ -4283,24 +4353,41 @@ def _recompute_contextual_risk_metrics(
     digests = {
         "raw_wti_sha256": array_sha256(raw_wti),
         "text_means_sha256": array_sha256(
-            _contextual_evidence_array(evidence, "text_means")
+            _contextual_evidence_array(
+                evidence, "text_means", artifact_run_dir=artifact_run_dir
+            )
         ),
         "video_means_sha256": array_sha256(
-            _contextual_evidence_array(evidence, "video_means")
+            _contextual_evidence_array(
+                evidence, "video_means", artifact_run_dir=artifact_run_dir
+            )
         ),
         "a1_failure_risk_sha256": {},
         "a1_vacuity_sha256": {},
     }
     for direction in ("t2v", "v2t"):
         risk = _contextual_evidence_array(
-            evidence, "failure_risk", direction
+            evidence, "failure_risk", direction, artifact_run_dir=artifact_run_dir
         )
         a1_risk = _contextual_evidence_array(
-            evidence, "a1_failure_risk", direction
+            evidence, "a1_failure_risk", direction, artifact_run_dir=artifact_run_dir
         )
         a1_vacuity = _contextual_evidence_array(
-            evidence, "a1_vacuity", direction
+            evidence, "a1_vacuity", direction, artifact_run_dir=artifact_run_dir
         )
+        for optional_name in (
+            "query_ranks",
+            "bootstrap_auroc",
+            "a1_query_ranks",
+            "a1_bootstrap_auroc",
+        ):
+            if optional_name in evidence:
+                _contextual_evidence_array(
+                    evidence,
+                    optional_name,
+                    direction,
+                    artifact_run_dir=artifact_run_dir,
+                )
         digests["a1_failure_risk_sha256"][direction] = array_sha256(a1_risk)
         digests["a1_vacuity_sha256"][direction] = array_sha256(a1_vacuity)
         scores = raw_wti if direction == "t2v" else raw_wti.T
@@ -4324,10 +4411,10 @@ def _recompute_contextual_risk_metrics(
     if retrieval_config.get("score_path") != "post_dsl_directional_scores":
         raise ValueError("A3 retrieval evidence score path mismatch")
     retrieval_t2v = _contextual_evidence_array(
-        evidence, "retrieval_scores", "t2v"
+        evidence, "retrieval_scores", "t2v", artifact_run_dir=artifact_run_dir
     )
     retrieval_v2t = _contextual_evidence_array(
-        evidence, "retrieval_scores", "v2t"
+        evidence, "retrieval_scores", "v2t", artifact_run_dir=artifact_run_dir
     )
     if retrieval_t2v.shape != raw_wti.shape or retrieval_v2t.shape != raw_wti.shape:
         raise ValueError("A3 retrieval evidence matrix shape mismatch")
@@ -4381,6 +4468,7 @@ def _build_contextual_risk_candidate(
     bootstrap_samples,
     expected_retrieval_config,
     expected_head_configs,
+    artifact_run_dir=None,
 ):
     """Build one complete, validation-only A3 candidate record."""
 
@@ -4403,11 +4491,13 @@ def _build_contextual_risk_candidate(
         model_path,
         evidence,
         expected_head_configs=expected_head_configs,
+        artifact_run_dir=artifact_run_dir,
     )
     recomputed_contextual, evidence_digests = _recompute_contextual_risk_metrics(
         evidence,
         bootstrap_samples=bootstrap_samples,
         expected_retrieval_config=expected_retrieval_config,
+        artifact_run_dir=artifact_run_dir,
     )
     if contextual != recomputed_contextual:
         raise ValueError("A3 validation metric summary differs from evidence")
@@ -4514,6 +4604,7 @@ def _reaudit_contextual_risk_candidate(
     bootstrap_samples,
     expected_retrieval_config,
     expected_head_configs,
+    artifact_run_dir=None,
 ):
     """Recompute every derivable A3 audit field without mutating its record."""
 
@@ -4524,6 +4615,7 @@ def _reaudit_contextual_risk_candidate(
         candidate["evidence"],
         bootstrap_samples=bootstrap_samples,
         expected_retrieval_config=expected_retrieval_config,
+        artifact_run_dir=artifact_run_dir,
     )
     if {
         "t2v": contextual["t2v"], "v2t": contextual["v2t"]
@@ -4544,6 +4636,7 @@ def _reaudit_contextual_risk_candidate(
             candidate["path"],
             candidate["evidence"],
             expected_head_configs=expected_head_configs,
+            artifact_run_dir=artifact_run_dir,
         )
     mismatches = non_sidecar_state_dict_mismatches(
         reference_checkpoint,
@@ -4671,6 +4764,7 @@ def _regenerate_contextual_risk_baseline(
         n_gpu,
         report_csd_logvar=False,
         artifact_array_store=getattr(args, "artifact_array_store", None),
+        artifact_run_dir=getattr(args, "artifact_run_dir", None),
     )
     return {
         "reference_checkpoint": str(Path(reference_checkpoint).resolve()),
@@ -4752,6 +4846,7 @@ def _initialize_contextual_risk_protocol(
     """Register a fresh canonical A1 baseline or validate one A3 continuation."""
 
     output_dir = Path(args.output_dir)
+    artifact_run_dir = getattr(args, "artifact_run_dir", None)
     _validate_a3_publication_directory(output_dir)
     baseline_path = output_dir / "a3_paired_baseline.json"
     candidate_path = output_dir / "contextual_risk_candidates.json"
@@ -4796,18 +4891,21 @@ def _initialize_contextual_risk_protocol(
         if not isinstance(baseline_evidence, dict):
             raise ValueError("A3 continuation baseline complete evidence is missing")
         expected_retrieval_config = _registered_retrieval_config(
-            _contextual_evidence_array(baseline_evidence, "positive_mask"),
+            _contextual_evidence_array(
+                baseline_evidence, "positive_mask", artifact_run_dir=artifact_run_dir
+            ),
             dsl=bool(getattr(args, "DSL", False)),
             dsl_temperature=float(getattr(args, "dsl_temperature", 1.0)),
         )
         expected_head_configs = _registered_a3_head_configs(
-            args, baseline_evidence
+            args, baseline_evidence, artifact_run_dir=artifact_run_dir
         )
         _verify_contextual_risk_checkpoint_outputs(
             reference_checkpoint,
             baseline_evidence,
             expected_head_configs=expected_head_configs,
             verify_contextual=False,
+            artifact_run_dir=artifact_run_dir,
         )
         _, baseline_digests = _recompute_contextual_risk_metrics(
             baseline_evidence,
@@ -4815,6 +4913,7 @@ def _initialize_contextual_risk_protocol(
                 args, "contextual_risk_bootstrap_samples", 1000
             ),
             expected_retrieval_config=expected_retrieval_config,
+            artifact_run_dir=artifact_run_dir,
         )
         for digest_name, digest_value in baseline_digests.items():
             if paired_baseline.get(digest_name) != digest_value:
@@ -4842,6 +4941,7 @@ def _initialize_contextual_risk_protocol(
                 ),
                 expected_retrieval_config=expected_retrieval_config,
                 expected_head_configs=expected_head_configs,
+                artifact_run_dir=artifact_run_dir,
             )
             for candidate in candidates
         ]
@@ -4893,18 +4993,21 @@ def _initialize_contextual_risk_protocol(
         paired_baseline = regenerated_baseline["paired_digest"]
         baseline_evidence = regenerated_baseline["evidence"]
         expected_retrieval_config = _registered_retrieval_config(
-            _contextual_evidence_array(baseline_evidence, "positive_mask"),
+            _contextual_evidence_array(
+                baseline_evidence, "positive_mask", artifact_run_dir=artifact_run_dir
+            ),
             dsl=bool(getattr(args, "DSL", False)),
             dsl_temperature=float(getattr(args, "dsl_temperature", 1.0)),
         )
         expected_head_configs = _registered_a3_head_configs(
-            args, baseline_evidence
+            args, baseline_evidence, artifact_run_dir=artifact_run_dir
         )
         _verify_contextual_risk_checkpoint_outputs(
             reference_checkpoint,
             baseline_evidence,
             expected_head_configs=expected_head_configs,
             verify_contextual=False,
+            artifact_run_dir=artifact_run_dir,
         )
         _recompute_contextual_risk_metrics(
             baseline_evidence,
@@ -4912,6 +5015,7 @@ def _initialize_contextual_risk_protocol(
                 args, "contextual_risk_bootstrap_samples", 1000
             ),
             expected_retrieval_config=expected_retrieval_config,
+            artifact_run_dir=artifact_run_dir,
         )
         baseline_payload = {
             "reference_checkpoint": reference_checkpoint,
@@ -4919,7 +5023,7 @@ def _initialize_contextual_risk_protocol(
             "paired_digest": paired_baseline,
             "evidence": baseline_evidence,
         }
-        if "artifact_array_root" in baseline_evidence:
+        if _has_external_contextual_arrays(baseline_evidence):
             validate_artifact_json_payload(baseline_payload)
         atomic_write_json(baseline_path, baseline_payload)
         candidates = []
@@ -4948,6 +5052,7 @@ def _record_contextual_risk_selection(
     bootstrap_samples,
     expected_retrieval_config,
     expected_head_configs,
+    artifact_run_dir=None,
 ):
     """Audit and append one A3 validation candidate, then persist its winner."""
 
@@ -4971,12 +5076,23 @@ def _record_contextual_risk_selection(
         bootstrap_samples=bootstrap_samples,
         expected_retrieval_config=expected_retrieval_config,
         expected_head_configs=expected_head_configs,
+        artifact_run_dir=artifact_run_dir,
     )
     candidate["publication_marker"] = str(marker_path.resolve())
     candidate["publication_marker_sha256"] = file_sha256(marker_path)
-    if "artifact_array_root" in candidate["evidence"]:
+    if _has_external_contextual_arrays(candidate["evidence"]):
         validate_artifact_json_payload(candidate)
-    candidates = append_candidate_atomic(candidate_path, candidate)
+    candidates = append_candidate_atomic(
+        candidate_path,
+        candidate,
+        validate_payload=(
+            lambda payload: validate_artifact_json_payload(
+                payload, ensure_ascii=True
+            )
+            if _has_external_contextual_arrays(candidate["evidence"])
+            else None
+        ),
+    )
     validate_candidate_artifacts(
         candidates,
         output_dir=Path(selection_path).parent,
@@ -4991,7 +5107,7 @@ def _record_contextual_risk_selection(
             raise
         winner = None
     selection_payload = _contextual_risk_selection_payload(candidates, winner)
-    if "artifact_array_root" in candidate["evidence"]:
+    if _has_external_contextual_arrays(candidate["evidence"]):
         validate_artifact_json_payload(selection_payload)
     atomic_write_json(selection_path, selection_payload)
     if candidate["non_a3_mismatches"]:
@@ -5087,7 +5203,7 @@ def _maybe_run_contextual_risk_final_test(
         os.fsync(handle.fileno())
     try:
         result = run_selected_jsfusion_once(selected)
-        if "artifact_array_root" in selected.get("evidence", {}):
+        if _has_external_contextual_arrays(selected.get("evidence", {})):
             validate_artifact_json_payload(result)
         atomic_write_json(final_path, result)
     except Exception as exc:
@@ -5764,7 +5880,13 @@ def main():
                         dist.barrier()
                     return
                 validation_metrics = eval_epoch(
-                    args, model, eval_dataloader, device, n_gpu
+                    args,
+                    model,
+                    eval_dataloader,
+                    device,
+                    n_gpu,
+                    artifact_array_store=getattr(args, "artifact_array_store", None),
+                    artifact_run_dir=getattr(args, "artifact_run_dir", None),
                 )
                 if a2_only:
                     winner = _record_csd_logvar_selection(
@@ -5810,11 +5932,12 @@ def main():
                             selection_path=contextual_protocol["selection_path"],
                             bootstrap_samples=args.contextual_risk_bootstrap_samples,
                             expected_retrieval_config=_registered_retrieval_config(
-                                np.asarray(
-                                    validation_metrics["contextual_risk_evidence"][
-                                        "positive_mask"
-                                    ],
-                                    dtype=bool,
+                                _contextual_evidence_array(
+                                    validation_metrics["contextual_risk_evidence"],
+                                    "positive_mask",
+                                    artifact_run_dir=getattr(
+                                        args, "artifact_run_dir", None
+                                    ),
                                 ),
                                 dsl=bool(args.DSL),
                                 dsl_temperature=float(args.dsl_temperature),
@@ -5822,7 +5945,11 @@ def main():
                             expected_head_configs=_registered_a3_head_configs(
                                 args,
                                 validation_metrics["contextual_risk_evidence"],
+                                artifact_run_dir=getattr(
+                                    args, "artifact_run_dir", None
+                                ),
                             ),
+                            artifact_run_dir=getattr(args, "artifact_run_dir", None),
                         )
                     except RuntimeError as exc:
                         if "terminal A3 invariance violation" not in str(exc):

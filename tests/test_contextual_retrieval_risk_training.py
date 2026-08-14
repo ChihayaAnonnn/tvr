@@ -145,11 +145,9 @@ def _complete_evidence(rho=0.30, raw="raw"):
     return evidence, metrics
 
 
-def test_externalized_a3_evidence_recomputes_from_hash_verified_references(tmp_path):
-    evidence, expected = _complete_evidence()
-    store = ArtifactArrayStore(tmp_path / "arrays")
+def _externalize_a3_evidence(evidence, run_dir):
+    store = ArtifactArrayStore(run_dir / "arrays")
     externalized = copy.deepcopy(evidence)
-    externalized["artifact_array_root"] = str(tmp_path)
     for name in ("raw_wti", "text_means", "video_means", "positive_mask"):
         reference = store.write(
             name,
@@ -168,14 +166,51 @@ def test_externalized_a3_evidence_recomputes_from_hash_verified_references(tmp_p
             ).as_dict()
             externalized[name][direction] = reference
             externalized["array_metadata"][name][direction] = reference
+    return externalized
+
+
+def test_externalized_a3_evidence_recomputes_from_hash_verified_references(tmp_path):
+    evidence, expected = _complete_evidence()
+    externalized = _externalize_a3_evidence(evidence, tmp_path)
 
     actual, _ = main_task_retrieval._recompute_contextual_risk_metrics(
         externalized,
         bootstrap_samples=0,
         expected_retrieval_config=externalized["retrieval_config"],
+        artifact_run_dir=tmp_path,
     )
 
     assert actual == expected
+    (tmp_path / "other-run").mkdir()
+    with pytest.raises(ValueError, match="file is missing"):
+        main_task_retrieval._contextual_evidence_array(
+            externalized,
+            "raw_wti",
+            artifact_run_dir=tmp_path / "other-run",
+        )
+
+
+def test_artifact_mode_candidate_registration_loads_positive_mask_reference(tmp_path):
+    run = tmp_path / "run"
+    run.mkdir()
+    reference = tmp_path / "a1.pt"
+    torch.save({"backbone": torch.tensor([1.0])}, reference)
+    validation = _validation()
+    validation["contextual_risk_evidence"] = _externalize_a3_evidence(
+        validation["contextual_risk_evidence"], run
+    )
+    candidates = []
+
+    _record(
+        run,
+        reference,
+        candidates,
+        0,
+        validation,
+        artifact_run_dir=run,
+    )
+
+    assert candidates[0]["evidence"]["positive_mask"]["path"].startswith("arrays/")
 
 
 def _paired_digest(raw="raw"):
@@ -577,7 +612,7 @@ def _write_pair(run, reference, epoch):
     return model_path, optimizer_path, payload
 
 
-def _record(run, reference, candidates, epoch, metrics):
+def _record(run, reference, candidates, epoch, metrics, *, artifact_run_dir=None):
     model, optimizer, payload = _write_pair(run, reference, epoch)
     with mock.patch.object(
         main_task_retrieval,
@@ -597,6 +632,7 @@ def _record(run, reference, candidates, epoch, metrics):
                 "contextual_risk_evidence"
             ]["retrieval_config"],
             expected_head_configs={},
+            artifact_run_dir=artifact_run_dir,
         )
     candidates[:] = json.loads(
         (run / "contextual_risk_candidates.json").read_text()

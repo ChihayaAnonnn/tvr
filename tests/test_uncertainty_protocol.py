@@ -117,6 +117,27 @@ def test_append_candidate_is_atomic_and_strictly_append_only(tmp_path, monkeypat
     assert path.read_bytes() == original
 
 
+def test_append_candidate_validates_the_full_list_before_replacement(tmp_path):
+    path = tmp_path / "candidates.json"
+    first = _candidate(tmp_path, 0)
+    second = _candidate(tmp_path, 1)
+    append_candidate_atomic(path, first, validate_payload=lambda payload: None)
+    original = path.read_bytes()
+
+    def reject_aggregate(payload):
+        if len(payload) > 1:
+            raise ValueError("aggregate limit")
+
+    with pytest.raises(ValueError, match="aggregate limit"):
+        append_candidate_atomic(
+            path,
+            second,
+            validate_payload=reject_aggregate,
+        )
+
+    assert path.read_bytes() == original
+
+
 def test_append_candidate_serializes_finite_array_evidence(tmp_path):
     path = tmp_path / "candidates.json"
     candidate = {

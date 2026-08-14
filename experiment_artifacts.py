@@ -181,7 +181,9 @@ def _array_sha256(array: object) -> str:
 
 
 def _validate_numeric_array(value: object) -> np.ndarray:
-    array = np.ascontiguousarray(np.asarray(value))
+    array = np.asarray(value)
+    if array.ndim and not array.flags.c_contiguous:
+        array = np.ascontiguousarray(array)
     if array.dtype.hasobject:
         raise ValueError("artifact arrays must reject object dtype")
     if not (np.issubdtype(array.dtype, np.number) or np.issubdtype(array.dtype, np.bool_)):
@@ -199,7 +201,7 @@ def _safe_array_key(value: object) -> str:
 
 def _array_reference_from_mapping(value: ArrayReference | Mapping[str, object]) -> ArrayReference:
     if isinstance(value, ArrayReference):
-        return value
+        value = value.as_dict()
     if not isinstance(value, Mapping):
         raise ValueError("array reference must be an object")
     expected = {"path", "key", "shape", "dtype", "byte_size", "format", "sha256"}
@@ -249,7 +251,9 @@ class ArtifactArrayStore:
         if root.name != "arrays":
             raise ValueError("array_dir must be the canonical arrays directory")
         self.root = root
-        self.root.mkdir(parents=True, exist_ok=True)
+        self.run_root = root.parent
+        _assert_no_symlink_components(self.root)
+        _ensure_safe_directory_chain(self.root)
         _assert_no_symlink_components(self.root)
         root_info = self.root.lstat()
         if not stat.S_ISDIR(root_info.st_mode) or stat.S_ISLNK(root_info.st_mode):
@@ -278,7 +282,7 @@ class ArtifactArrayStore:
         if target.exists():
             verify_array_reference(self.root.parent, reference)
             return reference
-        target.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_safe_directory_chain(target.parent)
         _assert_no_symlink_components(target.parent)
         descriptor, temporary_name = tempfile.mkstemp(
             dir=target.parent, prefix=f".{target.name}.", suffix=".tmp"
@@ -302,7 +306,9 @@ class ArtifactArrayStore:
         return reference
 
 
-def _reference_file_path(artifact_root: PathLike[str] | str, reference: ArrayReference) -> Path:
+def _reference_file_path(
+    artifact_root: PathLike[str] | str, reference: ArrayReference
+) -> tuple[Path, Path]:
     try:
         root = _canonical_absolute_path(artifact_root, "artifact root")
         _assert_no_symlink_components(root)
@@ -322,15 +328,44 @@ def _reference_file_path(artifact_root: PathLike[str] | str, reference: ArrayRef
         expected = expected.relative_to("arrays")
     if relative != expected:
         raise ValueError("array reference path is not canonical content-addressed storage")
-    candidate = root / relative
-    _assert_no_symlink_components(candidate)
+    return root, relative
+
+
+def _open_reference_file(root: Path, relative: Path) -> tuple[int, os.stat_result]:
+    """Open a canonical referenced file through no-follow directory FDs."""
+
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
-        info = candidate.lstat()
+        current = os.open(root, directory_flags)
+    except OSError as exc:
+        raise ValueError("artifact root is not a safe directory") from exc
+    try:
+        root_info = os.fstat(current)
+        if not stat.S_ISDIR(root_info.st_mode):
+            raise ValueError("artifact root is not a directory")
+        for component in relative.parts[:-1]:
+            child = os.open(component, directory_flags, dir_fd=current)
+            os.close(current)
+            current = child
+            info = os.fstat(current)
+            if not stat.S_ISDIR(info.st_mode):
+                raise ValueError("array reference directory is unsafe")
+        descriptor = os.open(
+            relative.name,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=current,
+        )
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            os.close(descriptor)
+            raise ValueError("array reference file is not a private regular file")
+        return descriptor, info
     except FileNotFoundError as exc:
         raise ValueError("array reference file is missing") from exc
-    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_nlink != 1:
-        raise ValueError("array reference file is not a private regular file")
-    return candidate
+    except OSError as exc:
+        raise ValueError("array reference path is unsafe") from exc
+    finally:
+        os.close(current)
 
 
 def verify_array_reference(
@@ -339,18 +374,24 @@ def verify_array_reference(
     """Load a referenced NPY without pickle and fail closed on any mismatch."""
 
     normalized = _array_reference_from_mapping(reference)
-    path = _reference_file_path(artifact_root, normalized)
+    root, relative = _reference_file_path(artifact_root, normalized)
     expected_bytes = int(np.prod(normalized.shape, dtype=object)) * np.dtype(normalized.dtype).itemsize
     if expected_bytes != normalized.byte_size:
         raise ValueError("array reference shape and byte_size disagree")
-    file_size = path.stat().st_size
+    descriptor, info = _open_reference_file(root, relative)
+    file_size = info.st_size
     if file_size < normalized.byte_size or file_size > normalized.byte_size + 10_000:
+        os.close(descriptor)
         raise ValueError("array reference file size is inconsistent with safe NPY storage")
     try:
-        with path.open("rb") as handle:
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = -1
             array = np.load(handle, allow_pickle=False, max_header_size=10_000)
     except (OSError, ValueError) as exc:
         raise ValueError("array reference is not a safe NPY payload") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
     if not isinstance(array, np.ndarray):
         raise ValueError("array reference NPY did not contain an array")
     array = _validate_numeric_array(array)
@@ -407,8 +448,10 @@ def externalize_numeric_payload(
     return visit(payload, (semantic_key,))
 
 
-def validate_artifact_json_payload(payload: object) -> None:
-    """Reject in-memory payloads that cannot safely be a small artifact JSON."""
+def artifact_json_bytes(
+    payload: object, *, ensure_ascii: bool = False, indent: int = 2
+) -> bytes:
+    """Serialize exactly like an artifact writer after path-aware validation."""
 
     def visit(value: object, path: str) -> None:
         if isinstance(value, np.ndarray) or _tensor_to_numpy(value) is not None:
@@ -417,6 +460,12 @@ def validate_artifact_json_payload(payload: object) -> None:
             if len(value) > _MAX_ARTIFACT_JSON_BYTES:
                 raise ValueError(f"artifact JSON byte string over 1 MiB at {path}")
             raise ValueError(f"artifact JSON cannot embed byte strings at {path}")
+        if isinstance(value, np.generic):
+            if isinstance(value, np.floating) and not np.isfinite(value):
+                raise ValueError(f"artifact JSON contains non-finite number at {path}")
+            raise ValueError(f"artifact JSON cannot embed NumPy scalar at {path}")
+        if isinstance(value, float) and not np.isfinite(value):
+            raise ValueError(f"artifact JSON contains non-finite number at {path}")
         if isinstance(value, Mapping):
             for key, child in value.items():
                 if not isinstance(key, str):
@@ -428,9 +477,28 @@ def validate_artifact_json_payload(payload: object) -> None:
 
     visit(payload, "")
     try:
-        encoded = json.dumps(payload, ensure_ascii=True, allow_nan=False, separators=(",", ":")).encode("utf-8")
+        return (
+            json.dumps(
+                payload,
+                ensure_ascii=ensure_ascii,
+                allow_nan=False,
+                sort_keys=True,
+                indent=indent,
+            )
+            + "\n"
+        ).encode("utf-8")
     except (TypeError, ValueError) as exc:
         raise ValueError("artifact JSON payload is not strict JSON") from exc
+
+
+def validate_artifact_json_payload(
+    payload: object, *, ensure_ascii: bool = False, indent: int = 2
+) -> None:
+    """Reject payloads that do not fit the exact writer's strict JSON bytes."""
+
+    encoded = artifact_json_bytes(
+        payload, ensure_ascii=ensure_ascii, indent=indent
+    )
     if len(encoded) >= _MAX_ARTIFACT_JSON_BYTES:
         raise ValueError("artifact JSON document must remain below 1 MiB")
 
@@ -803,6 +871,43 @@ def _fsync_directory(directory: Path) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def _ensure_safe_directory_chain(path: Path) -> None:
+    """Create a canonical directory chain without following existing symlinks.
+
+    Every newly linked child is fsynced in both its parent and itself before the
+    caller may publish a reference below it.
+    """
+
+    canonical = _canonical_absolute_path(path, "directory path")
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    current = os.open(canonical.anchor, flags)
+    try:
+        for component in canonical.parts[1:]:
+            created = False
+            try:
+                child = os.open(component, flags, dir_fd=current)
+            except FileNotFoundError:
+                try:
+                    os.mkdir(component, 0o700, dir_fd=current)
+                    created = True
+                except FileExistsError:
+                    pass
+                child = os.open(component, flags, dir_fd=current)
+            info = os.fstat(child)
+            if not stat.S_ISDIR(info.st_mode):
+                os.close(child)
+                raise _unsafe_run_path(f"directory component is unsafe: {component}")
+            if created:
+                os.fsync(current)
+                os.fsync(child)
+            os.close(current)
+            current = child
+    except OSError as exc:
+        raise _unsafe_run_path("directory component is unsafe") from exc
+    finally:
+        os.close(current)
 
 
 def _atomic_write_bytes(path: Path, payload: bytes) -> None:

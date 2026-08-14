@@ -203,6 +203,9 @@ def test_a3_artifact_evidence_externalizes_every_query_array(tmp_path):
     assert "path" in evidence["raw_wti"]
     assert "path" in evidence["failure_risk"]["t2v"]
     assert evidence["array_metadata"]["raw_wti"] == evidence["raw_wti"]
+    for name in ("query_ranks", "bootstrap_auroc"):
+        assert "path" in evidence[name]["t2v"]
+        assert evidence["array_metadata"][name]["t2v"] == evidence[name]["t2v"]
     assert "failure_risk_arrays" not in evidence
     assert len(json.dumps(evidence).encode()) < 1_048_576
     validate_artifact_json_payload(evidence)

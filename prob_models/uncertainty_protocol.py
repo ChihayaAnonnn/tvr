@@ -7,7 +7,7 @@ import json
 import math
 import os
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from numbers import Number
 from os import PathLike
 from pathlib import Path
@@ -388,7 +388,12 @@ def compare_paired_invariance(
     return {"passed": all(checks.values()), "checks": checks}
 
 
-def append_candidate_atomic(path: PathLike, candidate: Mapping) -> list[dict]:
+def append_candidate_atomic(
+    path: PathLike,
+    candidate: Mapping,
+    *,
+    validate_payload: Callable[[object], None] | None = None,
+) -> list[dict]:
     """Append one unique, increasing-epoch candidate using atomic replacement."""
 
     target = Path(path)
@@ -431,6 +436,8 @@ def append_candidate_atomic(path: PathLike, candidate: Mapping) -> list[dict]:
     ):
         raise ValueError("candidate artifact paths must be unique")
     appended = [*candidates, _json_safe(dict(candidate))]
+    if validate_payload is not None:
+        validate_payload(appended)
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary_name = None
     try:
@@ -442,7 +449,14 @@ def append_candidate_atomic(path: PathLike, candidate: Mapping) -> list[dict]:
             delete=False,
         ) as handle:
             temporary_name = handle.name
-            json.dump(appended, handle, indent=2, sort_keys=True)
+            json.dump(
+                appended,
+                handle,
+                ensure_ascii=True,
+                allow_nan=False,
+                indent=2,
+                sort_keys=True,
+            )
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())

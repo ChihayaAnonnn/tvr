@@ -1,6 +1,7 @@
 import json
 import multiprocessing
 import os
+from dataclasses import replace
 from pathlib import Path
 import subprocess
 
@@ -87,6 +88,62 @@ def test_array_reference_rejects_traversal_partial_writes_and_hash_mismatch(tmp_
     path.write_bytes(path.read_bytes()[:20])
     with pytest.raises(ValueError, match="file size"):
         experiment_artifacts.verify_array_reference(tmp_path, reference)
+
+
+def test_artifact_json_limit_uses_the_pretty_utf8_bytes_written():
+    payload = {"values": ["x"] * 120_000}
+
+    with pytest.raises(ValueError, match="1 MiB"):
+        experiment_artifacts.validate_artifact_json_payload(payload)
+
+
+def test_artifact_json_boundary_matches_exact_writer_bytes():
+    empty_size = len(experiment_artifacts.artifact_json_bytes({"value": ""}))
+    accepted = {"value": "x" * (1_048_575 - empty_size)}
+    rejected = {"value": accepted["value"] + "x"}
+
+    assert len(experiment_artifacts.artifact_json_bytes(accepted)) == 1_048_575
+    experiment_artifacts.validate_artifact_json_payload(accepted)
+    assert len(experiment_artifacts.artifact_json_bytes(rejected)) == 1_048_576
+    with pytest.raises(ValueError, match="1 MiB"):
+        experiment_artifacts.validate_artifact_json_payload(rejected)
+
+
+def test_artifact_json_boundary_counts_unescaped_unicode_utf8():
+    empty_size = len(experiment_artifacts.artifact_json_bytes({"value": ""}))
+    accepted = {"value": "é" * ((1_048_575 - empty_size) // 2)}
+
+    assert len(experiment_artifacts.artifact_json_bytes(accepted)) < 1_048_576
+    experiment_artifacts.validate_artifact_json_payload(accepted)
+
+
+def test_array_store_refuses_symlinked_ancestor_before_creating_children(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (tmp_path / "redirect").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink"):
+        experiment_artifacts.ArtifactArrayStore(tmp_path / "redirect" / "arrays")
+
+    assert not (outside / "arrays").exists()
+
+
+def test_zero_dimensional_array_reference_preserves_its_shape(tmp_path):
+    store = experiment_artifacts.ArtifactArrayStore(tmp_path / "arrays")
+    reference = store.write("scalar", np.asarray(1.5, dtype=np.float32))
+
+    assert reference.shape == ()
+    assert experiment_artifacts.verify_array_reference(tmp_path, reference).shape == ()
+
+
+def test_array_reference_dataclass_is_validated_like_a_mapping(tmp_path):
+    store = experiment_artifacts.ArtifactArrayStore(tmp_path / "arrays")
+    reference = store.write("safe", np.arange(4, dtype=np.float32))
+
+    with pytest.raises(ValueError, match="format"):
+        experiment_artifacts.verify_array_reference(
+            tmp_path, replace(reference, format="npz")
+        )
 
 
 def _manifest_sha256(payload):
