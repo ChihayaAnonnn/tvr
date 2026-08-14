@@ -12,6 +12,7 @@ import random
 import shlex
 import signal
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -165,7 +166,8 @@ def _verify_artifact_runtime_bindings(
                 raise ValueError(
                     f"artifact effective config mismatch: {category}.{name}"
                 )
-    if registered_a3_contract:
+    qualification = getattr(args, "archive_qualification_scenario", "none") != "none"
+    if registered_a3_contract and not qualification:
         required = set(_registered_a3_expected_values()) - {
             "world_size", "n_gpu", "pin_memory",
         }
@@ -179,7 +181,7 @@ def _verify_artifact_runtime_bindings(
         for reference in manifest[field]:
             if _hash_artifact_runtime_input(repository, reference) != reference["sha256"]:
                 raise ValueError(f"artifact {field} input SHA-256 mismatch")
-    if registered_a3_contract:
+    if registered_a3_contract and not qualification:
         def normalized_reference_paths(field):
             result = set()
             for reference in manifest[field]:
@@ -230,6 +232,23 @@ def _verify_artifact_runtime_bindings(
         raise ValueError(
             "artifact runtime environment mismatch: " + ", ".join(mismatches)
         )
+    if qualification:
+        allowed = {
+            "success", "non_owner_failure", "owner_collective_failure",
+            "sigterm_different_collectives",
+        }
+        if args.archive_qualification_scenario not in allowed:
+            raise ValueError("archive qualification scenario is invalid")
+        if manifest["stage"] != "baseline" or manifest["test_authorized"]:
+            raise ValueError("archive qualification must be validation-only baseline")
+        if manifest["input_checkpoints"] or manifest["dataset_splits"]:
+            raise ValueError("archive qualification forbids model and dataset inputs")
+        required = {
+            "archive_qualification_scenario", "datatype", "do_train",
+            "eval_split", "run_final_test",
+        }
+        if not required.issubset(flattened):
+            raise ValueError("archive qualification manifest config is incomplete")
     if registered_a3_contract:
         required_environment = {
             "CUDA_VISIBLE_DEVICES": "0,2,3,4",
@@ -296,6 +315,16 @@ def _prepare_artifact_run(args, *, repo_root=None):
         if repo_root is not None
         else Path(__file__).resolve().parent
     )
+    if "artifact_locator" in manifest:
+        common_dir = Path(
+            subprocess.run(
+                ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                cwd=repository, check=True, capture_output=True, text=True,
+            ).stdout.strip()
+        )
+        located = (common_dir.parent / str(manifest["artifact_locator"])).resolve()
+        if located != root:
+            raise ValueError("artifact_locator does not resolve to artifact_path")
     verify_committed_reservation(repository, str(manifest["registry_path"]), manifest)
     descriptor = os.open(paths.command, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
@@ -328,6 +357,98 @@ def _prepare_artifact_run(args, *, repo_root=None):
     args.artifact_metrics_dir = paths.metrics
     args._artifact_eval_sequence = 0
     return _ArtifactRunContext(paths=paths, manifest=manifest)
+
+
+_ARCHIVE_QUALIFICATION_SCENARIOS = (
+    "none", "success", "non_owner_failure", "owner_collective_failure",
+    "sigterm_different_collectives",
+)
+
+
+def _run_archive_qualification(args):
+    """Exercise the production distributed/lifecycle boundary without datasets."""
+
+    import torch.distributed as dist
+
+    args.local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    torch.cuda.set_device(args.local_rank)
+    if not dist.is_initialized():
+        dist.init_process_group(
+            backend="nccl", timeout=datetime.timedelta(seconds=90)
+        )
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+    if world_size != 4:
+        raise ValueError("archive qualification requires exactly four ranks")
+    scenario = args.archive_qualification_scenario
+    provenance = Path(args.artifact_run_dir) / "provenance"
+
+    def marker(state, collective):
+        atomic_write_json(
+            provenance / f"qualification-rank-{rank}.json",
+            {
+                "scenario": scenario, "rank": rank, "world_size": world_size,
+                "pid": os.getpid(), "state": state, "collective": collective,
+            },
+        )
+
+    if scenario == "success":
+        parameter = torch.nn.Parameter(torch.tensor([rank + 1.0], device="cuda"))
+        optimizer = torch.optim.SGD([parameter], lr=0.01)
+        optimizer.zero_grad(set_to_none=True)
+        loss = parameter.square().mean()
+        loss.backward()
+        optimizer.step()
+        reduced = loss.detach().clone()
+        dist.all_reduce(reduced)
+        reduced /= world_size
+        marker("step_completed", "all_reduce")
+        dist.barrier()
+        if rank == 0:
+            reference = args.artifact_array_store.write(
+                "qualification_values", np.arange(524288, dtype=np.float32)
+            )
+            atomic_write_json(
+                Path(args.artifact_metrics_dir) / "selected_validation.json",
+                {
+                    "split": "validation",
+                    "summary_metrics": {"qualification_loss": float(reduced.cpu())},
+                    "array_references": [reference.as_dict()],
+                },
+            )
+        return
+
+    dist.barrier()
+    if scenario == "non_owner_failure":
+        marker("fault_ready", "all_reduce")
+        dist.barrier()
+        if rank == 2:
+            raise RuntimeError("planned archive qualification non-owner rank failure")
+        value = torch.ones(1, device="cuda")
+        dist.all_reduce(value)
+        return
+
+    if scenario == "owner_collective_failure":
+        marker("fault_ready", "all_reduce" if rank else "owner_raise")
+        dist.barrier()
+        if rank == 0:
+            time.sleep(0.5)
+            raise RuntimeError("planned archive qualification lifecycle-owner failure")
+        value = torch.ones(1, device="cuda")
+        dist.all_reduce(value)
+        return
+
+    if scenario == "sigterm_different_collectives":
+        collective = "all_reduce" if rank % 2 == 0 else "broadcast"
+        marker("signal_ready", collective)
+        dist.barrier()
+        value = torch.ones(1, device="cuda")
+        if rank % 2 == 0:
+            dist.all_reduce(value)
+        else:
+            dist.broadcast(value, src=0)
+        return
+    raise ValueError(f"unsupported archive qualification scenario: {scenario}")
 
 
 def _start_artifact_run(context):
@@ -539,6 +660,12 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
     parser.add_argument("--artifact_run_id", default=None, type=str)
     parser.add_argument("--artifact_manifest_sha256", default=None, type=str)
+    parser.add_argument(
+        "--archive_qualification_scenario",
+        choices=_ARCHIVE_QUALIFICATION_SCENARIOS,
+        default="none",
+        help="Manifest-bound production archive qualification scenario.",
+    )
     parser.add_argument("--cross_model", default="cross-base", type=str, required=False, help="Cross module")
     parser.add_argument("--init_model", default=None, type=str, required=False, help="Initial model.")
     parser.add_argument("--resume_model", default=None, type=str, required=False, help="Resume train model.")
@@ -5958,6 +6085,10 @@ def _evaluate_selected_test_checkpoints(
 def _run_main(args):
     global logger
     import torch.distributed as dist
+
+    if getattr(args, "archive_qualification_scenario", "none") != "none":
+        _run_archive_qualification(args)
+        return
 
     _assert_registered_a3_initial_environment(args)
     _preflight_registered_a3_clip_asset(args, verify_load=False)

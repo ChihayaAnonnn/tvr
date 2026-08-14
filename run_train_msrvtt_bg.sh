@@ -153,6 +153,30 @@ run_worker() {
     export NCCL_IB_DISABLE=${NCCL_IB_DISABLE:-1}
     export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
 
+    if [[ -n "${ARCHIVE_QUALIFICATION_SCENARIO:-}" ]]; then
+        case "${ARCHIVE_QUALIFICATION_SCENARIO}" in
+            success|non_owner_failure|owner_collective_failure|sigterm_different_collectives) ;;
+            *) echo "invalid archive qualification scenario" >&2; exit 2 ;;
+        esac
+        CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,2,3,4}"
+        NPROC="${NPROC:-4}"
+        if [[ "${NPROC}" != "4" ]]; then
+            echo "archive qualification requires NPROC=4" >&2
+            exit 2
+        fi
+        echo "[run_train_msrvtt_bg:worker] production archive qualification=${ARCHIVE_QUALIFICATION_SCENARIO}"
+        CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
+            "${TVR_TORCHRUN}" --nproc_per_node=4 \
+            --master_addr="${MASTER_ADDR:-127.0.0.9}" \
+            --master_port="${MASTER_PORT:-29547}" \
+            "${ROOT_DIR}/main_task_retrieval.py" \
+            --do_train --datatype archive_qualification --eval_split val \
+            --archive_qualification_scenario "${ARCHIVE_QUALIFICATION_SCENARIO}" \
+            --output_dir "${OUTPUT_DIR}" --clip_layer_norm_precision fp32 \
+            "$@"
+        return
+    fi
+
     DATA_PATH=${DATA_PATH:-/data2/hxj/data/MSRVTT}
     SOURCE_TRAIN_CSV="${DATA_PATH}/csv/MSRVTT_train.9k.csv"
     TEST_CSV="${DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv"

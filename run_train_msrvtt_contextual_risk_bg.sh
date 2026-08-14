@@ -52,7 +52,8 @@ reject_registered_environment_overrides() {
         CUBLAS_WORKSPACE_CONFIG SMOKE_STEPS EXPERIMENT_DESC \
         REGISTERED_CLIP_ASSET_PATH REGISTERED_CLIP_ASSET_SHA256 \
         ARTIFACT_MANIFEST_SHA256 WORKER_GROUP_DRAIN_TIMEOUT_SECONDS \
-        WORKER_GROUP_TERM_TIMEOUT_SECONDS WORKER_GROUP_KILL_TIMEOUT_SECONDS; do
+        WORKER_GROUP_TERM_TIMEOUT_SECONDS WORKER_GROUP_KILL_TIMEOUT_SECONDS \
+        ARCHIVE_QUALIFICATION_SCENARIO; do
         if [[ -v "${name}" ]]; then
             echo "registered A3 environment ${name} cannot be overridden" >&2
             exit 2
@@ -96,26 +97,13 @@ if [[ "${A3_LAUNCHER_TEST_MODE:-0}" != "1" ]]; then
     fi
 fi
 
-if [[ ! -f "${BASE_CKPT}" ]]; then
-    echo "Missing canonical A1 checkpoint BASE_CKPT=${BASE_CKPT}" >&2
-    exit 2
-fi
-if [[ ! -f "${CLIP_ASSET}" ]]; then
-    echo "Missing registered CLIP asset CLIP_ASSET=${CLIP_ASSET}" >&2
-    exit 2
-fi
-ACTUAL_CLIP_ASSET_SHA256="$(sha256sum -- "${CLIP_ASSET}" | awk '{print $1}')"
-if [[ "${ACTUAL_CLIP_ASSET_SHA256}" != "${CLIP_ASSET_SHA256}" ]]; then
-    echo "Registered CLIP asset SHA-256 mismatch: ${CLIP_ASSET}" >&2
-    exit 2
-fi
-
 RUN_DATE="$(date +%Y%m%d)"
 RUN_TIME="$(date +%H%M%S)"
 RUN_TAG="contextual_risk_a3"
 RUN_SUFFIX="${RUN_TIME}${RUN_TAG:+_${RUN_TAG}}"
 RUN_ID="${RUN_DATE}_${RUN_SUFFIX}"
 ARTIFACT_ARGS=()
+QUALIFICATION_SCENARIO=""
 ARTIFACT_MODE=1
 if [[ "${LEGACY_A3_LAYOUT:-0}" == "1" ]]; then
     ARTIFACT_MODE=0
@@ -174,6 +162,13 @@ PY
     )
     ARTIFACT_RUN_DIR="${ARTIFACT_IDENTITY[0]}"
     ARTIFACT_MANIFEST_SHA256="${ARTIFACT_IDENTITY[1]}"
+    QUALIFICATION_SCENARIO="$(${TVR_PYTHON:-/home/xujie/.conda/envs/tvr/bin/python} - "${ARTIFACT_RUN_DIR}/manifest.json" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    manifest = json.load(handle)
+print(manifest["config"]["evaluation"].get("archive_qualification_scenario", ""))
+PY
+    )" || exit 2
     if ! /home/xujie/.conda/envs/tvr/bin/python - "${ARTIFACT_IDENTITY[5]}" "${ARTIFACT_RUN_ID}" <<'PY'
 import json, sys
 actual = json.loads(sys.argv[1])
@@ -210,6 +205,22 @@ PY
 fi
 if [[ "${ARTIFACT_MODE}" == "0" ]]; then
     FINAL_TEST_ARGS=(--run_final_test)
+fi
+
+if [[ -z "${QUALIFICATION_SCENARIO}" ]]; then
+    if [[ ! -f "${BASE_CKPT}" ]]; then
+        echo "Missing canonical A1 checkpoint BASE_CKPT=${BASE_CKPT}" >&2
+        exit 2
+    fi
+    if [[ ! -f "${CLIP_ASSET}" ]]; then
+        echo "Missing registered CLIP asset CLIP_ASSET=${CLIP_ASSET}" >&2
+        exit 2
+    fi
+    ACTUAL_CLIP_ASSET_SHA256="$(sha256sum -- "${CLIP_ASSET}" | awk '{print $1}')"
+    if [[ "${ACTUAL_CLIP_ASSET_SHA256}" != "${CLIP_ASSET_SHA256}" ]]; then
+        echo "Registered CLIP asset SHA-256 mismatch: ${CLIP_ASSET}" >&2
+        exit 2
+    fi
 fi
 
 if [[ "${ARTIFACT_MODE}" == "0" && -e "${OUTPUT_DIR}" ]]; then
@@ -330,6 +341,21 @@ trap 'retain_reservation_on_signal SIGINT 130' INT
 trap 'retain_reservation_on_signal SIGTERM 143' TERM
 
 CONTROLLER_MAY_HAVE_SPAWNED=1
+CONTROLLER_ARGS=("${ARTIFACT_ARGS[@]}")
+if [[ -z "${QUALIFICATION_SCENARIO}" ]]; then
+    CONTROLLER_ARGS=(
+        --use_uatvr_full --use_ada_norm --init_model "${BASE_CKPT}"
+        --use_retrieval_risk_sidecar --w_retrieval_risk 0.0
+        --use_contextual_risk_sidecar --contextual_risk_sidecar_only
+        --registered_contextual_risk_a3
+        --registered_clip_asset_path "${CLIP_ASSET}"
+        --registered_clip_asset_sha256 "${CLIP_ASSET_SHA256}"
+        --contextual_risk_topk 16 --contextual_risk_projection_dim 128
+        --contextual_risk_hidden_dim 128 --contextual_risk_temperature 1.0
+        --w_contextual_risk_fit 0.25 --w_contextual_risk_rank 0.25
+        --seed 0 --epochs 3 "${FINAL_TEST_ARGS[@]}" "${ARTIFACT_ARGS[@]}"
+    )
+fi
 RUN_DATE="${RUN_DATE}" \
 RUN_TIME="${RUN_TIME}" \
 RUN_TAG="${RUN_TAG}" \
@@ -373,27 +399,9 @@ DATA_PATH=/data2/hxj/data/MSRVTT \
 PYTHONHASHSEED=0 \
 EXPERIMENT_PROFILE=hygiene \
 EXPERIMENT_DESC="A3 contextual retrieval-risk sidecar" \
+ARCHIVE_QUALIFICATION_SCENARIO="${QUALIFICATION_SCENARIO}" \
 bash "${CONTROLLER_SCRIPT}" \
-    --use_uatvr_full \
-    --use_ada_norm \
-    --init_model "${BASE_CKPT}" \
-    --use_retrieval_risk_sidecar \
-    --w_retrieval_risk 0.0 \
-    --use_contextual_risk_sidecar \
-    --contextual_risk_sidecar_only \
-    --registered_contextual_risk_a3 \
-    --registered_clip_asset_path "${CLIP_ASSET}" \
-    --registered_clip_asset_sha256 "${CLIP_ASSET_SHA256}" \
-    --contextual_risk_topk 16 \
-    --contextual_risk_projection_dim 128 \
-    --contextual_risk_hidden_dim 128 \
-    --contextual_risk_temperature 1.0 \
-    --w_contextual_risk_fit 0.25 \
-    --w_contextual_risk_rank 0.25 \
-    --seed 0 \
-    --epochs 3 \
-    "${FINAL_TEST_ARGS[@]}" \
-    "${ARTIFACT_ARGS[@]}" \
+    "${CONTROLLER_ARGS[@]}" \
     "$@" &
 CONTROLLER_PID=$!
 

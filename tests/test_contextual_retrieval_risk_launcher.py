@@ -340,6 +340,22 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
     assert 'git -C "${ROOT_DIR}" diff --cached --quiet --' in text
 
 
+def test_registered_launcher_qualification_is_manifest_bound_and_uses_controller():
+    text = SCRIPT.read_text()
+    base = (REPOSITORY / "run_train_msrvtt_bg.sh").read_text()
+
+    assert "ARCHIVE_QUALIFICATION_SCENARIO" in text
+    assert "archive_qualification_scenario" in text
+    assert 'bash "${CONTROLLER_SCRIPT}"' in text
+    assert "ARCHIVE_QUALIFICATION_SCENARIO" in base
+    assert '"${TVR_TORCHRUN}"' in base
+    assert '"${ROOT_DIR}/main_task_retrieval.py"' in base
+    assert "scripts/build_msrvtt_trusted_split.py" in base
+    assert base.index("ARCHIVE_QUALIFICATION_SCENARIO") < base.index(
+        "scripts/build_msrvtt_trusted_split.py"
+    )
+
+
 def test_registered_a3_launcher_pins_legacy_async_value_at_controller_boundary(
     tmp_path,
 ):

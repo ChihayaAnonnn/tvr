@@ -254,6 +254,25 @@ def test_retrieval_parser_requires_complete_artifact_identity(monkeypatch, tmp_p
         main_task_retrieval.get_args()
 
 
+def test_retrieval_parser_accepts_only_named_archive_qualification_scenarios(
+    monkeypatch, tmp_path,
+):
+    import main_task_retrieval
+
+    monkeypatch.setattr(
+        sys, "argv", ["prog", "--output_dir", str(tmp_path), "--do_train",
+                      "--datatype", "archive_qualification",
+                      "--archive_qualification_scenario", "success"],
+    )
+    assert main_task_retrieval.get_args().archive_qualification_scenario == "success"
+    monkeypatch.setattr(
+        sys, "argv", ["prog", "--output_dir", str(tmp_path), "--do_train",
+                      "--archive_qualification_scenario", "external_override"],
+    )
+    with pytest.raises(SystemExit):
+        main_task_retrieval.get_args()
+
+
 def test_python_entrypoint_binds_committed_manifest_paths_and_array_store(campaign_repo):
     import main_task_retrieval
 
