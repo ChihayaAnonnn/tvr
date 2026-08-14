@@ -12,6 +12,7 @@ from os import PathLike
 from pathlib import Path
 import re
 import socket
+import stat
 import subprocess
 import tempfile
 from typing import Mapping
@@ -306,6 +307,14 @@ def manifest_sha256(payload: Mapping[str, object]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def registry_record_sha256(payload: Mapping[str, object]) -> str:
+    """Return the canonical digest used by correction records to name prior lines."""
+
+    normalized = _validate_registry_record(payload)
+    canonical = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _validate_registry_record(payload: Mapping[str, object]) -> dict[str, object]:
     if not isinstance(payload, Mapping):
         raise ValueError("registry record must be an object")
@@ -358,6 +367,7 @@ def _record_key(record: Mapping[str, object]) -> tuple[str, str]:
 def _parse_registry_text(text: str) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
     seen: set[tuple[str, str]] = set()
+    earlier_by_digest: dict[str, dict[str, object]] = {}
     for number, line in enumerate(text.splitlines(), start=1):
         if not line.strip():
             raise ValueError(f"registry line {number} must not be blank")
@@ -369,8 +379,16 @@ def _parse_registry_text(text: str) -> list[dict[str, object]]:
         key = _record_key(record)
         if key in seen:
             raise ValueError(f"registry contains duplicate (run_id, event): {key}")
+        if record["event"] == "correction":
+            target_digest = str(record["supersedes_sha256"])
+            target = earlier_by_digest.get(target_digest)
+            if target is None:
+                raise ValueError("registry.supersedes_sha256 must name an earlier registry record")
+            if target["run_id"] != record["run_id"]:
+                raise ValueError("registry.supersedes_sha256 must name a record from the same run")
         seen.add(key)
         records.append(record)
+        earlier_by_digest[registry_record_sha256(record)] = record
     return records
 
 
@@ -438,11 +456,13 @@ def append_registry_records(
                 if key in seen:
                     raise ValueError(f"duplicate registry (run_id, event): {key}")
                 seen.add(key)
-            combined = existing + additions
-            content = "".join(
+            appended_text = "".join(
                 json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
-                for record in combined
+                for record in additions
             )
+            separator = "" if not existing_text or existing_text.endswith("\n") else "\n"
+            content = existing_text + separator + appended_text
+            _parse_registry_text(content)
             _atomic_write_bytes(path, content.encode("utf-8"))
         finally:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
@@ -455,6 +475,24 @@ def _require_repo_relative_path(value: PathLike[str] | str) -> Path:
     return path
 
 
+def _load_manifest_without_leaf_symlink(path: Path) -> object:
+    """Load one run-local manifest while refusing a substituted manifest leaf."""
+
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError("run-local manifest must be a regular file")
+        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            descriptor = -1
+            return json.load(handle)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
 def verify_committed_reservation(
     repo_root: PathLike[str] | str,
     registry_relative_path: PathLike[str] | str,
@@ -465,9 +503,19 @@ def verify_committed_reservation(
     root = Path(repo_root).resolve()
     registry_path = _require_repo_relative_path(registry_relative_path)
     try:
-        expected_digest = manifest_sha256(manifest)
+        normalized_manifest = validate_manifest(manifest)
+        expected_digest = manifest_sha256(normalized_manifest)
     except ValueError as exc:
         raise ValueError("committed reservation requires a valid manifest") from exc
+    if normalized_manifest["registry_path"] != registry_path.as_posix():
+        raise ValueError("committed reservation must name the manifest's declared registry path")
+    try:
+        disk_manifest = _load_manifest_without_leaf_symlink(Path(normalized_manifest["artifact_path"]) / "manifest.json")
+        disk_manifest = validate_manifest(disk_manifest)
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("committed reservation requires a valid run-local manifest") from exc
+    if manifest_sha256(disk_manifest) != expected_digest:
+        raise ValueError("committed reservation does not match the run-local manifest")
     for command in (["git", "diff", "--quiet"], ["git", "diff", "--cached", "--quiet"]):
         result = subprocess.run(command, cwd=root, check=False, capture_output=True)
         if result.returncode != 0:
@@ -486,9 +534,11 @@ def verify_committed_reservation(
     matches = [
         record for record in records
         if record["event"] == "reserved"
-        and record["run_id"] == manifest["run_id"]
+        and record["run_id"] == normalized_manifest["run_id"]
         and record["manifest_sha256"] == expected_digest
-        and record["artifact_path"] == manifest["artifact_path"]
+        and record["artifact_path"] == normalized_manifest["artifact_path"]
+        and record["parent_run_ids"] == normalized_manifest["parent_run_ids"]
+        and record["test_authorized"] == normalized_manifest["test_authorized"]
     ]
     if len(matches) != 1:
         raise ValueError("worker requires one exact committed reservation")
@@ -537,6 +587,62 @@ def _append_audit_record(paths: RunPaths, record: Mapping[str, object]) -> None:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
 
+def _load_audit_records(paths: RunPaths) -> list[dict[str, object]]:
+    audit_path = paths.provenance / "audit.jsonl"
+    if not audit_path.exists():
+        return []
+    records: list[dict[str, object]] = []
+    for line_number, line in enumerate(audit_path.read_text(encoding="utf-8").splitlines(), start=1):
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"audit line {line_number} is not valid JSON") from exc
+        if not isinstance(record, dict):
+            raise ValueError(f"audit line {line_number} must be an object")
+        records.append(record)
+    return records
+
+
+def _ensure_audit_record(paths: RunPaths, record: Mapping[str, object]) -> None:
+    transition_id = record.get("transition_id")
+    event = record.get("event")
+    if not isinstance(transition_id, str) or not isinstance(event, str):
+        raise ValueError("audit records require a transition_id and event")
+    for previous in _load_audit_records(paths):
+        if previous.get("transition_id") == transition_id and previous.get("event") == event:
+            if previous != record:
+                raise ValueError("existing audit transition record differs from requested transition")
+            return
+    _append_audit_record(paths, record)
+
+
+def _find_audit_record(paths: RunPaths, transition_id: str, event: str) -> dict[str, object] | None:
+    for record in _load_audit_records(paths):
+        if record.get("transition_id") == transition_id and record.get("event") == event:
+            return record
+    return None
+
+
+def _transition_id(
+    run_id: str,
+    expected_state: str,
+    next_state: str,
+    manifest_digest: str,
+    exit_code: int | None,
+    output_hashes: Mapping[str, str],
+) -> str:
+    identity = {
+        "run_id": run_id,
+        "expected_state": expected_state,
+        "next_state": next_state,
+        "manifest_sha256": manifest_digest,
+        "exit_code": exit_code,
+        "output_hashes": dict(output_hashes),
+    }
+    encoded = json.dumps(identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def reserve_run_directory(
     paths: RunPaths,
     manifest: Mapping[str, object],
@@ -551,14 +657,13 @@ def reserve_run_directory(
         raise ValueError("manifest artifact_path must match canonical run directory")
     worker_pid, host = _validate_worker_identity(worker_pid, host)
     paths.root.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        paths.root.mkdir()
-    except FileExistsError as exc:
-        raise FileExistsError(f"run directory already exists: {paths.root}") from exc
-    for directory in (paths.logs, paths.checkpoints, paths.metrics, paths.arrays, paths.plots, paths.provenance):
-        directory.mkdir()
     digest = manifest_sha256(normalized)
-    status = {
+    reservation_id = _transition_id(
+        str(normalized["run_id"]), "new", "reserved", digest, None, {}
+    )
+
+    def reservation_status() -> dict[str, object]:
+        return {
         "run_id": normalized["run_id"],
         "state": "reserved",
         "timestamp_utc": _utc_now(),
@@ -566,13 +671,60 @@ def reserve_run_directory(
         "host": host,
         "manifest_sha256": digest,
         "exit_code": None,
+        "output_hashes": {},
+        "transition_id": reservation_id,
     }
-    _atomic_write_json(paths.manifest, normalized)
-    _atomic_write_json(paths.status, status)
-    _append_audit_record(
-        paths,
-        {"event": "reserved", "timestamp_utc": status["timestamp_utc"], "status": status, "output_hashes": {}},
-    )
+
+    def reservation_audit(status: Mapping[str, object]) -> dict[str, object]:
+        return {
+            "event": "reservation_commit",
+            "transition_id": reservation_id,
+            "status": dict(status),
+            "output_hashes": {},
+        }
+
+    lock_path = paths.root.parent / f".{normalized['run_id']}.reservation.lock"
+    with lock_path.open("a+", encoding="utf-8") as lock_handle:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        try:
+            if paths.root.exists():
+                try:
+                    existing_manifest, existing_digest = _load_run_manifest(paths)
+                    if existing_manifest != normalized or existing_digest != digest:
+                        raise FileExistsError(f"run directory already exists: {paths.root}")
+                    if paths.status.exists():
+                        existing_status = json.loads(paths.status.read_text(encoding="utf-8"))
+                        if (
+                            existing_status.get("state") != "reserved"
+                            or existing_status.get("transition_id") != reservation_id
+                        ):
+                            raise FileExistsError(f"run directory already exists: {paths.root}")
+                        audit = reservation_audit(existing_status)
+                        if any(
+                            item.get("transition_id") == reservation_id
+                            and item.get("event") == "reservation_commit"
+                            for item in _load_audit_records(paths)
+                        ):
+                            raise FileExistsError(f"run directory already exists: {paths.root}")
+                        _ensure_audit_record(paths, audit)
+                        return
+                    for directory in (paths.logs, paths.checkpoints, paths.metrics, paths.arrays, paths.plots, paths.provenance):
+                        directory.mkdir(exist_ok=True)
+                    status = reservation_status()
+                    _atomic_write_json(paths.status, status)
+                    _ensure_audit_record(paths, reservation_audit(status))
+                    return
+                except (json.JSONDecodeError, ValueError) as exc:
+                    raise FileExistsError(f"run directory already exists: {paths.root}") from exc
+            paths.root.mkdir()
+            for directory in (paths.logs, paths.checkpoints, paths.metrics, paths.arrays, paths.plots, paths.provenance):
+                directory.mkdir()
+            _atomic_write_json(paths.manifest, normalized)
+            status = reservation_status()
+            _atomic_write_json(paths.status, status)
+            _ensure_audit_record(paths, reservation_audit(status))
+        finally:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
 
 def _validate_output_hashes(output_hashes: Mapping[str, object] | None) -> dict[str, str]:
@@ -609,42 +761,89 @@ def _transition_run_status_locked(
     except json.JSONDecodeError as exc:
         raise ValueError("run status is not valid JSON") from exc
     current_state = current.get("state") if isinstance(current, Mapping) else None
+    if exit_code is not None and (isinstance(exit_code, bool) or not isinstance(exit_code, int)):
+        raise ValueError("exit_code must be an integer or null")
+    if next_state in _TERMINAL_STATES and exit_code is None:
+        raise ValueError("terminal transitions require an exit_code")
+    worker_pid, host = _validate_worker_identity(worker_pid, host)
+    manifest, digest = _load_run_manifest(paths)
+    if current.get("manifest_sha256") != digest:
+        raise ValueError("run status manifest digest does not match manifest")
+    hashes = _validate_output_hashes(output_hashes)
+    transition_id = _transition_id(
+        str(manifest["run_id"]), expected_state, next_state, digest, exit_code, hashes
+    )
+    if current_state == next_state and current.get("transition_id") == transition_id:
+        if current.get("exit_code") != exit_code or current.get("output_hashes") != hashes:
+            raise ValueError("existing status differs from requested idempotent transition")
+        _ensure_audit_record(
+            paths,
+            {
+                "event": "transition_intent",
+                "transition_id": transition_id,
+                "from_state": expected_state,
+                "to_state": next_state,
+                "status": current,
+                "output_hashes": hashes,
+            },
+        )
+        _ensure_audit_record(
+            paths,
+            {
+                "event": "transition_commit",
+                "transition_id": transition_id,
+                "from_state": expected_state,
+                "to_state": next_state,
+                "status": current,
+                "output_hashes": hashes,
+            },
+        )
+        return dict(current)
     if current_state in _TERMINAL_STATES:
         raise FileExistsError("terminal run status is immutable")
     if current_state != expected_state:
         raise ValueError(f"expected current state {expected_state!r}, found {current_state!r}")
     if next_state not in _ALLOWED_TRANSITIONS.get(expected_state, frozenset()):
         raise ValueError(f"transition {expected_state!r} -> {next_state!r} is not allowed")
-    if exit_code is not None and (isinstance(exit_code, bool) or not isinstance(exit_code, int)):
-        raise ValueError("exit_code must be an integer or null")
-    if next_state in {"completed", "failed"} and exit_code is None:
-        raise ValueError("completed and failed transitions require an exit_code")
-    worker_pid, host = _validate_worker_identity(worker_pid, host)
-    manifest, digest = _load_run_manifest(paths)
-    if current.get("manifest_sha256") != digest:
-        raise ValueError("run status manifest digest does not match manifest")
-    hashes = _validate_output_hashes(output_hashes)
-    status = {
-        "run_id": manifest["run_id"],
-        "state": next_state,
-        "timestamp_utc": _utc_now(),
-        "worker_pid": worker_pid,
-        "host": host,
-        "manifest_sha256": digest,
-        "exit_code": exit_code,
-    }
-    _atomic_write_json(paths.status, status)
-    _append_audit_record(
-        paths,
-        {
-            "event": "status_transition",
-            "from_state": expected_state,
-            "to_state": next_state,
-            "timestamp_utc": status["timestamp_utc"],
-            "status": status,
+    prior_intent = _find_audit_record(paths, transition_id, "transition_intent")
+    if prior_intent is not None:
+        prior_status = prior_intent.get("status")
+        if not isinstance(prior_status, Mapping):
+            raise ValueError("existing transition intent does not contain a status object")
+        status = dict(prior_status)
+        if (
+            status.get("run_id") != manifest["run_id"]
+            or status.get("state") != next_state
+            or status.get("manifest_sha256") != digest
+            or status.get("exit_code") != exit_code
+            or status.get("output_hashes") != hashes
+            or status.get("transition_id") != transition_id
+        ):
+            raise ValueError("existing transition intent differs from requested transition")
+    else:
+        status = {
+            "run_id": manifest["run_id"],
+            "state": next_state,
+            "timestamp_utc": _utc_now(),
+            "worker_pid": worker_pid,
+            "host": host,
+            "manifest_sha256": digest,
+            "exit_code": exit_code,
             "output_hashes": hashes,
-        },
-    )
+            "transition_id": transition_id,
+        }
+    intent = {
+        "event": "transition_intent",
+        "transition_id": transition_id,
+        "from_state": expected_state,
+        "to_state": next_state,
+        "status": status,
+        "output_hashes": hashes,
+    }
+    commit = {**intent, "event": "transition_commit"}
+    _ensure_audit_record(paths, intent)
+    _atomic_write_json(paths.status, status)
+    _ensure_audit_record(paths, commit)
     return status
 
 

@@ -1,11 +1,13 @@
 import json
 import multiprocessing
+import os
 from pathlib import Path
 import subprocess
 
 import pytest
 from jsonschema import Draft202012Validator
 
+import experiment_artifacts
 from experiment_artifacts import (
     ALLOWED_STAGES,
     ALLOWED_STATES,
@@ -261,17 +263,28 @@ def _init_git_repo(repo_root):
     subprocess.run(["git", "commit", "-qm", "initial registry"], cwd=repo_root, check=True)
 
 
+def _write_run_local_manifest(manifest):
+    artifact_path = Path(manifest["artifact_path"])
+    artifact_path.mkdir(parents=True, exist_ok=True)
+    (artifact_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
 def test_worker_requires_exact_committed_reservation(tmp_path):
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _init_git_repo(repo_root)
-    manifest = _manifest()
+    manifest = _manifest(artifact_path=str(tmp_path / "artifact"))
+    _write_run_local_manifest(manifest)
     append_registry_records(repo_root / REGISTRY, [_reservation_record(manifest)])
     subprocess.run(["git", "add", REGISTRY.as_posix()], cwd=repo_root, check=True)
     subprocess.run(["git", "commit", "-qm", "reserve phase"], cwd=repo_root, check=True)
 
     verify_committed_reservation(repo_root, REGISTRY, manifest)
-    changed = {**manifest, "seed": 1}
+    changed = {
+        **manifest,
+        "variant": "changed",
+        "run_id": "msrvtt-baseline-changed-seed000-20260814T020304Z-000000000000",
+    }
     with pytest.raises(ValueError, match="committed reservation"):
         verify_committed_reservation(repo_root, REGISTRY, changed)
 
@@ -280,7 +293,8 @@ def test_worker_rejects_missing_or_uncommitted_reservation(tmp_path):
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     _init_git_repo(repo_root)
-    manifest = _manifest()
+    manifest = _manifest(artifact_path=str(tmp_path / "artifact"))
+    _write_run_local_manifest(manifest)
 
     with pytest.raises(ValueError, match="committed reservation"):
         verify_committed_reservation(repo_root, REGISTRY, manifest)
@@ -321,3 +335,181 @@ def test_transition_allows_only_forward_lifecycle_and_terminal_runs_are_immutabl
         transition_run_status(paths, "completed", "running")
     audit_records = [json.loads(line) for line in (paths.provenance / "audit.jsonl").read_text().splitlines()]
     assert audit_records[-1]["output_hashes"] == {"metrics/selected_validation.json": "a" * 64}
+
+
+def test_committed_reservation_rejects_run_local_manifest_mismatch(tmp_path):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_git_repo(repo_root)
+    manifest = _manifest(artifact_path=str(tmp_path / "artifact"))
+    _write_run_local_manifest(manifest)
+    append_registry_records(repo_root / REGISTRY, [_reservation_record(manifest)])
+    subprocess.run(["git", "add", REGISTRY.as_posix()], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-qm", "reserve phase"], cwd=repo_root, check=True)
+
+    changed_local_manifest = {
+        **manifest,
+        "config": {"model": {"changed": True}, "loss": {}, "optimizer": {}, "scheduler": {}, "evaluation": {}},
+    }
+    _write_run_local_manifest(changed_local_manifest)
+
+    with pytest.raises(ValueError, match="committed reservation"):
+        verify_committed_reservation(repo_root, REGISTRY, manifest)
+
+
+def test_committed_reservation_rejects_mismatched_registry_authorization_metadata(tmp_path):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_git_repo(repo_root)
+    manifest = _manifest(artifact_path=str(tmp_path / "artifact"))
+    _write_run_local_manifest(manifest)
+    record = _reservation_record(manifest)
+    record["test_authorized"] = True
+    append_registry_records(repo_root / REGISTRY, [record])
+    subprocess.run(["git", "add", REGISTRY.as_posix()], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-qm", "reserve phase"], cwd=repo_root, check=True)
+
+    with pytest.raises(ValueError, match="committed reservation"):
+        verify_committed_reservation(repo_root, REGISTRY, manifest)
+
+
+def test_committed_reservation_refuses_a_symlinked_run_local_manifest(tmp_path):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_git_repo(repo_root)
+    artifact_path = tmp_path / "artifact"
+    manifest = _manifest(artifact_path=str(artifact_path))
+    artifact_path.mkdir()
+    target = tmp_path / "other-manifest.json"
+    target.write_text(json.dumps(manifest), encoding="utf-8")
+    os.symlink(target, artifact_path / "manifest.json")
+    append_registry_records(repo_root / REGISTRY, [_reservation_record(manifest)])
+    subprocess.run(["git", "add", REGISTRY.as_posix()], cwd=repo_root, check=True)
+    subprocess.run(["git", "commit", "-qm", "reserve phase"], cwd=repo_root, check=True)
+
+    with pytest.raises(ValueError, match="run-local manifest"):
+        verify_committed_reservation(repo_root, REGISTRY, manifest)
+
+
+def test_registry_correction_must_resolve_prior_same_run_record(tmp_path):
+    registry = tmp_path / "registry.jsonl"
+    first = _reservation_record(_manifest())
+    append_registry_records(registry, [first])
+    correction = {
+        **first,
+        "event": "correction",
+        "state": "reserved",
+        "supersedes_sha256": "f" * 64,
+    }
+    with pytest.raises(ValueError, match="supersedes_sha256"):
+        append_registry_records(registry, [correction])
+
+    other = {**first, "run_id": "other-run", "event": "completed", "state": "completed"}
+    other_registry = tmp_path / "other.jsonl"
+    append_registry_records(other_registry, [other])
+    wrong_run_correction = {
+        **first,
+        "event": "correction",
+        "state": "reserved",
+        "supersedes_sha256": experiment_artifacts.registry_record_sha256(other),
+    }
+    with pytest.raises(ValueError, match="same run"):
+        append_registry_records(other_registry, [wrong_run_correction])
+
+
+def test_registry_preserves_existing_raw_bytes_when_appending(tmp_path):
+    registry = tmp_path / "registry.jsonl"
+    first = _reservation_record(_manifest())
+    raw_prefix = json.dumps(first, separators=(", ", ": "), sort_keys=False) + "\n"
+    registry.write_text(raw_prefix, encoding="utf-8")
+    second = {**first, "run_id": "a-second-run", "event": "completed", "state": "completed"}
+
+    append_registry_records(registry, [second])
+
+    assert registry.read_text(encoding="utf-8").startswith(raw_prefix)
+
+
+@pytest.mark.parametrize("first_state", ["reserved", "running"])
+def test_cancelled_transition_requires_exit_code(tmp_path, first_state):
+    paths = make_run_paths(tmp_path, "contextual-risk-v2", _manifest()["run_id"])
+    manifest = _manifest(artifact_path=str(paths.root))
+    reserve_run_directory(paths, manifest)
+    if first_state == "running":
+        transition_run_status(paths, "reserved", "running")
+
+    with pytest.raises(ValueError, match="exit_code"):
+        transition_run_status(paths, first_state, "cancelled")
+
+
+def _advance_to_validating(paths):
+    transition_run_status(paths, "reserved", "running")
+    transition_run_status(paths, "running", "validating")
+
+
+def test_terminal_transition_retry_repairs_missing_commit_audit_after_status_write(tmp_path, monkeypatch):
+    paths = make_run_paths(tmp_path, "contextual-risk-v2", _manifest()["run_id"])
+    manifest = _manifest(artifact_path=str(paths.root))
+    reserve_run_directory(paths, manifest)
+    _advance_to_validating(paths)
+    original_append = experiment_artifacts._append_audit_record
+
+    def fail_terminal_commit(run_paths, record):
+        if record.get("event") == "transition_commit":
+            raise OSError("injected audit failure")
+        return original_append(run_paths, record)
+
+    monkeypatch.setattr(experiment_artifacts, "_append_audit_record", fail_terminal_commit)
+    hashes = {"metrics/selected_validation.json": "a" * 64}
+    with pytest.raises(OSError, match="injected"):
+        transition_run_status(paths, "validating", "completed", exit_code=0, output_hashes=hashes)
+    assert json.loads(paths.status.read_text())["output_hashes"] == hashes
+
+    monkeypatch.setattr(experiment_artifacts, "_append_audit_record", original_append)
+    transition_run_status(paths, "validating", "completed", exit_code=0, output_hashes=hashes)
+    audit = (paths.provenance / "audit.jsonl").read_text(encoding="utf-8")
+    assert '"event":"transition_commit"' in audit
+
+
+def test_terminal_transition_retry_recovers_from_status_replace_failure(tmp_path, monkeypatch):
+    paths = make_run_paths(tmp_path, "contextual-risk-v2", _manifest()["run_id"])
+    manifest = _manifest(artifact_path=str(paths.root))
+    reserve_run_directory(paths, manifest)
+    _advance_to_validating(paths)
+    original_write = experiment_artifacts._atomic_write_json
+
+    def fail_terminal_status(path, payload):
+        if path == paths.status and payload.get("state") == "completed":
+            raise OSError("injected status failure")
+        return original_write(path, payload)
+
+    monkeypatch.setattr(experiment_artifacts, "_atomic_write_json", fail_terminal_status)
+    with pytest.raises(OSError, match="injected"):
+        transition_run_status(paths, "validating", "completed", exit_code=0)
+    assert json.loads(paths.status.read_text())["state"] == "validating"
+
+    monkeypatch.setattr(experiment_artifacts, "_atomic_write_json", original_write)
+    transition_run_status(paths, "validating", "completed", exit_code=0)
+    assert json.loads(paths.status.read_text())["state"] == "completed"
+
+
+def test_reservation_retry_repairs_missing_audit_after_status_write(tmp_path, monkeypatch):
+    paths = make_run_paths(tmp_path, "contextual-risk-v2", _manifest()["run_id"])
+    manifest = _manifest(artifact_path=str(paths.root))
+    original_append = experiment_artifacts._append_audit_record
+
+    def fail_reservation_commit(run_paths, record):
+        if record.get("event") == "reservation_commit":
+            raise OSError("injected reservation audit failure")
+        return original_append(run_paths, record)
+
+    monkeypatch.setattr(experiment_artifacts, "_append_audit_record", fail_reservation_commit)
+    with pytest.raises(OSError, match="injected"):
+        reserve_run_directory(paths, manifest)
+    assert json.loads(paths.status.read_text())["state"] == "reserved"
+
+    monkeypatch.setattr(experiment_artifacts, "_append_audit_record", original_append)
+    reserve_run_directory(paths, manifest)
+    audit = (paths.provenance / "audit.jsonl").read_text(encoding="utf-8")
+    assert '"event":"reservation_commit"' in audit
+    with pytest.raises(FileExistsError, match="already exists"):
+        reserve_run_directory(paths, manifest)

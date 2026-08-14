@@ -3,13 +3,19 @@
   "title": "Experiment runtime status",
   "type": "object",
   "additionalProperties": false,
-  "required": ["run_id", "state", "timestamp_utc", "worker_pid", "host", "manifest_sha256", "exit_code"],
+  "required": ["run_id", "state", "timestamp_utc", "worker_pid", "host", "manifest_sha256", "exit_code", "output_hashes", "transition_id"],
+  "allOf": [{
+    "if": {"properties": {"state": {"enum": ["completed", "failed", "cancelled"]}}, "required": ["state"]},
+    "then": {"properties": {"exit_code": {"type": "integer"}}}
+  }],
   "properties": {
     "run_id": {"type": "string", "minLength": 1},
     "state": {"type": "string", "enum": ["reserved", "running", "validating", "completed", "failed", "cancelled"]},
     "timestamp_utc": {"type": "string", "format": "date-time"},
     "worker_pid": {"type": "integer", "minimum": 0}, "host": {"type": "string", "minLength": 1},
     "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "exit_code": {"type": ["integer", "null"]}
+    "exit_code": {"type": ["integer", "null"]},
+    "output_hashes": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+    "transition_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
   }
 }
