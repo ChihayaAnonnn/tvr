@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from experiment_artifacts import StrictJSONError, strict_json_loads
 
 _CANDIDATE_ARTIFACT_FIELDS = {
     "epoch",
@@ -158,8 +159,8 @@ def validate_candidate_artifacts(
                 )
             try:
                 marker_sha = file_sha256(marker_path)
-                marker = json.loads(marker_path.read_text())
-            except (OSError, json.JSONDecodeError) as exc:
+                marker = strict_json_loads(marker_path.read_text())
+            except (OSError, json.JSONDecodeError, StrictJSONError) as exc:
                 raise ValueError(
                     f"persisted {method_name} publication marker is unavailable"
                 ) from exc
@@ -398,8 +399,8 @@ def prepare_candidate_append(
     target = Path(path)
     if target.exists():
         try:
-            candidates = json.loads(target.read_text())
-        except (OSError, json.JSONDecodeError) as exc:
+            candidates = strict_json_loads(target.read_text())
+        except (OSError, json.JSONDecodeError, StrictJSONError) as exc:
             raise ValueError("existing candidate list is unreadable") from exc
         if not isinstance(candidates, list):
             raise ValueError("existing protocol artifact is not a candidate list")

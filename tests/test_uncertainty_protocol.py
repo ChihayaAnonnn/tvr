@@ -9,6 +9,7 @@ from prob_models.uncertainty_protocol import (
     compare_paired_invariance,
     file_sha256,
     non_sidecar_state_dict_mismatches,
+    prepare_candidate_append,
     validate_candidate_artifacts,
     validate_resume_lineage,
     validate_selected_checkpoint,
@@ -72,6 +73,46 @@ def test_candidate_artifacts_reject_duplicate_epochs_and_paths(tmp_path):
         validate_candidate_artifacts(
             [first, cross_role], output_dir=tmp_path, method_name="A3"
         )
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_candidate_artifacts_reject_nonstandard_json_in_publication_marker(
+    tmp_path, constant
+):
+    candidate = _candidate(tmp_path, 0)
+    marker_path = tmp_path / "checkpoint_epoch.0.published.json"
+    marker = {
+        "epoch": 0,
+        "model_path": candidate["path"],
+        "optimizer_path": candidate["optimizer_path"],
+        "model_sha256": candidate["model_sha256"],
+        "optimizer_sha256": candidate["optimizer_sha256"],
+        "unexpected": "NONSTANDARD_NUMBER",
+    }
+    serialized = json.dumps(marker).replace('"NONSTANDARD_NUMBER"', constant)
+    marker_path.write_text(serialized)
+    candidate.update(
+        publication_marker=str(marker_path.resolve()),
+        publication_marker_sha256=file_sha256(marker_path),
+    )
+
+    with pytest.raises(ValueError, match="publication marker is unavailable"):
+        validate_candidate_artifacts(
+            [candidate], output_dir=tmp_path, method_name="A3"
+        )
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_prepare_candidate_append_rejects_nonstandard_existing_json(
+    tmp_path, constant
+):
+    path = tmp_path / "candidates.json"
+    prior = _candidate(tmp_path, 0) | {"unexpected": "NONSTANDARD_NUMBER"}
+    serialized = json.dumps([prior]).replace('"NONSTANDARD_NUMBER"', constant)
+    path.write_text(serialized)
+
+    with pytest.raises(ValueError, match="existing candidate list is unreadable"):
+        prepare_candidate_append(path, _candidate(tmp_path, 1))
 
 
 def test_append_candidate_is_atomic_and_strictly_append_only(tmp_path, monkeypatch):
