@@ -1,0 +1,83 @@
+# Frozen protocol for the reliable retrieval / contextual-risk-v2 campaign.
+study: contextual-risk-v2
+protocol_version: 1
+control_plane: experiments/contextual-risk-v2
+data_plane: artifacts/contextual-risk-v2
+registry: experiments/contextual-risk-v2/registry.jsonl
+
+stages:
+  - baseline
+  - feature_ablation
+  - loss_ablation
+  - topk_sweep
+  - multiseed
+  - calibration
+  - robustness
+  - efficiency
+  - final
+
+variants:
+  stage1_baselines: [raw_score, top1_top2_margin, entropy, energy, score_variance, sap, a2_logvar, a1, a3]
+  stage2_features: [score_only, semantics_only, no_context, no_score_geometry, full_a3]
+  stage3_losses: [bce_only, bce_fit, bce_rank, full_loss]
+  stage3_topk: [1, 4, 8, 16, 32]
+
+seeds: [0, 1, 2]
+bootstrap:
+  samples: 10000
+  seed: 0
+  confidence_level: 0.95
+
+canonical_a1:
+  checkpoint: ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4
+  sha256: a2c074e3988b0e4a115d054c352785271712ffdfb4e4c2da8b372bde424e2607
+
+test_sealed:
+  default: true
+  datasets: [msrvtt, msvd]
+  authorize_only_after: final_configuration_frozen
+  retry_policy: identical_manifest_after_recorded_infrastructure_failure
+
+hardware_policy:
+  required_gpu_model: A800
+  required_gpu_count: 4
+  precision: fp32
+  distributed_topology: torchrun-4-rank
+  stage0_fixture_allows_cpu: true
+
+stop_gates:
+  stage1_baselines:
+    a3_vs_strongest_baseline:
+      mean_directional_auroc_delta_gte: 0.01
+      mean_directional_aurc_delta_lte: -0.01
+      min_directional_auroc_gt: 0.5
+      min_directional_rho_gte: 0.20
+  stage2_features:
+    full_a3_vs_score_only_and_no_context:
+      mean_auroc_delta_gte: 0.005
+      mean_aurc_delta_lte: -0.005
+      max_directional_auroc_loss_lte: 0.01
+      changed_tensors: a3_sidecar_only
+  stage3_loss_topk:
+    min_directional_rho_gte: 0.20
+    retain_within_mean_auroc: 0.005
+    retain_within_mean_aurc: 0.005
+    tie_break_order: [smallest_k, fewest_active_loss_terms, earliest_epoch]
+  stage4_multiseed:
+    both_directional_point_estimates_improve: true
+    accept_if_any_confidence_interval_passes: true
+    paired_95ci_mean_auroc_delta_gt: 0.0
+    paired_95ci_mean_aurc_delta_lt: 0.0
+  stage5_msvd:
+    both_directional_point_estimates_improve: true
+    accept_if_any_confidence_interval_passes: true
+    paired_95ci_mean_auroc_delta_gt: 0.0
+    paired_95ci_mean_aurc_delta_lt: 0.0
+    retrieval_ranks_and_recall_exactly_match_frozen_retriever: true
+
+archive_rules:
+  phase_batched_registry: true
+  runtime_may_modify_tracked_files: false
+  externalize_numeric_payloads_over_bytes: 1048576
+  preserve_failed_evidence: true
+  new_legacy_output_forbidden: true

@@ -3,6 +3,10 @@
 # docs/
 cache_dir/
 
+# Run-centric experiment data plane.  The companion control plane under
+# experiments/contextual-risk-v2/ remains tracked.
+/artifacts/
+
 /deploy_qwen/
 /ckpts/
 /tmp/
