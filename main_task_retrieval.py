@@ -1046,6 +1046,8 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
             "--artifact_run_dir, --artifact_run_id, and "
             "--artifact_manifest_sha256 must be provided together"
         )
+    if args.archive_qualification_scenario != "none" and not all(artifact_identity):
+        raise ValueError("archive qualification requires a complete artifact identity")
 
     if args.use_retrieval_risk_sidecar and not args.use_uatvr_full:
         raise ValueError(
@@ -1585,6 +1587,9 @@ _REGISTERED_A3_DYNAMIC_NAMESPACE_FIELDS = {
     "artifact_run_id",
     "artifact_manifest_sha256",
     "run_final_test",
+    # The production qualification contract validates this independently;
+    # ordinary registered A3 parses the inert value ``none``.
+    "archive_qualification_scenario",
 }
 
 

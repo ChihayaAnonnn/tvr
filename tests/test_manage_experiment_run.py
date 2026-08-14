@@ -262,7 +262,10 @@ def test_retrieval_parser_accepts_only_named_archive_qualification_scenarios(
     monkeypatch.setattr(
         sys, "argv", ["prog", "--output_dir", str(tmp_path), "--do_train",
                       "--datatype", "archive_qualification",
-                      "--archive_qualification_scenario", "success"],
+                      "--archive_qualification_scenario", "success",
+                      "--artifact_run_dir", str(tmp_path),
+                      "--artifact_run_id", "fixture-run",
+                      "--artifact_manifest_sha256", "0" * 64],
     )
     assert main_task_retrieval.get_args().archive_qualification_scenario == "success"
     monkeypatch.setattr(
