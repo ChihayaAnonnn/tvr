@@ -26,6 +26,13 @@ def _absolute(path: str | os.PathLike[str]) -> Path:
     return Path(os.path.normpath(value))
 
 
+def _portable_path(path: Path) -> str:
+    try:
+        return path.relative_to(_absolute(Path.cwd())).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def _assert_no_symlink_components(path: Path) -> None:
     current = Path(path.anchor)
     for part in path.parts[1:]:
@@ -299,7 +306,7 @@ def inventory_legacy_artifacts(
     result: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "roots": [str(root) for root in canonical_roots],
-        "inventory_path": str(output_path),
+        "inventory_path": _portable_path(output_path),
         "inventory_sha256": hashlib.sha256(inventory_bytes).hexdigest(),
         "completed_files": len(completed),
         "completed_bytes": sum(int(record["size"]) for record in completed),

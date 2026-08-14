@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 
 import pytest
 
@@ -131,6 +132,22 @@ def test_inventory_classifies_whitelisted_sources_as_critical(tmp_path):
     assert record["classification"] == "critical"
 
 
+def test_inventory_summary_uses_portable_path_inside_current_checkout(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    root = tmp_path / "logs"
+    _write(root / "run.log", b"evidence")
+
+    summary = inventory.inventory_legacy_artifacts(
+        [root],
+        tmp_path / "artifacts" / "contextual-risk-v2" / "legacy" / "inventory.jsonl",
+        tmp_path / "inventory-summary.json",
+    )
+
+    assert summary["inventory_path"] == (
+        "artifacts/contextual-risk-v2/legacy/inventory.jsonl"
+    )
+
+
 def test_migration_copies_and_verifies_without_deleting_source(tmp_path):
     source = tmp_path / "ckpts" / "legacy-run"
     _write(source / "model.bin", b"weights")
@@ -221,6 +238,50 @@ def test_migration_refuses_source_symlinks_and_hardlinks(tmp_path):
         migration.migrate_critical_run(source, tmp_path / "artifacts")
 
 
+def test_migration_rejects_identical_destination_below_symlink_parent(tmp_path):
+    source = _write(tmp_path / "ckpts" / "train.log", b"same")
+    artifact_root = tmp_path / "artifacts"
+    artifact_root.mkdir()
+    outside = tmp_path / "outside"
+    _write(outside / "train.log", b"same")
+    (artifact_root / "logs").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink|unsafe artifact"):
+        migration.migrate_critical_run(
+            source, artifact_root, destination="logs/train.log"
+        )
+
+
+def test_migration_rejects_identical_hardlinked_destination(tmp_path):
+    source = _write(tmp_path / "ckpts" / "model.bin", b"same")
+    artifact_root = tmp_path / "artifacts"
+    destination = _write(artifact_root / "checkpoints" / "model.bin", b"same")
+    os.link(destination, tmp_path / "outside-hardlink.bin")
+
+    with pytest.raises(FileExistsError, match="destination collision"):
+        migration.migrate_critical_run(
+            source, artifact_root, destination="checkpoints/model.bin"
+        )
+
+
+def test_provenance_publication_rejects_symlinked_parent(tmp_path):
+    artifact_root = tmp_path / "artifacts"
+    run_root = artifact_root / "dataset" / "stage" / "run"
+    run_root.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    payload = {"schema_version": 1, "operation": "copy-plus-verify"}
+    (outside / "legacy-migration.json").write_bytes(migration._json_bytes(payload))
+    (run_root / "provenance").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink|unsafe artifact"):
+        migration._publish_json_equal_or_fail(
+            artifact_root,
+            Path("dataset/stage/run/provenance/legacy-migration.json"),
+            payload,
+        )
+
+
 def test_migration_detects_source_mutation_during_copy(tmp_path, monkeypatch):
     source = _write(tmp_path / "ckpts" / "model.bin", b"before")
     original = migration._copy_open_file
@@ -233,6 +294,47 @@ def test_migration_detects_source_mutation_during_copy(tmp_path, monkeypatch):
     monkeypatch.setattr(migration, "_copy_open_file", mutate_after_copy)
     with pytest.raises(ValueError, match="changed while copying"):
         migration.migrate_critical_run(source, tmp_path / "artifacts")
+
+
+def test_migration_rehashes_all_sources_after_multifile_copy(tmp_path, monkeypatch):
+    source = tmp_path / "ckpts" / "legacy-run"
+    first = _write(source / "a.bin", b"first")
+    _write(source / "b.bin", b"second")
+    original = migration._copy_open_file
+
+    def mutate_earlier_file_during_later_copy(path, *args, **kwargs):
+        result = original(path, *args, **kwargs)
+        if path.name == "b.bin":
+            first.write_bytes(b"FIRST")
+        return result
+
+    monkeypatch.setattr(migration, "_copy_open_file", mutate_earlier_file_during_later_copy)
+    with pytest.raises(ValueError, match="changed after copying"):
+        migration.migrate_critical_run(
+            source, tmp_path / "artifacts", destination="checkpoints"
+        )
+    assert (tmp_path / "artifacts" / "checkpoints" / "a.bin").exists()
+
+
+def test_migration_fsyncs_parents_for_new_directory_chain(tmp_path, monkeypatch):
+    source = _write(tmp_path / "ckpts" / "model.bin", b"weights")
+    original = migration.os.fsync
+    directory_fsyncs = 0
+
+    def count_directory_fsyncs(fd):
+        nonlocal directory_fsyncs
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            directory_fsyncs += 1
+        return original(fd)
+
+    monkeypatch.setattr(migration.os, "fsync", count_directory_fsyncs)
+    migration.migrate_critical_run(
+        source,
+        tmp_path / "artifacts",
+        destination="dataset/stage/run/checkpoints/model.bin",
+    )
+
+    assert directory_fsyncs >= 6
 
 
 def test_mapping_records_unresolved_run_and_copies_only_resolved_whitelist(tmp_path):

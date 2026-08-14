@@ -13,7 +13,6 @@ import os
 from pathlib import Path
 import re
 import stat
-import tempfile
 from typing import Iterable, Mapping, Sequence
 
 
@@ -44,6 +43,12 @@ class _CopySnapshot:
     sha256: str
     size: int
     sample_sha256: str
+
+
+@dataclass(frozen=True)
+class _VerifiedCopy:
+    source: _CopySnapshot
+    destination_sha256: str
 
 
 def _absolute(path: str | os.PathLike[str]) -> Path:
@@ -111,6 +116,17 @@ def _regular_metadata(path: Path, *, label: str) -> os.stat_result:
     return metadata
 
 
+def _regular_metadata_at(directory_fd: int, name: str, *, label: str) -> os.stat_result:
+    metadata = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    if stat.S_ISLNK(metadata.st_mode):
+        raise ValueError(f"symlink is forbidden in {label}: {name}")
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError(f"{label} must be a regular file: {name}")
+    if metadata.st_nlink != 1:
+        raise ValueError(f"hardlink is forbidden in {label}: {name}")
+    return metadata
+
+
 def _hash_fd(fd: int, chunk_size: int = _CHUNK_SIZE) -> tuple[str, int]:
     digest = hashlib.sha256()
     size = 0
@@ -164,11 +180,45 @@ def _stable_hash_file(path: Path) -> _CopySnapshot:
     return _CopySnapshot(after_path, digest, size, after_sample)
 
 
-def _copy_open_file(source: Path, temporary: Path, chunk_size: int = _CHUNK_SIZE) -> _CopySnapshot:
+def _stable_hash_at(directory_fd: int, name: str, *, label: str) -> _CopySnapshot:
+    before_path = _regular_metadata_at(directory_fd, name, label=label)
+    fd = os.open(
+        name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=directory_fd
+    )
+    try:
+        before_fd = os.fstat(fd)
+        if not _same_file(before_path, before_fd):
+            raise ValueError(f"{label} changed before hashing: {name}")
+        before_sample = _sample_fd(fd, before_fd.st_size)
+        digest, size = _hash_fd(fd)
+        after_fd = os.fstat(fd)
+        after_sample = _sample_fd(fd, after_fd.st_size)
+    finally:
+        os.close(fd)
+    after_path = _regular_metadata_at(directory_fd, name, label=label)
+    if (
+        not _same_file(before_fd, after_fd)
+        or not _same_file(before_fd, after_path)
+        or before_sample != after_sample
+    ):
+        raise ValueError(f"{label} changed while hashing: {name}")
+    return _CopySnapshot(after_path, digest, size, after_sample)
+
+
+def _copy_open_file(
+    source: Path,
+    temporary: Path,
+    chunk_size: int = _CHUNK_SIZE,
+    *,
+    destination_dir_fd: int | None = None,
+) -> _CopySnapshot:
     before_path = _regular_metadata(source, label="legacy source")
     source_fd = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     destination_fd = os.open(
-        temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600
+        temporary.name if destination_dir_fd is not None else temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+        dir_fd=destination_dir_fd,
     )
     digest = hashlib.sha256()
     size = 0
@@ -203,41 +253,134 @@ def _copy_open_file(source: Path, temporary: Path, chunk_size: int = _CHUNK_SIZE
     return _CopySnapshot(after_path, digest.hexdigest(), size, after_sample)
 
 
-def _ensure_safe_directory(path: Path) -> None:
-    missing: list[Path] = []
-    current = path
-    while not current.exists():
-        missing.append(current)
-        current = current.parent
-    _assert_no_symlink_components(current)
-    if not stat.S_ISDIR(current.lstat().st_mode):
-        raise ValueError(f"artifact parent is not a directory: {current}")
-    for directory in reversed(missing):
-        try:
-            directory.mkdir(mode=0o700)
-        except FileExistsError:
-            pass
-        metadata = directory.lstat()
-        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
-            raise ValueError(f"unsafe artifact directory: {directory}")
-
-
-def _fsync_directory(directory: Path) -> None:
-    fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+def _open_absolute_directory(path: Path, *, create: bool) -> int:
+    if not path.is_absolute() or path != Path(os.path.normpath(path)):
+        raise ValueError("artifact directory must be an absolute canonical path")
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_fd = os.open(path.anchor, flags)
     try:
-        os.fsync(fd)
+        for part in path.parts[1:]:
+            try:
+                child_fd = os.open(part, flags, dir_fd=directory_fd)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                os.mkdir(part, mode=0o700, dir_fd=directory_fd)
+                # Persist every newly created directory entry in its parent.
+                os.fsync(directory_fd)
+                child_fd = os.open(part, flags, dir_fd=directory_fd)
+            except NotADirectoryError as exc:
+                raise ValueError(f"unsafe artifact directory component: {path}") from exc
+            except OSError as exc:
+                if exc.errno == errno.ELOOP:
+                    raise ValueError(f"symlink is forbidden in artifact path: {path}") from exc
+                raise
+            os.close(directory_fd)
+            directory_fd = child_fd
+        return directory_fd
+    except BaseException:
+        os.close(directory_fd)
+        raise
+
+
+def _ensure_safe_directory(path: Path) -> None:
+    directory_fd = _open_absolute_directory(path, create=True)
+    try:
+        metadata = os.fstat(directory_fd)
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise ValueError(f"unsafe artifact directory: {path}")
+    finally:
+        os.close(directory_fd)
+
+
+def _open_destination_parent(
+    artifact_root: Path, relative: Path, *, create: bool
+) -> int:
+    parent = artifact_root / relative.parent
+    if parent != artifact_root / parent.relative_to(artifact_root):
+        raise ValueError("destination path must remain below artifact root")
+    return _open_absolute_directory(parent, create=create)
+
+
+def _unlink_at_if_present(directory_fd: int, name: str) -> None:
+    try:
+        os.unlink(name, dir_fd=directory_fd)
+    except FileNotFoundError:
+        pass
+
+
+def _read_regular_at(directory_fd: int, name: str) -> bytes:
+    before_path = _regular_metadata_at(
+        directory_fd, name, label="artifact destination"
+    )
+    fd = os.open(
+        name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=directory_fd
+    )
+    try:
+        before_fd = os.fstat(fd)
+        if not _same_file(before_path, before_fd):
+            raise ValueError(f"artifact destination changed before reading: {name}")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        after_fd = os.fstat(fd)
     finally:
         os.close(fd)
+    after_path = _regular_metadata_at(
+        directory_fd, name, label="artifact destination"
+    )
+    if not _same_file(before_fd, after_fd) or not _same_file(before_fd, after_path):
+        raise ValueError(f"artifact destination changed while reading: {name}")
+    return b"".join(chunks)
 
 
-def _publish_no_replace(temporary: Path, destination: Path) -> None:
+def _write_all(fd: int, payload: bytes) -> None:
+    view = memoryview(payload)
+    while view:
+        written = os.write(fd, view)
+        view = view[written:]
+
+
+def _temporary_name(destination_name: str) -> str:
+    return f".{destination_name}.{os.getpid()}.{os.urandom(8).hex()}.tmp"
+
+
+def _raise_destination_collision(path: Path, cause: BaseException | None = None) -> None:
+    error = FileExistsError(f"destination collision: {path}")
+    if cause is None:
+        raise error
+    raise error from cause
+
+
+def _assert_safe_existing_destination(directory_fd: int, name: str, path: Path) -> _CopySnapshot:
+    try:
+        return _stable_hash_at(directory_fd, name, label="artifact destination")
+    except FileNotFoundError:
+        raise
+    except (ValueError, OSError) as exc:
+        _raise_destination_collision(path, exc)
+
+
+def _publish_no_replace_at(
+    directory_fd: int, temporary_name: str, destination_name: str, destination: Path
+) -> None:
     libc = ctypes.CDLL(None, use_errno=True)
     renameat2 = getattr(libc, "renameat2", None)
     if renameat2 is None:
-        # Atomic no-clobber fallback for non-glibc Unix; the temporary link is
-        # removed before the destination is accepted as a private regular file.
-        os.link(temporary, destination, follow_symlinks=False)
-        os.unlink(temporary)
+        try:
+            os.link(
+                temporary_name,
+                destination_name,
+                src_dir_fd=directory_fd,
+                dst_dir_fd=directory_fd,
+                follow_symlinks=False,
+            )
+        except FileExistsError:
+            _raise_destination_collision(destination)
+        os.unlink(temporary_name, dir_fd=directory_fd)
     else:
         renameat2.argtypes = [
             ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p,
@@ -245,17 +388,19 @@ def _publish_no_replace(temporary: Path, destination: Path) -> None:
         ]
         renameat2.restype = ctypes.c_int
         result = renameat2(
-            -100, os.fsencode(temporary), -100, os.fsencode(destination), 1
+            directory_fd,
+            os.fsencode(temporary_name),
+            directory_fd,
+            os.fsencode(destination_name),
+            1,
         )
         if result != 0:
             error = ctypes.get_errno()
             if error == errno.EEXIST:
-                raise FileExistsError(error, os.strerror(error), destination)
+                _raise_destination_collision(destination)
             raise OSError(error, os.strerror(error), destination)
-    metadata = destination.lstat()
-    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
-        raise ValueError(f"atomic publication produced an unsafe destination: {destination}")
-    _fsync_directory(destination.parent)
+    _regular_metadata_at(directory_fd, destination_name, label="artifact destination")
+    os.fsync(directory_fd)
 
 
 def _walk_source(source: Path) -> tuple[bool, list[tuple[Path, Path]]]:
@@ -301,30 +446,52 @@ def _tree_sha256(entries: Iterable[tuple[Path, str, int]]) -> str:
     return digest.hexdigest()
 
 
-def _copy_or_verify(source: Path, destination: Path, *, dry_run: bool) -> tuple[str, str, int]:
-    if destination.exists() or destination.is_symlink():
-        if destination.is_symlink():
-            raise ValueError(f"symlink is forbidden in artifact destination: {destination}")
-        source_snapshot = _stable_hash_file(source)
-        try:
-            destination_snapshot = _stable_hash_file(destination)
-        except ValueError as exc:
-            raise FileExistsError(f"destination collision: {destination}") from exc
-        if (
-            source_snapshot.sha256 != destination_snapshot.sha256
-            or source_snapshot.size != destination_snapshot.size
-        ):
-            raise FileExistsError(f"destination collision: {destination}")
-        return source_snapshot.sha256, destination_snapshot.sha256, source_snapshot.size
-
-    if dry_run:
-        snapshot = _stable_hash_file(source)
-        return snapshot.sha256, snapshot.sha256, snapshot.size
-
-    _ensure_safe_directory(destination.parent)
-    temporary = destination.parent / f".{destination.name}.{os.getpid()}.{os.urandom(8).hex()}.tmp"
+def _copy_or_verify(
+    source: Path,
+    artifact_root: Path,
+    destination_relative: Path,
+    *,
+    dry_run: bool,
+) -> _VerifiedCopy:
+    destination = artifact_root / destination_relative
     try:
-        snapshot = _copy_open_file(source, temporary)
+        directory_fd = _open_destination_parent(
+            artifact_root, destination_relative, create=not dry_run
+        )
+    except FileNotFoundError:
+        if not dry_run:
+            raise
+        snapshot = _stable_hash_file(source)
+        return _VerifiedCopy(snapshot, snapshot.sha256)
+
+    temporary_name: str | None = None
+    try:
+        try:
+            destination_snapshot = _assert_safe_existing_destination(
+                directory_fd, destination.name, destination
+            )
+        except FileNotFoundError:
+            destination_snapshot = None
+
+        if destination_snapshot is not None:
+            source_snapshot = _stable_hash_file(source)
+            if (
+                source_snapshot.sha256 != destination_snapshot.sha256
+                or source_snapshot.size != destination_snapshot.size
+            ):
+                _raise_destination_collision(destination)
+            return _VerifiedCopy(source_snapshot, destination_snapshot.sha256)
+
+        if dry_run:
+            snapshot = _stable_hash_file(source)
+            return _VerifiedCopy(snapshot, snapshot.sha256)
+
+        temporary_name = _temporary_name(destination.name)
+        snapshot = _copy_open_file(
+            source,
+            Path(temporary_name),
+            destination_dir_fd=directory_fd,
+        )
         after_copy = _regular_metadata(source, label="legacy source")
         if (
             not _same_file(snapshot.metadata, after_copy)
@@ -332,21 +499,34 @@ def _copy_or_verify(source: Path, destination: Path, *, dry_run: bool) -> tuple[
         ):
             raise ValueError(f"legacy source changed while copying: {source}")
         try:
-            _publish_no_replace(temporary, destination)
+            _publish_no_replace_at(
+                directory_fd, temporary_name, destination.name, destination
+            )
+            temporary_name = None
         except FileExistsError:
-            existing = _stable_hash_file(destination)
+            existing = _assert_safe_existing_destination(
+                directory_fd, destination.name, destination
+            )
             if existing.sha256 != snapshot.sha256 or existing.size != snapshot.size:
-                raise FileExistsError(f"destination collision: {destination}")
-            temporary.unlink(missing_ok=True)
-        verified = _stable_hash_file(destination)
+                _raise_destination_collision(destination)
+            _unlink_at_if_present(directory_fd, temporary_name)
+            temporary_name = None
+        verified = _stable_hash_at(
+            directory_fd, destination.name, label="artifact destination"
+        )
         if verified.sha256 != snapshot.sha256 or verified.size != snapshot.size:
             raise ValueError(f"destination hash verification failed: {destination}")
         final_source = _regular_metadata(source, label="legacy source")
-        if not _same_file(snapshot.metadata, final_source):
+        if (
+            not _same_file(snapshot.metadata, final_source)
+            or _sample_path(source, final_source.st_size) != snapshot.sample_sha256
+        ):
             raise ValueError(f"legacy source changed while copying: {source}")
-        return snapshot.sha256, verified.sha256, snapshot.size
+        return _VerifiedCopy(snapshot, verified.sha256)
     finally:
-        temporary.unlink(missing_ok=True)
+        if temporary_name is not None:
+            _unlink_at_if_present(directory_fd, temporary_name)
+        os.close(directory_fd)
 
 
 def migrate_critical_run(
@@ -372,33 +552,44 @@ def migrate_critical_run(
     if not dry_run:
         _ensure_safe_directory(artifact_path)
         if is_directory:
-            if target.exists() and not target.is_dir():
-                raise FileExistsError(f"destination collision: {target}")
             _ensure_safe_directory(target)
-        elif target.exists() and target.is_dir():
-            raise FileExistsError(f"destination collision: {target}")
 
-    source_entries: list[tuple[Path, str, int]] = []
+    initial_sources: list[tuple[Path, Path, _CopySnapshot]] = []
     destination_entries: list[tuple[Path, str, int]] = []
     for path, relative in files:
-        destination_file = target / relative if is_directory else target
-        source_digest, destination_digest, size = _copy_or_verify(
-            path, destination_file, dry_run=dry_run
+        destination_relative = (
+            target_relative / relative if is_directory else target_relative
+        )
+        verified = _copy_or_verify(
+            path, artifact_path, destination_relative, dry_run=dry_run
         )
         tree_relative = relative if is_directory else Path(source_path.name)
-        source_entries.append((tree_relative, source_digest, size))
-        destination_entries.append((tree_relative, destination_digest, size))
+        initial_sources.append((path, tree_relative, verified.source))
+        destination_entries.append(
+            (tree_relative, verified.destination_sha256, verified.source.size)
+        )
 
     if is_directory:
         _, after_files = _walk_source(source_path)
         if [relative for _, relative in after_files] != [relative for _, relative in files]:
             raise ValueError(f"legacy source changed while copying: {source_path}")
         if not dry_run:
+            _assert_no_symlink_components(target)
             _, destination_files = _walk_source(target)
             if [relative for _, relative in destination_files] != [
                 relative for _, relative in files
             ]:
                 raise FileExistsError(f"destination collision: {target}")
+    source_entries: list[tuple[Path, str, int]] = []
+    for path, tree_relative, initial in initial_sources:
+        final = _stable_hash_file(path)
+        if (
+            not _same_file(initial.metadata, final.metadata)
+            or initial.sha256 != final.sha256
+            or initial.size != final.size
+        ):
+            raise ValueError(f"legacy source changed after copying: {path}")
+        source_entries.append((tree_relative, final.sha256, final.size))
     source_tree = _tree_sha256(source_entries)
     destination_tree = _tree_sha256(destination_entries)
     if source_tree != destination_tree:
@@ -421,30 +612,50 @@ def _json_bytes(payload: Mapping[str, object]) -> bytes:
     return encoded
 
 
-def _publish_json_equal_or_fail(path: Path, payload: Mapping[str, object]) -> None:
+def _publish_json_equal_or_fail(
+    artifact_root: Path, relative: Path, payload: Mapping[str, object]
+) -> None:
     encoded = _json_bytes(payload)
-    if path.exists() or path.is_symlink():
-        if path.is_symlink() or _regular_metadata(path, label="artifact destination").st_size != len(encoded):
-            raise FileExistsError(f"destination collision: {path}")
-        if path.read_bytes() != encoded:
-            raise FileExistsError(f"destination collision: {path}")
-        return
-    _ensure_safe_directory(path.parent)
-    fd, raw_temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    temporary = Path(raw_temporary)
+    path = artifact_root / relative
+    directory_fd = _open_destination_parent(artifact_root, relative, create=True)
+    temporary_name: str | None = None
     try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
         try:
-            _publish_no_replace(temporary, path)
+            existing = _read_regular_at(directory_fd, path.name)
+        except FileNotFoundError:
+            existing = None
+        except (ValueError, OSError) as exc:
+            _raise_destination_collision(path, exc)
+        if existing is not None:
+            if existing != encoded:
+                _raise_destination_collision(path)
+            return
+
+        temporary_name = _temporary_name(path.name)
+        fd = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=directory_fd,
+        )
+        try:
+            _write_all(fd, encoded)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        try:
+            _publish_no_replace_at(directory_fd, temporary_name, path.name, path)
+            temporary_name = None
         except FileExistsError:
-            if path.read_bytes() != encoded:
-                raise FileExistsError(f"destination collision: {path}")
-            temporary.unlink(missing_ok=True)
+            existing = _read_regular_at(directory_fd, path.name)
+            if existing != encoded:
+                _raise_destination_collision(path)
+            _unlink_at_if_present(directory_fd, temporary_name)
+            temporary_name = None
     finally:
-        temporary.unlink(missing_ok=True)
+        if temporary_name is not None:
+            _unlink_at_if_present(directory_fd, temporary_name)
+        os.close(directory_fd)
 
 
 def _load_mapping(path: Path) -> list[dict[str, object]]:
@@ -548,7 +759,9 @@ def migrate_mapping(
         }
         if not dry_run:
             _publish_json_equal_or_fail(
-                run_root / "provenance" / "legacy-migration.json", provenance
+                artifact_path,
+                run_root_relative / "provenance" / "legacy-migration.json",
+                provenance,
             )
         migrated.append(provenance)
         total_files += int(provenance["file_count"])

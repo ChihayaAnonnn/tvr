@@ -5,7 +5,7 @@
   },
   "completed_bytes": 93652104491,
   "completed_files": 340,
-  "inventory_path": "/data2/hxj/project/UATVR/.worktrees/experiment-artifact-archive/artifacts/contextual-risk-v2/legacy/inventory.jsonl",
+  "inventory_path": "artifacts/contextual-risk-v2/legacy/inventory.jsonl",
   "inventory_sha256": "6103c1c6f8a2d3548adc1317c5f9227303ea2181c1e18d199ea1c04fd5769178",
   "roots": [
     "/data2/hxj/project/UATVR/logs",
