@@ -97,3 +97,36 @@ def test_study_readme_exposes_lifecycle_commands_and_stage_zero_gate(repo_root: 
         "test",
     ):
         assert required in text
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["AGENTS.md", "docs/agent/experiment-artifacts.md"],
+)
+def test_docs_forbid_terminal_in_place_retry_and_describe_existing_lineage(
+    repo_root: Path, path: str
+) -> None:
+    text = (repo_root / path).read_text(encoding="utf-8")
+    for required in (
+        "failed/cancelled",
+        "不可原地重试",
+        "新的唯一 run ID",
+        "`parent_run_ids`",
+        "`selection_lineage`",
+        "`supersedes_sha256`",
+    ):
+        assert required in text
+
+
+def test_root_readme_describes_all_ignored_runtime_writes(repo_root: Path) -> None:
+    text = (repo_root / "README.md").read_text(encoding="utf-8")
+    assert "受跟踪控制面不会在运行时写入" in text
+    for location in (
+        "<run-dir>/status.json",
+        "<run-dir>/provenance/audit.jsonl",
+        "<run-dir>/metrics/",
+        "<run-dir>/checkpoints/",
+        "<run-dir>/logs/",
+        "<run-dir>/arrays/",
+    ):
+        assert location in text

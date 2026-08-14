@@ -29,9 +29,16 @@ terminal 后才批量追加终态记录和阶段摘要。每个 launch 均绑定
 路径、shape、dtype、字节数和 SHA-256）。候选、winner 与 final JSON 不得重复嵌入数组。
 
 发生故障时保留 `logs/`、`status.json`、`command.sh`、provenance/audit 与输出哈希。先执行
-`verify-run` 并检查源码、预留、manifest 和 audit 是否一致；仅当基础设施失败且 manifest
-完全相同，才可在追加失败证据后恢复。配置、命令、输入或 source SHA 改变时必须新预留 run，
-绝不静默重试或覆盖既有目录。路径/哈希/审计无法验证时停止并请求人工处理。
+`verify-run` 并检查源码、预留、manifest 和 audit 是否一致。恢复只适用于未终态且只有一个
+待提交 transition 的崩溃窗口；`failed/cancelled` 是不可变终态，不可原地重试，也不可复用相同
+run ID。
+
+如人工审查确认是基础设施问题并授权新的尝试，必须在后续 phase 预留新的唯一 run ID。新
+manifest 的既有 `parent_run_ids` 必须链接 predecessor，`selection_lineage` 必须保留人工审核的
+重试理由。对旧登记行的事实更正只可追加 `correction`，并以 `supersedes_sha256` 指向同一 run
+的既有记录；当前 schema 不支持用 correction 将旧 run 跨 run 链接到新尝试。配置、命令、输入或
+source SHA 改变时也必须新预留 run。路径/哈希/审计无法验证时停止并请求人工处理，绝不静默重试
+或覆盖既有目录。
 
 ## 常用命令
 

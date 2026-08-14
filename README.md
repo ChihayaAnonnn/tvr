@@ -31,8 +31,10 @@ PYTHONPATH=. /home/xujie/.conda/envs/tvr/bin/python scripts/manage_experiment_ru
 ```
 
 先提交这一批 `reserved` 登记记录，再用同一组精确身份参数执行 `start-run`。
-运行时只会写入 `<run-dir>/status.json` 和 `<run-dir>/provenance/audit.jsonl`；
-所有 worker 结束后，再通过 `finalize-phase` 追加终态登记记录和小型阶段摘要。
+受跟踪控制面不会在运行时写入；被忽略的 run 目录可写入
+`<run-dir>/status.json`、`<run-dir>/provenance/audit.jsonl`、
+`<run-dir>/metrics/`、`<run-dir>/checkpoints/`、`<run-dir>/logs/` 和
+`<run-dir>/arrays/`。所有 worker 结束后，再通过 `finalize-phase` 追加终态登记记录和小型阶段摘要。
 
 指标位于 `<run-dir>/metrics/`，检查点位于 `<run-dir>/checkpoints/`，日志位于
 `<run-dir>/logs/`。大于 1 MiB 的数组必须保存在 `<run-dir>/arrays/` 的 NPY/NPZ

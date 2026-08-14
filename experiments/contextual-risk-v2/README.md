@@ -11,6 +11,8 @@
 
 `registry.jsonl` 先批量提交 `reserved`，运行时只更新 run-local lifecycle，全部 terminal 后才
 批量提交终态记录与摘要。大于 1 MiB 的数组必须外置，失败证据不可删除。
+`failed/cancelled` 不可原地重试或复用 run ID；人工授权的新尝试必须在后续 phase 使用新的唯一
+run ID，并通过 manifest 的 `parent_run_ids` 和 `selection_lineage` 保留 predecessor 与审核理由。
 
 ## 生命周期命令
 
