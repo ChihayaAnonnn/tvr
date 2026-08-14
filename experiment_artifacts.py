@@ -71,6 +71,7 @@ _MANIFEST_FIELDS = frozenset(
         "test_authorized",
         "expected_scalar_outputs",
         "array_references",
+        "command_sha256",
     }
 )
 _REGISTRY_FIELDS = frozenset(
@@ -134,6 +135,7 @@ class RunManifest:
     test_authorized: bool
     expected_scalar_outputs: list[object]
     array_references: list[dict[str, object]]
+    command_sha256: str
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, object]) -> "RunManifest":
@@ -790,6 +792,7 @@ def validate_manifest(payload: Mapping[str, object]) -> dict[str, object]:
         raise ValueError("test_authorized is permitted only for final stage runs")
     _require_list(normalized["expected_scalar_outputs"], "expected_scalar_outputs")
     _validate_hashed_references(normalized["array_references"], "array_references")
+    _require_sha256(normalized["command_sha256"], "command_sha256")
     return normalized
 
 
@@ -893,6 +896,12 @@ def load_registry(registry_path: PathLike[str] | str) -> list[dict[str, object]]
     if not path.exists():
         return []
     return _parse_registry_text(path.read_text(encoding="utf-8"))
+
+
+def parse_registry_text(text: str) -> list[dict[str, object]]:
+    """Validate registry content obtained from an immutable source such as Git."""
+
+    return _parse_registry_text(text)
 
 
 def _fsync_directory(directory: Path) -> None:
@@ -1038,6 +1047,60 @@ def _read_private_json(path: Path) -> object:
     descriptor = _open_private_regular_file(path, os.O_RDONLY)
     with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _private_file_sha256(path: Path) -> str:
+    descriptor = _open_private_regular_file(path, os.O_RDONLY)
+    try:
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        return digest.hexdigest()
+    finally:
+        os.close(descriptor)
+
+
+def hash_run_outputs(paths: RunPaths) -> dict[str, str]:
+    """Hash the complete immutable output inventory without following links."""
+
+    _validate_run_paths(paths, require_root=True)
+    hashes: dict[str, str] = {}
+    for directory in (
+        paths.logs, paths.checkpoints, paths.metrics, paths.arrays, paths.plots,
+        paths.provenance,
+    ):
+        for current, directory_names, file_names, descriptor in os.fwalk(
+            directory, follow_symlinks=False
+        ):
+            for name in directory_names:
+                info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+                if not stat.S_ISDIR(info.st_mode):
+                    raise _unsafe_run_path(f"unsafe output directory: {Path(current) / name}")
+            for name in sorted(file_names):
+                if directory == paths.provenance and (
+                    name == "audit.jsonl" or name.endswith(".lock")
+                    or name.startswith("controller-pid.")
+                ):
+                    continue
+                file_descriptor = os.open(
+                    name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=descriptor,
+                )
+                try:
+                    info = os.fstat(file_descriptor)
+                    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                        raise _unsafe_run_path(
+                            f"unsafe output file: {Path(current) / name}"
+                        )
+                    digest = hashlib.sha256()
+                    while chunk := os.read(file_descriptor, 1024 * 1024):
+                        digest.update(chunk)
+                finally:
+                    os.close(file_descriptor)
+                relative = (Path(current) / name).relative_to(paths.root).as_posix()
+                hashes[relative] = digest.hexdigest()
+    hashes["command.sh"] = _private_file_sha256(paths.command)
+    return hashes
 
 
 def verify_committed_reservation(
@@ -1251,9 +1314,53 @@ def reserve_run_directory(
     with os.fdopen(lock_descriptor, "a+", encoding="utf-8") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         try:
+            lock_handle.seek(0)
+            reservation_intent = json.dumps(
+                {"manifest_sha256": digest, "reservation_id": reservation_id},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+            ) + "\n"
+            existing_intent = lock_handle.read()
+            if existing_intent:
+                if existing_intent != reservation_intent:
+                    raise FileExistsError(f"run reservation intent differs: {paths.root}")
+            else:
+                if paths.root.exists():
+                    raise FileExistsError(f"run directory already exists: {paths.root}")
+                lock_handle.write(reservation_intent)
+                lock_handle.flush()
+                os.fsync(lock_handle.fileno())
+                _fsync_directory(lock_path.parent)
             _validate_run_paths(paths)
             if paths.root.exists():
                 try:
+                    if not paths.manifest.exists():
+                        allowed = {path.name for path in (
+                            paths.logs, paths.checkpoints, paths.metrics,
+                            paths.arrays, paths.plots, paths.provenance,
+                        )}
+                        for entry in os.scandir(paths.root):
+                            if entry.name not in allowed or not entry.is_dir(
+                                follow_symlinks=False
+                            ):
+                                raise FileExistsError(
+                                    f"run directory already exists: {paths.root}"
+                                )
+                            with os.scandir(entry.path) as children:
+                                if next(children, None) is not None:
+                                    raise FileExistsError(
+                                        f"run directory already exists: {paths.root}"
+                                    )
+                        for directory in (
+                            paths.logs, paths.checkpoints, paths.metrics,
+                            paths.arrays, paths.plots, paths.provenance,
+                        ):
+                            directory.mkdir(exist_ok=True)
+                        _validate_run_paths(paths, require_root=True)
+                        _atomic_write_json(paths.manifest, normalized)
+                        status = reservation_status()
+                        _atomic_write_json(paths.status, status)
+                        _ensure_audit_record(paths, reservation_audit(status))
+                        return
                     existing_manifest, existing_digest = _load_run_manifest(paths)
                     if existing_manifest != normalized or existing_digest != digest:
                         raise FileExistsError(f"run directory already exists: {paths.root}")
@@ -1445,3 +1552,158 @@ def transition_run_status(
             )
         finally:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+
+def load_validated_run_lifecycle(
+    paths: RunPaths,
+    *,
+    require_command: bool = True,
+    allow_pending_commit: bool = False,
+) -> tuple[dict[str, object], dict[str, object], list[dict[str, object]]]:
+    """Load and fully authenticate one run-local manifest/status/audit chain."""
+
+    manifest, digest = _load_run_manifest(paths)
+    if require_command and _private_file_sha256(paths.command) != manifest["command_sha256"]:
+        raise ValueError("sealed command SHA-256 differs from manifest")
+    try:
+        status_payload = _read_private_json(paths.status)
+    except json.JSONDecodeError as exc:
+        raise ValueError("run status is not valid JSON") from exc
+    if not isinstance(status_payload, Mapping):
+        raise ValueError("run status must be an object")
+    required = {
+        "run_id", "state", "timestamp_utc", "worker_pid", "host",
+        "manifest_sha256", "exit_code", "output_hashes", "transition_id",
+    }
+    if set(status_payload) != required:
+        raise ValueError("run status fields do not match the status schema")
+    status = dict(status_payload)
+    if status["run_id"] != manifest["run_id"]:
+        raise ValueError("run status run_id differs from manifest")
+    state = status["state"]
+    if not isinstance(state, str) or state not in ALLOWED_STATES:
+        raise ValueError("run status state is invalid")
+    try:
+        parsed = datetime.fromisoformat(str(status["timestamp_utc"]).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("run status timestamp_utc is invalid") from exc
+    if parsed.tzinfo is None:
+        raise ValueError("run status timestamp_utc must be timezone-aware")
+    _validate_worker_identity(status["worker_pid"], status["host"])
+    if status["manifest_sha256"] != digest:
+        raise ValueError("run status manifest digest does not match manifest")
+    exit_code = status["exit_code"]
+    if state in _TERMINAL_STATES:
+        if isinstance(exit_code, bool) or not isinstance(exit_code, int):
+            raise ValueError("terminal run status requires an integer exit_code")
+    elif exit_code is not None:
+        raise ValueError("non-terminal run status requires a null exit_code")
+    hashes = _validate_output_hashes(status["output_hashes"])
+    transition_id = _require_sha256(status["transition_id"], "status.transition_id")
+    audits = _load_audit_records(paths)
+    seen_audits: set[tuple[str, str]] = set()
+    for index, record in enumerate(audits):
+        event = record.get("event")
+        audit_id = _require_sha256(
+            record.get("transition_id"), f"audit[{index}].transition_id"
+        )
+        key = (str(event), audit_id)
+        if key in seen_audits:
+            raise ValueError("audit contains a duplicate event/transition identity")
+        seen_audits.add(key)
+        if event == "reservation_commit":
+            expected_fields = {"event", "transition_id", "status", "output_hashes"}
+            from_state, to_state = "new", "reserved"
+        elif event in {"transition_intent", "transition_commit"}:
+            expected_fields = {
+                "event", "transition_id", "from_state", "to_state", "status",
+                "output_hashes",
+            }
+            from_state, to_state = record.get("from_state"), record.get("to_state")
+            if not isinstance(from_state, str) or not isinstance(to_state, str):
+                raise ValueError("audit transition states must be strings")
+            if to_state not in _ALLOWED_TRANSITIONS.get(from_state, frozenset()):
+                raise ValueError("audit contains a forbidden lifecycle transition")
+        else:
+            raise ValueError("audit event is not recognized")
+        if set(record) != expected_fields:
+            raise ValueError("audit record fields do not match its schema")
+        embedded = record.get("status")
+        if not isinstance(embedded, Mapping) or set(embedded) != required:
+            raise ValueError("audit embedded status fields do not match the status schema")
+        if embedded.get("run_id") != manifest["run_id"] or embedded.get("state") != to_state:
+            raise ValueError("audit embedded status identity is invalid")
+        if embedded.get("manifest_sha256") != digest:
+            raise ValueError("audit embedded manifest digest is invalid")
+        try:
+            audit_time = datetime.fromisoformat(
+                str(embedded.get("timestamp_utc")).replace("Z", "+00:00")
+            )
+        except ValueError as exc:
+            raise ValueError("audit embedded timestamp is invalid") from exc
+        if audit_time.tzinfo is None:
+            raise ValueError("audit embedded timestamp must be timezone-aware")
+        _validate_worker_identity(embedded.get("worker_pid"), embedded.get("host"))
+        embedded_exit = embedded.get("exit_code")
+        if to_state in _TERMINAL_STATES:
+            if isinstance(embedded_exit, bool) or not isinstance(embedded_exit, int):
+                raise ValueError("terminal audit status requires an integer exit_code")
+        elif embedded_exit is not None:
+            raise ValueError("non-terminal audit status requires a null exit_code")
+        embedded_hashes = _validate_output_hashes(embedded.get("output_hashes"))
+        if record.get("output_hashes") != embedded_hashes:
+            raise ValueError("audit output hashes differ from embedded status")
+        if embedded.get("transition_id") != audit_id:
+            raise ValueError("audit embedded transition identity differs")
+        if _transition_id(
+            str(manifest["run_id"]), str(from_state), str(to_state), digest,
+            embedded_exit, embedded_hashes,
+        ) != audit_id:
+            raise ValueError("audit transition identity is invalid")
+    if state == "reserved":
+        matches = [
+            record for record in audits
+            if record.get("event") == "reservation_commit"
+            and record.get("transition_id") == transition_id
+            and record.get("status") == status
+            and record.get("output_hashes") == hashes
+        ]
+        if len(matches) != 1:
+            raise ValueError("reserved status lacks one matching audit commit")
+    else:
+        commits = [
+            record for record in audits
+            if record.get("event") == "transition_commit"
+            and record.get("transition_id") == transition_id
+            and record.get("status") == status
+            and record.get("output_hashes") == hashes
+            and record.get("to_state") == state
+        ]
+        intents = [
+            record for record in audits
+            if record.get("event") == "transition_intent"
+            and record.get("transition_id") == transition_id
+            and record.get("status") == status
+            and record.get("to_state") == state
+            and record.get("output_hashes") == hashes
+        ]
+        if len(commits) == 1:
+            transition_record = commits[0]
+        elif allow_pending_commit and not commits and len(intents) == 1:
+            transition_record = intents[0]
+        else:
+            raise ValueError("run status lacks one matching transition audit commit")
+        from_state = transition_record.get("from_state")
+        if not isinstance(from_state, str) or state not in _ALLOWED_TRANSITIONS.get(from_state, frozenset()):
+            raise ValueError("run status audit transition is not allowed")
+        expected_id = _transition_id(
+            str(manifest["run_id"]), from_state, state, digest, exit_code, hashes
+        )
+        if expected_id != transition_id:
+            raise ValueError("run status transition identity is invalid")
+        matching_intents = [
+            record for record in intents if record.get("from_state") == from_state
+        ]
+        if len(matching_intents) != 1:
+            raise ValueError("run status lacks one matching transition audit intent")
+    return manifest, status, audits

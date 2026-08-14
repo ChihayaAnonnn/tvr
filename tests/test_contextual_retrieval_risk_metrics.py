@@ -1,6 +1,7 @@
 from contextlib import nullcontext
 import json
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -28,6 +29,25 @@ def _scores_with_two_failures():
         ],
         dtype=np.float32,
     )
+
+
+def test_artifact_mus_diagnostics_never_write_repository_logs(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    run_dir = tmp_path / "artifacts" / "study" / "dataset" / "baseline" / "run"
+    (run_dir / "logs").mkdir(parents=True)
+    args = SimpleNamespace(
+        output_dir=str(run_dir / "checkpoints"),
+        artifact_run_dir=str(run_dir),
+        artifact_run_id="run",
+    )
+    monkeypatch.setattr(
+        retrieval, "logger", logging.getLogger("test-mus"), raising=False
+    )
+
+    retrieval._log_mus_scores_tsv(args, np.eye(3, dtype=np.float32))
+
+    assert list((run_dir / "logs" / "mus_scores").rglob("run.tsv"))
+    assert not (tmp_path / "logs").exists()
 
 
 def test_risk_metrics_add_prefix_mean_aurc_and_strict_saturation():

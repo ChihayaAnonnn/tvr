@@ -20,6 +20,19 @@ run_controller() {
     LOG_FILE="${LOG_FILE:-logs/${RUN_DATE}/${RUN_SUFFIX}_train_msrvtt.log}"
     mkdir -p "$(dirname "${LOG_FILE}")"
     TRAIN_PID_FILE="${TRAIN_PID_FILE:-}"
+    TRAIN_PID=""
+
+    terminate_controller() {
+        local exit_status="$1"
+        trap - INT TERM
+        if [[ "${TRAIN_PID}" =~ ^[1-9][0-9]*$ ]]; then
+            kill -TERM -- "-${TRAIN_PID}" 2>/dev/null || true
+            wait "${TRAIN_PID}" 2>/dev/null || true
+        fi
+        exit "${exit_status}"
+    }
+    trap 'terminate_controller 130' INT
+    trap 'terminate_controller 143' TERM
 
     echo "[run_train_msrvtt_bg] RUN_DATE=${RUN_DATE} RUN_TIME=${RUN_TIME} RUN_TAG=${RUN_TAG}"
     echo "[run_train_msrvtt_bg] LOG_FILE=${LOG_FILE}"
@@ -39,7 +52,14 @@ run_controller() {
     echo "[run_train_msrvtt_bg] 随时可以运行以下命令查看日志："
     echo "tail -f ${LOG_FILE}"
 
-    tail -n 50 -F "${LOG_FILE}"
+    # Keep the controller alive until the detached worker has closed its log.
+    # The outer registered launcher may only seal hashes after this returns.
+    tail --pid="${TRAIN_PID}" -n 50 -F "${LOG_FILE}" || true
+    if wait "${TRAIN_PID}"; then
+        return 0
+    else
+        return $?
+    fi
 }
 
 
@@ -217,7 +237,7 @@ run_worker() {
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
         "${TVR_TORCHRUN}" --nproc_per_node="${NPROC}" --master_addr=127.0.0.9 --master_port=${MASTER_PORT:-29547} \
         "${ROOT_DIR}/main_task_retrieval.py" \
-        --do_train --run_final_test --num_thread_reader "${TRAIN_NUM_WORKERS}" \
+        --do_train --num_thread_reader "${TRAIN_NUM_WORKERS}" \
         --prefetch_factor "${TRAIN_PREFETCH_FACTOR}" --epochs=5 \
         --batch_size "${TRAIN_BATCH_SIZE}" \
         --gradient_accumulation_steps "${TRAIN_GRADIENT_ACCUMULATION_STEPS}" \

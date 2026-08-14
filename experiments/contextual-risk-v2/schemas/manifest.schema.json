@@ -3,7 +3,7 @@
   "title": "Experiment run manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["run_id", "study", "dataset", "stage", "variant", "seed", "artifact_path", "registry_path", "git_sha", "tracked_clean", "source_patch_sha256", "environment", "input_checkpoints", "dataset_splits", "config", "parent_run_ids", "selection_lineage", "validation_authorized", "test_authorized", "expected_scalar_outputs", "array_references"],
+  "required": ["run_id", "study", "dataset", "stage", "variant", "seed", "artifact_path", "registry_path", "git_sha", "tracked_clean", "source_patch_sha256", "environment", "input_checkpoints", "dataset_splits", "config", "parent_run_ids", "selection_lineage", "validation_authorized", "test_authorized", "expected_scalar_outputs", "array_references", "command_sha256"],
   "allOf": [{"if": {"properties": {"test_authorized": {"const": true}}, "required": ["test_authorized"]}, "then": {"properties": {"stage": {"const": "final"}}}}],
   "properties": {
     "run_id": {"type": "string", "description": "The UTC timestamp must be a real calendar time and this final SHA-12 must equal git_sha[:12]; validate those semantic bindings with the archive API.", "pattern": "^(?!.*--)[A-Za-z0-9][A-Za-z0-9._-]*-(baseline|feature_ablation|loss_ablation|topk_sweep|multiseed|calibration|robustness|efficiency|final)-[A-Za-z0-9][A-Za-z0-9._-]*-seed[0-9]{3}-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"},
@@ -12,7 +12,7 @@
     "environment": {"type": "object", "additionalProperties": false, "required": ["python", "pytorch", "cuda", "gpu_model", "gpu_count", "precision", "distributed_topology"], "properties": {"python": {"type": "string"}, "pytorch": {"type": "string"}, "cuda": {"type": "string"}, "gpu_model": {"type": "string"}, "gpu_count": {"type": "integer", "minimum": 0}, "precision": {"type": "string"}, "distributed_topology": {"type": "string"}}},
     "input_checkpoints": {"type": "array", "items": {"$ref": "#/$defs/hashedReference"}}, "dataset_splits": {"type": "array", "items": {"$ref": "#/$defs/hashedReference"}},
     "config": {"type": "object", "additionalProperties": false, "required": ["model", "loss", "optimizer", "scheduler", "evaluation"], "properties": {"model": {"type": "object"}, "loss": {"type": "object"}, "optimizer": {"type": "object"}, "scheduler": {"type": "object"}, "evaluation": {"type": "object"}}},
-    "parent_run_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}, "selection_lineage": {"type": "array"}, "validation_authorized": {"type": "boolean"}, "test_authorized": {"type": "boolean"}, "expected_scalar_outputs": {"type": "array"}, "array_references": {"type": "array", "items": {"$ref": "#/$defs/hashedReference"}}
+    "parent_run_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}, "selection_lineage": {"type": "array"}, "validation_authorized": {"type": "boolean"}, "test_authorized": {"type": "boolean"}, "expected_scalar_outputs": {"type": "array"}, "array_references": {"type": "array", "items": {"$ref": "#/$defs/hashedReference"}}, "command_sha256": {"$ref": "#/$defs/sha256"}
   },
   "$defs": {"safeName": {"type": "string", "pattern": "^(?!.*--)[A-Za-z0-9][A-Za-z0-9._-]*$"}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "hashedReference": {"type": "object", "required": ["path", "sha256"], "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}}}}
 }

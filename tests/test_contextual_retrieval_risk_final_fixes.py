@@ -334,7 +334,7 @@ def _exact_fresh_a3_launcher_args(output_dir):
     data_root = Path("/data2/hxj/data/MSRVTT")
     generated = repository / "data/generated/msrvtt_trusted_v1"
     return [
-        "--do_train", "--run_final_test",
+        "--do_train",
         "--num_thread_reader", "12", "--prefetch_factor", "4", "--epochs=5",
         "--batch_size", "256", "--gradient_accumulation_steps", "1",
         "--n_display=20",

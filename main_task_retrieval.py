@@ -7,7 +7,9 @@ import hashlib
 import json
 import math
 import os
+import platform
 import random
+import shlex
 import signal
 import stat
 import sys
@@ -31,6 +33,7 @@ from dataloaders.msrvtt_protocol import (
 from experiment_artifacts import (
     ArtifactArrayStore,
     RunPaths,
+    load_validated_run_lifecycle,
     make_run_paths,
     manifest_sha256,
     transition_run_status,
@@ -126,6 +129,130 @@ class _ArtifactSignal(KeyboardInterrupt):
         self.signum = signum
 
 
+def _hash_artifact_runtime_input(repository, reference):
+    raw = Path(str(reference["path"]))
+    path = raw if raw.is_absolute() else repository / raw
+    if not path.is_absolute() or path.resolve(strict=True) != path:
+        raise ValueError(f"artifact input path is not canonical/private: {raw}")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise ValueError(f"artifact input is not a private regular file: {raw}")
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        return digest.hexdigest()
+    finally:
+        os.close(descriptor)
+
+
+def _verify_artifact_runtime_bindings(
+    args, manifest, repository, *, registered_a3_contract
+):
+    flattened = {}
+    for category, values in manifest["config"].items():
+        for name, expected in values.items():
+            if name in flattened:
+                raise ValueError(f"artifact config duplicates effective field {name}")
+            flattened[name] = expected
+            actual = getattr(args, name, None)
+            if (
+                not hasattr(args, name)
+                or type(actual) is not type(expected)
+                or actual != expected
+            ):
+                raise ValueError(
+                    f"artifact effective config mismatch: {category}.{name}"
+                )
+    if registered_a3_contract:
+        required = set(_registered_a3_expected_values()) - {
+            "world_size", "n_gpu", "pin_memory",
+        }
+        required.update({"epochs", "init_model", "run_final_test"})
+        missing = sorted(required - set(flattened))
+        if missing:
+            raise ValueError(
+                "registered A3 manifest config is incomplete: " + ", ".join(missing)
+            )
+    for field in ("input_checkpoints", "dataset_splits"):
+        for reference in manifest[field]:
+            if _hash_artifact_runtime_input(repository, reference) != reference["sha256"]:
+                raise ValueError(f"artifact {field} input SHA-256 mismatch")
+    if registered_a3_contract:
+        def normalized_reference_paths(field):
+            result = set()
+            for reference in manifest[field]:
+                raw = Path(str(reference["path"]))
+                result.add((raw if raw.is_absolute() else repository / raw).resolve())
+            return result
+
+        checkpoint_paths = normalized_reference_paths("input_checkpoints")
+        required_checkpoints = {
+            Path(args.init_model).resolve(),
+            Path(args.registered_clip_asset_path).resolve(),
+        }
+        if checkpoint_paths != required_checkpoints:
+            raise ValueError(
+                "registered A3 input_checkpoints do not bind init_model and CLIP asset"
+            )
+        split_paths = normalized_reference_paths("dataset_splits")
+        consumed_split_paths = {
+            Path(getattr(args, name)).resolve()
+            for name in (
+                "split_manifest", "source_train_csv", "train_csv", "val_csv",
+                "test_csv", "data_path",
+            )
+        }
+        if split_paths != consumed_split_paths:
+            raise ValueError(
+                "registered A3 dataset_splits do not bind consumed split arguments"
+            )
+    gpu_count = torch.cuda.device_count()
+    environment = {
+        "python": platform.python_version(),
+        "pytorch": str(torch.__version__),
+        "cuda": str(torch.version.cuda or "none"),
+        "gpu_model": torch.cuda.get_device_name(0) if gpu_count else "none",
+        "gpu_count": gpu_count,
+        "precision": str(getattr(args, "clip_layer_norm_precision", manifest["environment"]["precision"])),
+        "distributed_topology": (
+            f"torchrun-{int(os.environ['WORLD_SIZE'])}"
+            if int(os.environ.get("WORLD_SIZE", "1")) > 1
+            else "single-process"
+        ),
+    }
+    if environment != manifest["environment"]:
+        mismatches = sorted(
+            name for name in environment
+            if environment[name] != manifest["environment"].get(name)
+        )
+        raise ValueError(
+            "artifact runtime environment mismatch: " + ", ".join(mismatches)
+        )
+    if registered_a3_contract:
+        required_environment = {
+            "CUDA_VISIBLE_DEVICES": "0,2,3,4",
+            "CUDA_MODULE_LOADING": "LAZY",
+            "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
+            "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1",
+            "NCCL_P2P_LEVEL": "NVL", "NCCL_IB_DISABLE": "1",
+            "NCCL_DEBUG": "WARN", "NCCL_ASYNC_ERROR_HANDLING": "1",
+            "TORCH_WARN_ONCE": "1", "PYTHONHASHSEED": "0",
+            "MASTER_ADDR": "127.0.0.9", "MASTER_PORT": "29547",
+            "WORLD_SIZE": "4",
+        }
+        wrong = sorted(
+            name for name, expected in required_environment.items()
+            if os.environ.get(name) != expected
+        )
+        if wrong:
+            raise ValueError(
+                "registered A3 effective environment mismatch: " + ", ".join(wrong)
+            )
+
+
 def _prepare_artifact_run(args, *, repo_root=None):
     """Bind one worker invocation to its exact committed archive reservation."""
 
@@ -134,11 +261,19 @@ def _prepare_artifact_run(args, *, repo_root=None):
     root = Path(args.artifact_run_dir)
     if not root.is_absolute() or str(root) != os.path.normpath(str(root)):
         raise ValueError("artifact run directory must be an absolute canonical path")
-    try:
-        payload = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError("artifact run manifest is unavailable or invalid") from exc
-    manifest = validate_manifest(payload)
+    paths = RunPaths(
+        root=root, manifest=root / "manifest.json", status=root / "status.json",
+        command=root / "command.sh", logs=root / "logs",
+        checkpoints=root / "checkpoints", metrics=root / "metrics",
+        arrays=root / "arrays", plots=root / "plots", provenance=root / "provenance",
+    )
+    manifest, status, _audits = load_validated_run_lifecycle(paths)
+    runtime_rank = int(os.environ.get("RANK", getattr(args, "local_rank", 0)))
+    allowed_preflight_states = {"reserved"} if runtime_rank == 0 else {"reserved", "running"}
+    if status["state"] not in allowed_preflight_states:
+        raise ValueError(
+            f"artifact rank {runtime_rank} cannot attach in lifecycle state {status['state']}"
+        )
     if manifest["run_id"] != args.artifact_run_id:
         raise ValueError("artifact run ID differs from manifest")
     digest = manifest_sha256(manifest)
@@ -146,9 +281,10 @@ def _prepare_artifact_run(args, *, repo_root=None):
         raise ValueError("artifact manifest SHA-256 differs from manifest")
     if Path(str(manifest["artifact_path"])) != root:
         raise ValueError("artifact run directory differs from manifest artifact_path")
-    paths = make_run_paths(root.parents[3], str(manifest["study"]), str(manifest["run_id"]))
-    if paths.root != root:
+    canonical_paths = make_run_paths(root.parents[3], str(manifest["study"]), str(manifest["run_id"]))
+    if canonical_paths.root != root:
         raise ValueError("artifact run directory is not canonical")
+    paths = canonical_paths
     expected_output = paths.checkpoints.resolve()
     if Path(args.output_dir).resolve() != expected_output:
         raise ValueError("artifact output_dir must be the canonical checkpoints directory")
@@ -158,6 +294,31 @@ def _prepare_artifact_run(args, *, repo_root=None):
         else Path(__file__).resolve().parent
     )
     verify_committed_reservation(repository, str(manifest["registry_path"]), manifest)
+    descriptor = os.open(paths.command, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+        sealed_argv = shlex.split(handle.read())
+    registered_a3_contract = sealed_argv == [
+        "env", f"ARTIFACT_RUN_ID={manifest['run_id']}", "bash",
+        "run_train_msrvtt_contextual_risk_bg.sh",
+    ]
+    if not registered_a3_contract and manifest["study"] == "contextual-risk-v2":
+        # The production study has one registered launcher entry point. Fixture
+        # studies must use a different study name rather than weakening it.
+        raise ValueError("contextual-risk-v2 worker must execute its exact sealed launcher")
+    _verify_artifact_runtime_bindings(
+        args, manifest, repository,
+        registered_a3_contract=registered_a3_contract,
+    )
+    if getattr(args, "resume_model", None):
+        raise ValueError(
+            "artifact resume requires an implemented reserved child-run lineage import"
+        )
+    if (
+        getattr(args, "do_train", False)
+        or getattr(args, "do_eval", False)
+        or getattr(args, "eval_split", "val") == "val"
+    ) and not manifest["validation_authorized"]:
+        raise ValueError("artifact manifest does not authorize validation")
     if (getattr(args, "run_final_test", False) or getattr(args, "eval_split", "val") == "test") and not manifest["test_authorized"]:
         raise ValueError("artifact manifest does not authorize test evaluation")
     args.artifact_array_store = ArtifactArrayStore(paths.arrays)
@@ -239,23 +400,21 @@ def _complete_artifact_run(context):
     state = status.get("state")
     if state == "running":
         transition_run_status(context.paths, "running", "validating")
-    transition_run_status(
-        context.paths, "validating", "completed", exit_code=0,
-        output_hashes=_artifact_output_hashes(context.paths),
-    )
+    elif state != "validating":
+        raise ValueError(f"artifact worker cannot finish from state {state!r}")
 
 
 def _fail_artifact_run(context, *, exit_code):
     if context is None:
         return
-    status = json.loads(context.paths.status.read_text(encoding="utf-8"))
-    state = status.get("state")
-    if state in {"completed", "failed", "cancelled"}:
-        return
-    target = "failed" if state == "validating" else "cancelled"
-    transition_run_status(
-        context.paths, str(state), target, exit_code=exit_code,
-        output_hashes=_artifact_output_hashes(context.paths),
+    # The controller owns train.log and may append after this Python process
+    # raises.  Preserve the worker failure, but leave terminal hashing and the
+    # terminal transition to the launcher after every writer has closed.
+    atomic_write_json(
+        context.paths.provenance / "worker_failure.json",
+        {"exit_code": int(exit_code), "recorded_at_utc": datetime.datetime.now(
+            datetime.timezone.utc
+        ).isoformat()},
     )
 
 
@@ -1208,7 +1367,6 @@ def _registered_a3_expected_values():
         "do_train": True,
         "do_eval": False,
         "do_pretrain": False,
-        "run_final_test": True,
         "datatype": "msrvtt",
         "eval_split": "val",
         "expand_msrvtt_sentences": True,
@@ -1356,6 +1514,7 @@ _REGISTERED_A3_DYNAMIC_NAMESPACE_FIELDS = {
     "artifact_run_dir",
     "artifact_run_id",
     "artifact_manifest_sha256",
+    "run_final_test",
 }
 
 
@@ -3115,8 +3274,13 @@ def _log_mus_scores_tsv(args, sim_matrix: "np.ndarray"):
     from modules.mus_util import compute_mus_batch
 
     date_str = _dt.datetime.now().strftime("%Y%m%d")
-    run_id = os.path.basename(os.path.normpath(args.output_dir)) or "eval"
-    out_dir = os.path.join("logs", "mus_scores", date_str)
+    artifact_run_dir = getattr(args, "artifact_run_dir", None)
+    if artifact_run_dir:
+        run_id = str(getattr(args, "artifact_run_id", "artifact-eval"))
+        out_dir = os.path.join(artifact_run_dir, "logs", "mus_scores", date_str)
+    else:
+        run_id = os.path.basename(os.path.normpath(args.output_dir)) or "eval"
+        out_dir = os.path.join("logs", "mus_scores", date_str)
     os.makedirs(out_dir, exist_ok=True)
     out_file = os.path.join(out_dir, f"{run_id}.tsv")
 

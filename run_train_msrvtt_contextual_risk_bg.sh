@@ -166,10 +166,26 @@ payload = json.loads(sys.argv[1])
 print(payload["run_dir"])
 print(payload["manifest_sha256"])
 print(payload["state"])
+print("1" if payload["test_authorized"] else "0")
+print(payload["stage"])
+print(json.dumps(payload["command_argv"], separators=(",", ":")))
 PY
     )
     ARTIFACT_RUN_DIR="${ARTIFACT_IDENTITY[0]}"
     ARTIFACT_MANIFEST_SHA256="${ARTIFACT_IDENTITY[1]}"
+    if ! /home/xujie/.conda/envs/tvr/bin/python - "${ARTIFACT_IDENTITY[5]}" "${ARTIFACT_RUN_ID}" <<'PY'
+import json, sys
+actual = json.loads(sys.argv[1])
+expected = [
+    "env", f"ARTIFACT_RUN_ID={sys.argv[2]}", "bash",
+    "run_train_msrvtt_contextual_risk_bg.sh",
+]
+if actual != expected:
+    raise SystemExit("sealed command is not this exact registered A3 launcher invocation")
+PY
+    then
+        exit 2
+    fi
     if [[ "${ARTIFACT_IDENTITY[2]}" != "reserved" ]]; then
         echo "registered A3 run must be in reserved state" >&2
         exit 2
@@ -182,6 +198,17 @@ PY
         --artifact_run_id "${ARTIFACT_RUN_ID}"
         --artifact_manifest_sha256 "${ARTIFACT_MANIFEST_SHA256}"
     )
+    FINAL_TEST_ARGS=()
+    if [[ "${ARTIFACT_IDENTITY[3]}" == "1" ]]; then
+        if [[ "${ARTIFACT_IDENTITY[4]}" != "final" ]]; then
+            echo "test authorization requires a final-stage reservation" >&2
+            exit 2
+        fi
+        FINAL_TEST_ARGS=(--run_final_test)
+    fi
+fi
+if [[ "${ARTIFACT_MODE}" == "0" ]]; then
+    FINAL_TEST_ARGS=(--run_final_test)
 fi
 
 if [[ "${ARTIFACT_MODE}" == "0" && -e "${OUTPUT_DIR}" ]]; then
@@ -204,6 +231,14 @@ fi
 
 retain_reservation_failure() {
     echo "$1" >&2
+    if [[ "${ARTIFACT_MODE}" == "1" && "${CONTROLLER_MAY_HAVE_SPAWNED}" == "1" ]]; then
+        kill -TERM "${CONTROLLER_PID}" 2>/dev/null || true
+        wait "${CONTROLLER_PID}" 2>/dev/null || true
+        unlink "${HANDOFF_PID_FILE}" 2>/dev/null || true
+        if ! publish_artifact_terminal 2; then
+            echo "A3 handoff failure terminal publication failed; retained run evidence: ${ARTIFACT_RUN_DIR}" >&2
+        fi
+    fi
     RESERVATION_HELD=0
     trap - EXIT
     exit 2
@@ -219,13 +254,63 @@ cleanup_reservation() {
 }
 trap cleanup_reservation EXIT
 
+publish_artifact_terminal() {
+    local controller_status="$1"
+    [[ "${ARTIFACT_MODE}" == "1" ]] || return 0
+    local verify_json source_state terminal_state
+    if [[ "${controller_status}" == "0" ]]; then
+        source_state="validating"
+    else
+        verify_json="$(
+            /home/xujie/.conda/envs/tvr/bin/python "${MANAGE_RUN_SCRIPT}" verify-run \
+                --repo-root "${ARTIFACT_REPO_ROOT}" \
+                --registry "${REGISTRY_PATH}" \
+                --run-dir "${ARTIFACT_RUN_DIR}" \
+                --run-id "${ARTIFACT_RUN_ID}" \
+                --manifest-sha256 "${ARTIFACT_MANIFEST_SHA256}"
+        )" || return 2
+        source_state="$(
+            /home/xujie/.conda/envs/tvr/bin/python - "${verify_json}" <<'PY'
+import json, sys
+print(json.loads(sys.argv[1])["state"])
+PY
+        )" || return 2
+    fi
+    if [[ "${controller_status}" == "0" && "${source_state}" == "validating" ]]; then
+        terminal_state="completed"
+    elif [[ "${controller_status}" != "0" && "${source_state}" == "validating" ]]; then
+        terminal_state="failed"
+    elif [[ "${controller_status}" != "0" && ( "${source_state}" == "running" || "${source_state}" == "reserved" ) ]]; then
+        terminal_state="cancelled"
+    else
+        echo "A3 cannot terminalize status ${controller_status} from ${source_state}" >&2
+        return 2
+    fi
+    /home/xujie/.conda/envs/tvr/bin/python "${MANAGE_RUN_SCRIPT}" transition-run \
+        --repo-root "${ARTIFACT_REPO_ROOT}" \
+        --registry "${REGISTRY_PATH}" \
+        --run-dir "${ARTIFACT_RUN_DIR}" \
+        --run-id "${ARTIFACT_RUN_ID}" \
+        --manifest-sha256 "${ARTIFACT_MANIFEST_SHA256}" \
+        --expected "${source_state}" \
+        --next "${terminal_state}" \
+        --exit-code "${controller_status}"
+}
+
 retain_reservation_on_signal() {
     local signal_name="$1"
     local exit_status="$2"
     trap - INT TERM
     if [[ "${CONTROLLER_MAY_HAVE_SPAWNED}" == "1" ]]; then
+        kill -TERM "${CONTROLLER_PID}" 2>/dev/null || true
+        wait "${CONTROLLER_PID}" 2>/dev/null || true
+        unlink "${HANDOFF_PID_FILE}" 2>/dev/null || true
+        if [[ "${ARTIFACT_MODE}" == "1" ]] && ! publish_artifact_terminal "${exit_status}"; then
+            echo "A3 signal terminal publication failed; retained run evidence: ${ARTIFACT_RUN_DIR}" >&2
+            exit 2
+        fi
         if [[ "${ARTIFACT_MODE}" == "1" ]]; then
-            echo "A3 ${signal_name} received after controller start; retaining run evidence: ${ARTIFACT_RUN_DIR}" >&2
+            echo "A3 ${signal_name} terminalized after closing writers; retained run evidence: ${ARTIFACT_RUN_DIR}" >&2
         else
             echo "A3 ${signal_name} received after controller start; retaining reservation: ${RESERVATION_DIR}" >&2
         fi
@@ -297,19 +382,27 @@ bash "${CONTROLLER_SCRIPT}" \
     --w_contextual_risk_rank 0.25 \
     --seed 0 \
     --epochs 3 \
-    --run_final_test \
+    "${FINAL_TEST_ARGS[@]}" \
     "${ARTIFACT_ARGS[@]}" \
     "$@" &
 CONTROLLER_PID=$!
 
 while [[ ! -s "${HANDOFF_PID_FILE}" ]]; do
     if ! kill -0 "${CONTROLLER_PID}" 2>/dev/null; then
-        if wait "${CONTROLLER_PID}"; then
-            echo "A3 controller exited before confirming worker handoff" >&2
-            exit 2
-        else
-            exit $?
+        set +e
+        wait "${CONTROLLER_PID}"
+        EARLY_CONTROLLER_STATUS=$?
+        set -e
+        if [[ "${EARLY_CONTROLLER_STATUS}" == "0" ]]; then
+            EARLY_CONTROLLER_STATUS=2
         fi
+        if [[ "${ARTIFACT_MODE}" == "1" ]]; then
+            unlink "${HANDOFF_PID_FILE}" 2>/dev/null || true
+            RESERVATION_HELD=0
+            publish_artifact_terminal "${EARLY_CONTROLLER_STATUS}" || true
+        fi
+        echo "A3 controller exited before confirming worker handoff" >&2
+        exit "${EARLY_CONTROLLER_STATUS}"
     fi
     sleep 0.05
 done
@@ -345,4 +438,15 @@ if [[ "${ARTIFACT_MODE}" == "0" ]]; then
     rmdir "${RESERVATION_DIR}"
 fi
 RESERVATION_HELD=0
+set +e
 wait "${CONTROLLER_PID}"
+CONTROLLER_STATUS=$?
+set -e
+
+if [[ "${ARTIFACT_MODE}" == "1" ]]; then
+    if ! publish_artifact_terminal "${CONTROLLER_STATUS}"; then
+        echo "A3 terminal publication failed; retained run evidence: ${ARTIFACT_RUN_DIR}" >&2
+        exit 2
+    fi
+fi
+exit "${CONTROLLER_STATUS}"

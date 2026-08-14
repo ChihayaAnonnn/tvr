@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 import subprocess
 import time
 from pathlib import Path
@@ -11,7 +12,7 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 SCRIPT = REPOSITORY / "run_train_msrvtt_contextual_risk_bg.sh"
 
 
-def _fake_controller(tmp_path, *, wait_for_output_release=False):
+def _fake_controller(tmp_path, *, wait_for_output_release=False, exit_code=0):
     marker = tmp_path / "controller-called"
     release = tmp_path / "release-controller"
     controller = tmp_path / "fake-controller.sh"
@@ -19,8 +20,9 @@ def _fake_controller(tmp_path, *, wait_for_output_release=False):
         """
 while [[ ! -e "${A3_TEST_CONTROLLER_RELEASE}" ]]; do sleep 0.01; done
 mkdir -p "${OUTPUT_DIR}"
+if [[ -n "${LOG_FILE}" ]]; then printf 'controller-final-line\n' >> "${LOG_FILE}"; fi
 sleep 0.2
-"""
+""" + (f"exit {exit_code}\n" if exit_code else "")
         if wait_for_output_release
         else ""
     )
@@ -95,15 +97,27 @@ def test_legacy_layout_seam_is_rejected_outside_launcher_test_mode(tmp_path):
     assert not marker.exists()
 
 
-def test_campaign_launcher_routes_every_output_to_artifact_run(tmp_path):
-    run_id = "msrvtt-baseline-smoke-seed000-20260814T020304Z-0123456789ab"
+@pytest.mark.parametrize(
+    "stage,test_authorized,expects_final_test,controller_exit,terminal_state,creates_output,expected_return",
+    [
+        ("baseline", False, False, 0, "completed", True, 0),
+        ("final", True, True, 0, "completed", True, 0),
+        ("baseline", False, False, 7, "cancelled", True, 7),
+        ("baseline", False, False, 7, "cancelled", False, 2),
+    ],
+)
+def test_campaign_launcher_routes_every_output_to_artifact_run(
+    tmp_path, stage, test_authorized, expects_final_test, controller_exit,
+    terminal_state, creates_output, expected_return,
+):
+    run_id = f"msrvtt-{stage}-smoke-seed000-20260814T020304Z-0123456789ab"
     artifact_root = tmp_path / "artifacts"
-    run_dir = artifact_root / "contextual-risk-v2" / "msrvtt" / "baseline" / run_id
+    run_dir = artifact_root / "contextual-risk-v2" / "msrvtt" / stage / run_id
     for relative in ("logs", "checkpoints", "metrics", "arrays", "plots", "provenance"):
         (run_dir / relative).mkdir(parents=True, exist_ok=True)
     manifest = {
         "run_id": run_id, "study": "contextual-risk-v2", "dataset": "msrvtt",
-        "stage": "baseline", "variant": "smoke", "seed": 0,
+        "stage": stage, "variant": "smoke", "seed": 0,
         "artifact_path": str(run_dir),
         "registry_path": "experiments/contextual-risk-v2/registry.jsonl",
         "git_sha": "0123456789abcdef0123456789abcdef01234567",
@@ -115,21 +129,35 @@ def test_campaign_launcher_routes_every_output_to_artifact_run(tmp_path):
         },
         "input_checkpoints": [], "dataset_splits": [],
         "config": {name: {} for name in ("model", "loss", "optimizer", "scheduler", "evaluation")},
-        "parent_run_ids": [], "selection_lineage": [],
-        "validation_authorized": True, "test_authorized": False,
+        "parent_run_ids": [] if stage == "baseline" else ["parent-run"],
+        "selection_lineage": [],
+        "validation_authorized": True, "test_authorized": test_authorized,
         "expected_scalar_outputs": [], "array_references": [],
     }
+    command = (
+        f"env ARTIFACT_RUN_ID={run_id} bash "
+        "run_train_msrvtt_contextual_risk_bg.sh\n"
+    )
+    (run_dir / "command.sh").write_text(command, encoding="utf-8")
+    manifest["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
     (run_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     manage = tmp_path / "fake-manage.py"
     manage.write_text(
-        "import hashlib, json, sys\n"
+        "import hashlib, json, os, sys\n"
         "p=json.load(open(sys.argv[sys.argv.index('--run-dir')+1]+'/manifest.json'))\n"
+        "if sys.argv[1]=='transition-run':\n"
+        " log=p['artifact_path']+'/logs/train.log'\n"
+        " digest=hashlib.sha256(open(log,'rb').read() if os.path.exists(log) else b'').hexdigest()\n"
+        " open(os.environ['A3_TEST_TERMINAL_CAPTURE'],'a').write(sys.argv[sys.argv.index('--next')+1]+' '+digest+'\\n')\n"
         "raw=json.dumps(p,sort_keys=True,separators=(',',':')).encode()\n"
-        "print(json.dumps({'run_dir':p['artifact_path'],'manifest_sha256':hashlib.sha256(raw).hexdigest(),'state':'reserved'}))\n",
+        "print(json.dumps({'run_dir':p['artifact_path'],'manifest_sha256':hashlib.sha256(raw).hexdigest(),'state':'reserved','test_authorized':p['test_authorized'],'stage':p['stage'],'command_argv':['env','ARTIFACT_RUN_ID='+p['run_id'],'bash','run_train_msrvtt_contextual_risk_bg.sh']}))\n",
         encoding="utf-8",
     )
-    controller, marker, release = _fake_controller(tmp_path, wait_for_output_release=True)
+    controller, marker, release = _fake_controller(
+        tmp_path, wait_for_output_release=creates_output, exit_code=controller_exit
+    )
     capture = tmp_path / "capture.txt"
+    terminal_capture = tmp_path / "terminal-capture.txt"
     env = _launcher_env(controller, marker)
     env.pop("LEGACY_A3_LAYOUT")
     env.update({
@@ -139,6 +167,7 @@ def test_campaign_launcher_routes_every_output_to_artifact_run(tmp_path):
         "A3_TEST_MANAGE_CLI": str(manage),
         "A3_TEST_CAPTURE_FILE": str(capture),
         "A3_TEST_CONTROLLER_RELEASE": str(release),
+        "A3_TEST_TERMINAL_CAPTURE": str(terminal_capture),
     })
     release.touch()
 
@@ -147,14 +176,22 @@ def test_campaign_launcher_routes_every_output_to_artifact_run(tmp_path):
         check=False, timeout=5,
     )
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == expected_return, result.stderr
     captured = capture.read_text().splitlines()
     assert Path(captured[0]) == run_dir / "checkpoints"
     assert Path(captured[1]) == run_dir / "logs" / "train.log"
     assert "--artifact_run_dir" in captured[2:]
     assert str(run_dir) in captured[2:]
+    assert ("--run_final_test" in captured[2:]) is expects_final_test
     assert not Path(captured[0]).is_relative_to(REPOSITORY / "ckpts")
     assert not Path(captured[1]).is_relative_to(REPOSITORY / "logs")
+    captured_terminal_state, sealed_log_digest = terminal_capture.read_text().split()
+    assert captured_terminal_state == terminal_state
+    log_bytes = (
+        (run_dir / "logs" / "train.log").read_bytes()
+        if (run_dir / "logs" / "train.log").exists() else b""
+    )
+    assert sealed_log_digest == hashlib.sha256(log_bytes).hexdigest()
 
 
 def test_registered_a3_launcher_preserves_the_fresh_training_contract():
@@ -181,7 +218,6 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
         "--w_contextual_risk_rank 0.25",
         "--seed 0",
         "--epochs 3",
-        "--run_final_test",
     ):
         assert flag in text
 

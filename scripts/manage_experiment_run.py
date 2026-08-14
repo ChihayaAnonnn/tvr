@@ -22,11 +22,15 @@ import tempfile
 from typing import Mapping, Sequence
 
 from experiment_artifacts import (
+    RunPaths,
     append_registry_records,
     build_run_id,
+    hash_run_outputs,
     load_registry,
+    load_validated_run_lifecycle,
     make_run_paths,
     manifest_sha256,
+    parse_registry_text,
     reserve_run_directory,
     transition_run_status,
     validate_artifact_json_payload,
@@ -124,6 +128,7 @@ def _build_manifest(
         spec["seed"], str(spec["timestamp_utc"]), git_sha,  # type: ignore[arg-type]
     )
     paths = make_run_paths(artifact_root, study, run_id)
+    command = _render_command(spec["command"], run_id=run_id, run_dir=paths.root)
     generated = {
         key: value for key, value in spec.items()
         if key not in {"timestamp_utc", "command"}
@@ -138,8 +143,22 @@ def _build_manifest(
             "git_sha": git_sha,
             "tracked_clean": True,
             "source_patch_sha256": None,
+            "command_sha256": hashlib.sha256(command).hexdigest(),
         }
     )
+
+
+def _render_command(command: Sequence[str], *, run_id: str, run_dir: Path) -> bytes:
+    replacements = {"{run_id}": run_id, "{artifact_run_dir}": str(run_dir)}
+    command_argv = []
+    for original in command:
+        item = original
+        if "{manifest_sha256}" in item:
+            raise ValueError("command cannot contain self-referential manifest SHA")
+        for marker, value in replacements.items():
+            item = item.replace(marker, value)
+        command_argv.append(item)
+    return (shlex.join(command_argv) + "\n").encode("utf-8")
 
 
 def _registry_record(
@@ -162,7 +181,13 @@ def _registry_record(
 
 def _read_json(path: Path, description: str) -> dict[str, object]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            os.close(descriptor)
+            raise ValueError(f"{description} must be a private regular file")
+        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"{description} is unavailable or invalid") from exc
     if not isinstance(payload, dict):
@@ -170,15 +195,21 @@ def _read_json(path: Path, description: str) -> dict[str, object]:
     return payload
 
 
-def _load_run(run_dir: Path) -> tuple[dict[str, object], dict[str, object]]:
+def _load_run(
+    run_dir: Path, *, allow_pending_commit: bool = False
+) -> tuple[dict[str, object], dict[str, object]]:
     if not run_dir.is_absolute() or os.fspath(run_dir) != os.path.normpath(run_dir):
         raise ValueError("run-dir must be an absolute canonical path")
-    manifest = validate_manifest(_read_json(run_dir / "manifest.json", "run manifest"))
-    if Path(str(manifest["artifact_path"])) != run_dir:
-        raise ValueError("run-dir differs from manifest artifact_path")
-    status = _read_json(run_dir / "status.json", "run status")
-    if status.get("manifest_sha256") != manifest_sha256(manifest):
-        raise ValueError("run status manifest hash mismatch")
+    paths = RunPaths(
+        root=run_dir, manifest=run_dir / "manifest.json",
+        status=run_dir / "status.json", command=run_dir / "command.sh",
+        logs=run_dir / "logs", checkpoints=run_dir / "checkpoints",
+        metrics=run_dir / "metrics", arrays=run_dir / "arrays",
+        plots=run_dir / "plots", provenance=run_dir / "provenance",
+    )
+    manifest, status, _audits = load_validated_run_lifecycle(
+        paths, allow_pending_commit=allow_pending_commit
+    )
     return manifest, status
 
 
@@ -238,28 +269,16 @@ def _safe_file_sha256(run_dir: Path, relative_name: str) -> str:
         os.close(descriptor)
 
 
-def _all_output_hashes(run_dir: Path) -> dict[str, str]:
-    hashes: dict[str, str] = {}
-    for directory_name in (
-        "logs", "checkpoints", "metrics", "arrays", "plots", "provenance"
-    ):
-        directory = run_dir / directory_name
-        for path in sorted(directory.rglob("*")):
-            info = path.lstat()
-            if stat.S_ISLNK(info.st_mode):
-                raise ValueError(f"unsafe artifact output: {path}")
-            if stat.S_ISREG(info.st_mode):
-                if directory_name == "provenance" and (
-                    path.name == "audit.jsonl" or path.name.endswith(".lock")
-                    or path.name.startswith("controller-pid.")
-                ):
-                    continue
-                relative = path.relative_to(run_dir).as_posix()
-                hashes[relative] = _safe_file_sha256(run_dir, relative)
-    command = run_dir / "command.sh"
-    if command.exists():
-        hashes["command.sh"] = _safe_file_sha256(run_dir, "command.sh")
-    return hashes
+def _all_output_hashes(
+    run_dir: Path, *, allow_pending_commit: bool = False
+) -> dict[str, str]:
+    manifest, _ = _load_run(
+        run_dir, allow_pending_commit=allow_pending_commit
+    )
+    paths = make_run_paths(
+        run_dir.parents[3], str(manifest["study"]), str(manifest["run_id"])
+    )
+    return hash_run_outputs(paths)
 
 
 def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
@@ -295,7 +314,8 @@ def reserve_phase(args: argparse.Namespace) -> dict[str, object]:
     phase_path = _repo_relative(args.phase, "phase")
     registry = _repo_relative(args.registry, "registry")
     artifact_root = _canonical_root(args.artifact_root, "artifact-root")
-    _require_clean(repo)
+    if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=repo).returncode:
+        raise ValueError("reservation recovery requires a clean staged index")
     phase = _load_committed_phase(repo, phase_path)
     git_sha = _git(repo, "rev-parse", "HEAD").strip()
     manifests = [
@@ -308,7 +328,26 @@ def reserve_phase(args: argparse.Namespace) -> dict[str, object]:
     run_ids = [str(manifest["run_id"]) for manifest in manifests]
     if len(run_ids) != len(set(run_ids)):
         raise ValueError("phase contains duplicate run identities")
-    existing = load_registry(repo / registry)
+    committed_text = _git(repo, "show", f"HEAD:{registry.as_posix()}")
+    working = load_registry(repo / registry)
+    expected_records = [_registry_record(manifest, "reserved") for manifest in manifests]
+    committed_records = parse_registry_text(committed_text)
+    committed_exact = [record in committed_records for record in expected_records]
+    if any(committed_exact) and not all(committed_exact):
+        raise ValueError("phase reservation is only partially committed at HEAD")
+    additions = [] if all(committed_exact) else expected_records
+    if working == committed_records:
+        registry_already_appended = not additions
+    elif additions and working == committed_records + additions:
+        registry_already_appended = True
+    else:
+        raise ValueError(
+            "reservation requires the committed registry or its exact crash-recovery append"
+        )
+    changed = set(_git(repo, "diff", "--name-only").splitlines())
+    if changed - {registry.as_posix()}:
+        raise ValueError("reservation recovery requires clean tracked source")
+    existing = committed_records
     for spec in phase["runs"]:  # type: ignore[union-attr]
         prefix = (
             f"{spec['dataset']}-{spec['stage']}-{spec['variant']}-"
@@ -317,43 +356,49 @@ def reserve_phase(args: argparse.Namespace) -> dict[str, object]:
         if any(
             record["event"] == "reserved"
             and str(record["run_id"]).startswith(prefix)
+            and record not in expected_records
             for record in existing
         ):
             raise ValueError(
                 "phase contains an already registered identity; silent retry rejected"
             )
-    for manifest in manifests:
-        paths = make_run_paths(
-            artifact_root, str(phase["study"]), str(manifest["run_id"])
-        )
-        if paths.root.exists():
-            raise FileExistsError(f"run directory already exists: {paths.root}")
     for manifest, spec in zip(manifests, phase["runs"]):  # type: ignore[arg-type]
         paths = make_run_paths(artifact_root, str(phase["study"]), str(manifest["run_id"]))
-        reserve_run_directory(paths, manifest)
-        replacements = {
-            "{run_id}": str(manifest["run_id"]),
-            "{artifact_run_dir}": str(paths.root),
-            "{manifest_sha256}": manifest_sha256(manifest),
-        }
-        command_argv = []
-        for item in spec["command"]:
-            for marker, value in replacements.items():
-                item = item.replace(marker, value)
-            command_argv.append(item)
-        command = shlex.join(command_argv) + "\n"
-        descriptor = os.open(
-            paths.command,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-            0o700,
+        command = _render_command(
+            spec["command"], run_id=str(manifest["run_id"]), run_dir=paths.root
         )
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(command)
-            handle.flush()
-            os.fsync(handle.fileno())
-    append_registry_records(
-        repo / registry, [_registry_record(manifest, "reserved") for manifest in manifests]
-    )
+        if paths.root.exists():
+            if not registry_already_appended:
+                try:
+                    reserve_run_directory(paths, manifest)
+                except FileExistsError:
+                    pass
+            recovered_manifest, recovered_status, _ = load_validated_run_lifecycle(
+                paths, require_command=False
+            )
+            if recovered_manifest != manifest or recovered_status["state"] != "reserved":
+                raise ValueError("existing run directory is not the exact reserved recovery")
+        else:
+            if registry_already_appended:
+                raise ValueError("committed reservation is missing its run directory")
+            reserve_run_directory(paths, manifest)
+        if paths.command.exists():
+            if _safe_file_sha256(paths.root, "command.sh") != hashlib.sha256(command).hexdigest():
+                raise ValueError("existing recovery command differs from sealed command")
+        else:
+            if registry_already_appended:
+                raise ValueError("published reservation is missing its sealed command")
+            descriptor = os.open(
+                paths.command,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+                0o700,
+            )
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(command)
+                handle.flush()
+                os.fsync(handle.fileno())
+    if not registry_already_appended:
+        append_registry_records(repo / registry, additions)
     return {
         "phase": phase["phase"],
         "study": phase["study"],
@@ -369,44 +414,72 @@ def reserve_phase(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
-def verify_run(args: argparse.Namespace) -> dict[str, object]:
+def _verify_run_identity(
+    args: argparse.Namespace, *, allow_pending_commit: bool = False
+) -> dict[str, object]:
     repo = Path(args.repo_root).resolve()
     registry = _repo_relative(args.registry, "registry")
-    manifest, status = _load_run(Path(args.run_dir))
+    manifest, status = _load_run(
+        Path(args.run_dir), allow_pending_commit=allow_pending_commit
+    )
     _assert_identity(manifest, run_id=args.run_id, digest=args.manifest_sha256)
     verify_committed_reservation(repo, registry, manifest)
+    command_digest = _safe_file_sha256(Path(args.run_dir), "command.sh")
+    if command_digest != manifest["command_sha256"]:
+        raise ValueError("sealed command SHA-256 mismatch")
+    descriptor = os.open(
+        Path(args.run_dir) / "command.sh",
+        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+    )
+    with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+        command_argv = shlex.split(handle.read())
+    if not command_argv:
+        raise ValueError("sealed command must contain an executable argv")
     return {
         "run_id": manifest["run_id"],
         "run_dir": manifest["artifact_path"],
         "manifest_sha256": manifest_sha256(manifest),
         "state": status["state"],
+        "stage": manifest["stage"],
+        "test_authorized": manifest["test_authorized"],
+        "command_argv": command_argv,
     }
 
 
+def verify_run(args: argparse.Namespace) -> dict[str, object]:
+    return _verify_run_identity(args)
+
+
 def start_run(args: argparse.Namespace) -> dict[str, object]:
-    result = verify_run(args)
+    result = _verify_run_identity(args, allow_pending_commit=True)
     run_dir = Path(args.run_dir)
     status = transition_run_status(
-        make_run_paths_from_dir(run_dir), "reserved", "running"
+        make_run_paths_from_dir(run_dir, allow_pending_commit=True),
+        "reserved", "running"
     )
     return {**result, "state": status["state"]}
 
 
-def make_run_paths_from_dir(run_dir: Path):
-    manifest, _ = _load_run(run_dir)
+def make_run_paths_from_dir(run_dir: Path, *, allow_pending_commit: bool = False):
+    manifest, _ = _load_run(run_dir, allow_pending_commit=allow_pending_commit)
     artifact_root = run_dir.parents[3]
     return make_run_paths(artifact_root, str(manifest["study"]), str(manifest["run_id"]))
 
 
 def transition_run(args: argparse.Namespace) -> dict[str, object]:
     run_dir = Path(args.run_dir)
-    paths = make_run_paths_from_dir(run_dir)
+    _verify_run_identity(args, allow_pending_commit=True)
+    if args.expected == "reserved" and args.next_state == "running":
+        raise ValueError("reserved runs may only be started through start-run")
+    paths = make_run_paths_from_dir(run_dir, allow_pending_commit=True)
     hashes = {
         relative: _safe_file_sha256(run_dir, relative)
         for relative in (args.output or [])
     }
     if args.next_state in TERMINAL_STATES:
-        complete_inventory = _all_output_hashes(run_dir)
+        complete_inventory = _all_output_hashes(
+            run_dir, allow_pending_commit=True
+        )
         for relative, digest in hashes.items():
             if complete_inventory.get(relative) != digest:
                 raise ValueError(f"terminal output changed while hashing: {relative}")
@@ -437,16 +510,21 @@ def finalize_phase(args: argparse.Namespace) -> dict[str, object]:
     phase_path = _repo_relative(args.phase, "phase")
     registry_path = _repo_relative(args.registry, "registry")
     summary_path = _repo_relative(args.summary, "summary")
-    if (repo / summary_path).exists():
-        raise FileExistsError(f"phase summary already exists: {summary_path}")
     artifact_root = _canonical_root(args.artifact_root, "artifact-root")
     phase = _load_committed_phase(repo, phase_path)
-    records = load_registry(repo / registry_path)
+    try:
+        committed_registry = _git(
+            repo, "show", f"HEAD:{registry_path.as_posix()}"
+        )
+    except subprocess.CalledProcessError as exc:
+        raise ValueError("finalization requires a committed HEAD registry") from exc
+    committed_records = parse_registry_text(committed_registry)
+    working_records = load_registry(repo / registry_path)
     terminal_records: list[dict[str, object]] = []
     summary_runs: list[dict[str, object]] = []
     states: Counter[str] = Counter()
     for spec in phase["runs"]:  # type: ignore[union-attr]
-        reservation = _reservation_for_spec(spec, records, artifact_root)
+        reservation = _reservation_for_spec(spec, committed_records, artifact_root)
         run_dir = Path(str(reservation["artifact_path"]))
         manifest, status = _load_run(run_dir)
         if manifest_sha256(manifest) != reservation["manifest_sha256"]:
@@ -480,13 +558,36 @@ def finalize_phase(args: argparse.Namespace) -> dict[str, object]:
                 "output_hashes": output_hashes, "summary_metrics": metrics,
             }
         )
-    append_registry_records(repo / registry_path, terminal_records)
     summary: dict[str, object] = {
         "phase": phase["phase"], "study": phase["study"],
         "phase_path": phase_path.as_posix(),
         "terminal_counts": dict(sorted(states.items())), "runs": summary_runs,
     }
-    _atomic_json(repo / summary_path, summary)
+    terminal_additions = [
+        record for record in terminal_records if record not in committed_records
+    ]
+    if working_records == committed_records:
+        registry_already_appended = not terminal_additions
+    elif terminal_additions and working_records == committed_records + terminal_additions:
+        registry_already_appended = True
+    else:
+        raise ValueError(
+            "finalization requires the committed HEAD registry or its exact terminal append"
+        )
+    changed = set(_git(repo, "diff", "--name-only").splitlines())
+    allowed_changes = {registry_path.as_posix(), summary_path.as_posix()}
+    if changed - allowed_changes or subprocess.run(
+        ["git", "diff", "--cached", "--quiet"], cwd=repo
+    ).returncode:
+        raise ValueError("finalization requires clean tracked source")
+    if not registry_already_appended:
+        append_registry_records(repo / registry_path, terminal_additions)
+    if (repo / summary_path).exists():
+        existing_summary = _read_json(repo / summary_path, "phase summary")
+        if existing_summary != summary:
+            raise ValueError("existing phase summary differs from exact recovery")
+    else:
+        _atomic_json(repo / summary_path, summary)
     return summary
 
 
@@ -514,7 +615,7 @@ def build_parser() -> argparse.ArgumentParser:
     _identity_arguments(start)
     start.set_defaults(handler=start_run)
     transition = commands.add_parser("transition-run", allow_abbrev=False)
-    transition.add_argument("--run-dir", required=True)
+    _identity_arguments(transition)
     transition.add_argument("--expected", required=True)
     transition.add_argument("--next", dest="next_state", required=True)
     transition.add_argument("--exit-code", type=int)

@@ -265,6 +265,7 @@ def _manifest(**overrides):
         "test_authorized": False,
         "expected_scalar_outputs": [],
         "array_references": [],
+        "command_sha256": "0" * 64,
     }
     payload.update(overrides)
     return payload
