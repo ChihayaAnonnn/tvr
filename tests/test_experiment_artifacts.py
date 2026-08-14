@@ -367,6 +367,44 @@ def test_manifest_schema_rejects_duplicate_separators_and_nonfinal_test_access()
     assert not validator.is_valid(_manifest(test_authorized=True))
 
 
+def test_portable_artifact_locator_is_optional_normalized_and_schema_valid():
+    legacy = _manifest()
+    legacy_digest = experiment_artifacts.manifest_sha256(legacy)
+    located = legacy | {
+        "artifact_locator": "artifacts/contextual-risk-v2/msrvtt/baseline/example"
+    }
+
+    assert "artifact_locator" not in validate_manifest(legacy)
+    assert experiment_artifacts.manifest_sha256(legacy) == legacy_digest
+    assert validate_manifest(located)["artifact_locator"] == located["artifact_locator"]
+    schema = json.loads(
+        Path("experiments/contextual-risk-v2/schemas/manifest.schema.json").read_text()
+    )
+    assert Draft202012Validator(schema).is_valid(located)
+
+    for invalid in ("/absolute/path", "artifacts/../escape", "artifacts//run", "./artifacts/run"):
+        with pytest.raises(ValueError, match="artifact_locator"):
+            validate_manifest(legacy | {"artifact_locator": invalid})
+
+
+def test_registry_accepts_and_preserves_optional_artifact_locator(tmp_path):
+    manifest = _manifest(
+        artifact_locator="artifacts/contextual-risk-v2/msrvtt/baseline/example"
+    )
+    record = _reservation_record(manifest) | {
+        "artifact_locator": manifest["artifact_locator"]
+    }
+    registry = tmp_path / "registry.jsonl"
+
+    append_registry_records(registry, [record])
+
+    assert load_registry(registry)[0]["artifact_locator"] == manifest["artifact_locator"]
+    schema = json.loads(
+        Path("experiments/contextual-risk-v2/schemas/registry.schema.json").read_text()
+    )
+    assert Draft202012Validator(schema).is_valid(record)
+
+
 def test_registry_is_append_only_and_rejects_duplicate_events(tmp_path):
     registry = tmp_path / "registry.jsonl"
     manifest = _manifest()

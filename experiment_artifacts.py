@@ -72,8 +72,10 @@ _MANIFEST_FIELDS = frozenset(
         "expected_scalar_outputs",
         "array_references",
         "command_sha256",
+        "artifact_locator",
     }
 )
+_MANIFEST_REQUIRED_FIELDS = _MANIFEST_FIELDS - {"artifact_locator"}
 _REGISTRY_FIELDS = frozenset(
     {
         "run_id",
@@ -86,9 +88,12 @@ _REGISTRY_FIELDS = frozenset(
         "test_authorized",
         "summary_metrics",
         "supersedes_sha256",
+        "artifact_locator",
     }
 )
-_REGISTRY_REQUIRED_FIELDS = _REGISTRY_FIELDS - {"supersedes_sha256"}
+_REGISTRY_REQUIRED_FIELDS = _REGISTRY_FIELDS - {
+    "supersedes_sha256", "artifact_locator",
+}
 _REGISTRY_EVENTS = frozenset({"reserved", "completed", "failed", "cancelled", "correction"})
 _TERMINAL_STATES = frozenset({"completed", "failed", "cancelled"})
 _ALLOWED_TRANSITIONS = {
@@ -136,13 +141,17 @@ class RunManifest:
     expected_scalar_outputs: list[object]
     array_references: list[dict[str, object]]
     command_sha256: str
+    artifact_locator: str | None = None
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, object]) -> "RunManifest":
         return cls(**validate_manifest(payload))  # type: ignore[arg-type]
 
     def as_dict(self) -> dict[str, object]:
-        return asdict(self)
+        payload = asdict(self)
+        if payload["artifact_locator"] is None:
+            del payload["artifact_locator"]
+        return payload
 
 
 _MAX_ARTIFACT_JSON_BYTES = 1024 * 1024
@@ -720,13 +729,31 @@ def _validate_hashed_references(value: object, field: str) -> None:
         _require_sha256(item.get("sha256"), f"{field}[{index}].sha256")
 
 
+def _validate_artifact_locator(value: object) -> str:
+    """Validate a portable path relative to the repository common root."""
+
+    if not isinstance(value, str) or not value:
+        raise ValueError("artifact_locator must be a non-empty repository-relative path")
+    path = Path(value)
+    if (
+        path.is_absolute()
+        or value != path.as_posix()
+        or value.startswith("./")
+        or ".." in path.parts
+        or "." in path.parts
+        or any(not part for part in value.split("/"))
+    ):
+        raise ValueError("artifact_locator must be normalized and traversal-free")
+    return value
+
+
 def validate_manifest(payload: Mapping[str, object]) -> dict[str, object]:
     """Validate and copy a complete, serializable archive manifest payload."""
 
     if not isinstance(payload, Mapping):
         raise ValueError("manifest must be an object")
     unknown = set(payload) - _MANIFEST_FIELDS
-    missing = _MANIFEST_FIELDS - set(payload)
+    missing = _MANIFEST_REQUIRED_FIELDS - set(payload)
     if unknown:
         raise ValueError(f"manifest has unknown fields: {sorted(unknown)}")
     if missing:
@@ -754,6 +781,8 @@ def validate_manifest(payload: Mapping[str, object]) -> dict[str, object]:
         _canonical_absolute_path(artifact_path, "artifact_path")
     except ValueError as exc:
         raise ValueError("artifact_path must be absolute and lexically canonical") from exc
+    if "artifact_locator" in normalized:
+        _validate_artifact_locator(normalized["artifact_locator"])
     registry_path = normalized["registry_path"]
     if not isinstance(registry_path, str) or Path(registry_path).is_absolute() or ".." in Path(registry_path).parts:
         raise ValueError("registry_path must be repository-relative and traversal-free")
@@ -830,6 +859,8 @@ def _validate_registry_record(payload: Mapping[str, object]) -> dict[str, object
     artifact_path = record["artifact_path"]
     if not isinstance(artifact_path, str) or not Path(artifact_path).is_absolute():
         raise ValueError("registry.artifact_path must be absolute")
+    if "artifact_locator" in record:
+        _validate_artifact_locator(record["artifact_locator"])
     _require_sha256(record["manifest_sha256"], "registry.manifest_sha256")
     state = record["state"]
     if not isinstance(state, str) or state not in ALLOWED_STATES:

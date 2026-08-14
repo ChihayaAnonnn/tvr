@@ -76,6 +76,13 @@ def _git(repo: Path, *arguments: str) -> str:
     return result.stdout
 
 
+def _git_common_root(repo: Path) -> Path:
+    common_dir = Path(
+        _git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+    )
+    return common_dir.parent.resolve()
+
+
 def _require_clean(repo: Path) -> None:
     for arguments in (("diff", "--quiet"), ("diff", "--cached", "--quiet")):
         result = subprocess.run(["git", *arguments], cwd=repo, check=False)
@@ -126,7 +133,7 @@ def _load_committed_phase(repo: Path, relative: Path) -> dict[str, object]:
 
 def _build_manifest(
     spec: Mapping[str, object], *, study: str, git_sha: str,
-    artifact_root: Path, registry: Path,
+    artifact_root: Path, registry: Path, common_root: Path,
 ) -> dict[str, object]:
     run_id = build_run_id(
         str(spec["dataset"]), str(spec["stage"]), str(spec["variant"]),
@@ -138,8 +145,7 @@ def _build_manifest(
         key: value for key, value in spec.items()
         if key not in {"timestamp_utc", "command"}
     }
-    return validate_manifest(
-        {
+    payload = {
             **generated,
             "run_id": run_id,
             "study": study,
@@ -149,8 +155,12 @@ def _build_manifest(
             "tracked_clean": True,
             "source_patch_sha256": None,
             "command_sha256": hashlib.sha256(command).hexdigest(),
-        }
-    )
+    }
+    try:
+        payload["artifact_locator"] = paths.root.relative_to(common_root).as_posix()
+    except ValueError:
+        pass
+    return validate_manifest(payload)
 
 
 def _render_command(command: Sequence[str], *, run_id: str, run_dir: Path) -> bytes:
@@ -171,7 +181,7 @@ def _registry_record(
     summary_metrics: Mapping[str, object] | None = None,
     selected_validation: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    return {
+    record = {
         "run_id": manifest["run_id"],
         "event": state,
         "artifact_path": manifest["artifact_path"],
@@ -182,6 +192,9 @@ def _registry_record(
         "test_authorized": manifest["test_authorized"],
         "summary_metrics": dict(summary_metrics or {}),
     }
+    if "artifact_locator" in manifest:
+        record["artifact_locator"] = manifest["artifact_locator"]
+    return record
 
 
 def _read_json(path: Path, description: str) -> dict[str, object]:
@@ -323,10 +336,11 @@ def reserve_phase(args: argparse.Namespace) -> dict[str, object]:
         raise ValueError("reservation recovery requires a clean staged index")
     phase = _load_committed_phase(repo, phase_path)
     git_sha = _git(repo, "rev-parse", "HEAD").strip()
+    common_root = _git_common_root(repo)
     manifests = [
         _build_manifest(
             spec, study=str(phase["study"]), git_sha=git_sha,
-            artifact_root=artifact_root, registry=registry,
+            artifact_root=artifact_root, registry=registry, common_root=common_root,
         )
         for spec in phase["runs"]  # type: ignore[union-attr]
     ]

@@ -147,6 +147,21 @@ def test_reserve_phase_builds_runs_without_launching_and_verify_requires_commit(
     assert json.loads(verified.stdout)["state"] == "reserved"
 
 
+def test_reserve_phase_adds_portable_locator_for_repo_canonical_artifacts(campaign_repo):
+    repo, phase, _artifact_root = campaign_repo
+    canonical = repo / "artifacts"
+
+    result = _run(
+        repo, "reserve-phase", "--repo-root", repo, "--phase", phase,
+        "--registry", REGISTRY, "--artifact-root", canonical,
+    )
+
+    run = json.loads(result.stdout)["runs"][0]
+    manifest = json.loads((Path(run["artifact_path"]) / "manifest.json").read_text())
+    assert manifest["artifact_locator"] == Path(run["artifact_path"]).relative_to(repo).as_posix()
+    reservation = json.loads((repo / REGISTRY).read_text().splitlines()[-1])
+    assert reservation["artifact_locator"] == manifest["artifact_locator"]
+
 def test_lifecycle_cli_finalizes_only_terminal_runs_and_verifies_output_hashes(campaign_repo):
     repo, phase, _artifact_root, payload = _reserve(campaign_repo)
     run = payload["runs"][0]

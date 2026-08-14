@@ -5,7 +5,7 @@
   "additionalProperties": false,
   "required": ["run_id", "event", "artifact_path", "manifest_sha256", "state", "parent_run_ids", "selected_validation", "test_authorized", "summary_metrics"],
   "properties": {
-    "run_id": {"type": "string", "minLength": 1}, "event": {"type": "string", "enum": ["reserved", "completed", "failed", "cancelled", "correction"]}, "artifact_path": {"type": "string", "pattern": "^/"}, "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "run_id": {"type": "string", "minLength": 1}, "event": {"type": "string", "enum": ["reserved", "completed", "failed", "cancelled", "correction"]}, "artifact_path": {"type": "string", "pattern": "^/"}, "artifact_locator": {"type": "string", "pattern": "^(?!/)(?!\\./)(?!.*(^|/)\\.\\.(/|$))(?!.*//)[^\\\\]+$"}, "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "state": {"type": "string", "enum": ["reserved", "running", "validating", "completed", "failed", "cancelled"]}, "parent_run_ids": {"type": "array", "items": {"type": "string"}}, "selected_validation": {"type": ["object", "null"]}, "test_authorized": {"type": "boolean"}, "summary_metrics": {"type": "object", "additionalProperties": {"type": "number"}}, "supersedes_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
   }
 }
