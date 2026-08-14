@@ -2,25 +2,24 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 import fcntl
 import hashlib
 import json
 import os
-from os import PathLike
-from pathlib import Path
 import re
 import secrets
 import socket
 import stat
 import subprocess
 import tempfile
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from os import PathLike
+from pathlib import Path
 from typing import Mapping
 
 import numpy as np
 from jsonschema import Draft202012Validator, ValidationError, validators
-
 
 ALLOWED_STAGES: frozenset[str] = frozenset(
     {
@@ -51,6 +50,49 @@ _RUN_ID = re.compile(
     r"(?P<variant>[A-Za-z0-9][A-Za-z0-9._-]*)-"
     r"seed(?P<seed>\d{3})-(?P<timestamp>\d{8}T\d{6}Z)-(?P<git_sha>[0-9a-f]{12})$"
 )
+_LEGACY_QUALIFICATION_METRICS_SHA256 = (
+    "61f65c79af6c88280be5ca9862f2db97d9d3027b7696163fb9b13c14eb4e4831"
+)
+
+
+class StrictJSONError(ValueError):
+    """Raised when Python's permissive JSON extensions would be required."""
+
+
+def _reject_nonstandard_json_constant(value: str) -> None:
+    raise StrictJSONError(f"{value} is not permitted in strict JSON")
+
+
+def strict_json_loads(value: str) -> object:
+    """Decode JSON while rejecting Python's non-standard numeric constants."""
+
+    return json.loads(value, parse_constant=_reject_nonstandard_json_constant)
+
+
+def strict_json_load(handle: object) -> object:
+    """Decode a JSON stream while rejecting non-standard numeric constants."""
+
+    return json.load(handle, parse_constant=_reject_nonstandard_json_constant)
+
+
+def strict_json_dumps(payload: object, **kwargs: object) -> str:
+    """Encode only standards-compliant JSON numbers."""
+
+    kwargs["allow_nan"] = False
+    try:
+        return json.dumps(payload, **kwargs)
+    except ValueError as exc:
+        raise StrictJSONError("payload is not strict JSON") from exc
+
+
+def strict_json_dump(payload: object, handle: object, **kwargs: object) -> None:
+    """Write only standards-compliant JSON numbers."""
+
+    kwargs["allow_nan"] = False
+    try:
+        json.dump(payload, handle, **kwargs)
+    except ValueError as exc:
+        raise StrictJSONError("payload is not strict JSON") from exc
 
 
 def _validate_canonical_content_address(
@@ -75,9 +117,38 @@ def _validate_canonical_content_address(
         )
 
 
+def _nonfinite_json_paths(value: object, path: str = "$"):
+    if isinstance(value, float) and not np.isfinite(value):
+        yield path
+    elif isinstance(value, Mapping):
+        for key, child in value.items():
+            yield from _nonfinite_json_paths(child, f"{path}.{key}")
+    elif isinstance(value, (list, tuple)):
+        for index, child in enumerate(value):
+            yield from _nonfinite_json_paths(child, f"{path}[{index}]")
+
+
+def _validate_finite_json_numbers(
+    validator: object,
+    enabled: object,
+    instance: object,
+    schema: Mapping[str, object],
+):
+    """Reject NaN and infinities anywhere in a project-schema payload."""
+
+    del validator, schema
+    if not enabled:
+        return
+    for path in _nonfinite_json_paths(instance):
+        yield ValidationError(f"non-finite JSON number at {path}")
+
+
 ArtifactSchemaValidator = validators.extend(
     Draft202012Validator,
-    {"x-canonical-content-address": _validate_canonical_content_address},
+    {
+        "x-canonical-content-address": _validate_canonical_content_address,
+        "x-finite-json-numbers": _validate_finite_json_numbers,
+    },
 )
 
 
@@ -87,7 +158,9 @@ def artifact_schema_validator(
     """Build the required validator for archive schemas and custom invariants."""
 
     ArtifactSchemaValidator.check_schema(schema)
-    return ArtifactSchemaValidator(schema)
+    project_schema = dict(schema)
+    project_schema.setdefault("x-finite-json-numbers", True)
+    return ArtifactSchemaValidator(project_schema)
 
 _MANIFEST_FIELDS = frozenset(
     {
@@ -865,6 +938,7 @@ def validate_manifest(payload: Mapping[str, object]) -> dict[str, object]:
     _require_list(normalized["expected_scalar_outputs"], "expected_scalar_outputs")
     _validate_hashed_references(normalized["array_references"], "array_references")
     _require_sha256(normalized["command_sha256"], "command_sha256")
+    validate_artifact_json_payload(normalized, ensure_ascii=True, indent=None)
     return normalized
 
 
@@ -872,7 +946,9 @@ def manifest_sha256(payload: Mapping[str, object]) -> str:
     """Return the stable digest used to bind manifests to registry records."""
 
     normalized = validate_manifest(payload)
-    canonical = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    canonical = strict_json_dumps(
+        normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -970,11 +1046,57 @@ def validate_metrics_document(payload: Mapping[str, object]) -> dict[str, object
     return normalized
 
 
+def validate_selected_metrics_document(
+    raw_document: bytes | str, selected_validation: Mapping[str, object]
+) -> dict[str, object]:
+    """Bind raw metrics to their registry digest, then dispatch their schema."""
+
+    reference = _validate_selected_validation(selected_validation)
+    assert reference is not None
+    if isinstance(raw_document, bytes):
+        raw_bytes = raw_document
+        try:
+            serialized = raw_document.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("selected metrics are not strict UTF-8 JSON") from exc
+    elif isinstance(raw_document, str):
+        serialized = raw_document
+        raw_bytes = raw_document.encode("utf-8")
+    else:
+        raise ValueError("selected metrics must be supplied as raw UTF-8 JSON")
+    payload = strict_json_loads(serialized)
+    actual_digest = hashlib.sha256(raw_bytes).hexdigest()
+    if actual_digest != reference["sha256"]:
+        raise ValueError("selected metrics digest differs from registry reference")
+    if not isinstance(payload, Mapping):
+        raise ValueError("selected metrics must be an object")
+
+    if reference["sha256"] != _LEGACY_QUALIFICATION_METRICS_SHA256:
+        if "world_size" in payload:
+            raise ValueError("world_size is not part of the current metrics schema")
+        return validate_metrics_document(payload)
+
+    allowed = {"split", "summary_metrics", "array_references", "world_size"}
+    if set(payload) != allowed:
+        raise ValueError("legacy qualification metrics fields do not match v0 schema")
+    world_size = payload["world_size"]
+    if isinstance(world_size, bool) or not isinstance(world_size, int) or world_size < 1:
+        raise ValueError("legacy qualification world_size must be a positive integer")
+    normalized = validate_metrics_document(
+        {name: value for name, value in payload.items() if name != "world_size"}
+    )
+    normalized["world_size"] = world_size
+    validate_artifact_json_payload(normalized)
+    return normalized
+
+
 def registry_record_sha256(payload: Mapping[str, object]) -> str:
     """Return the canonical digest used by correction records to name prior lines."""
 
     normalized = _validate_registry_record(payload)
-    canonical = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    canonical = strict_json_dumps(
+        normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -1039,7 +1161,7 @@ def _parse_registry_text(text: str) -> list[dict[str, object]]:
         if not line.strip():
             raise ValueError(f"registry line {number} must not be blank")
         try:
-            payload = json.loads(line)
+            payload = strict_json_loads(line)
         except json.JSONDecodeError as exc:
             raise ValueError(f"registry line {number} is not valid JSON") from exc
         record = _validate_registry_record(payload)
@@ -1140,7 +1262,9 @@ def _atomic_write_bytes(path: Path, payload: bytes) -> None:
 
 
 def _atomic_write_json(path: Path, payload: Mapping[str, object]) -> None:
-    serialized = json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
+    serialized = strict_json_dumps(
+        payload, sort_keys=True, indent=2, ensure_ascii=True
+    ) + "\n"
     _atomic_write_bytes(path, serialized.encode("utf-8"))
 
 
@@ -1167,7 +1291,9 @@ def append_registry_records(
                     raise ValueError(f"duplicate registry (run_id, event): {key}")
                 seen.add(key)
             appended_text = "".join(
-                json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
+                strict_json_dumps(
+                    record, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+                ) + "\n"
                 for record in additions
             )
             separator = "" if not existing_text or existing_text.endswith("\n") else "\n"
@@ -1197,7 +1323,7 @@ def _load_manifest_without_leaf_symlink(path: Path) -> object:
             raise ValueError("run-local manifest must be a regular file")
         with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
             descriptor = -1
-            return json.load(handle)
+            return strict_json_load(handle)
     finally:
         if descriptor >= 0:
             os.close(descriptor)
@@ -1216,7 +1342,7 @@ def _open_private_regular_file(path: Path, flags: int, mode: int = 0o600) -> int
 def _read_private_json(path: Path) -> object:
     descriptor = _open_private_regular_file(path, os.O_RDONLY)
     with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
-        return json.load(handle)
+        return strict_json_load(handle)
 
 
 def _private_file_sha256(path: Path) -> str:
@@ -1372,7 +1498,9 @@ def _append_audit_record(paths: RunPaths, record: Mapping[str, object]) -> None:
     _validate_run_paths(paths, require_root=True)
     audit_path = paths.provenance / "audit.jsonl"
     lock_path = audit_path.with_name(f"{audit_path.name}.lock")
-    encoded = json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
+    encoded = strict_json_dumps(
+        record, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ) + "\n"
     lock_descriptor = _open_private_regular_file(lock_path, os.O_RDWR | os.O_CREAT)
     with os.fdopen(lock_descriptor, "a+", encoding="utf-8") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
@@ -1399,7 +1527,7 @@ def _load_audit_records(paths: RunPaths) -> list[dict[str, object]]:
         lines = handle.read().splitlines()
     for line_number, line in enumerate(lines, start=1):
         try:
-            record = json.loads(line)
+            record = strict_json_loads(line)
         except json.JSONDecodeError as exc:
             raise ValueError(f"audit line {line_number} is not valid JSON") from exc
         if not isinstance(record, dict):
@@ -1444,7 +1572,9 @@ def _transition_id(
         "exit_code": exit_code,
         "output_hashes": dict(output_hashes),
     }
-    encoded = json.dumps(identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    encoded = strict_json_dumps(
+        identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
@@ -1495,7 +1625,7 @@ def reserve_run_directory(
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         try:
             lock_handle.seek(0)
-            reservation_intent = json.dumps(
+            reservation_intent = strict_json_dumps(
                 {"manifest_sha256": digest, "reservation_id": reservation_id},
                 sort_keys=True, separators=(",", ":"), ensure_ascii=True,
             ) + "\n"

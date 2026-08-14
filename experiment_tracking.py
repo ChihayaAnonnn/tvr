@@ -705,9 +705,19 @@ def atomic_write_json(path, payload):
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    encoded = (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode(
-        "utf-8"
-    )
+    try:
+        encoded = (
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                allow_nan=False,
+                sort_keys=True,
+                indent=2,
+            )
+            + "\n"
+        ).encode("utf-8")
+    except ValueError as exc:
+        raise ValueError("tracking payload is not strict JSON") from exc
     fd, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent)
     )

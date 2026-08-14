@@ -15,7 +15,14 @@
 run ID，并通过 manifest 的 `parent_run_ids` 和 `selection_lineage` 保留 predecessor 与审核理由。
 程序化校验这些 schema 必须使用 `experiment_artifacts.artifact_schema_validator`；普通
 `Draft202012Validator` 不执行 `x-canonical-content-address` 跨字段关键字，不能证明数组路径中的
-完整文件名与 `sha256` 相等。
+完整文件名与 `sha256` 相等。该项目 validator 还会递归拒绝 `NaN`、`Infinity` 和
+`-Infinity`；归档 JSON 的读写必须使用 strict helper，禁止 Python JSON 的非标准数值扩展。
+
+早期 qualification successor 的 selected metric 保留了顶层 `world_size`，其不可变 SHA-256
+为 `61f65c79af6c88280be5ca9862f2db97d9d3027b7696163fb9b13c14eb4e4831`。只有该 digest 通过
+`validate_selected_metrics_document` 对原始 UTF-8 bytes 重算并匹配 registry reference 后，才分派到
+`schemas/metrics-legacy-qualification-v0.schema.json`；其他文件以及所有新写入均使用
+`metrics.schema.json`，不得把 `world_size` 当作当前 schema 的静默扩展。
 
 ## 生命周期命令
 

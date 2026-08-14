@@ -1,10 +1,11 @@
+import hashlib
 import json
 import multiprocessing
 import os
-from dataclasses import replace
-from pathlib import Path
 import subprocess
 import sys
+from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -24,7 +25,6 @@ from experiment_artifacts import (
     validate_manifest,
     verify_committed_reservation,
 )
-
 
 REGISTRY = Path("experiments/contextual-risk-v2/registry.jsonl")
 
@@ -375,6 +375,177 @@ def test_schemas_match_canonical_enums():
     assert set(status["properties"]["state"]["enum"]) == ALLOWED_STATES
 
 
+def _schema(name):
+    return json.loads(
+        Path(f"experiments/contextual-risk-v2/schemas/{name}.schema.json").read_text()
+    )
+
+
+def _terminal_registry_record():
+    return _reservation_record(_manifest()) | {
+        "event": "completed",
+        "state": "completed",
+        "selected_validation": {
+            "path": "metrics/selected_validation.json",
+            "sha256": "a" * 64,
+        },
+        "summary_metrics": {"loss": 1.0},
+    }
+
+
+def _completed_status():
+    return {
+        "run_id": _manifest()["run_id"],
+        "state": "completed",
+        "timestamp_utc": "2026-08-15T00:00:00Z",
+        "worker_pid": 1,
+        "host": "fixture",
+        "manifest_sha256": "a" * 64,
+        "exit_code": 0,
+        "output_hashes": {},
+        "transition_id": "b" * 64,
+    }
+
+
+@pytest.mark.parametrize("nonfinite", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("document", ["metrics", "risk", "registry", "status"])
+def test_project_schema_validator_deeply_rejects_nonstandard_json_numbers(
+    document, nonfinite
+):
+    if document == "metrics":
+        schema = _schema("metrics")
+        payload = {
+            "split": "validation",
+            "summary_metrics": {"risk": nonfinite},
+            "array_references": [],
+        }
+    elif document == "risk":
+        schema = _schema("manifest")
+        payload = _manifest()
+        payload["config"]["model"] = {
+            "retrieval_risk": {"temperature": nonfinite}
+        }
+    elif document == "registry":
+        schema = _schema("registry")
+        payload = _terminal_registry_record()
+        payload["summary_metrics"] = {"risk": nonfinite}
+    else:
+        schema = _schema("status")
+        payload = _completed_status()
+        payload["output_hashes"] = {"metrics/selected_validation.json": nonfinite}
+
+    errors = list(artifact_schema_validator(schema).iter_errors(payload))
+    assert errors
+    assert any("non-finite JSON number" in error.message for error in errors)
+
+    with pytest.raises(ValueError):
+        if document == "metrics":
+            experiment_artifacts.validate_metrics_document(payload)
+        elif document == "risk":
+            experiment_artifacts.validate_manifest(payload)
+        elif document == "registry":
+            experiment_artifacts.parse_registry_text(json.dumps(payload) + "\n")
+        else:
+            experiment_artifacts._validate_output_hashes(payload["output_hashes"])
+
+
+def test_project_schema_validator_accepts_nested_finite_numbers():
+    metrics = {
+        "split": "validation",
+        "summary_metrics": {"risk": 0.25},
+        "array_references": [],
+    }
+    manifest = _manifest()
+    manifest["config"]["model"] = {
+        "retrieval_risk": {"temperature": 1.0, "topk": 16}
+    }
+    registry = _terminal_registry_record()
+    status = _completed_status()
+
+    for schema_name, payload in (
+        ("metrics", metrics),
+        ("manifest", manifest),
+        ("registry", registry),
+        ("status", status),
+    ):
+        assert artifact_schema_validator(_schema(schema_name)).is_valid(payload)
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_registry_parser_rejects_nonstandard_json_constants_at_parse_boundary(constant):
+    serialized = json.dumps(_terminal_registry_record()).replace("1.0", constant)
+    with pytest.raises(ValueError, match="strict JSON"):
+        experiment_artifacts.parse_registry_text(serialized + "\n")
+
+
+def test_atomic_archive_writer_refuses_nonstandard_json_number(tmp_path):
+    target = tmp_path / "status.json"
+    with pytest.raises(ValueError, match="strict JSON"):
+        experiment_artifacts._atomic_write_json(
+            target, {"nested": {"risk": float("nan")}}
+        )
+    assert not target.exists()
+
+
+def test_historical_qualification_metric_uses_explicit_digest_dispatch():
+    legacy_digest = "61f65c79af6c88280be5ca9862f2db97d9d3027b7696163fb9b13c14eb4e4831"
+    legacy = {
+        "array_references": [{
+            "byte_size": 2097152,
+            "dtype": "float32",
+            "format": "npy",
+            "key": "four_rank_fixture_values",
+            "path": "arrays/sha256/90/" + "908251af60385de2b211f1fd4281d4e69cc3ece66815e1ccd2e019d24cace430.npy",
+            "sha256": "908251af60385de2b211f1fd4281d4e69cc3ece66815e1ccd2e019d24cace430",
+            "shape": [524288],
+        }],
+        "split": "validation",
+        "summary_metrics": {"fixture_loss": 4.1768999099731445},
+        "world_size": 4,
+    }
+    dispatch = getattr(
+        experiment_artifacts, "validate_selected_metrics_document", None
+    )
+    assert dispatch is not None
+    raw = (json.dumps(legacy, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    assert hashlib.sha256(raw).hexdigest() == legacy_digest
+    assert dispatch(
+        raw,
+        {"path": "metrics/selected_validation.json", "sha256": legacy_digest},
+    ) == legacy
+    assert artifact_schema_validator(
+        _schema("metrics-legacy-qualification-v0")
+    ).is_valid(legacy)
+
+    mutated = (json.dumps(legacy | {"world_size": 999}, sort_keys=True, indent=2) + "\n").encode(
+        "utf-8"
+    )
+    with pytest.raises(ValueError, match="digest"):
+        dispatch(
+            mutated,
+            {"path": "metrics/selected_validation.json", "sha256": legacy_digest},
+        )
+    with pytest.raises(ValueError, match="digest"):
+        dispatch(
+            raw,
+            {"path": "metrics/selected_validation.json", "sha256": "f" * 64},
+        )
+    unknown = (json.dumps(legacy | {"undeclared": True}, sort_keys=True) + "\n").encode()
+    with pytest.raises(ValueError, match="current metrics schema"):
+        dispatch(
+            unknown,
+            {
+                "path": "metrics/selected_validation.json",
+                "sha256": hashlib.sha256(unknown).hexdigest(),
+            },
+        )
+    with pytest.raises(ValueError, match="strict JSON"):
+        dispatch(
+            b'{"split":"validation","summary_metrics":{"risk":NaN}}',
+            {"path": "metrics/selected_validation.json", "sha256": legacy_digest},
+        )
+
+
 def test_metrics_schema_and_python_validator_accept_production_archive_payload():
     payload = {
         "split": "validation",
@@ -547,7 +718,7 @@ def test_registry_schema_and_python_validator_have_strict_selected_metric_contra
         record | {"selected_validation": terminal["selected_validation"]},
         record | {"summary_metrics": {"premature": 1.0}},
     ):
-        assert not validator.is_valid(invalid) or invalid["summary_metrics"] == {"loss": float("inf")}
+        assert not validator.is_valid(invalid)
         with pytest.raises(ValueError):
             experiment_artifacts.parse_registry_text(json.dumps(invalid) + "\n")
 

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:uatvr:contextual-risk-v2:metrics:legacy-qualification-v0",
+  "title": "Legacy archive qualification metrics v0",
+  "$comment": "Digest-dispatched only for 61f65c79af6c88280be5ca9862f2db97d9d3027b7696163fb9b13c14eb4e4831; new metrics must use metrics.schema.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["split", "summary_metrics", "array_references", "world_size"],
+  "properties": {
+    "split": {"const": "validation"},
+    "summary_metrics": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+      "additionalProperties": {"type": "number"}
+    },
+    "array_references": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/arrayReference"}
+    },
+    "world_size": {"type": "integer", "minimum": 1}
+  },
+  "$defs": {
+    "arrayReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "key", "shape", "dtype", "byte_size", "format", "sha256"],
+      "x-canonical-content-address": true,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^arrays/sha256/([0-9a-f]{2})/\\1[0-9a-f]{62}\\.npy$"
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "shape": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 0}
+        },
+        "dtype": {
+          "type": "string",
+          "pattern": "^(?:bool|u?int(?:8|16|32|64)|float(?:16|32|64)|complex(?:64|128))$"
+        },
+        "byte_size": {"type": "integer", "minimum": 0},
+        "format": {"const": "npy"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

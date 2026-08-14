@@ -4,6 +4,11 @@ protocol_version: 1
 control_plane: experiments/contextual-risk-v2
 data_plane: artifacts/contextual-risk-v2
 registry: experiments/contextual-risk-v2/registry.jsonl
+legacy_metrics_contracts:
+  61f65c79af6c88280be5ca9862f2db97d9d3027b7696163fb9b13c14eb4e4831:
+    schema: schemas/metrics-legacy-qualification-v0.schema.json
+    version: archive-qualification-v0
+    new_writes: forbidden
 
 stages:
   - baseline

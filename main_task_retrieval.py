@@ -34,9 +34,13 @@ from dataloaders.msrvtt_protocol import (
 from experiment_artifacts import (
     ArtifactArrayStore,
     RunPaths,
+    StrictJSONError,
     load_validated_run_lifecycle,
     make_run_paths,
     manifest_sha256,
+    strict_json_dump,
+    strict_json_dumps,
+    strict_json_loads,
     transition_run_status,
     validate_artifact_json_payload,
     validate_manifest,
@@ -460,7 +464,7 @@ def _start_artifact_run(context):
 def _complete_artifact_run(context):
     if context is None:
         return
-    status = json.loads(context.paths.status.read_text(encoding="utf-8"))
+    status = strict_json_loads(context.paths.status.read_text(encoding="utf-8"))
     state = status.get("state")
     if state == "running":
         transition_run_status(context.paths, "running", "validating")
@@ -493,7 +497,7 @@ def _publish_artifact_eval_metrics(args, payload):
     if path.exists():
         raise FileExistsError(f"artifact metric already exists: {path}")
     encoded = (
-        json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+        strict_json_dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
     ).encode("utf-8")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags, 0o600)
@@ -2325,7 +2329,7 @@ def _publish_experiment_manifest(
                 "A3 continuation requires the original experiment manifest"
             )
         validate_contextual_risk_resume_manifest(
-            json.loads(manifest_path.read_text()), tracking_payload
+            strict_json_loads(manifest_path.read_text()), tracking_payload
         )
     if is_global_rank_zero(args):
         if a3_only and not resume_a3 and manifest_path.exists():
@@ -2361,7 +2365,7 @@ def _write_training_args_json(args, path):
             payload[key] = os.fspath(value)
         elif isinstance(value, (list, tuple)):
             try:
-                json.dumps(list(value))
+                strict_json_dumps(list(value))
                 payload[key] = list(value)
             except TypeError:
                 payload[key] = repr(value)
@@ -2607,8 +2611,8 @@ def _validate_checkpoint_publication(
             f"A3 checkpoint publication marker is missing: {marker_file}"
         )
     try:
-        marker = json.loads(marker_file.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
+        marker = strict_json_loads(marker_file.read_text())
+    except (OSError, json.JSONDecodeError, StrictJSONError) as exc:
         raise ValueError("A3 checkpoint publication marker is unreadable") from exc
     expected_model = Path(model_path).resolve()
     expected_optimizer = Path(optimizer_path).resolve()
@@ -5436,7 +5440,7 @@ def _initialize_contextual_risk_protocol(
         )
 
     if continuing:
-        registration = json.loads(baseline_path.read_text())
+        registration = strict_json_loads(baseline_path.read_text())
         reference_checkpoint = str(
             Path(registration["reference_checkpoint"]).resolve()
         )
@@ -5489,8 +5493,8 @@ def _initialize_contextual_risk_protocol(
                 raise ValueError(
                     f"A3 baseline {digest_name} differs from complete evidence"
                 )
-        candidates = json.loads(candidate_path.read_text())
-        selection = json.loads(selection_path.read_text())
+        candidates = strict_json_loads(candidate_path.read_text())
+        selection = strict_json_loads(selection_path.read_text())
         if selection.get("candidates") != candidates:
             raise ValueError("A3 candidate and selection artifacts disagree")
         validate_candidate_artifacts(
@@ -5742,7 +5746,7 @@ def _maybe_run_contextual_risk_final_test(
     claim_path = _run_metadata_dir(args) / "a3_final_test_claim.json"
     final_path = _run_metadata_dir(args) / "final_test.json"
     if claim_path.exists():
-        existing_claim = json.loads(claim_path.read_text())
+        existing_claim = strict_json_loads(claim_path.read_text())
         status = existing_claim.get("status")
         if status == "completed":
             recorded_result = Path(existing_claim.get("result_path", "")).resolve()
@@ -5781,7 +5785,9 @@ def _maybe_run_contextual_risk_final_test(
             "A3 JSFUSION final test has already been claimed for this lineage"
         ) from exc
     with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        json.dump(claim, handle, ensure_ascii=False, sort_keys=True, indent=2)
+        strict_json_dump(
+            claim, handle, ensure_ascii=False, sort_keys=True, indent=2
+        )
         handle.write("\n")
         handle.flush()
         os.fsync(handle.fileno())
@@ -5918,7 +5924,7 @@ def _initialize_csd_logvar_protocol(
         )
 
     if continuing:
-        paired_registration = json.loads(baseline_path.read_text())
+        paired_registration = strict_json_loads(baseline_path.read_text())
         paired_baseline = paired_registration["paired_digest"]
         reference_checkpoint = paired_registration["reference_checkpoint"]
         registered_reference_sha256 = paired_registration.get(
@@ -5966,7 +5972,7 @@ def _initialize_csd_logvar_protocol(
     if continuing:
         if resume_payload is None:
             raise ValueError("A2 continuation requires an optimizer payload")
-        candidates = json.loads(selection_path.read_text())["candidates"]
+        candidates = strict_json_loads(selection_path.read_text())["candidates"]
         validate_csd_logvar_candidate_artifacts(
             candidates,
             output_dir=args.output_dir,
@@ -6320,7 +6326,7 @@ def _run_main(args):
         crf_dev_video_ids: list[str] = []
         if bool(getattr(args, "aleatoric_crf_training", False)):
             _crf_split_path = Path("dataloaders/splits/crf_dev_audit_seed0.json")
-            crf_dev_video_ids = json.loads(_crf_split_path.read_text())[
+            crf_dev_video_ids = strict_json_loads(_crf_split_path.read_text())[
                 "crf_dev_video_ids"
             ]
         ## ##############################################################
@@ -6552,7 +6558,7 @@ def _run_main(args):
                             raise
                         winner = None
                         contextual_terminal_error = str(exc)
-                    contextual_protocol["candidates"] = json.loads(
+                    contextual_protocol["candidates"] = strict_json_loads(
                         contextual_protocol["candidate_path"].read_text()
                     )
                     if winner is None:
@@ -6621,16 +6627,16 @@ def _run_main(args):
                     csd_protocol["candidates"],
                     output_dir=args.output_dir,
                 )
-                selection_payload = json.loads(
+                selection_payload = strict_json_loads(
                     csd_protocol["selection_path"].read_text()
                 )
                 if selection_payload["winner"] != winner:
                     raise RuntimeError("persisted A2 winner does not match candidates")
             elif a3_only:
-                candidates = json.loads(
+                candidates = strict_json_loads(
                     contextual_protocol["candidate_path"].read_text()
                 )
-                selection_payload = json.loads(
+                selection_payload = strict_json_loads(
                     contextual_protocol["selection_path"].read_text()
                 )
                 if selection_payload["candidates"] != candidates:

@@ -12,9 +12,17 @@ from crf_ladder import TRAIN_CRFS, X264_RECIPE
 from experiment_tracking import (
     CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT,
     CONTEXTUAL_RISK_CANONICAL_A1_SHA256,
+    atomic_write_json,
     build_experiment_manifest,
     validate_contextual_risk_resume_manifest,
 )
+
+
+def test_tracking_atomic_writer_rejects_nested_nonstandard_json_number(tmp_path):
+    target = tmp_path / "manifest.json"
+    with pytest.raises(ValueError, match="strict JSON"):
+        atomic_write_json(target, {"config": {"risk": float("inf")}})
+    assert not target.exists()
 
 
 def _crf_args_namespace(**overrides):

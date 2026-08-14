@@ -27,6 +27,13 @@ terminal 后才批量追加终态记录和阶段摘要。每个 launch 均绑定
 
 数值载荷超过 1 MiB 时使用内容寻址的 NPY/NPZ 文件保存于 `arrays/`，JSON 只保留引用（相对
 路径、shape、dtype、字节数和 SHA-256）。候选、winner 与 final JSON 不得重复嵌入数组。
+归档 JSON 必须由 strict loader/writer 处理，递归拒绝 `NaN`、`Infinity`、`-Infinity`；schema
+校验必须使用 `artifact_schema_validator`。早期 qualification successor 的 selected metric
+由 registry 中固定的 digest
+`61f65c79af6c88280be5ca9862f2db97d9d3027b7696163fb9b13c14eb4e4831` 唯一分派至
+`metrics-legacy-qualification-v0.schema.json`；分派前必须对原始 UTF-8 bytes 重算并匹配该
+registry digest，只读兼容其 `world_size` 字段。新文件不得使用该
+legacy contract，也不得在当前 metrics schema 中静默增加字段。
 
 发生故障时保留 `logs/`、`status.json`、`command.sh`、provenance/audit 与输出哈希。先执行
 `verify-run` 并检查源码、预留、manifest 和 audit 是否一致。恢复只适用于未终态且只有一个

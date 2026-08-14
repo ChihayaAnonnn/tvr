@@ -26,6 +26,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from experiment_artifacts import (
     RunPaths,
+    StrictJSONError,
     append_registry_records,
     build_run_id,
     hash_run_outputs,
@@ -37,6 +38,10 @@ from experiment_artifacts import (
     pending_audit_transition,
     reservation_record,
     reserve_run_directory,
+    strict_json_dump,
+    strict_json_dumps,
+    strict_json_load,
+    strict_json_loads,
     transition_run_status,
     validate_artifact_json_payload,
     validate_manifest,
@@ -169,8 +174,8 @@ def _load_committed_phase(repo: Path, relative: Path) -> dict[str, object]:
     if disk_text != committed:
         raise ValueError("phase JSON must exactly match its committed HEAD version")
     try:
-        payload = json.loads(committed)
-    except json.JSONDecodeError as exc:
+        payload = strict_json_loads(committed)
+    except (json.JSONDecodeError, StrictJSONError) as exc:
         raise ValueError("phase JSON is invalid") from exc
     if not isinstance(payload, dict) or set(payload) != {"phase", "study", "runs"}:
         raise ValueError("phase JSON must contain exactly phase, study, and runs")
@@ -288,8 +293,8 @@ def _read_json(path: Path, description: str) -> dict[str, object]:
             os.close(descriptor)
             raise ValueError(f"{description} must be a private regular file")
         with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
+            payload = strict_json_load(handle)
+    except (OSError, json.JSONDecodeError, StrictJSONError) as exc:
         raise ValueError(f"{description} is unavailable or invalid") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"{description} must be an object")
@@ -388,7 +393,7 @@ def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
     descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, sort_keys=True, indent=2)
+            strict_json_dump(payload, handle, sort_keys=True, indent=2)
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
@@ -712,8 +717,8 @@ def finalize_phase(args: argparse.Namespace) -> dict[str, object]:
         committed_summary = None
     else:
         try:
-            committed_summary = json.loads(committed_summary_text)
-        except json.JSONDecodeError as exc:
+            committed_summary = strict_json_loads(committed_summary_text)
+        except (json.JSONDecodeError, StrictJSONError) as exc:
             raise ValueError("committed phase summary is invalid") from exc
     all_terminal_committed = (
         len(committed_terminal_records) == len(terminal_records)
@@ -801,7 +806,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (OSError, ValueError, FileExistsError, subprocess.CalledProcessError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps(result, sort_keys=True))
+    print(strict_json_dumps(result, sort_keys=True))
     return 0
 
 

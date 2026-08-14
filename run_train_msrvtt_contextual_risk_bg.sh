@@ -149,32 +149,34 @@ PY
             --run-id "${ARTIFACT_RUN_ID}" \
             --manifest-sha256 "$(
                 /home/xujie/.conda/envs/tvr/bin/python - "${EXPECTED_RUN_DIR}/manifest.json" <<'PY'
-import json, sys
-from experiment_artifacts import manifest_sha256
+import sys
+from experiment_artifacts import manifest_sha256, strict_json_load
 with open(sys.argv[1], encoding="utf-8") as handle:
-    print(manifest_sha256(json.load(handle)))
+    print(manifest_sha256(strict_json_load(handle)))
 PY
             )"
     )" || exit 2
     mapfile -t ARTIFACT_IDENTITY < <(
         /home/xujie/.conda/envs/tvr/bin/python - "${VERIFY_JSON}" <<'PY'
-import json, sys
-payload = json.loads(sys.argv[1])
+import sys
+from experiment_artifacts import strict_json_dumps, strict_json_loads
+payload = strict_json_loads(sys.argv[1])
 print(payload["run_dir"])
 print(payload["manifest_sha256"])
 print(payload["state"])
 print("1" if payload["test_authorized"] else "0")
 print(payload["stage"])
-print(json.dumps(payload["command_argv"], separators=(",", ":")))
-print(json.dumps(payload["registered_a3_variant_argv"], separators=(",", ":")))
+print(strict_json_dumps(payload["command_argv"], separators=(",", ":")))
+print(strict_json_dumps(payload["registered_a3_variant_argv"], separators=(",", ":")))
 PY
     )
     ARTIFACT_RUN_DIR="${ARTIFACT_IDENTITY[0]}"
     ARTIFACT_MANIFEST_SHA256="${ARTIFACT_IDENTITY[1]}"
     QUALIFICATION_SCENARIO="$(${TVR_PYTHON:-/home/xujie/.conda/envs/tvr/bin/python} - "${ARTIFACT_RUN_DIR}/manifest.json" <<'PY'
-import json, sys
+import sys
+from experiment_artifacts import strict_json_load
 with open(sys.argv[1], encoding="utf-8") as handle:
-    manifest = json.load(handle)
+    manifest = strict_json_load(handle)
 print(manifest["config"]["evaluation"].get("archive_qualification_scenario", ""))
 PY
     )" || exit 2
@@ -183,16 +185,18 @@ PY
     fi
     mapfile -t REGISTERED_VARIANT_ARGS < <(
         /home/xujie/.conda/envs/tvr/bin/python - "${ARTIFACT_IDENTITY[6]}" <<'PY'
-import json, sys
-values = json.loads(sys.argv[1])
+import sys
+from experiment_artifacts import strict_json_loads
+values = strict_json_loads(sys.argv[1])
 if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
     raise SystemExit("registered A3 variant argv must be a string list")
 print("\n".join(values))
 PY
     ) || exit 2
     if ! /home/xujie/.conda/envs/tvr/bin/python - "${ARTIFACT_IDENTITY[5]}" "${ARTIFACT_RUN_ID}" <<'PY'
-import json, sys
-actual = json.loads(sys.argv[1])
+import sys
+from experiment_artifacts import strict_json_loads
+actual = strict_json_loads(sys.argv[1])
 expected = [
     "env", f"ARTIFACT_RUN_ID={sys.argv[2]}", "bash",
     "run_train_msrvtt_contextual_risk_bg.sh",
@@ -310,8 +314,9 @@ publish_artifact_terminal() {
         )" || return 2
         source_state="$(
             /home/xujie/.conda/envs/tvr/bin/python - "${verify_json}" <<'PY'
-import json, sys
-print(json.loads(sys.argv[1])["state"])
+import sys
+from experiment_artifacts import strict_json_loads
+print(strict_json_loads(sys.argv[1])["state"])
 PY
         )" || return 2
     fi
