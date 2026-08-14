@@ -41,7 +41,14 @@ experiments/
 
 Tracked files contain configuration, small scalar metrics, hashes, state, and paper summaries. They must not contain model tensors, optimizer states, per-query arrays, raw similarity matrices, or full environment dumps with secrets.
 
-`registry.jsonl` is append-only. Corrections are new records referencing the superseded record; existing lines are never edited or removed.
+`registry.jsonl` is append-only. Corrections are new records referencing the superseded record; existing lines are never edited or removed. Registry publication is phase-batched so scientific workers never mutate tracked files while running:
+
+1. append every phase run's `reserved` record and commit the registry before launch;
+2. launch only from that clean committed source state;
+3. write live lifecycle changes only to the ignored run-local `status.json` and administrative audit log;
+4. after every worker in the phase is terminal, append terminal registry records and commit them together with the phase summary.
+
+The committed `reserved` record is the launch authorization. A worker must reject a run whose reservation is absent, uncommitted, or differs from its manifest.
 
 ### 3.2 Ignored artifact data plane
 
@@ -101,7 +108,7 @@ reserved -> running -> validating -> completed
 reserved/running -------------> cancelled
 ```
 
-Transitions use atomic write-and-rename. A launcher must refuse an existing run ID or terminal run directory. Every status record includes timestamp, worker PID, host, exit code when terminal, and SHA-256 of the manifest.
+Transitions use atomic write-and-rename. A launcher must refuse an existing run ID or terminal run directory. Every status record includes timestamp, worker PID, host, exit code when terminal, and SHA-256 of the manifest. Runtime transitions do not write tracked files.
 
 ## 5. Manifest and registry contract
 
