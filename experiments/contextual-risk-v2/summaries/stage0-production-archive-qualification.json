@@ -1,0 +1,73 @@
+{
+  "phase": "stage0-production-archive-qualification",
+  "phase_path": "experiments/contextual-risk-v2/phases/stage0-production-archive-qualification.json",
+  "runs": [
+    {
+      "manifest_sha256": "d9151491979e19f4e5d6ef7805a75e12bbe7eeff335f74f2dbcfb7216a3bd933",
+      "output_hashes": {
+        "arrays/sha256/90/908251af60385de2b211f1fd4281d4e69cc3ece66815e1ccd2e019d24cace430.npy": "647092735d0f83096419a07a203198e8caba708bd1effbd1b0ff903c75fb910a",
+        "command.sh": "42f47e9805824b82feff08f28c2e9999cd65214221e2459aa18c32441f1c8e22",
+        "logs/train.log": "ba5dde3cf33b1326dab7aa0d88032ff3cad178a01b07ddeb09396ec0e1e54316",
+        "metrics/selected_validation.json": "e22da43db31aaa6bad4983d0b68faf70823e9d6baf18d298ff80325236a31ac4",
+        "provenance/qualification-rank-0.json": "2b10efebff3073c7da1ebef82c251f03b9b2c253e6cceba21394b9dc4d12eeb2",
+        "provenance/qualification-rank-1.json": "70a6b4f71765d826491b26bca34b40ca6314b1e47ec1a5c046c9dea249bc3045",
+        "provenance/qualification-rank-2.json": "9b412a4f994ef573ec0a8f1ee5a30e3a008a479c78e2bbe47615616c40e1ab0c",
+        "provenance/qualification-rank-3.json": "0e3df36c63620e0c08b739b6a9acf4d2922dd35154763d1b56e0c112786cf4d7"
+      },
+      "run_id": "msrvtt-baseline-archive_prod_success-seed000-20260815T070000Z-5d9f2ba35ffa",
+      "state": "completed",
+      "summary_metrics": {
+        "qualification_loss": 7.5
+      }
+    },
+    {
+      "manifest_sha256": "6e91a3f7a0530ae3ddab442b88e348e46d9219744e6a7f86b42f9a81e4d605fd",
+      "output_hashes": {
+        "command.sh": "ac9648d239b3c2f2157546583a269a0e52589dc8219b1cb177f2b0d819542033",
+        "logs/train.log": "128e4666af42be2f441864ea552beab2240abd515c07b33c098f199622260aa7",
+        "provenance/qualification-rank-0.json": "75dfab66b7d12d388b9b4bfcfae078c54f3bbf73745e65509fc6ac1b17168213",
+        "provenance/qualification-rank-1.json": "a1c56178ab274e5a8190a7d84b978e0ec98f6d639e933dbb6488a65624ca37c3",
+        "provenance/qualification-rank-2.json": "18226b382cd11ed2ae0e39ff55b7a8868cc270ffca2d6f12003b239024c90a36",
+        "provenance/qualification-rank-3.json": "d613ff6a4cadee1b1e650a02eba7d11d0f85ef1d414c3c729df126f8a79ef4af"
+      },
+      "run_id": "msrvtt-baseline-archive_prod_nonowner_fail-seed000-20260815T070100Z-5d9f2ba35ffa",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "91be56d1394b2dbfe15ce85d3343dfff956050fd0e64201804e5d6bb56a8bc0c",
+      "output_hashes": {
+        "command.sh": "b4b8d5d3befc9933384414f37ed8ac5cdf8616cf2e6c82e6b3283203ce7ac270",
+        "logs/train.log": "14cba25baa159f77c0363049e6d8d59bb42dfe0e5f53da2e3784ec883017224b",
+        "provenance/qualification-rank-0.json": "e3eab6b05d907dd173a0153fb22d6d360b1c7e1c8fd8977245bd678be9b867ce",
+        "provenance/qualification-rank-1.json": "caa8f4e0648468e4b3c4cc339f2a00cfd1ca86cb0385870be94bfc49251de275",
+        "provenance/qualification-rank-2.json": "84d7173d46ca6bddf447fd0345a81e769331fa1d51f7be9401c4900e4bd53344",
+        "provenance/qualification-rank-3.json": "85eb4a6c59becf0c95f03ca7b4ec8cdde3b82d6f5602291c66475994a0c2fa53",
+        "provenance/worker_failure.json": "11099da500beffe9a62fbfffb74353a688cd1e1f6ec02b5e74b32e8bc6b75ced"
+      },
+      "run_id": "msrvtt-baseline-archive_prod_owner_collective_fail-seed000-20260815T070200Z-5d9f2ba35ffa",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "b050fa1d6caf4443600bda3cd46c23515bdb95732e392372b90634fd0b9cf6f1",
+      "output_hashes": {
+        "command.sh": "e628bf7e9a5b3866320f8fcb56542dfdd09a0c3b4b18c61074619b0844cf4267",
+        "logs/train.log": "5162428f087753ad67760a94305648f39af519d1344c2aacd04eaf9e81ba0ca2",
+        "logs/train.log.process-group-drain.txt": "39d46543be9ebc65b1d535d65f44195f717848e176170685dff1c92c7b882213",
+        "provenance/qualification-rank-0.json": "8796686fec0c9630f7cce80b1f038c54364123281aa1bfb6f50edb19551a9a43",
+        "provenance/qualification-rank-1.json": "5aea6150a82c96796bb1fa8a2add248707807313a9422c61ca65a3bc2d72ac84",
+        "provenance/qualification-rank-2.json": "f383746eccc21e0578154fb1f5db1beaf003888bfcf6e3b7ac6d2abc37bc98d7",
+        "provenance/qualification-rank-3.json": "183ac200dad4ab458b4c23eee5dba7cb49aa2fa7be3b902ea4f9cf7fd2feaa60"
+      },
+      "run_id": "msrvtt-baseline-archive_prod_sigterm_mismatch-seed000-20260815T070300Z-5d9f2ba35ffa",
+      "state": "cancelled",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "contextual-risk-v2",
+  "terminal_counts": {
+    "cancelled": 3,
+    "completed": 1
+  }
+}
