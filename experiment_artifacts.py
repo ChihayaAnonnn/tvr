@@ -210,9 +210,7 @@ def build_run_id(
 def make_run_paths(artifact_root: PathLike[str] | str, study: str, run_id: str) -> RunPaths:
     """Return the canonical, not-yet-created paths for a run directory."""
 
-    root = Path(artifact_root)
-    if not root.is_absolute():
-        raise ValueError("artifact_root must be absolute")
+    root = _canonical_absolute_path(artifact_root, "artifact_root")
     study = _require_safe_name(study, "study")
     match = _RUN_ID.fullmatch(run_id) if isinstance(run_id, str) else None
     if match is None or "--" in run_id:
@@ -236,11 +234,22 @@ def _unsafe_run_path(message: str) -> ValueError:
     return ValueError(f"unsafe run path: {message}")
 
 
+def _canonical_absolute_path(value: PathLike[str] | str, field: str) -> Path:
+    raw = os.fspath(value)
+    if not isinstance(raw, str) or not os.path.isabs(raw):
+        raise ValueError(f"{field} must be absolute")
+    if raw != os.path.normpath(raw):
+        raise ValueError(f"{field} must use canonical lexical path spelling")
+    return Path(raw)
+
+
 def _assert_no_symlink_components(path: Path) -> None:
-    if not path.is_absolute():
-        raise _unsafe_run_path("path must be absolute")
-    current = Path(path.anchor)
-    for component in path.parts[1:]:
+    try:
+        canonical_path = _canonical_absolute_path(path, "run path")
+    except ValueError as exc:
+        raise _unsafe_run_path("path must use canonical lexical spelling") from exc
+    current = Path(canonical_path.anchor)
+    for component in canonical_path.parts[1:]:
         current /= component
         try:
             info = current.lstat()
@@ -255,6 +264,10 @@ def _validate_run_paths(paths: RunPaths, *, require_root: bool = False) -> None:
 
     if not paths.root.is_absolute():
         raise _unsafe_run_path("run root must be absolute")
+    try:
+        _canonical_absolute_path(paths.root, "run root")
+    except ValueError as exc:
+        raise _unsafe_run_path("run root must use canonical lexical spelling") from exc
     for field, relative_path in _RUN_PATH_RELATIVE_NAMES.items():
         if getattr(paths, field) != paths.root / relative_path:
             raise _unsafe_run_path(f"non-canonical {field} member")
@@ -342,8 +355,10 @@ def validate_manifest(payload: Mapping[str, object]) -> dict[str, object]:
         raise ValueError("run_id must agree with dataset, stage, variant, and seed")
     _validate_utc_timestamp(match.group("timestamp"))
     artifact_path = normalized["artifact_path"]
-    if not isinstance(artifact_path, str) or not Path(artifact_path).is_absolute():
-        raise ValueError("artifact_path must be absolute")
+    try:
+        _canonical_absolute_path(artifact_path, "artifact_path")
+    except ValueError as exc:
+        raise ValueError("artifact_path must be absolute and lexically canonical") from exc
     registry_path = normalized["registry_path"]
     if not isinstance(registry_path, str) or Path(registry_path).is_absolute() or ".." in Path(registry_path).parts:
         raise ValueError("registry_path must be repository-relative and traversal-free")

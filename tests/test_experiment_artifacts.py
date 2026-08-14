@@ -11,6 +11,7 @@ import experiment_artifacts
 from experiment_artifacts import (
     ALLOWED_STAGES,
     ALLOWED_STATES,
+    RunPaths,
     append_registry_records,
     build_run_id,
     load_registry,
@@ -48,6 +49,21 @@ def _reservation_record(manifest):
 
 def _append_worker(registry_path, record):
     append_registry_records(Path(registry_path), [record])
+
+
+def _paths_for_root(root):
+    return RunPaths(
+        root=root,
+        manifest=root / "manifest.json",
+        status=root / "status.json",
+        command=root / "command.sh",
+        logs=root / "logs",
+        checkpoints=root / "checkpoints",
+        metrics=root / "metrics",
+        arrays=root / "arrays",
+        plots=root / "plots",
+        provenance=root / "provenance",
+    )
 
 
 def _manifest(**overrides):
@@ -584,3 +600,31 @@ def test_lifecycle_rejects_hardlinked_status_file(tmp_path):
     with pytest.raises(ValueError, match="safe run path"):
         transition_run_status(paths, "reserved", "running")
     assert json.loads(outside.read_text(encoding="utf-8"))["state"] == "reserved"
+
+
+def test_reservation_rejects_noncanonical_run_root_before_side_effects(tmp_path):
+    base = tmp_path / "base"
+    base.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    redirect = base / "redirect"
+    os.symlink(outside, redirect, target_is_directory=True)
+    run_id = _manifest()["run_id"]
+    unsafe_root = Path(f"{base}/missing/../redirect") / "contextual-risk-v2" / "msrvtt" / "baseline" / run_id
+    paths = _paths_for_root(unsafe_root)
+    manifest = _manifest(artifact_path=str(outside / "contextual-risk-v2" / "msrvtt" / "baseline" / run_id))
+
+    with pytest.raises(ValueError, match="safe run path"):
+        reserve_run_directory(paths, manifest)
+
+    assert not (base / "missing").exists()
+    assert list(outside.iterdir()) == []
+
+
+def test_make_run_paths_rejects_relative_and_noncanonical_artifact_roots(tmp_path):
+    with pytest.raises(ValueError, match="absolute"):
+        make_run_paths("relative/artifacts", "contextual-risk-v2", _manifest()["run_id"])
+    with pytest.raises(ValueError, match="canonical"):
+        make_run_paths(tmp_path / "one" / ".." / "two", "contextual-risk-v2", _manifest()["run_id"])
+    with pytest.raises(ValueError, match="canonical"):
+        make_run_paths(f"{tmp_path}/./two", "contextual-risk-v2", _manifest()["run_id"])
