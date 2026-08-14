@@ -4355,6 +4355,47 @@ def _recompute_contextual_risk_metrics(
     if raw_wti.shape != positive_mask.shape:
         raise ValueError("A3 raw WTI and positive-mask shapes differ")
 
+    # A3 contextual risk is defined on raw WTI.  A1 retrieval risk instead
+    # follows the directional scores actually evaluated by retrieval, which can
+    # differ after DSL.  Verify those scores against the raw WTI/configuration
+    # before using them to re-audit the A1 rank/bootstrap evidence.
+    retrieval_config = evidence["retrieval_config"]
+    if (
+        expected_retrieval_config is not None
+        and retrieval_config != expected_retrieval_config
+    ):
+        raise ValueError("A3 retrieval configuration mismatch")
+    retrieval_directions = tuple(retrieval_config["directions"])
+    if retrieval_directions != ("t2v", "v2t"):
+        raise ValueError("A3 retrieval evidence must contain both directions")
+    if retrieval_config.get("score_path") != "post_dsl_directional_scores":
+        raise ValueError("A3 retrieval evidence score path mismatch")
+    retrieval_t2v = _contextual_evidence_array(
+        evidence, "retrieval_scores", "t2v", artifact_run_dir=artifact_run_dir
+    )
+    retrieval_v2t = _contextual_evidence_array(
+        evidence, "retrieval_scores", "v2t", artifact_run_dir=artifact_run_dir
+    )
+    if retrieval_t2v.shape != raw_wti.shape or retrieval_v2t.shape != raw_wti.shape:
+        raise ValueError("A3 retrieval evidence matrix shape mismatch")
+    dsl_enabled = retrieval_config.get("dsl")
+    if not isinstance(dsl_enabled, bool):
+        raise ValueError("A3 retrieval evidence DSL flag must be boolean")
+    dsl_temperature = float(retrieval_config.get("dsl_temperature"))
+    if not math.isfinite(dsl_temperature) or dsl_temperature <= 0:
+        raise ValueError("A3 retrieval evidence DSL temperature is invalid")
+    if dsl_enabled:
+        expected_t2v, expected_v2t = _apply_dual_softmax(
+            raw_wti, dsl_temperature
+        )
+    else:
+        expected_t2v, expected_v2t = raw_wti, raw_wti
+    if not np.array_equal(retrieval_t2v, expected_t2v):
+        raise ValueError("A3 retrieval t2v score evidence differs from raw WTI/DSL")
+    if not np.array_equal(retrieval_v2t, expected_v2t):
+        raise ValueError("A3 retrieval v2t score evidence differs from raw WTI/DSL")
+    a1_scores = {"t2v": retrieval_t2v, "v2t": retrieval_v2t.T}
+
     metrics = {}
     digests = {
         "raw_wti_sha256": array_sha256(raw_wti),
@@ -4410,7 +4451,7 @@ def _recompute_contextual_risk_metrics(
         )
         if verify_a1_arrays:
             a1_result = evaluate_retrieval_risk(
-                scores,
+                a1_scores[direction],
                 mask,
                 a1_risk,
                 a1_vacuity,
@@ -4429,41 +4470,6 @@ def _recompute_contextual_risk_metrics(
                     raise ValueError(
                         f"A3 evidence a1_{name} differs from recomputation"
                     )
-    retrieval_config = evidence["retrieval_config"]
-    if (
-        expected_retrieval_config is not None
-        and retrieval_config != expected_retrieval_config
-    ):
-        raise ValueError("A3 retrieval configuration mismatch")
-    retrieval_directions = tuple(retrieval_config["directions"])
-    if retrieval_directions != ("t2v", "v2t"):
-        raise ValueError("A3 retrieval evidence must contain both directions")
-    if retrieval_config.get("score_path") != "post_dsl_directional_scores":
-        raise ValueError("A3 retrieval evidence score path mismatch")
-    retrieval_t2v = _contextual_evidence_array(
-        evidence, "retrieval_scores", "t2v", artifact_run_dir=artifact_run_dir
-    )
-    retrieval_v2t = _contextual_evidence_array(
-        evidence, "retrieval_scores", "v2t", artifact_run_dir=artifact_run_dir
-    )
-    if retrieval_t2v.shape != raw_wti.shape or retrieval_v2t.shape != raw_wti.shape:
-        raise ValueError("A3 retrieval evidence matrix shape mismatch")
-    dsl_enabled = retrieval_config.get("dsl")
-    if not isinstance(dsl_enabled, bool):
-        raise ValueError("A3 retrieval evidence DSL flag must be boolean")
-    dsl_temperature = float(retrieval_config.get("dsl_temperature"))
-    if not math.isfinite(dsl_temperature) or dsl_temperature <= 0:
-        raise ValueError("A3 retrieval evidence DSL temperature is invalid")
-    if dsl_enabled:
-        expected_t2v, expected_v2t = _apply_dual_softmax(
-            raw_wti, dsl_temperature
-        )
-    else:
-        expected_t2v, expected_v2t = raw_wti, raw_wti
-    if not np.array_equal(retrieval_t2v, expected_t2v):
-        raise ValueError("A3 retrieval t2v score evidence differs from raw WTI/DSL")
-    if not np.array_equal(retrieval_v2t, expected_v2t):
-        raise ValueError("A3 retrieval v2t score evidence differs from raw WTI/DSL")
     recorded_cut_off_points = retrieval_config.get("cut_off_points")
     cut_off_points = (
         None

@@ -43,19 +43,25 @@ def _array_metadata(value):
     }
 
 
-def _complete_evidence(rho=0.30, raw="raw"):
-    size = 8
-    raw_wti = np.full((size, size), -2.0, dtype=np.float32)
-    for index in range(size):
-        raw_wti[index, index] = 0.0
-        non_positive = [value for value in range(size) if value != index]
-        raw_wti[index, non_positive[:index]] = 1.0
+def _complete_evidence(rho=0.30, raw="raw", matrix=None, dsl=False):
+    if matrix is None:
+        size = 8
+        raw_wti = np.full((size, size), -2.0, dtype=np.float32)
+        for index in range(size):
+            raw_wti[index, index] = 0.0
+            non_positive = [value for value in range(size) if value != index]
+            raw_wti[index, non_positive[:index]] = 1.0
+    else:
+        raw_wti = np.asarray(matrix, dtype=np.float32)
+        if raw_wti.ndim != 2 or raw_wti.shape[0] != raw_wti.shape[1]:
+            raise ValueError("test evidence matrix must be square")
+        size = raw_wti.shape[0]
     if raw != "raw":
         raw_wti[0, 1] += 0.125
     positive_mask = np.eye(size, dtype=bool)
     text_means = np.arange(size * 2, dtype=np.float32).reshape(size, 2)
     video_means = text_means[::-1].copy()
-    noise = np.asarray([3, 0, 6, 1, 7, 2, 5, 4], dtype=np.float32)
+    noise = np.asarray([3, 0, 6, 1, 7, 2, 5, 4], dtype=np.float32)[:size]
     quality = 0.2 if rho <= 0.20 else 0.5 if rho <= 0.21 else 0.8 if rho <= 0.30 else 1.0
     failure_risk = {}
     metrics = {}
@@ -80,6 +86,11 @@ def _complete_evidence(rho=0.30, raw="raw"):
         "video_means": video_means,
         "positive_mask": positive_mask,
     }
+    retrieval_t2v, retrieval_v2t = (
+        main_task_retrieval._apply_dual_softmax(raw_wti)
+        if dsl
+        else (raw_wti, raw_wti)
+    )
     evidence = {
         **{name: value.tolist() for name, value in arrays.items()},
         "failure_risk": {
@@ -121,14 +132,14 @@ def _complete_evidence(rho=0.30, raw="raw"):
             "seed_by_direction": {"t2v": 0, "v2t": 1},
         },
         "retrieval_scores": {
-            "t2v": raw_wti.tolist(),
-            "v2t": raw_wti.tolist(),
+            "t2v": retrieval_t2v.tolist(),
+            "v2t": retrieval_v2t.tolist(),
         },
         "retrieval_config": {
             "directions": ["t2v", "v2t"],
             "cut_off_points": "one_to_one",
             "independent_directions": True,
-            "dsl": False,
+            "dsl": dsl,
             "dsl_temperature": 1.0,
             "score_path": "post_dsl_directional_scores",
         },
@@ -139,8 +150,8 @@ def _complete_evidence(rho=0.30, raw="raw"):
         },
     }
     evidence["array_metadata"]["retrieval_scores"] = {
-        direction: _array_metadata(raw_wti)
-        for direction in ("t2v", "v2t")
+        "t2v": _array_metadata(retrieval_t2v),
+        "v2t": _array_metadata(retrieval_v2t),
     }
     return evidence, metrics
 
@@ -178,7 +189,14 @@ def _add_externalized_rank_bootstrap_evidence(evidence, source_evidence, run_dir
         ("a1_", "a1_failure_risk", "a1_vacuity"),
     ):
         for direction, seed in (("t2v", 0), ("v2t", 1)):
-            scores = raw if direction == "t2v" else raw.T
+            if prefix:
+                scores = np.asarray(
+                    source_evidence["retrieval_scores"][direction], dtype=np.float32
+                )
+                if direction == "v2t":
+                    scores = scores.T
+            else:
+                scores = raw if direction == "t2v" else raw.T
             direction_mask = mask if direction == "t2v" else mask.T
             result = evaluate_retrieval_risk(
                 scores,
@@ -213,6 +231,7 @@ def test_externalized_a3_evidence_recomputes_from_hash_verified_references(tmp_p
     )
 
     assert actual == expected
+
     (tmp_path / "other-run").mkdir()
     with pytest.raises(ValueError, match="file is missing"):
         main_task_retrieval._contextual_evidence_array(
@@ -247,6 +266,62 @@ def test_externalized_rank_evidence_must_match_deterministic_recomputation(
             externalized,
             bootstrap_samples=0,
             expected_retrieval_config=externalized["retrieval_config"],
+            artifact_run_dir=tmp_path,
+        )
+
+
+def test_externalized_dsl_a1_rank_evidence_uses_post_dsl_scores(tmp_path):
+    raw_wti = np.asarray(
+        [
+            [9.584334, 1.7167077, 6.251684, 4.2842927],
+            [9.885194, 5.2435346, 9.838521, 7.0097136],
+            [7.3837733, 7.7229414, 2.9403703, 8.170938],
+            [6.3869267, 3.934891, 8.599843, 9.211167],
+        ],
+        dtype=np.float32,
+    )
+    source, expected = _complete_evidence(matrix=raw_wti, dsl=True)
+    positive_mask = np.eye(4, dtype=bool)
+    raw_v2t_ranks = positive_ranks(raw_wti.T, positive_mask.T)
+    post_v2t_ranks = positive_ranks(
+        np.asarray(source["retrieval_scores"]["v2t"], dtype=np.float32).T,
+        positive_mask.T,
+    )
+    assert not np.array_equal(raw_v2t_ranks > 0, post_v2t_ranks > 0)
+
+    externalized = _add_externalized_rank_bootstrap_evidence(
+        _externalize_a3_evidence(source, tmp_path), source, tmp_path
+    )
+    actual, _ = main_task_retrieval._recompute_contextual_risk_metrics(
+        externalized,
+        bootstrap_samples=0,
+        expected_retrieval_config=externalized["retrieval_config"],
+        artifact_run_dir=tmp_path,
+    )
+
+    assert actual == expected
+
+    self_reported_config = copy.deepcopy(externalized)
+    self_reported_config["retrieval_config"]["dsl"] = False
+    with pytest.raises(ValueError, match="retrieval configuration mismatch"):
+        main_task_retrieval._recompute_contextual_risk_metrics(
+            self_reported_config,
+            bootstrap_samples=0,
+            expected_retrieval_config=source["retrieval_config"],
+            artifact_run_dir=tmp_path,
+        )
+
+    forged_scores = copy.deepcopy(externalized)
+    forged_t2v = ArtifactArrayStore(tmp_path / "arrays").write(
+        "forged_dsl_t2v", raw_wti
+    ).as_dict()
+    forged_scores["retrieval_scores"]["t2v"] = forged_t2v
+    forged_scores["array_metadata"]["retrieval_scores"]["t2v"] = forged_t2v
+    with pytest.raises(ValueError, match="t2v score evidence differs"):
+        main_task_retrieval._recompute_contextual_risk_metrics(
+            forged_scores,
+            bootstrap_samples=0,
+            expected_retrieval_config=source["retrieval_config"],
             artifact_run_dir=tmp_path,
         )
 
