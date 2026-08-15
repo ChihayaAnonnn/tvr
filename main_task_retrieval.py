@@ -164,9 +164,15 @@ def _verify_artifact_runtime_bindings(
             if name in flattened:
                 raise ValueError(f"artifact config duplicates effective field {name}")
             flattened[name] = expected
-            actual = getattr(args, name, None)
+            optional_missing_false = (
+                registered_a3_contract
+                and name == "intrinsic_concentration_only"
+                and expected is False
+                and not hasattr(args, name)
+            )
+            actual = False if optional_missing_false else getattr(args, name, None)
             if (
-                not hasattr(args, name)
+                (not hasattr(args, name) and not optional_missing_false)
                 or type(actual) is not type(expected)
                 or actual != expected
             ):

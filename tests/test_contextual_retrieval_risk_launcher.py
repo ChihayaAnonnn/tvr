@@ -1,12 +1,14 @@
 import os
 import json
 import hashlib
+import platform
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 import pytest
+import torch
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -67,6 +69,385 @@ def _launcher_env(controller, marker, *, output_dir=None):
     if output_dir is not None:
         env["A3_TEST_OUTPUT_DIR"] = str(output_dir)
     return env
+
+
+def _file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _reserve_committed_registered_a3_run(
+    tmp_path, *, config_mutation=None, timestamp="20260815T120000Z"
+):
+    import main_task_retrieval as retrieval
+
+    repo = tmp_path / "control-repo"
+    registry = Path("experiments/contextual-risk-v2/registry.jsonl")
+    phase = Path("experiments/contextual-risk-v2/phases/e2e-feature.json")
+    (repo / registry.parent).mkdir(parents=True)
+    (repo / registry).write_text("", encoding="utf-8")
+    (repo / phase.parent).mkdir(parents=True)
+    generated = tmp_path / "generated-split"
+    generated.mkdir()
+    train_csv = generated / "train.csv"
+    val_csv = generated / "val.csv"
+    train_csv.write_text("video_id,sentence\nvideo0,train\n", encoding="utf-8")
+    val_csv.write_text("video_id,sentence\nvideo1,val\n", encoding="utf-8")
+
+    common = Path(
+        subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=REPOSITORY,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
+    ).parent
+    data_root = Path("/data2/hxj/data/MSRVTT")
+    checkpoint = (
+        common
+        / "ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
+    )
+    clip_asset = common / ".cache/ViT-B-16.pt"
+    split_manifest = REPOSITORY / "dataloaders/splits/msrvtt_trusted_v1_seed0.json"
+    source_train = data_root / "csv/MSRVTT_train.9k.csv"
+    test_csv = data_root / "csv/MSRVTT_JSFUSION_test.csv"
+    annotation = data_root / "annotation/MSRVTT_v2.json"
+
+    fixed = retrieval._registered_a3_expected_config()
+    for name in ("world_size", "n_gpu", "pin_memory"):
+        fixed.pop(name)
+    fixed.update(
+        {
+            "contextual_risk_feature_set": "score_only",
+            "contextual_risk_topk": 4,
+            "w_contextual_risk_fit": 0.25,
+            "w_contextual_risk_rank": 0.0,
+            "seed": 1,
+            "epochs": 3,
+            "init_model": str(checkpoint),
+            "run_final_test": False,
+            "train_csv": str(train_csv),
+            "val_csv": str(val_csv),
+            "features_path": str(
+                data_root / "videos/compressed_videos/msrvtt_224_12fps"
+            )
+            + "/",
+        }
+    )
+    reserved_names = {
+        "contextual_risk_feature_set",
+        "contextual_risk_topk",
+        "w_contextual_risk_fit",
+        "w_contextual_risk_rank",
+        "seed",
+        "epochs",
+        "run_final_test",
+    }
+    config = {
+        "model": {
+            name: value for name, value in fixed.items()
+            if name not in reserved_names
+        },
+        "loss": {
+            "w_contextual_risk_fit": fixed["w_contextual_risk_fit"],
+            "w_contextual_risk_rank": fixed["w_contextual_risk_rank"],
+        },
+        "optimizer": {"seed": fixed["seed"]},
+        "scheduler": {"epochs": fixed["epochs"]},
+        "evaluation": {"run_final_test": fixed["run_final_test"]},
+    }
+    config["model"].update(
+        {
+            "contextual_risk_feature_set": fixed[
+                "contextual_risk_feature_set"
+            ],
+            "contextual_risk_topk": fixed["contextual_risk_topk"],
+        }
+    )
+    if config_mutation is not None:
+        config_mutation(config)
+
+    references = [
+        checkpoint,
+        clip_asset,
+        split_manifest,
+        source_train,
+        train_csv,
+        val_csv,
+        test_csv,
+        annotation,
+    ]
+    digests = {
+        checkpoint: (
+            "a2c074e3988b0e4a115d054c352785271712ffdfb4e4c2da8b372bde424e2607"
+        ),
+        clip_asset: (
+            "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f"
+        ),
+        **{
+            path: _file_sha256(path)
+            for path in references
+            if path not in {checkpoint, clip_asset}
+        },
+    }
+    phase_payload = {
+        "phase": "e2e-feature",
+        "study": "contextual-risk-v2",
+        "runs": [
+            {
+                "dataset": "msrvtt",
+                "stage": "feature_ablation",
+                "variant": "score_only_e2e",
+                "seed": 1,
+                "scheduled_timestamp_utc": timestamp,
+                "environment": {
+                    "python": platform.python_version(),
+                    "pytorch": str(torch.__version__),
+                    "cuda": str(torch.version.cuda or "none"),
+                    "gpu_model": "none",
+                    "gpu_count": 0,
+                    "precision": "fp32",
+                    "distributed_topology": "torchrun-4",
+                },
+                "input_checkpoints": [
+                    {"path": str(path), "sha256": digests[path]}
+                    for path in (checkpoint, clip_asset)
+                ],
+                "dataset_splits": [
+                    {"path": str(path), "sha256": digests[path]}
+                    for path in (
+                        split_manifest,
+                        source_train,
+                        train_csv,
+                        val_csv,
+                        test_csv,
+                        annotation,
+                    )
+                ],
+                "config": config,
+                "parent_run_ids": ["historical-a3-validation"],
+                "selection_lineage": [],
+                "validation_authorized": True,
+                "test_authorized": False,
+                "expected_scalar_outputs": [],
+                "array_references": [],
+                "command": [
+                    "env",
+                    "ARTIFACT_RUN_ID={run_id}",
+                    "bash",
+                    "run_train_msrvtt_contextual_risk_bg.sh",
+                ],
+            }
+        ],
+    }
+    (repo / phase).write_text(json.dumps(phase_payload), encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=repo,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"], cwd=repo, check=True
+    )
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "phase"], cwd=repo, check=True)
+    artifact_root = tmp_path / "artifacts"
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(REPOSITORY)
+    reserved = subprocess.run(
+        [
+            sys.executable,
+            str(REPOSITORY / "scripts/manage_experiment_run.py"),
+            "reserve-phase",
+            "--repo-root",
+            str(repo),
+            "--phase",
+            str(phase),
+            "--registry",
+            str(registry),
+            "--artifact-root",
+            str(artifact_root),
+        ],
+        cwd=repo,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    run = json.loads(reserved.stdout)["runs"][0]
+    subprocess.run(["git", "add", str(registry)], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "reserve phase"], cwd=repo, check=True
+    )
+    return repo, artifact_root, generated, run
+
+
+def _production_contract_test_processes(tmp_path):
+    capture = tmp_path / "runtime-capture.json"
+    fake_torchrun = tmp_path / "fake-torchrun.py"
+    fake_torchrun.write_text(
+        "#!/home/xujie/.conda/envs/tvr/bin/python\n"
+        "import json, os, sys\n"
+        "from pathlib import Path\n"
+        f"sys.path.insert(0,{str(REPOSITORY)!r})\n"
+        "import torch\n"
+        "import main_task_retrieval as retrieval\n"
+        "from experiment_artifacts import make_run_paths, strict_json_load\n"
+        "worker=sys.argv[1:]\n"
+        "entry=next(i for i,v in enumerate(worker) if v.endswith('main_task_retrieval.py'))\n"
+        "sys.argv=['main_task_retrieval.py',*worker[entry+1:]]\n"
+        "os.environ.update(WORLD_SIZE='4',RANK='0',LOCAL_RANK='0')\n"
+        "torch.cuda.device_count=lambda: 0\n"
+        "args=retrieval.get_args()\n"
+        "args.local_rank=0\n"
+        "manifest=strict_json_load(open(Path(args.artifact_run_dir)/'manifest.json',encoding='utf-8'))\n"
+        "repo=Path(os.environ['A3_TEST_REPO_ROOT'])\n"
+        "retrieval._verify_artifact_runtime_bindings(args,manifest,repo,registered_a3_contract=True)\n"
+        "paths=make_run_paths(Path(args.artifact_run_dir).parents[3],manifest['study'],manifest['run_id'])\n"
+        "retrieval._start_artifact_run(retrieval._ArtifactRunContext(paths,manifest))\n"
+        "retrieval._complete_artifact_run(retrieval._ArtifactRunContext(paths,manifest))\n"
+        "json.dump({'feature_set':args.contextual_risk_feature_set,'topk':args.contextual_risk_topk,'fit':args.w_contextual_risk_fit,'rank':args.w_contextual_risk_rank,'seed':args.seed,'epochs':args.epochs,'argv':worker},open(os.environ['A3_TEST_RUNTIME_CAPTURE'],'w'))\n",
+        encoding="utf-8",
+    )
+    fake_torchrun.chmod(0o755)
+    proxy_controller = tmp_path / "proxy-controller.sh"
+    proxy_controller.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        f"[[ \"${{TVR_TORCHRUN}}\" == {fake_torchrun} ]] || exit 86\n"
+        "printf 'called\\n' > \"${A3_TEST_CONTROLLER_MARKER}\"\n"
+        f"exec bash {REPOSITORY / 'run_train_msrvtt_bg.sh'} \"$@\"\n",
+        encoding="utf-8",
+    )
+    proxy_controller.chmod(0o755)
+    return proxy_controller, fake_torchrun, capture
+
+
+def test_committed_manifest_flows_through_real_wrapper_parser_and_runtime_binding(
+    tmp_path,
+):
+    repo, artifact_root, generated, run = _reserve_committed_registered_a3_run(
+        tmp_path
+    )
+    controller, fake_torchrun, capture = _production_contract_test_processes(
+        tmp_path
+    )
+    marker = tmp_path / "controller-called"
+    env = _launcher_env(controller, marker)
+    env.pop("LEGACY_A3_LAYOUT")
+    env.update(
+        {
+            "ARTIFACT_RUN_ID": run["run_id"],
+            "A3_TEST_REPO_ROOT": str(repo),
+            "A3_TEST_ARTIFACT_ROOT": str(artifact_root),
+            "A3_TEST_TORCHRUN": str(fake_torchrun),
+            "A3_TEST_SKIP_SPLIT_BUILD": "1",
+            "A3_TEST_GENERATED_SPLIT_DIR": str(generated),
+            "A3_TEST_RUNTIME_CAPTURE": str(capture),
+        }
+    )
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        cwd=REPOSITORY,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    bound = json.loads(capture.read_text(encoding="utf-8"))
+    assert {
+        name: bound[name]
+        for name in ("feature_set", "topk", "fit", "rank", "seed", "epochs")
+    } == {
+        "feature_set": "score_only", "topk": 4, "fit": 0.25,
+        "rank": 0.0, "seed": 1, "epochs": 3,
+    }
+    assert "--artifact_run_dir" in bound["argv"]
+    assert marker.exists()
+    run_dir = Path(run["artifact_path"])
+    assert json.loads((run_dir / "status.json").read_text(encoding="utf-8"))[
+        "state"
+    ] == "completed"
+    assert not any((run_dir / "checkpoints").iterdir())
+    assert not any((run_dir / "metrics").iterdir())
+    assert not any((run_dir / "arrays").iterdir())
+
+
+@pytest.mark.parametrize("invalid", ["duplicate", "out_of_allowlist"])
+def test_real_wrapper_rejects_invalid_committed_variant_before_controller(
+    tmp_path, invalid
+):
+    def mutate(config):
+        if invalid == "duplicate":
+            config["model"]["seed"] = 1
+        else:
+            config["model"]["contextual_risk_topk"] = 2
+
+    repo, artifact_root, _generated, run = _reserve_committed_registered_a3_run(
+        tmp_path, config_mutation=mutate
+    )
+    controller, _fake_torchrun, _capture = _production_contract_test_processes(
+        tmp_path
+    )
+    marker = tmp_path / "controller-called"
+    env = _launcher_env(controller, marker)
+    env.pop("LEGACY_A3_LAYOUT")
+    env.update(
+        {
+            "ARTIFACT_RUN_ID": run["run_id"],
+            "A3_TEST_REPO_ROOT": str(repo),
+            "A3_TEST_ARTIFACT_ROOT": str(artifact_root),
+        }
+    )
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)], cwd=REPOSITORY, env=env, text=True,
+        capture_output=True, check=False, timeout=15,
+    )
+
+    assert result.returncode == 2
+    assert not marker.exists()
+    expected = "duplicates effective field" if invalid == "duplicate" else "allowlist"
+    assert expected in result.stderr
+
+
+def test_real_wrapper_rejects_env_override_before_committed_manifest_handoff(
+    tmp_path,
+):
+    repo, artifact_root, _generated, run = _reserve_committed_registered_a3_run(
+        tmp_path
+    )
+    controller, _fake_torchrun, _capture = _production_contract_test_processes(
+        tmp_path
+    )
+    marker = tmp_path / "controller-called"
+    env = _launcher_env(controller, marker)
+    env.pop("LEGACY_A3_LAYOUT")
+    env.update(
+        {
+            "ARTIFACT_RUN_ID": run["run_id"],
+            "A3_TEST_REPO_ROOT": str(repo),
+            "A3_TEST_ARTIFACT_ROOT": str(artifact_root),
+            "CONTEXTUAL_RISK_TOPK": "8",
+        }
+    )
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)], cwd=REPOSITORY, env=env, text=True,
+        capture_output=True, check=False, timeout=15,
+    )
+
+    assert result.returncode == 2
+    assert "environment CONTEXTUAL_RISK_TOPK cannot be overridden" in result.stderr
+    assert not marker.exists()
 
 
 def test_artifact_campaign_launcher_requires_registered_run_identity(tmp_path):
@@ -354,7 +735,7 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
         'NCCL_ASYNC_ERROR_HANDLING=1',
         'MASTER_PORT=29547', 'TORCH_WARN_ONCE=1',
         'TVR_PYTHON=/home/xujie/.conda/envs/tvr/bin/python',
-        'TVR_TORCHRUN=/home/xujie/.conda/envs/tvr/bin/torchrun',
+        'TVR_TORCHRUN="${A3_TEST_TORCHRUN:-/home/xujie/.conda/envs/tvr/bin/torchrun}"',
     ):
         assert binding in text
     assert '--registered_clip_asset_path "${CLIP_ASSET}"' in text
@@ -636,13 +1017,28 @@ def test_registered_a3_launcher_rejects_inherited_controller_execution_overrides
     assert not Path(f"{output_dir}.reserve").exists()
 
 
-@pytest.mark.parametrize("seam", ["A3_BG_CONTROLLER", "A3_TEST_OUTPUT_DIR"])
-def test_registered_a3_launcher_rejects_test_seams_without_test_mode(tmp_path, seam):
+@pytest.mark.parametrize(
+    ("seam", "value"),
+    [
+        ("A3_BG_CONTROLLER", "controller"),
+        ("A3_TEST_OUTPUT_DIR", "output"),
+        ("A3_TEST_TORCHRUN", "torchrun"),
+        ("A3_TEST_SKIP_SPLIT_BUILD", "1"),
+        ("A3_TEST_GENERATED_SPLIT_DIR", "generated"),
+    ],
+)
+def test_registered_a3_launcher_rejects_test_seams_without_test_mode(
+    tmp_path, seam, value
+):
     controller, marker, _ = _fake_controller(tmp_path)
     env = os.environ.copy()
-    env["A3_BG_CONTROLLER"] = str(controller)
-    if seam == "A3_TEST_OUTPUT_DIR":
-        env["A3_TEST_OUTPUT_DIR"] = str(tmp_path / "test-output")
+    path_values = {
+        "controller": controller,
+        "output": tmp_path / "test-output",
+        "torchrun": tmp_path / "fake-torchrun",
+        "generated": tmp_path / "generated",
+    }
+    env[seam] = str(path_values.get(value, value))
 
     result = subprocess.run(
         ["bash", str(SCRIPT)],

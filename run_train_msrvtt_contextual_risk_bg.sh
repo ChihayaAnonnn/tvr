@@ -33,6 +33,16 @@ validate_test_seams() {
         echo "A3 test timeout requires A3_LAUNCHER_TEST_MODE=1" >&2
         exit 2
     fi
+    if [[ -n "${A3_TEST_TORCHRUN:-}" || -n "${A3_TEST_SKIP_SPLIT_BUILD:-}" || -n "${A3_TEST_GENERATED_SPLIT_DIR:-}" ]]; then
+        if [[ "${A3_LAUNCHER_TEST_MODE:-}" != "1" ]]; then
+            echo "A3 worker-composition test seams require A3_LAUNCHER_TEST_MODE=1" >&2
+            exit 2
+        fi
+    fi
+    if [[ -n "${A3_TEST_SKIP_SPLIT_BUILD:-}" && "${A3_TEST_SKIP_SPLIT_BUILD}" != "1" ]]; then
+        echo "A3_TEST_SKIP_SPLIT_BUILD must be 1 when set" >&2
+        exit 2
+    fi
 }
 
 reject_registered_environment_overrides() {
@@ -407,7 +417,7 @@ OUTPUT_DIR="${OUTPUT_DIR}" \
 LOG_FILE="${LOG_FILE:-}" \
 TRAIN_PID_FILE="${HANDOFF_PID_FILE}" \
 TVR_PYTHON=/home/xujie/.conda/envs/tvr/bin/python \
-TVR_TORCHRUN=/home/xujie/.conda/envs/tvr/bin/torchrun \
+TVR_TORCHRUN="${A3_TEST_TORCHRUN:-/home/xujie/.conda/envs/tvr/bin/torchrun}" \
 CUDA_VISIBLE_DEVICES="0,2,3,4" \
 CUDA_MODULE_LOADING=LAZY \
 NPROC=4 \

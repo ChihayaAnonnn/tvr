@@ -183,14 +183,28 @@ run_worker() {
     ANNOTATION_JSON="${DATA_PATH}/annotation/MSRVTT_v2.json"
     SPLIT_MANIFEST="${ROOT_DIR}/dataloaders/splits/msrvtt_trusted_v1_seed0.json"
     GENERATED_SPLIT_DIR="${ROOT_DIR}/data/generated/msrvtt_trusted_v1"
+    if [[ -n "${A3_TEST_GENERATED_SPLIT_DIR:-}" ]]; then
+        if [[ "${A3_LAUNCHER_TEST_MODE:-}" != "1" ]]; then
+            echo "A3_TEST_GENERATED_SPLIT_DIR requires A3_LAUNCHER_TEST_MODE=1" >&2
+            exit 2
+        fi
+        GENERATED_SPLIT_DIR="${A3_TEST_GENERATED_SPLIT_DIR}"
+    fi
     export CLIP_CACHE_DIR=${CLIP_CACHE_DIR:-${ROOT_DIR}/.cache}
 
-    "${TVR_PYTHON}" "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
-        --train-csv "${SOURCE_TRAIN_CSV}" \
-        --annotation-json "${ANNOTATION_JSON}" \
-        --test-csv "${TEST_CSV}" \
-        --manifest "${SPLIT_MANIFEST}" \
-        --output-dir "${GENERATED_SPLIT_DIR}"
+    if [[ "${A3_TEST_SKIP_SPLIT_BUILD:-0}" == "1" ]]; then
+        if [[ "${A3_LAUNCHER_TEST_MODE:-}" != "1" ]]; then
+            echo "A3_TEST_SKIP_SPLIT_BUILD requires A3_LAUNCHER_TEST_MODE=1" >&2
+            exit 2
+        fi
+    else
+        "${TVR_PYTHON}" "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
+            --train-csv "${SOURCE_TRAIN_CSV}" \
+            --annotation-json "${ANNOTATION_JSON}" \
+            --test-csv "${TEST_CSV}" \
+            --manifest "${SPLIT_MANIFEST}" \
+            --output-dir "${GENERATED_SPLIT_DIR}"
+    fi
 
     # Auto-run id to avoid overwriting checkpoints/logs across runs
     RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
