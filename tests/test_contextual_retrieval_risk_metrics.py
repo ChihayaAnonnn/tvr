@@ -439,6 +439,8 @@ def test_eval_epoch_scores_a3_once_after_full_raw_matrix_and_means(
         artifact_run_dir=tmp_path,
     )
     artifact_evidence = artifact_result["contextual_risk_evidence"]
+    assert "risk_baselines" in artifact_result
+    assert "risk_baselines" not in result
     for name in ("raw_wti", "text_means", "video_means", "positive_mask"):
         assert "path" in artifact_evidence[name]
         assert artifact_evidence[name] == artifact_evidence["array_metadata"][name]

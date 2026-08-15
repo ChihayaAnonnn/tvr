@@ -12,11 +12,13 @@ from main_task_retrieval import (
     _compute_csd_logvar_metrics,
     _compute_directional_metrics,
     _compute_retrieval_risk_metrics,
+    _compute_score_risk_baseline_metrics,
     _eval_autocast_context,
     _merge_csd_eval_outputs,
     _run_on_single_gpu,
     _select_eval_device_ids,
 )
+from experiment_artifacts import ArtifactArrayStore, validate_artifact_json_payload
 from modules.modeling_mulit import UATVR as FullUATVR
 from prob_models.csd_logvar_protocol import array_sha256
 
@@ -181,6 +183,47 @@ def test_risk_reporting_retains_exact_output_array_digests():
             "vacuity": array_sha256(expected_vacuity),
         },
     }
+
+
+def test_validation_baselines_externalize_arrays_without_mutating_scores(tmp_path):
+    matrix = _matrix_with_successes_and_failures()
+    before = matrix.copy()
+    store = ArtifactArrayStore(tmp_path / "arrays")
+
+    result = _compute_score_risk_baseline_metrics(
+        metric_t2v_matrix=matrix,
+        metric_v2t_matrix=matrix,
+        positive_mask=np.eye(4, dtype=bool),
+        directions=("t2v", "v2t"),
+        artifact_array_store=store,
+    )
+
+    np.testing.assert_array_equal(matrix, before)
+    assert set(result) == {
+        "one_minus_top1",
+        "negative_margin",
+        "entropy",
+        "negative_energy",
+        "score_variance",
+    }
+    for method in result.values():
+        assert set(method) == {"t2v", "v2t"}
+        for metrics in method.values():
+            assert set(metrics) == {
+                "rho",
+                "auroc",
+                "aurc",
+                "coverage",
+                "ece",
+                "brier",
+                "nll",
+                "array_references",
+            }
+            assert all(
+                "path" in reference
+                for reference in metrics["array_references"].values()
+            )
+    validate_artifact_json_payload(result)
 
 
 def test_paired_digest_captures_raw_wti_a1_outputs_and_both_retrievals():

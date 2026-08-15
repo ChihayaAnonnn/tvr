@@ -93,10 +93,13 @@ from prob_models.uncertainty_protocol import (
 )
 from prob_models.contextual_retrieval_risk import ContextualRetrievalRiskSidecar
 from prob_models.retrieval_risk import RetrievalRiskSidecar
+from prob_models.retrieval_risk_baselines import score_risk_baselines
 from prob_models.retrieval_risk_metrics import (
     build_eval_positive_mask,
+    evaluate_failure_risk_scores,
     evaluate_intrinsic_uncertainty,
     evaluate_retrieval_risk,
+    positive_ranks,
     summarize_csd_components,
     summarize_logvar,
 )
@@ -3811,6 +3814,56 @@ def _compute_retrieval_risk_metrics(
     return payload
 
 
+def _compute_score_risk_baseline_metrics(
+    *,
+    metric_t2v_matrix,
+    metric_v2t_matrix,
+    positive_mask,
+    directions,
+    artifact_array_store,
+):
+    """Evaluate validation-only score baselines with external array evidence."""
+
+    if artifact_array_store is None:
+        raise ValueError("score-risk baseline arrays require an artifact array store")
+    directions = _normalize_eval_directions(directions)
+    by_method = {}
+    for direction in directions:
+        directional_matrix = (
+            metric_t2v_matrix if direction == "t2v" else metric_v2t_matrix
+        )
+        scores = (
+            np.asarray(directional_matrix, dtype=np.float64)
+            if direction == "t2v"
+            else np.asarray(directional_matrix, dtype=np.float64).T
+        )
+        mask = positive_mask if direction == "t2v" else positive_mask.T
+        ranks = positive_ranks(scores, mask)
+        failure = ranks > 0
+        risks = score_risk_baselines(directional_matrix, direction)
+        count = np.arange(1, ranks.size + 1, dtype=np.float64)
+        for method, risk in risks.items():
+            order = np.argsort(risk, kind="stable")
+            selective_risk = np.cumsum(failure[order]) / count
+            references = {
+                name: artifact_array_store.write(
+                    f"baseline_{method}_{name}.{direction}", values
+                ).as_dict()
+                for name, values in {
+                    "risk": risk,
+                    "failure_labels": failure,
+                    "query_ranks": ranks,
+                    "coverage": count / ranks.size,
+                    "selective_risk": selective_risk,
+                }.items()
+            }
+            metrics = evaluate_failure_risk_scores(failure, ranks, risk)
+            metrics["array_references"] = references
+            by_method.setdefault(method, {})[direction] = metrics
+    validate_artifact_json_payload(by_method)
+    return by_method
+
+
 def _compute_contextual_retrieval_risk_metrics(
     *,
     model,
@@ -4378,12 +4431,29 @@ def _eval_epoch_impl(
     report_contextual_risk = bool(
         getattr(model, "use_contextual_risk_sidecar", False)
     )
+    report_score_risk_baselines = bool(
+        artifact_array_store is not None
+        and str(getattr(args, "eval_split", "val")) in {"val", "validation"}
+    )
     positive_mask = None
-    if report_retrieval_risk or report_contextual_risk or report_csd_logvar:
+    if (
+        report_retrieval_risk
+        or report_contextual_risk
+        or report_csd_logvar
+        or report_score_risk_baselines
+    ):
         positive_mask = build_eval_positive_mask(
             metric_t2v_matrix.shape[0],
             metric_t2v_matrix.shape[1],
             cut_off_points_ if multi_sentence_ else None,
+        )
+    if report_score_risk_baselines:
+        result["risk_baselines"] = _compute_score_risk_baseline_metrics(
+            metric_t2v_matrix=metric_t2v_matrix,
+            metric_v2t_matrix=metric_v2t_matrix,
+            positive_mask=positive_mask,
+            directions=directions,
+            artifact_array_store=artifact_array_store,
         )
     if report_retrieval_risk:
         result["retrieval_risk"], risk_array_digests = (
