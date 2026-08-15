@@ -453,7 +453,7 @@ The authorization lists dataset, seed, selected validation checkpoint hash, froz
 
 - [ ] **Step 2: Execute each declared final run exactly once**
 
-Run raw retrieval and fixed validation-selected DSL settings, then A1/A3 risk evaluation. A runtime failure may retry only the identical manifest and must append the failed attempt record first. Scientific underperformance cannot trigger another run.
+Run raw retrieval and fixed validation-selected DSL settings, then A1/A3 risk evaluation. A terminal run is immutable and may never retry in place. After a runtime infrastructure failure, preserve and finalize the failed run first; only explicit human authorization may create a new unique successor run with the identical scientific configuration and recorded `parent_run_ids` plus `selection_lineage`. Scientific underperformance cannot trigger another run.
 
 - [ ] **Step 3: Compute paper comparisons without selection**
 
