@@ -511,6 +511,25 @@ def _real_checkpoint_evidence(tmp_path):
     return checkpoint, evidence
 
 
+@pytest.mark.parametrize("feature_set", ["full", "no_context"])
+def test_checkpoint_replay_reconstructs_registered_feature_set(feature_set):
+    evidence, _ = _complete_evidence()
+    args = SimpleNamespace(
+        contextual_risk_feature_set=feature_set,
+        contextual_risk_projection_dim=3,
+        contextual_risk_hidden_dim=4,
+        contextual_risk_topk=3,
+        contextual_risk_temperature=1.0,
+        retrieval_risk_hidden_dim=4,
+        retrieval_risk_temperature=1.0,
+    )
+
+    configs = main_task_retrieval._registered_a3_head_configs(args, evidence)
+    replayed = ContextualRetrievalRiskSidecar(**configs["contextual"])
+
+    assert replayed.feature_set == feature_set
+
+
 def test_checkpoint_state_anchors_contextual_and_a1_output_evidence(tmp_path):
     checkpoint, evidence = _real_checkpoint_evidence(tmp_path)
 

@@ -13,25 +13,33 @@ from prob_models.contextual_retrieval_risk import (
 def test_feature_ablation_masks_named_blocks_without_changing_capacity(feature_set):
     torch.manual_seed(7)
     full = ContextualRetrievalRiskSidecar(
-        embed_dim=4, projection_dim=3, hidden_dim=7, topk=2,
+        embed_dim=512, projection_dim=128, hidden_dim=128, topk=16,
         dropout=0.0, feature_set="full",
     )
     variant = ContextualRetrievalRiskSidecar(
-        embed_dim=4, projection_dim=3, hidden_dim=7, topk=2,
+        embed_dim=512, projection_dim=128, hidden_dim=128, topk=16,
         dropout=0.0, feature_set=feature_set,
     )
     variant.load_state_dict(full.state_dict())
     logits = torch.tensor([[4.0, 3.0, 1.0], [0.0, 2.0, 5.0]])
-    text = torch.randn(2, 4)
-    video = torch.randn(3, 4)
+    text = torch.randn(2, 512)
+    video = torch.randn(3, 512)
 
-    full_features = full(logits, text, video, "t2v")["features"]
-    variant_features = variant(logits, text, video, "t2v")["features"]
+    full_output = full(logits, text, video, "t2v")
+    variant_output = variant(logits, text, video, "t2v")
+    full_features = full_output["features"]
+    variant_features = variant_output["features"]
 
-    assert sum(parameter.numel() for parameter in variant.parameters()) == sum(
-        parameter.numel() for parameter in full.parameters()
+    assert sum(parameter.numel() for parameter in variant.parameters()) == 186_113
+    assert variant_features.shape == full_features.shape == (2, 426)
+    assert variant_output.get("feature_set") == feature_set
+    assert variant_output.get("active_feature_blocks") == tuple(
+        sorted(CONTEXTUAL_FEATURE_SETS[feature_set])
     )
-    assert variant_features.shape == full_features.shape
+    assert variant_output.get("feature_block_offsets") == {
+        name: (feature_slice.start, feature_slice.stop)
+        for name, feature_slice in variant.feature_slices.items()
+    }
     for block, feature_slice in variant.feature_slices.items():
         if block in CONTEXTUAL_FEATURE_SETS[feature_set]:
             torch.testing.assert_close(

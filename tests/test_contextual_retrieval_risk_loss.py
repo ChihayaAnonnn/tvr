@@ -39,6 +39,41 @@ def test_objective_uses_multi_positive_failures_and_bounded_weights():
     assert {"failure_rate", "prediction_mean", "prediction_std", "target_mean", "target_std", "valid_ranking_fraction", "entropy", "saturation_fraction"} <= output["t2v"].keys()
 
 
+@pytest.mark.parametrize(
+    ("fit_weight", "rank_weight"),
+    [
+        pytest.param(0.0, 0.0, id="bce_only"),
+        pytest.param(0.25, 0.0, id="bce_fit"),
+        pytest.param(0.0, 0.25, id="bce_rank"),
+        pytest.param(0.25, 0.25, id="full"),
+    ],
+)
+def test_objective_ablation_uses_exact_registered_loss_pair(
+    fit_weight, rank_weight
+):
+    logits, text, video, mask = _inputs()
+    sidecar = ContextualRetrievalRiskSidecar(
+        embed_dim=6, topk=2, dropout=0.0
+    )
+
+    loss, output = contextual_retrieval_risk_objective(
+        sidecar,
+        logits,
+        text,
+        video,
+        mask,
+        fit_weight=fit_weight,
+        rank_weight=rank_weight,
+    )
+
+    expected = (
+        output["bce"]
+        + fit_weight * output["fit"]
+        + rank_weight * output["rank"]
+    )
+    torch.testing.assert_close(loss, expected)
+
+
 def test_objective_ranking_tracks_harder_rows_and_updates_both_projections():
     torch.manual_seed(0)
     logits = torch.tensor(

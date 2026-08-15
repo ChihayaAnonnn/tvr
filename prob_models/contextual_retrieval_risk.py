@@ -37,6 +37,33 @@ CONTEXTUAL_FEATURE_SETS = {
         {"query_semantics", "top1_semantics", "context_semantics", "direction"}
     ),
 }
+CONTEXTUAL_FEATURE_BLOCK_LAYOUT = (
+    ("query_semantics", "projection_dim"),
+    ("top1_semantics", "projection_dim"),
+    ("context_semantics", "projection_dim"),
+    ("score_distribution", "score_distribution"),
+    ("topk_scores", "topk"),
+    ("score_gaps", "topk"),
+    ("direction", "direction"),
+)
+
+
+def _contextual_feature_slices(
+    projection_dim: int, topk: int
+) -> dict[str, slice]:
+    widths = {
+        "projection_dim": projection_dim,
+        "score_distribution": 8,
+        "topk": topk,
+        "direction": 2,
+    }
+    offset = 0
+    slices = {}
+    for block, width_name in CONTEXTUAL_FEATURE_BLOCK_LAYOUT:
+        width = widths[width_name]
+        slices[block] = slice(offset, offset + width)
+        offset += width
+    return slices
 
 
 def _validate_embeddings(
@@ -160,17 +187,9 @@ class ContextualRetrievalRiskSidecar(nn.Module):
         self.active_feature_blocks = tuple(
             sorted(CONTEXTUAL_FEATURE_SETS[feature_set])
         )
-        score_start = 3 * projection_dim
-        self.feature_slices = {
-            "query_semantics": slice(0, projection_dim),
-            "top1_semantics": slice(projection_dim, 2 * projection_dim),
-            "context_semantics": slice(2 * projection_dim, score_start),
-            "score_distribution": slice(score_start, score_start + 8),
-            "topk_scores": slice(score_start + 8, score_start + 8 + topk),
-            "score_gaps": slice(score_start + 8 + topk, score_start + 8 + 2 * topk),
-            "direction": slice(score_start + 8 + 2 * topk, score_start + 10 + 2 * topk),
-        }
-        feature_mask = torch.ones(score_start + 10 + 2 * topk)
+        self.feature_slices = _contextual_feature_slices(projection_dim, topk)
+        feature_width = self.feature_slices["direction"].stop
+        feature_mask = torch.ones(feature_width)
         for block, feature_slice in self.feature_slices.items():
             if block not in CONTEXTUAL_FEATURE_SETS[feature_set]:
                 feature_mask[feature_slice] = 0.0
@@ -230,6 +249,12 @@ class ContextualRetrievalRiskSidecar(nn.Module):
         return {
             **features,
             "features": network_features,
+            "feature_set": self.feature_set,
+            "active_feature_blocks": self.active_feature_blocks,
+            "feature_block_offsets": {
+                block: (feature_slice.start, feature_slice.stop)
+                for block, feature_slice in self.feature_slices.items()
+            },
             "failure_logit": failure_logit,
             "failure_risk": torch.sigmoid(failure_logit),
         }

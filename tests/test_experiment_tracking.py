@@ -330,10 +330,6 @@ def test_contextual_resume_rejects_any_immutable_manifest_change(tmp_path):
         git_state={"commit": "abc"},
     )
     original = build_experiment_manifest(args, **kwargs)
-    changed = build_experiment_manifest(
-        SimpleNamespace(**{**vars(args), "contextual_risk_topk": 8}), **kwargs
-    )
-
     assert validate_contextual_risk_resume_manifest(original, original) is None
 
     legacy_full = copy.deepcopy(original)
@@ -341,8 +337,17 @@ def test_contextual_resume_rejects_any_immutable_manifest_change(tmp_path):
     del legacy_full["contextual_risk"]["architecture"]["active_feature_blocks"]
     assert validate_contextual_risk_resume_manifest(legacy_full, original) is None
 
-    with pytest.raises(ValueError, match="immutable A3 manifest"):
-        validate_contextual_risk_resume_manifest(original, changed)
+    for override in (
+        {"contextual_risk_feature_set": "score_only"},
+        {"contextual_risk_topk": 8},
+        {"w_contextual_risk_fit": 0.0},
+        {"w_contextual_risk_rank": 0.0},
+    ):
+        changed = build_experiment_manifest(
+            SimpleNamespace(**{**vars(args), **override}), **kwargs
+        )
+        with pytest.raises(ValueError, match="immutable A3 manifest"):
+            validate_contextual_risk_resume_manifest(original, changed)
 
     paired_dependency_changed = copy.deepcopy(original)
     paired_dependency_changed["retrieval_risk"]["temperature"] = 2.0

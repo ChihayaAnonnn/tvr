@@ -455,6 +455,37 @@ def test_registered_a3_launcher_rejects_all_trailing_arguments_before_controller
     assert not marker.exists()
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "CONTEXTUAL_RISK_FEATURE_SET",
+        "CONTEXTUAL_RISK_TOPK",
+        "W_CONTEXTUAL_RISK_FIT",
+        "W_CONTEXTUAL_RISK_RANK",
+        "SEED",
+        "EPOCHS",
+    ],
+)
+def test_registered_a3_launcher_rejects_scientific_environment_override(
+    tmp_path, name
+):
+    controller, marker, _ = _fake_controller(tmp_path)
+    env = _launcher_env(controller, marker)
+    env[name] = "arbitrary"
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert f"environment {name} cannot be overridden" in result.stderr
+    assert not marker.exists()
+
+
 def test_registered_a3_launcher_rejects_existing_output_before_controller(tmp_path):
     controller, marker, _ = _fake_controller(tmp_path)
     output_dir = tmp_path / "existing-output"

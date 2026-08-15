@@ -83,6 +83,18 @@ def registered_a3_variant_argv(manifest: Mapping[str, object]) -> list[str]:
         if not isinstance(value, Mapping):
             raise ValueError(f"registered A3 config.{name} must be an object")
         categories[name] = value
+    duplicated = sorted(
+        name
+        for name, count in Counter(
+            field for values in categories.values() for field in values
+        ).items()
+        if count > 1
+    )
+    if duplicated:
+        raise ValueError(
+            "registered A3 config duplicates effective field "
+            + ", ".join(duplicated)
+        )
     scenario = categories["evaluation"].get("archive_qualification_scenario")
     if scenario not in (None, "none"):
         if scenario not in {

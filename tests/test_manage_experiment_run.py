@@ -129,6 +129,27 @@ def test_registered_a3_variant_argv_is_derived_from_allowlisted_manifest_config(
     ]
 
 
+def test_registered_a3_allowlists_exactly_match_committed_study():
+    import yaml
+
+    import scripts.manage_experiment_run as manage
+
+    study = yaml.safe_load(
+        (REPOSITORY / "experiments/contextual-risk-v2/study.yaml").read_text(
+            encoding="utf-8"
+        )
+    )["registered_a3_launcher"]
+
+    assert manage.REGISTERED_A3_FEATURE_SETS == frozenset(study["feature_sets"])
+    assert manage.REGISTERED_A3_TOPK == frozenset(study["topk"])
+    assert manage.REGISTERED_A3_SEEDS == frozenset(study["seeds"])
+    assert manage.REGISTERED_A3_EPOCHS == frozenset(study["epochs"])
+    assert manage.REGISTERED_A3_LOSSES == frozenset(
+        (weights["fit"], weights["rank"])
+        for weights in study["loss_weights"].values()
+    )
+
+
 @pytest.mark.parametrize(
     "category,name,value",
     [
@@ -167,6 +188,57 @@ def test_registered_a3_variant_argv_rejects_values_outside_frozen_allowlist(
         manage.registered_a3_variant_argv(manifest)
 
 
+def test_registered_a3_variant_argv_rejects_cross_category_field_duplication():
+    import scripts.manage_experiment_run as manage
+
+    manifest = {
+        "stage": "feature_ablation",
+        "seed": 0,
+        "config": {
+            "model": {
+                "contextual_risk_feature_set": "full",
+                "contextual_risk_topk": 16,
+                "seed": 0,
+            },
+            "loss": {
+                "w_contextual_risk_fit": 0.25,
+                "w_contextual_risk_rank": 0.25,
+            },
+            "optimizer": {"seed": 0},
+            "scheduler": {"epochs": 3},
+            "evaluation": {},
+        },
+    }
+
+    with pytest.raises(ValueError, match="duplicates effective field seed"):
+        manage.registered_a3_variant_argv(manifest)
+
+
+def test_registered_a3_final_stage_requires_full_feature_set():
+    import scripts.manage_experiment_run as manage
+
+    manifest = {
+        "stage": "final",
+        "seed": 0,
+        "config": {
+            "model": {
+                "contextual_risk_feature_set": "score_only",
+                "contextual_risk_topk": 16,
+            },
+            "loss": {
+                "w_contextual_risk_fit": 0.25,
+                "w_contextual_risk_rank": 0.25,
+            },
+            "optimizer": {"seed": 0},
+            "scheduler": {"epochs": 5},
+            "evaluation": {},
+        },
+    }
+
+    with pytest.raises(ValueError, match="final stage.*full"):
+        manage.registered_a3_variant_argv(manifest)
+
+
 @pytest.mark.parametrize(
     "feature_set,fit_weight,rank_weight,topk,seed,epochs",
     [
@@ -178,9 +250,10 @@ def test_registered_a3_variant_argv_rejects_values_outside_frozen_allowlist(
     ],
 )
 def test_allowlisted_variant_config_matches_effective_worker_bindings(
-    monkeypatch, feature_set, fit_weight, rank_weight, topk, seed, epochs
+    monkeypatch, tmp_path, feature_set, fit_weight, rank_weight, topk, seed, epochs
 ):
     import main_task_retrieval as retrieval
+    import scripts.manage_experiment_run as manage
 
     manifest = {
         "config": {
@@ -209,16 +282,18 @@ def test_allowlisted_variant_config_matches_effective_worker_bindings(
         },
     }
     monkeypatch.setattr(torch.cuda, "device_count", lambda: 0)
-    args = SimpleNamespace(
-        contextual_risk_feature_set=feature_set,
-        contextual_risk_topk=topk,
-        w_contextual_risk_fit=fit_weight,
-        w_contextual_risk_rank=rank_weight,
-        seed=seed,
-        epochs=epochs,
-        clip_layer_norm_precision="fp32",
-        archive_qualification_scenario="none",
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog", "--output_dir", str(tmp_path), "--datatype", "fixture",
+            "--do_eval", "--clip_layer_norm_precision", "fp32",
+            *manage.registered_a3_variant_argv(
+                {**manifest, "stage": "feature_ablation", "seed": seed}
+            ),
+        ],
     )
+    args = retrieval.get_args()
 
     retrieval._verify_artifact_runtime_bindings(
         args, manifest, REPOSITORY, registered_a3_contract=False
