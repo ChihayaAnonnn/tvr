@@ -24,7 +24,7 @@ stages:
 variants:
   stage1_baselines: [raw_score, top1_top2_margin, entropy, energy, score_variance, sap, a2_logvar, a1, a3]
   stage2_features: [score_only, semantic_only, no_context, no_score_geometry, full]
-  stage3_losses: [bce_only, bce_fit, bce_rank, full_loss]
+  stage3_losses: [bce, bce_fit, bce_rank, full]
   stage3_topk: [1, 4, 8, 16, 32]
 
 seeds: [0, 1, 2]
