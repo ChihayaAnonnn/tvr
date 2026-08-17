@@ -82,7 +82,7 @@
           "test_csv": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
           "split_manifest": "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/dataloaders/splits/msrvtt_trusted_v1_seed0.json",
           "data_path": "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json",
-          "features_path": "/data2/hxj/data/MSRVTT/videos/compressed_videos/msrvtt_224_12fps",
+          "features_path": "/data2/hxj/data/MSRVTT/videos/compressed_videos/msrvtt_224_12fps/",
           "use_attributes": false,
           "msrvtt_attributes_path": "",
           "msvd_attributes_path": "",
@@ -197,11 +197,15 @@
           "run_final_test": false
         }
       },
-      "parent_run_ids": [],
+      "parent_run_ids": [
+        "msrvtt-baseline-validation_baselines-seed000-20260815T120000Z-70622947894c"
+      ],
       "selection_lineage": [
         {
           "continuation_rule": "fresh_from_canonical_a1",
-          "parent_checkpoint": "/data2/hxj/project/UATVR/ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4"
+          "parent_checkpoint": "/data2/hxj/project/UATVR/ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4",
+          "authorization": "human approved",
+          "report": "experiments/contextual-risk-v2/summaries/stage1-baselines-retry-authorization.md"
         }
       ],
       "validation_authorized": true,
