@@ -477,7 +477,7 @@ def test_exact_a3_args_are_composed_by_the_real_shell_launchers(tmp_path):
             "A3_ARGV_CAPTURE": str(full_capture),
             "OUTPUT_DIR": str(worker_output),
             "RUN_ID": "contract_only_capture",
-            "CUDA_VISIBLE_DEVICES": "0,2,3,4",
+            "CUDA_VISIBLE_DEVICES": "0,1,2,3",
             "NPROC": "4",
             "TRAIN_BATCH_SIZE": "256",
             "TRAIN_GRADIENT_ACCUMULATION_STEPS": "1",
@@ -516,7 +516,7 @@ def test_exact_a3_args_are_composed_by_the_real_shell_launchers(tmp_path):
 
 
 def test_registered_a3_exact_real_parser_contract_passes(monkeypatch, tmp_path):
-    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1,2,3")
     args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
 
     retrieval._assert_registered_a3_contract(args)
@@ -525,7 +525,7 @@ def test_registered_a3_exact_real_parser_contract_passes(monkeypatch, tmp_path):
 def test_registered_a3_python_contract_rejects_manifest_material_mismatch(
     monkeypatch, tmp_path,
 ):
-    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1,2,3")
     args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
     batch = {
         "world_size": 4,
@@ -545,7 +545,7 @@ def test_registered_a3_python_contract_rejects_manifest_material_mismatch(
 def test_registered_a3_contract_rejects_missing_required_parser_field(
     monkeypatch, tmp_path,
 ):
-    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1,2,3")
     args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
     del args.contextual_risk_topk
 
@@ -565,7 +565,7 @@ def test_registered_a3_contract_rejects_missing_required_parser_field(
 def test_registered_a3_contract_rejects_wrong_semantic_types(
     monkeypatch, tmp_path, name, value, message,
 ):
-    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1,2,3")
     args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
     setattr(args, name, value)
 
@@ -574,7 +574,7 @@ def test_registered_a3_contract_rejects_wrong_semantic_types(
 
 
 def test_registered_a3_contract_normalizes_paths_semantically(monkeypatch, tmp_path):
-    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1,2,3")
     args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
     args.train_csv = str(Path(args.train_csv).parent / ".." / "msrvtt_trusted_v1" / "train.csv")
     retrieval._assert_registered_a3_contract(args)
@@ -587,7 +587,7 @@ def test_registered_a3_contract_normalizes_paths_semantically(monkeypatch, tmp_p
 def test_registered_a3_contract_normalizes_only_declared_missing_future_flag(
     monkeypatch, tmp_path,
 ):
-    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1,2,3")
     args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
     assert not hasattr(args, "intrinsic_concentration_only")
     retrieval._assert_registered_a3_contract(args)
@@ -626,7 +626,7 @@ def test_registered_a3_contract_schema_is_complete_for_real_parser(monkeypatch, 
 def test_registered_a3_four_rank_contract_only_exact_launcher_probe(tmp_path):
     output_dir = tmp_path / "must-not-be-created"
     env = os.environ.copy()
-    env["CUDA_VISIBLE_DEVICES"] = "0,2,3,4"
+    env["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
     command = [
         "/home/xujie/.conda/envs/tvr/bin/torchrun",
         "--nproc_per_node=4",
