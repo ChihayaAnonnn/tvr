@@ -7,7 +7,7 @@
       "stage": "baseline",
       "variant": "validation_baselines",
       "seed": 0,
-      "scheduled_timestamp_utc": "20260818T020000Z",
+      "scheduled_timestamp_utc": "20260818T030000Z",
       "environment": {
         "python": "3.10.0",
         "pytorch": "2.1.2+cu121",
@@ -199,7 +199,8 @@
       },
       "parent_run_ids": [
         "msrvtt-baseline-validation_baselines-seed000-20260815T120000Z-70622947894c",
-        "msrvtt-baseline-validation_baselines-seed000-20260818T010000Z-329ec6ae2070"
+        "msrvtt-baseline-validation_baselines-seed000-20260818T010000Z-329ec6ae2070",
+        "msrvtt-baseline-validation_baselines-seed000-20260818T020000Z-ec47075faa16"
       ],
       "selection_lineage": [
         {

@@ -13,7 +13,17 @@
      0,1,2,3 (commit 45bd2dd, reverted at 05e007e, cherry-picked back as
      05f57fa) the launcher's git SHA changed and the archive manager
      refused launch. Corrective order: modify launcher first (commit)
-     → reserve then. Attempt 3 follows that order.
+     → reserve then.
+3. `msrvtt-baseline-validation_baselines-seed000-20260818T020000Z-ec47075faa16`
+   - Manifest SHA: `9ac2e2a2fa021b0ff0931d3563a1acf54890e0e890a1cb4c8b2dbe212f9716c2`
+   - Cancellation commit: `051cda0`
+   - Cause: attempt 3 crashed at runtime with `registered A3 effective
+     environment mismatch: CUDA_VISIBLE_DEVICES`. The registered
+     environment contract at main_task_retrieval.py:267 and :1769 also
+     hardcodes the topology; the launcher pivot alone was insufficient.
+     Commit 62069e0 extends the pivot to main_task_retrieval.py and the
+     nine test assertions that asserted the frozen topology. Attempt 4
+     runs after this complete infra pivot.
 
 ## Cause
 
