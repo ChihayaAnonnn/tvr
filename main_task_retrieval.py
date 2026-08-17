@@ -1684,7 +1684,7 @@ def _registered_a3_contract_schema():
             name="CUDA_VISIBLE_DEVICES",
             source="environment",
             kind="string",
-            expected="0,2,3,4",
+            expected="0,1,2,3",
         )
     )
     return tuple(fields)
