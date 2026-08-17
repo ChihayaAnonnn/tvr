@@ -41,8 +41,11 @@ def prepare(args: argparse.Namespace) -> object:
 def launch(args: argparse.Namespace) -> object:
     controller = _controller(args)
     phase = Path(args.phase)
+    # Test-authorized launches are enforced by re-executing Stage 5 completion,
+    # study SHA, and frozen-configuration proofs from committed state inside
+    # ``launch_reserved``; no CLI flag can bypass those proofs.
     return controller.launch_reserved(
-        controller.reservations_for_phase(phase), allow_test=args.test_authorized
+        controller.reservations_for_phase(phase), phase=phase
     )
 
 
@@ -58,10 +61,23 @@ def monitor(args: argparse.Namespace) -> object:
     return controller.monitor(run_dirs)
 
 
+def _path_is_test_sealed(path: Path) -> bool:
+    """A path is sealed if any of its components contains the substring ``test``.
+
+    ``Path.parts`` yields individual path components. Guarding by exact equality
+    (``"test" in {parts}``) missed real artifact filenames such as
+    ``final_test.json`` or ``stage7_test_metrics.json``. The substring form
+    matches those while still allowing benign paths (no component contains
+    ``test``).
+    """
+
+    return any("test" in part.lower() for part in path.parts)
+
+
 def _read_validation_payload(path: Path, split: str) -> Mapping[str, object]:
     if split != "validation":
         raise ValueError("gate input must be declared as validation before any file access")
-    if "test" in {part.lower() for part in path.parts}:
+    if _path_is_test_sealed(path):
         raise ValueError("test paths remain sealed during gate evaluation")
     try:
         payload = strict_json_loads(path.read_text(encoding="utf-8"))
@@ -95,10 +111,18 @@ def evaluate_gate(args: argparse.Namespace) -> object:
     elif args.stage == 4:
         decision = evaluate_stage4_gate(payload["comparison"], **common)
     else:
+        frozen_sim = payload.get("sim_matrix_sha256_frozen")
+        candidate_sim = payload.get("sim_matrix_sha256_candidate")
+        if not isinstance(frozen_sim, str) or not isinstance(candidate_sim, str):
+            raise ValueError(
+                "Stage 5 payload must supply sim_matrix_sha256_frozen and "
+                "sim_matrix_sha256_candidate; operator-asserted rank booleans "
+                "are no longer accepted"
+            )
         decision = evaluate_stage5_gate(
             payload["comparison"],
-            retrieval_ranks_match=payload.get("retrieval_ranks_match") is True,
-            recall_at_k_match=payload.get("recall_at_k_match") is True,
+            sim_matrix_sha256_frozen=frozen_sim,
+            sim_matrix_sha256_candidate=candidate_sim,
             frozen_configuration_sha256=payload.get("frozen_configuration_sha256"),
             **common,
         )
@@ -133,7 +157,6 @@ def build_parser() -> argparse.ArgumentParser:
     command = commands.add_parser("launch", allow_abbrev=False)
     _common(command)
     command.add_argument("--phase", required=True)
-    command.add_argument("--test-authorized", action="store_true")
     command.set_defaults(handler=launch)
 
     command = commands.add_parser("monitor", allow_abbrev=False)

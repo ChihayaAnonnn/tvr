@@ -180,20 +180,39 @@ def test_stage4_rejects_missing_or_changed_frozen_bootstrap_protocol():
         evaluate_stage4_gate(changed, split="validation")
 
 
-def test_stage5_adds_frozen_retrieval_identity_requirement():
+def test_stage5_computes_retrieval_identity_from_sim_matrix_sha256():
     payload = _confirmation()
     passed = evaluate_stage5_gate(
-        payload, retrieval_ranks_match=True, recall_at_k_match=True,
-        frozen_configuration_sha256=DIGEST, split="validation",
+        payload, split="validation",
+        sim_matrix_sha256_frozen=DIGEST,
+        sim_matrix_sha256_candidate=DIGEST,
+        frozen_configuration_sha256=DIGEST,
     )
     assert passed.passed
     assert passed.frozen_configuration_sha256 == DIGEST
     failed = evaluate_stage5_gate(
-        payload, retrieval_ranks_match=True, recall_at_k_match=False,
-        split="validation",
+        payload, split="validation",
+        sim_matrix_sha256_frozen=DIGEST,
+        sim_matrix_sha256_candidate="b" * 64,
     )
     assert not failed.passed
     assert "frozen_retrieval_exact_match" in failed.failed_checks
+
+
+def test_stage5_rejects_missing_or_malformed_sim_matrix_sha256():
+    payload = _confirmation()
+    with pytest.raises(ValueError, match="SHA-256"):
+        evaluate_stage5_gate(
+            payload, split="validation",
+            sim_matrix_sha256_frozen="not-a-sha",
+            sim_matrix_sha256_candidate=DIGEST,
+        )
+    with pytest.raises(ValueError, match="SHA-256"):
+        evaluate_stage5_gate(
+            payload, split="validation",
+            sim_matrix_sha256_frozen=DIGEST,
+            sim_matrix_sha256_candidate="a" * 63 + "z",
+        )
 
 
 def test_gate_inputs_reject_missing_nonfinite_and_nonscalar_values():
@@ -305,13 +324,17 @@ def test_load_phase_rejects_absolute_traversal_and_duplicate_identity(controller
 
 
 def test_phase_run_results_rejects_missing_duplicate_failed_and_partial_phase():
-    phase = {"runs": [_run_spec("one"), _run_spec("two", timestamp="20260815T120100Z")]}
+    runs = [_run_spec("one"), _run_spec("two", timestamp="20260815T120100Z")]
+    identity_one = ("msrvtt", "feature_ablation", "one", 0, "20260815T120000Z")
+    identity_two = ("msrvtt", "feature_ablation", "two", 0, "20260815T120100Z")
+    phase = {"runs": runs}
     reservations = [
         {"run_id": "one", "event": "reserved", "manifest_sha256": DIGEST},
         {"run_id": "two", "event": "reserved", "manifest_sha256": "b" * 64},
     ]
+    ids = {identity_one: "one", identity_two: "two"}
     with pytest.raises(ValueError, match="missing terminal"):
-        phase_run_results(phase, reservations, {"one": "one", "two": "two"})
+        phase_run_results(phase, reservations, ids)
     with pytest.raises(ValueError, match="failed"):
         phase_run_results(
             phase,
@@ -319,7 +342,7 @@ def test_phase_run_results_rejects_missing_duplicate_failed_and_partial_phase():
                 {"run_id": "one", "event": "failed", "manifest_sha256": DIGEST},
                 {"run_id": "two", "event": "completed", "manifest_sha256": "b" * 64},
             ],
-            {"one": "one", "two": "two"},
+            ids,
         )
     with pytest.raises(ValueError, match="duplicate"):
         phase_run_results(
@@ -329,8 +352,32 @@ def test_phase_run_results_rejects_missing_duplicate_failed_and_partial_phase():
                 {"run_id": "one", "event": "completed", "manifest_sha256": DIGEST},
                 {"run_id": "two", "event": "completed", "manifest_sha256": "b" * 64},
             ],
-            {"one": "one", "two": "two"},
+            ids,
         )
+
+
+def test_phase_run_results_survives_duplicate_variants_across_datasets():
+    """Stage 7 has two ``frozen_test`` runs (msrvtt + msvd); variant keying
+    would silently collapse them to one. Identity keying keeps both."""
+
+    stage7 = {
+        "runs": [
+            _run_spec("frozen_test", "final", dataset="msrvtt",
+                      timestamp="20260815T130000Z", test_authorized=True),
+            _run_spec("frozen_test", "final", dataset="msvd",
+                      timestamp="20260815T130100Z", test_authorized=True),
+        ]
+    }
+    id_mst = ("msrvtt", "final", "frozen_test", 0, "20260815T130000Z")
+    id_msv = ("msvd",   "final", "frozen_test", 0, "20260815T130100Z")
+    records = [
+        {"run_id": "mst", "event": "reserved", "manifest_sha256": DIGEST},
+        {"run_id": "mst", "event": "completed", "manifest_sha256": DIGEST},
+        {"run_id": "msv", "event": "reserved", "manifest_sha256": "b" * 64},
+        {"run_id": "msv", "event": "completed", "manifest_sha256": "b" * 64},
+    ]
+    result = phase_run_results(stage7, records, {id_mst: "mst", id_msv: "msv"})
+    assert set(result.keys()) == {id_mst, id_msv}
 
 
 class RecordingRunner:
@@ -580,6 +627,116 @@ def test_authorize_test_requires_completed_stage5_frozen_hash_and_explicit_stage
 
     result = controller.authorize_test(phase, decision_path, DIGEST)
     assert result == {}
+
+
+def test_launch_test_authorized_reservation_refuses_without_committed_stage5_evidence(controller_repo):
+    """Launch must re-execute Stage 5 + frozen-configuration proofs for any
+    ``test_authorized`` reservation, not rely on an unverified CLI flag."""
+
+    phase_path = Path("experiments/contextual-risk-v2/phases/stage2.json")
+    payload = json.loads((controller_repo / phase_path).read_text())
+    payload["phase"] = "stage7-final"
+    payload["runs"] = [_run_spec("frozen_test", "final", test_authorized=True)]
+    payload["runs"][0]["selection_lineage"] = [{"frozen_configuration_sha256": DIGEST}]
+    (controller_repo / phase_path).write_text(json.dumps(payload), encoding="utf-8")
+    subprocess.run(["git", "add", phase_path], cwd=controller_repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "stage7 declaration"], cwd=controller_repo, check=True)
+
+    run_id = "msrvtt-final-frozen_test-seed000-20260815T120000Z-abcdef012345"
+    verified_json = json.dumps({
+        "run_id": run_id, "run_dir": str(controller_repo / "artifacts/run"),
+        "manifest_sha256": DIGEST, "state": "reserved",
+        "stage": "final", "test_authorized": True,
+        "command_argv": ["env", f"ARTIFACT_RUN_ID={run_id}", "bash",
+                         "run_train_msrvtt_contextual_risk_bg.sh"],
+        "registered_a3_variant_argv": [],
+    })
+    reservation = {
+        "run_id": run_id, "artifact_path": str(controller_repo / "artifacts/run"),
+        "manifest_sha256": DIGEST, "dataset": "msrvtt",
+        "environment": _run_spec()["environment"],
+    }
+    phase = load_phase_spec(controller_repo, phase_path)
+
+    controller = CampaignController(
+        controller_repo, runner=RecordingRunner([verified_json]),
+        expected_study_sha=DIGEST,
+    )
+    with pytest.raises(ValueError, match="Stage 5"):
+        controller.launch_reserved([reservation], phase=phase)
+
+    controller_no_phase = CampaignController(
+        controller_repo, runner=RecordingRunner([verified_json]),
+        expected_study_sha=DIGEST,
+    )
+    with pytest.raises(ValueError, match="authorize-test"):
+        controller_no_phase.launch_reserved([reservation])
+
+
+def test_launch_test_authorized_reservation_refuses_pending_frozen_configuration(controller_repo):
+    """A phase whose frozen_configuration_sha256 is still the placeholder
+    ``pending-stage5-freeze`` cannot launch even after Stage 5 completes."""
+
+    phase_path = Path("experiments/contextual-risk-v2/phases/stage2.json")
+    payload = json.loads((controller_repo / phase_path).read_text())
+    payload["phase"] = "stage7-final"
+    payload["runs"] = [_run_spec("frozen_test", "final", test_authorized=True)]
+    payload["runs"][0]["selection_lineage"] = [
+        {"frozen_configuration_sha256": "pending-stage5-freeze"}
+    ]
+    (controller_repo / phase_path).write_text(json.dumps(payload), encoding="utf-8")
+    subprocess.run(["git", "add", phase_path], cwd=controller_repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "stage7 pending freeze"], cwd=controller_repo, check=True)
+
+    run_id = "msrvtt-final-frozen_test-seed000-20260815T120000Z-abcdef012345"
+    verified_json = json.dumps({
+        "run_id": run_id, "run_dir": str(controller_repo / "artifacts/run"),
+        "manifest_sha256": DIGEST, "state": "reserved",
+        "stage": "final", "test_authorized": True,
+        "command_argv": ["env", f"ARTIFACT_RUN_ID={run_id}", "bash",
+                         "run_train_msrvtt_contextual_risk_bg.sh"],
+        "registered_a3_variant_argv": [],
+    })
+    reservation = {
+        "run_id": run_id, "artifact_path": str(controller_repo / "artifacts/run"),
+        "manifest_sha256": DIGEST, "dataset": "msrvtt",
+        "environment": _run_spec()["environment"],
+    }
+    phase = load_phase_spec(controller_repo, phase_path)
+    controller = CampaignController(
+        controller_repo, runner=RecordingRunner([verified_json]),
+        expected_study_sha=DIGEST,
+    )
+    with pytest.raises(ValueError, match="pending-stage5-freeze"):
+        controller.launch_reserved([reservation], phase=phase)
+
+
+def test_sealed_path_guard_rejects_test_named_files(tmp_path):
+    """The sealed-test guard should reject any path component whose name
+    contains ``test`` as a substring, not merely equals ``test``."""
+
+    import importlib.util
+    from pathlib import PurePosixPath
+    module_path = Path(__file__).resolve().parents[1] / "scripts/run_reliability_campaign.py"
+    spec = importlib.util.spec_from_file_location("run_reliability_campaign", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    for name in ["final_test.json", "stage7_test_metrics.json",
+                 "msrvtt_jsfusion_test_R1.json", "TEST_summary.json"]:
+        assert module._path_is_test_sealed(PurePosixPath("summaries") / name), (
+            f"expected {name} to be flagged"
+        )
+        path = tmp_path / name
+        path.write_text('{"split":"validation"}', encoding="utf-8")
+        with pytest.raises(ValueError, match="sealed"):
+            module._read_validation_payload(path, "validation")
+
+    # Benign components: no "test" substring anywhere in the checked prefix.
+    for benign in [PurePosixPath("summaries/validation.json"),
+                   PurePosixPath("gates/final.json"),
+                   PurePosixPath("ok.json")]:
+        assert not module._path_is_test_sealed(benign), f"benign {benign} was flagged"
 
 
 def test_cli_entrypoint_resolves_repository_imports_without_pythonpath():

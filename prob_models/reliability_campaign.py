@@ -392,16 +392,37 @@ def evaluate_stage4_gate(
 
 
 def evaluate_stage5_gate(
-    payload: Mapping[str, object], *, retrieval_ranks_match: bool,
-    recall_at_k_match: bool, split: str,
+    payload: Mapping[str, object], *, split: str,
+    sim_matrix_sha256_frozen: str,
+    sim_matrix_sha256_candidate: str,
     study_sha: str | None = None, phase_sha: str | None = None,
     frozen_configuration_sha256: str | None = None,
 ) -> GateDecision:
-    if type(retrieval_ranks_match) is not bool or type(recall_at_k_match) is not bool:
-        raise ValueError("retrieval identity checks must be booleans")
+    """Evaluate the Stage 5 confirmation gate with a computed retrieval-identity check.
+
+    The frozen-retriever contract is verified by comparing the SHA-256 of the
+    pre-DSL similarity matrix produced under a canonical evaluator (see
+    ``scripts/verify_frozen_retrieval_equivalence.py``). Byte-equal similarity
+    matrices imply byte-equal ranks and byte-equal Recall@k on the same
+    dataset, so the gate no longer accepts operator-asserted booleans.
+    """
+
+    if (
+        not isinstance(sim_matrix_sha256_frozen, str)
+        or not isinstance(sim_matrix_sha256_candidate, str)
+        or len(sim_matrix_sha256_frozen) != _SHA256_LENGTH
+        or len(sim_matrix_sha256_candidate) != _SHA256_LENGTH
+        or any(c not in "0123456789abcdef" for c in sim_matrix_sha256_frozen.lower())
+        or any(c not in "0123456789abcdef" for c in sim_matrix_sha256_candidate.lower())
+    ):
+        raise ValueError(
+            "Stage 5 retrieval identity requires two 64-hex SHA-256 hashes: "
+            "frozen retriever and candidate must both be provided"
+        )
+    identity_match = sim_matrix_sha256_frozen.lower() == sim_matrix_sha256_candidate.lower()
     return _evaluate_confirmation_gate(
         5, payload, split=split, study_sha=study_sha, phase_sha=phase_sha,
-        retrieval_match=retrieval_ranks_match and recall_at_k_match,
+        retrieval_match=identity_match,
         frozen_configuration_sha256=frozen_configuration_sha256,
     )
 
@@ -474,19 +495,41 @@ def load_phase_spec(repo: Path, path: Path) -> CommittedPhase:
     return CommittedPhase(relative, payload, hashlib.sha256(content).hexdigest())
 
 
+def _phase_run_identity(run: Mapping[str, object]) -> tuple:
+    """Canonical identity tuple for a phase run.
+
+    Matches :func:`load_phase_spec`'s uniqueness key so that phases with
+    repeated ``variant`` values (e.g. Stage 7's dual ``frozen_test`` entries
+    for MSRVTT and MSVD) do not collide.
+    """
+
+    return tuple(
+        run[name]
+        for name in ("dataset", "stage", "variant", "seed", "scheduled_timestamp_utc")
+    )
+
+
 def phase_run_results(
     phase: Mapping[str, object],
     records: Sequence[Mapping[str, object]],
-    run_ids_by_variant: Mapping[str, str],
-) -> dict[str, Mapping[str, object]]:
-    result: dict[str, Mapping[str, object]] = {}
+    run_ids_by_identity: Mapping[tuple, str],
+) -> dict[tuple, Mapping[str, object]]:
+    """Collect terminal records for every run in a phase, keyed by identity.
+
+    The result dictionary is keyed by the same 5-tuple identity that
+    :func:`load_phase_spec` uses to guarantee uniqueness. Variant strings
+    alone are insufficient: Stage 7 legitimately has two ``frozen_test``
+    runs (MSRVTT + MSVD) that would silently collide under variant keying.
+    """
+
+    result: dict[tuple, Mapping[str, object]] = {}
     for run in phase.get("runs", []):  # type: ignore[union-attr]
         if not isinstance(run, Mapping):
             raise ValueError("phase run must be an object")
-        variant = str(run["variant"])
-        if variant not in run_ids_by_variant:
-            raise ValueError(f"missing run identity for phase variant {variant}")
-        run_id = run_ids_by_variant[variant]
+        identity = _phase_run_identity(run)
+        if identity not in run_ids_by_identity:
+            raise ValueError(f"missing run identity for phase entry {identity}")
+        run_id = run_ids_by_identity[identity]
         matching = [record for record in records if record.get("run_id") == run_id]
         reservations = [record for record in matching if record.get("event") == "reserved"]
         terminals = [record for record in matching if record.get("event") in _TERMINAL_EVENTS]
@@ -501,7 +544,7 @@ def phase_run_results(
             raise ValueError(f"phase worker {run_id} failed or was cancelled")
         if terminal.get("manifest_sha256") != reservations[0].get("manifest_sha256"):
             raise ValueError(f"manifest changed between reservation and terminal for {run_id}")
-        result[variant] = terminal
+        result[identity] = terminal
     return result
 
 
@@ -776,12 +819,13 @@ class CampaignController:
 
     @staticmethod
     def _validate_training_capability(
-        reservation: Mapping[str, object], verified: Mapping[str, object], *, allow_test: bool
+        reservation: Mapping[str, object], verified: Mapping[str, object]
     ) -> list[str]:
         if verified.get("state") != "reserved":
             raise ValueError("scientific launch requires an exact reserved run")
-        if verified.get("test_authorized") and not allow_test:
-            raise ValueError("test-authorized launch must pass through authorize-test")
+        # Test-authorization is enforced upstream by _assert_test_launch_authorized.
+        # This function verifies training-capability invariants that hold for every
+        # reservation regardless of test authorization status.
         if reservation.get("dataset") == "msvd":
             raise ValueError(
                 "artifact-aware MSVD launcher is not qualified; Stage 5/7 must remain sealed"
@@ -816,18 +860,31 @@ class CampaignController:
         }
 
     def launch_reserved(
-        self, reservations: Sequence[Mapping[str, object]], *, allow_test: bool = False
+        self,
+        reservations: Sequence[Mapping[str, object]],
+        *,
+        phase: "CommittedPhase | Path | None" = None,
     ) -> list[dict[str, object]]:
         self._clean()
         if not reservations:
             raise ValueError("launch requires at least one committed reservation")
-        prepared = []
-        for reservation in reservations:
-            verified = self._verify_reservation(reservation)
-            command = self._validate_training_capability(
-                reservation, verified, allow_test=allow_test
-            )
-            prepared.append((reservation, verified, command))
+        verified_reservations = [
+            (reservation, self._verify_reservation(reservation))
+            for reservation in reservations
+        ]
+        if any(verified.get("test_authorized") for _, verified in verified_reservations):
+            if phase is None:
+                raise ValueError(
+                    "test-authorized launch requires the committed phase and prior "
+                    "authorize-test evidence"
+                )
+            if isinstance(phase, Path):
+                phase = load_phase_spec(self.repo_root, phase)
+            self._assert_test_launch_authorized(phase)
+        prepared = [
+            (reservation, verified, self._validate_training_capability(reservation, verified))
+            for reservation, verified in verified_reservations
+        ]
         results = []
         lock = self.artifact_root / ".locks/contextual-risk-v2-training.lock"
         with TrainingLease(lock):
@@ -871,6 +928,78 @@ class CampaignController:
             "--artifact-root", str(self.artifact_root),
             "--summary", summary.as_posix(),
         )
+
+    def _assert_test_launch_authorized(self, phase: CommittedPhase) -> str:
+        """Enforce Stage 5 completion and frozen-configuration binding at launch.
+
+        Derives the frozen configuration hash from the committed Stage 7 phase
+        specification, then re-executes the same proofs :meth:`authorize_test`
+        executes. This makes ``launch`` self-authorizing for
+        ``test_authorized`` reservations rather than relying on an unverified
+        CLI flag.
+        """
+
+        runs = phase.payload["runs"]
+        if not all(run["stage"] == "final" and run["test_authorized"] is True for run in runs):
+            raise ValueError(
+                "test-authorized launch requires the committed phase to declare "
+                "every run as an explicit final test reservation"
+            )
+        lineage_hashes: set[str] = set()
+        for run in runs:
+            for item in run["selection_lineage"]:
+                if not isinstance(item, Mapping):
+                    continue
+                value = item.get("frozen_configuration_sha256")
+                if isinstance(value, str):
+                    lineage_hashes.add(value)
+        if not lineage_hashes:
+            raise ValueError(
+                "test-authorized launch requires committed frozen-configuration "
+                "lineage on every Stage 7 run"
+            )
+        if len(lineage_hashes) != 1:
+            raise ValueError(
+                "test-authorized launch requires a single frozen-configuration "
+                "hash across all Stage 7 runs"
+            )
+        frozen_hash = lineage_hashes.pop()
+        if not (isinstance(frozen_hash, str) and len(frozen_hash) == _SHA256_LENGTH):
+            raise ValueError(
+                "test-authorized launch requires a committed 64-hex frozen "
+                "configuration hash (found: 'pending-stage5-freeze' or "
+                "malformed hash); rerun authorize-test after Stage 5 freezes"
+            )
+        decision_path = Path(
+            "experiments/contextual-risk-v2/summaries/stage5-gate.json"
+        )
+        try:
+            decision_bytes = _committed_bytes(
+                self.repo_root, decision_path, "Stage 5 decision"
+            )
+            decision = strict_json_loads(decision_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError, StrictJSONError, ValueError) as exc:
+            raise ValueError(
+                "test-authorized launch requires the committed passing Stage 5 gate"
+            ) from exc
+        if (
+            not isinstance(decision, Mapping)
+            or decision.get("stage") != 5
+            or decision.get("passed") is not True
+        ):
+            raise ValueError(
+                "test-authorized launch requires the committed passing Stage 5 gate"
+            )
+        if decision.get("study_sha") != self.expected_study_sha:
+            raise ValueError(
+                "test-authorized launch: Stage 5 gate study SHA differs from the frozen study"
+            )
+        if decision.get("frozen_configuration_sha256") != frozen_hash:
+            raise ValueError(
+                "test-authorized launch: Stage 5 frozen configuration hash differs from the phase lineage"
+            )
+        self._assert_stage5_completed()
+        return frozen_hash
 
     def authorize_test(
         self,
