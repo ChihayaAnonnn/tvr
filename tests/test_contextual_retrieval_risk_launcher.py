@@ -743,7 +743,7 @@ def test_registered_a3_launcher_preserves_the_fresh_training_contract():
     assert 'EXPERIMENT_PROFILE=hygiene' in text
     assert 'TRAIN_BATCH_SIZE=256' in text
     assert 'TRAIN_GRADIENT_ACCUMULATION_STEPS=1' in text
-    assert 'CUDA_VISIBLE_DEVICES="0,1,2,3"' in text
+    assert 'CUDA_VISIBLE_DEVICES="0,2,3,4"' in text
     assert 'NPROC=4' in text
     assert 'RUN_DATE="$(date +%Y%m%d)"' in text
     assert 'RUN_TIME="$(date +%H%M%S)"' in text

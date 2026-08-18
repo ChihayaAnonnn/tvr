@@ -264,7 +264,7 @@ def _verify_artifact_runtime_bindings(
             raise ValueError("archive qualification manifest config is incomplete")
     if registered_a3_contract:
         required_environment = {
-            "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+            "CUDA_VISIBLE_DEVICES": "0,2,3,4",
             "CUDA_MODULE_LOADING": "LAZY",
             "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
             "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
@@ -1684,7 +1684,7 @@ def _registered_a3_contract_schema():
             name="CUDA_VISIBLE_DEVICES",
             source="environment",
             kind="string",
-            expected="0,1,2,3",
+            expected="0,2,3,4",
         )
     )
     return tuple(fields)
@@ -1766,7 +1766,7 @@ def _registered_a3_expected_environment():
     """Return deterministic process values fixed by the registered launcher."""
 
     return {
-        "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+        "CUDA_VISIBLE_DEVICES": "0,2,3,4",
         "CUDA_MODULE_LOADING": "LAZY",
         "PYTHONHASHSEED": "0",
         "CLIP_CACHE_DIR": str(REGISTERED_A3_CLIP_CACHE_DIR),

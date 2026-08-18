@@ -492,7 +492,7 @@ def test_contextual_resume_rejects_runtime_topology_change(tmp_path, monkeypatch
         output_dir=str(tmp_path),
         n_gpu=4,
     )
-    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1,2,3")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
     existing = build_experiment_manifest(
         args, {"protocol_version": "trusted-v1"}, {"world_size": 4}, {"commit": "abc"}
     )
