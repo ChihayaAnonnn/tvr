@@ -999,6 +999,16 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         help="[--use_uatvr_full only] weight on orthogonality loss.",
     )
     parser.add_argument(
+        "--w_sap_failure_bce",
+        type=float,
+        default=0.0,
+        help=(
+            "Fix 1: weight on BCE(u_mode, V2T failure). Default 0.0 = no-op. "
+            "Enable in pre-registered study to test whether direct supervision "
+            "makes SAP.u_mode predictive of retrieval failure."
+        ),
+    )
+    parser.add_argument(
         "--use_retrieval_risk_sidecar",
         action="store_true",
         help="Train or evaluate the detached retrieval-risk sidecar.",
@@ -1622,6 +1632,9 @@ _REGISTERED_A3_DYNAMIC_NAMESPACE_FIELDS = {
     # The production qualification contract validates this independently;
     # ordinary registered A3 parses the inert value ``none``.
     "archive_qualification_scenario",
+    # Fix 1 (post-Stage 1): out of scope for A3 contract. A3 runs must leave
+    # this at its default 0.0; new studies register it in their own contract.
+    "w_sap_failure_bce",
 }
 
 

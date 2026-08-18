@@ -346,6 +346,10 @@ class UATVR(CLIP4ClipPreTrainedModel):
         self.w_neg_reg = getattr(self.task_config, "w_neg_reg", 1e-2)
         self.w_uncertainty_reg = getattr(self.task_config, "w_uncertainty_reg", 1e-3)
         self.w_orth = getattr(self.task_config, "w_orth", 0.0)
+        # Fix 1: 显式 failure supervision on SAP.u_mode (V2T direction).
+        # Default 0.0 = no-op; enable in pre-registered study to test whether
+        # a direct supervision signal makes u_mode predictive of retrieval failure.
+        self.w_sap_failure_bce = float(getattr(self.task_config, "w_sap_failure_bce", 0.0))
 
         # 退火系数：默认关闭；warmup_epochs > 0 时前 N 个 epoch 线性增大到 1.0
         self.anneal_warmup_epochs = getattr(self.task_config, "anneal_warmup_epochs", 0)
@@ -732,6 +736,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
             loss += res["retrieval_risk_loss"]
             loss += res.get("csd_logvar_loss", sim_matrix.new_zeros(()))
             loss += res.get("contextual_risk_loss", sim_matrix.new_zeros(()))
+            loss += res.get("sap_failure_bce_loss", sim_matrix.new_zeros(()))
 
             loss_dict = {
                 "total": loss,
@@ -744,6 +749,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 "retrieval_risk_edl": res["retrieval_risk_edl"],
                 "retrieval_risk_fit": res["retrieval_risk_fit"],
                 "retrieval_risk_rank": res["retrieval_risk_rank"],
+                "sap_failure_bce_loss": res.get(
+                    "sap_failure_bce_loss", sim_matrix.new_zeros(())
+                ),
             }
             loss_dict.update(
                 {key: value for key, value in res.items() if key.startswith("csd_logvar_")}
@@ -1072,6 +1080,16 @@ class UATVR(CLIP4ClipPreTrainedModel):
             text_token, visual_output, attention_mask, video_mask
         ) * logit_scale
 
+        # Fix 1: compute u_mode BCE loss when enabled (fires in all training paths,
+        # including sidecar_only, so SAP receives supervision even when other
+        # SAP losses are zeroed out).
+        if self.training and self.w_sap_failure_bce > 0.0:
+            sap_failure_bce_loss = self.w_sap_failure_bce * self._sap_failure_bce_loss(
+                u_mode, wti_logits
+            )
+        else:
+            sap_failure_bce_loss = wti_logits.new_zeros(())
+
         if self.training and self.contextual_risk_sidecar_only:
             contextual_terms = self._contextual_risk_terms(
                 wti_logits,
@@ -1090,6 +1108,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 "retrieval_risk_edl": zero,
                 "retrieval_risk_fit": zero,
                 "retrieval_risk_rank": zero,
+                "sap_failure_bce_loss": sap_failure_bce_loss,
                 **contextual_terms,
             }
 
@@ -1111,6 +1130,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 "retrieval_risk_edl": zero,
                 "retrieval_risk_fit": zero,
                 "retrieval_risk_rank": zero,
+                "sap_failure_bce_loss": sap_failure_bce_loss,
                 **csd_terms,
             }
 
@@ -1125,6 +1145,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 "evidential_loss": zero,
                 "neg_reg_loss": zero,
                 "orth_loss": zero,
+                "sap_failure_bce_loss": sap_failure_bce_loss,
                 **risk_terms,
             }
 
@@ -1251,6 +1272,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
             loss["evidential_loss"] = self.w_evidential * evidential_loss * anneal_factor
             loss["neg_reg_loss"] = self.w_neg_reg * neg_reg_loss * anneal_factor
             loss["orth_loss"] = self.w_orth * orth_loss
+            loss["sap_failure_bce_loss"] = sap_failure_bce_loss
             loss.update(
                 self._retrieval_risk_terms(wti_logits, global_group_ids)
             )
@@ -1291,6 +1313,30 @@ class UATVR(CLIP4ClipPreTrainedModel):
         confidence = torch.exp(-epistemic_penalty)  # [B]，不确定性越大，置信越低
         sim_matrix = cosine_sim * confidence.unsqueeze(1)  # [B, B]
         return sim_matrix
+
+    @staticmethod
+    def _sap_failure_bce_loss(u_mode, wti_logits):
+        """Fix 1: BCE(u_mode, is_v2t_failure).
+
+        u_mode ∈ (0, 1] is SAP's Dirichlet vacuity K/Σα. This loss directly
+        supervises it to predict per-video V2T retrieval failure using the
+        current-batch wti_logits diagonal argmax as ground truth.
+        Rationale: SAP's uncertainty outputs currently receive no direct
+        failure-prediction signal; retrieval losses only push mu_agg cosine.
+
+        Args:
+            u_mode: [B] per-video vacuity in (0, 1].
+            wti_logits: [B, B] text-video similarity, diagonal = positives.
+
+        Returns:
+            scalar BCE loss (no reduction over failure prior).
+        """
+        with torch.no_grad():
+            argmax_text_per_video = wti_logits.argmax(dim=0)
+            index = torch.arange(wti_logits.size(1), device=wti_logits.device)
+            failure = (argmax_text_per_video != index).float()
+        u_clamped = u_mode.clamp(min=1e-6, max=1.0 - 1e-6)
+        return F.binary_cross_entropy(u_clamped, failure)
 
     @staticmethod
     def _evidential_nll_loss(sim_matrix, alpha_dir):
