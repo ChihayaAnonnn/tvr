@@ -111,7 +111,7 @@ def _import_uatvr(use_full: bool):
 
     HEAD arch (default) is the simplified 2026-08-08 rewrite; June arch
     (``--use_uatvr_full``) restores ``modules.modeling_mulit.UATVR`` with
-    SAP + spatial_enhancer + ada_norm text. Ckpts are not interchangeable.
+    spatial_enhancer + ada_norm text. Ckpts are not interchangeable.
     """
     if use_full:
         from modules.modeling_mulit import UATVR as _UATVR_FULL
@@ -896,7 +896,7 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     parser.add_argument(
         "--use_uatvr_full",
         action="store_true",
-        help="Use restored June UATVR arch (modules.modeling_mulit.UATVR) with SAP + spatial_enhancer + ada_norm text.",
+        help="Use restored June UATVR arch (modules.modeling_mulit.UATVR) with spatial_enhancer + ada_norm text.",
     )
     parser.add_argument(
         "--use_ada_norm",
@@ -940,18 +940,6 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         help="[--use_uatvr_full only] weight on uncertainty regularization.",
     )
     parser.add_argument(
-        "--w_evidential",
-        type=float,
-        default=0.01,
-        help="[--use_uatvr_full only] weight on evidential loss.",
-    )
-    parser.add_argument(
-        "--w_neg_reg",
-        type=float,
-        default=0.01,
-        help="[--use_uatvr_full only] weight on negative regularization.",
-    )
-    parser.add_argument(
         "--uncertainty_mode",
         type=str,
         default="none",
@@ -986,18 +974,6 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         type=float,
         default=0.1,
         help="[--use_uatvr_full only] lr ratio for mamba params (if used).",
-    )
-    parser.add_argument(
-        "--w_mil",
-        type=float,
-        default=0.01,
-        help="[--use_uatvr_full only] weight on MIL loss.",
-    )
-    parser.add_argument(
-        "--w_orth",
-        type=float,
-        default=0.1,
-        help="[--use_uatvr_full only] weight on orthogonality loss.",
     )
     parser.add_argument(
         "--use_retrieval_risk_sidecar",
@@ -1538,16 +1514,12 @@ def _registered_a3_expected_values():
         "fusion_temperature": 1.5,
         "w_query_sim": 0.01,
         "w_uncertainty_reg": 0.001,
-        "w_evidential": 0.01,
-        "w_neg_reg": 0.01,
         "uncertainty_mode": "none",
         "uncertainty_text_head": "text",
         "log_sigma_min": -1.5,
         "log_sigma_max": 4.0,
         "anneal_warmup_epochs": 0,
         "mamba_lr_ratio": 0.1,
-        "w_mil": 0.01,
-        "w_orth": 0.1,
         "use_retrieval_risk_sidecar": True,
         "retrieval_risk_sidecar_only": False,
         "w_retrieval_risk": 0.0,
