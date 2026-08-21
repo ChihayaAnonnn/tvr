@@ -23,8 +23,6 @@ from modules.crf_head import CRFTrainingHead, paired_visual_forward
 from prob_models.contextual_retrieval_risk import (
     ContextualRetrievalRiskSidecar,
     contextual_retrieval_risk_objective,
-    SAP_CONTEXTUAL_FEATURE_SETS,
-    sap_uncertainty_descriptor,
 )
 from prob_models.csd_logvar import CSDLogVarSidecar, csd_logvar_objective
 from prob_models.retrieval_risk import (
@@ -456,9 +454,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 topk=int(getattr(self.task_config, "contextual_risk_topk", 16)),
                 temperature=self.contextual_risk_temperature,
                 feature_set=contextual_feature_set,
-                use_sap_uncertainty=(
-                    contextual_feature_set in SAP_CONTEXTUAL_FEATURE_SETS
-                ),
             )
 
         # Optional clamp for log-variance to stabilize sampling/KL terms
@@ -595,7 +590,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         video_means,
         text_group_ids,
         video_group_ids=None,
-        video_uncertainty=None,
     ):
         if text_group_ids is None:
             raise ValueError(
@@ -625,9 +619,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
             hardness_temperature=self.contextual_risk_temperature,
             fit_weight=self.w_contextual_risk_fit,
             rank_weight=self.w_contextual_risk_rank,
-            video_uncertainty=(
-                None if video_uncertainty is None else video_uncertainty.detach()
-            ),
         )
         terms = {
             "contextual_risk_loss": total,
@@ -663,25 +654,19 @@ class UATVR(CLIP4ClipPreTrainedModel):
         return self.retrieval_risk_sidecar(logits, direction)
 
     def score_contextual_retrieval_risk(
-        self, logits, text_means, video_means, direction, video_uncertainty=None
+        self, logits, text_means, video_means, direction
     ):
         if not self.use_contextual_risk_sidecar:
             raise RuntimeError("contextual retrieval risk sidecar is disabled")
-        uncertainty = (
-            None if video_uncertainty is None else video_uncertainty.detach()
-        )
         if direction == "v2t":
             query_means, candidate_means = video_means, text_means
-            axis_uncertainty = {"query_uncertainty": uncertainty}
         else:
             query_means, candidate_means = text_means, video_means
-            axis_uncertainty = {"candidate_uncertainty": uncertainty}
         return self.contextual_risk_sidecar(
             logits.detach(),
             query_means.detach(),
             candidate_means.detach(),
             direction,
-            **axis_uncertainty,
         )
 
     def forward(
@@ -1071,14 +1056,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         else:
             global_group_ids = None
 
-        # Per-video SAP uncertainty descriptor. This is the only channel through
-        # which the probe's own uncertainty heads (u_mode / alpha_dir /
-        # epistemic_cont / logsigma) reach the A3 contextual risk sidecar;
-        # without it A3 sees nothing but score geometry and pooled means.
-        sap_video_uncertainty = sap_uncertainty_descriptor(
-            u_mode, alpha_dir, epistemic_video, logsigma_video
-        )
-
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
 
         sequence_output = sequence_output.squeeze(1)
@@ -1101,11 +1078,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 text_pooled,
                 F.normalize(mu_video, dim=-1),
                 global_group_ids,
-                video_uncertainty=(
-                    sap_video_uncertainty
-                    if self.contextual_risk_sidecar.use_sap_uncertainty
-                    else None
-                ),
             )
             zero = wti_logits.new_zeros(())
             return {
@@ -1298,7 +1270,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 return wti_logits, {
                     "text_mu": text_pooled.detach(),
                     "video_mu": mu_video.detach(),
-                    "video_uncertainty": sap_video_uncertainty.detach(),
                 }
             return wti_logits
 

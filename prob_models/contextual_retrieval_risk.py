@@ -24,9 +24,6 @@ _ALL_CONTEXTUAL_FEATURE_BLOCKS = frozenset(
         "score_distribution", "topk_scores", "score_gaps", "direction",
     }
 )
-# Feature sets containing this block widen the network; every other set keeps
-# the pre-SAP capacity so the ablations stay capacity-matched among themselves.
-SAP_UNCERTAINTY_BLOCK = "sap_uncertainty"
 CONTEXTUAL_FEATURE_SETS = {
     "full": _ALL_CONTEXTUAL_FEATURE_BLOCKS,
     "score_only": frozenset(
@@ -39,20 +36,7 @@ CONTEXTUAL_FEATURE_SETS = {
     "no_score_geometry": frozenset(
         {"query_semantics", "top1_semantics", "context_semantics", "direction"}
     ),
-    # `full` plus SAP's own uncertainty heads: the treatment arm.
-    "full_sap": _ALL_CONTEXTUAL_FEATURE_BLOCKS | {SAP_UNCERTAINTY_BLOCK},
-    # SAP uncertainty in isolation: does the probe's own uncertainty predict
-    # retrieval failure without any score-geometry or semantic evidence?
-    "sap_only": frozenset({SAP_UNCERTAINTY_BLOCK, "direction"}),
 }
-SAP_CONTEXTUAL_FEATURE_SETS = frozenset(
-    name
-    for name, blocks in CONTEXTUAL_FEATURE_SETS.items()
-    if SAP_UNCERTAINTY_BLOCK in blocks
-)
-# `sap_uncertainty` is appended LAST so that every pre-existing block keeps its
-# offset. When `use_sap_uncertainty=False` the block is dropped from the layout
-# entirely and the feature vector is bit-identical to the pre-SAP sidecar.
 CONTEXTUAL_FEATURE_BLOCK_LAYOUT = (
     ("query_semantics", "projection_dim"),
     ("top1_semantics", "projection_dim"),
@@ -61,33 +45,18 @@ CONTEXTUAL_FEATURE_BLOCK_LAYOUT = (
     ("topk_scores", "topk"),
     ("score_gaps", "topk"),
     ("direction", "direction"),
-    ("sap_uncertainty", "sap_uncertainty"),
-)
-
-# Per-video SAP uncertainty descriptor width, and the three slots it occupies
-# in the feature vector (query-side, top-1 candidate, top-k context).
-SAP_UNCERTAINTY_DIM = 5
-SAP_UNCERTAINTY_SLOTS = 3
-SAP_UNCERTAINTY_FIELDS = (
-    "u_mode",
-    "log_evidence",
-    "modal_entropy",
-    "epistemic_scale",
-    "aleatoric_scale",
 )
 
 
 def _contextual_feature_slices(
     projection_dim: int,
     topk: int,
-    sap_uncertainty_dim: int = 0,
 ) -> dict[str, slice]:
     widths = {
         "projection_dim": projection_dim,
         "score_distribution": 8,
         "topk": topk,
         "direction": 2,
-        "sap_uncertainty": SAP_UNCERTAINTY_SLOTS * sap_uncertainty_dim,
     }
     offset = 0
     slices = {}
@@ -98,61 +67,6 @@ def _contextual_feature_slices(
         slices[block] = slice(offset, offset + width)
         offset += width
     return slices
-
-
-def sap_uncertainty_descriptor(
-    u_mode: torch.Tensor,
-    alpha_dir: torch.Tensor,
-    epistemic_cont: torch.Tensor,
-    logsigma: torch.Tensor,
-) -> torch.Tensor:
-    """Reduce raw SAP uncertainty heads to a per-video descriptor `[N, 5]`.
-
-    Fields, in order, match `SAP_UNCERTAINTY_FIELDS`:
-      u_mode          discrete modal uncertainty K/S, already in (0, 1]
-      log_evidence    log of the Dirichlet total evidence S = sum(alpha)
-      modal_entropy   entropy of alpha/S, normalized to [0, 1]
-      epistemic_scale RMS of the continuous epistemic tensor
-      aleatoric_scale mean mixture log-sigma
-    """
-
-    u = torch.as_tensor(u_mode).detach().float().reshape(-1)
-    alpha = torch.as_tensor(alpha_dir).detach().float()
-    epistemic = torch.as_tensor(epistemic_cont).detach().float()
-    sigma = torch.as_tensor(logsigma).detach().float()
-    if alpha.ndim != 2:
-        raise ValueError("alpha_dir must be [N, K]")
-    if epistemic.ndim != 3:
-        raise ValueError("epistemic_cont must be [N, K, D]")
-    if sigma.ndim != 2:
-        raise ValueError("logsigma must be [N, D]")
-    if not (u.size(0) == alpha.size(0) == epistemic.size(0) == sigma.size(0)):
-        raise ValueError("SAP uncertainty heads must share the video axis")
-
-    num_anchors = alpha.size(1)
-    strength = alpha.sum(dim=1).clamp_min(1e-6)
-    probs = alpha / strength.unsqueeze(1)
-    if num_anchors > 1:
-        modal_entropy = -(
-            probs * probs.clamp_min(1e-12).log()
-        ).sum(dim=1) / math.log(num_anchors)
-    else:
-        modal_entropy = probs.new_zeros(probs.size(0))
-    descriptor = torch.stack(
-        (
-            u,
-            strength.log(),
-            modal_entropy,
-            epistemic.pow(2).mean(dim=(1, 2)).clamp_min(1e-12).sqrt(),
-            sigma.mean(dim=1),
-        ),
-        dim=1,
-    )
-    if descriptor.size(1) != SAP_UNCERTAINTY_DIM:
-        raise ValueError("SAP uncertainty descriptor width drifted from the spec")
-    if not torch.isfinite(descriptor).all():
-        raise ValueError("SAP uncertainty descriptor must be finite")
-    return descriptor
 
 
 def _validate_embeddings(
@@ -254,7 +168,6 @@ class ContextualRetrievalRiskSidecar(nn.Module):
         temperature: float = 1.0,
         dropout: float = 0.1,
         feature_set: str = "full",
-        use_sap_uncertainty: bool = False,
     ) -> None:
         super().__init__()
         if embed_dim <= 0 or projection_dim <= 0 or hidden_dim <= 0:
@@ -274,23 +187,10 @@ class ContextualRetrievalRiskSidecar(nn.Module):
         self.topk = int(topk)
         self.temperature = float(temperature)
         self.feature_set = feature_set
-        self.use_sap_uncertainty = bool(use_sap_uncertainty)
-        if self.use_sap_uncertainty != (feature_set in SAP_CONTEXTUAL_FEATURE_SETS):
-            raise ValueError(
-                "use_sap_uncertainty must be enabled exactly for the feature "
-                f"sets {sorted(SAP_CONTEXTUAL_FEATURE_SETS)}; got "
-                f"feature_set='{feature_set}' with "
-                f"use_sap_uncertainty={self.use_sap_uncertainty}"
-            )
-        self.sap_uncertainty_dim = (
-            SAP_UNCERTAINTY_DIM if self.use_sap_uncertainty else 0
-        )
         self.active_feature_blocks = tuple(
             sorted(CONTEXTUAL_FEATURE_SETS[feature_set])
         )
-        self.feature_slices = _contextual_feature_slices(
-            projection_dim, topk, self.sap_uncertainty_dim
-        )
+        self.feature_slices = _contextual_feature_slices(projection_dim, topk)
         feature_width = max(
             feature_slice.stop for feature_slice in self.feature_slices.values()
         )
@@ -308,77 +208,12 @@ class ContextualRetrievalRiskSidecar(nn.Module):
             nn.Linear(hidden_dim, 1),
         )
 
-    def _check_uncertainty(
-        self, tensor: torch.Tensor, rows: int, role: str
-    ) -> torch.Tensor:
-        value = torch.as_tensor(tensor).detach().float()
-        if value.ndim != 2 or value.size(1) != self.sap_uncertainty_dim:
-            raise ValueError(
-                f"{role}_uncertainty must be [N, {self.sap_uncertainty_dim}]"
-            )
-        if value.size(0) != rows:
-            raise ValueError(
-                f"{role}_uncertainty rows must match the number of {role}s"
-            )
-        if not torch.isfinite(value).all():
-            raise ValueError(f"{role}_uncertainty must be finite")
-        return value
-
-    def _sap_uncertainty_block(
-        self,
-        features: dict[str, torch.Tensor],
-        num_candidates: int,
-        query_uncertainty: torch.Tensor | None,
-        candidate_uncertainty: torch.Tensor | None,
-    ) -> torch.Tensor:
-        """Assemble the [query | top-1 | context] SAP uncertainty slots.
-
-        SAP uncertainty is a per-VIDEO quantity, so exactly one side carries it
-        in each direction: the query side for v2t, the candidate side for t2v.
-        The absent side is zero-filled and the direction code tells the network
-        which slots are live.
-        """
-
-        if query_uncertainty is None and candidate_uncertainty is None:
-            raise ValueError(
-                "use_sap_uncertainty is enabled but no SAP uncertainty was "
-                "supplied for either the query or the candidate axis"
-            )
-        top_indices = features["top_indices"]
-        attention = features["attention"]
-        num_queries = top_indices.size(0)
-        reference = features["query_mean"]
-        zeros = reference.new_zeros(num_queries, self.sap_uncertainty_dim)
-
-        if query_uncertainty is None:
-            query_slot = zeros
-        else:
-            query_slot = self._check_uncertainty(
-                query_uncertainty, num_queries, "query"
-            ).to(device=reference.device, dtype=reference.dtype)
-
-        if candidate_uncertainty is None:
-            top1_slot = zeros
-            context_slot = zeros
-        else:
-            candidate = self._check_uncertainty(
-                candidate_uncertainty, num_candidates, "candidate"
-            ).to(device=reference.device, dtype=reference.dtype)
-            selected = candidate[top_indices]
-            top1_slot = selected[:, 0]
-            context_slot = torch.sum(
-                attention.unsqueeze(-1) * selected, dim=1
-            )
-        return torch.cat((query_slot, top1_slot, context_slot), dim=1)
-
     def forward(
         self,
         logits: torch.Tensor,
         query_means: torch.Tensor,
         candidate_means: torch.Tensor,
         direction: str,
-        query_uncertainty: torch.Tensor | None = None,
-        candidate_uncertainty: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         features = contextual_topk_features(
             logits,
@@ -409,15 +244,6 @@ class ContextualRetrievalRiskSidecar(nn.Module):
             features["score_gaps"],
             features["direction_code"],
         ]
-        if self.use_sap_uncertainty:
-            sap_block = self._sap_uncertainty_block(
-                features,
-                int(torch.as_tensor(candidate_means).shape[0]),
-                query_uncertainty,
-                candidate_uncertainty,
-            )
-            feature_blocks.append(sap_block)
-            features = {**features, "sap_uncertainty": sap_block}
         network_features = torch.cat(feature_blocks, dim=1)
         network_features = network_features * self.feature_mask.to(
             device=network_features.device, dtype=network_features.dtype
@@ -427,7 +253,6 @@ class ContextualRetrievalRiskSidecar(nn.Module):
             **features,
             "features": network_features,
             "feature_set": self.feature_set,
-            "use_sap_uncertainty": self.use_sap_uncertainty,
             "active_feature_blocks": self.active_feature_blocks,
             "feature_block_offsets": {
                 block: (feature_slice.start, feature_slice.stop)
@@ -448,8 +273,6 @@ def _direction_objective(
     hardness_temperature: float,
     fit_weight: float,
     rank_weight: float,
-    query_uncertainty: torch.Tensor | None = None,
-    candidate_uncertainty: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, object]]:
     scores = _oriented_scores(logits.detach(), direction)
     mask = _validate_positive_mask(
@@ -460,8 +283,6 @@ def _direction_objective(
         query_means,
         candidate_means,
         direction,
-        query_uncertainty=query_uncertainty,
-        candidate_uncertainty=candidate_uncertainty,
     )
     top_index = scores.argmax(dim=1, keepdim=True)
     failure = (~mask.gather(1, top_index).squeeze(1)).float()
@@ -511,7 +332,6 @@ def contextual_retrieval_risk_objective(
     hardness_temperature: float = 1.0,
     fit_weight: float = 0.25,
     rank_weight: float = 0.25,
-    video_uncertainty: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, object]]:
     """Train symmetric candidate-conditioned failure risk without retriever gradients."""
 
@@ -531,8 +351,6 @@ def contextual_retrieval_risk_objective(
         hardness_temperature,
         fit_weight,
         rank_weight,
-        # t2v: texts query, videos are the candidates.
-        candidate_uncertainty=video_uncertainty,
     )
     v2t_loss, v2t = _direction_objective(
         sidecar,
@@ -544,8 +362,6 @@ def contextual_retrieval_risk_objective(
         hardness_temperature,
         fit_weight,
         rank_weight,
-        # v2t: videos query, texts are the candidates and carry no SAP head.
-        query_uncertainty=video_uncertainty,
     )
     return 0.5 * (t2v_loss + v2t_loss), {
         "bce": 0.5 * (t2v["bce"] + v2t["bce"]),

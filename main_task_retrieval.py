@@ -91,11 +91,7 @@ from prob_models.uncertainty_protocol import (
     validate_resume_lineage,
     validate_selected_checkpoint,
 )
-from prob_models.contextual_retrieval_risk import (
-    SAP_CONTEXTUAL_FEATURE_SETS,
-    SAP_UNCERTAINTY_FIELDS,
-    ContextualRetrievalRiskSidecar,
-)
+from prob_models.contextual_retrieval_risk import ContextualRetrievalRiskSidecar
 from prob_models.retrieval_risk import RetrievalRiskSidecar
 from prob_models.retrieval_risk_baselines import score_risk_baselines
 from prob_models.retrieval_risk_metrics import (
@@ -1049,10 +1045,6 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         choices=[
             "full", "score_only", "semantic_only", "no_context",
             "no_score_geometry",
-            # Sets that additionally feed the per-video SAP uncertainty
-            # descriptor into the sidecar. Every other set reproduces the
-            # pre-SAP head bit-for-bit.
-            "full_sap", "sap_only",
         ],
         default="full",
     )
@@ -3544,11 +3536,6 @@ def _run_on_single_gpu(
                 video_names = ["video_mu"]
                 if collect_csd:
                     video_names.append("video_logvar")
-                elif "video_uncertainty" in aux:
-                    # Only models with a SAP head expose this; absence is a
-                    # valid configuration and is caught downstream if the A3
-                    # sidecar was actually built to consume it.
-                    video_names.append("video_uncertainty")
                 video_payload.append(
                     {name: aux[name].float().cpu() for name in video_names}
                 )
@@ -3568,10 +3555,6 @@ def _run_on_single_gpu(
             [payload["video_mu"] for payload in video_payload], dim=0
         ),
     }
-    if "video_uncertainty" in video_payload[0]:
-        payload["video_uncertainty"] = torch.cat(
-            [chunk["video_uncertainty"] for chunk in video_payload], dim=0
-        )
     if collect_csd:
         payload.update(
             {
@@ -3602,13 +3585,6 @@ def _merge_canonical_eval_means(outputs):
             "canonical mean axes do not align with retrieval matrix"
         )
     merged = {"text_mu": text_mu, "video_mu": video_mu}
-    if "video_uncertainty" in outputs[0]:
-        video_uncertainty = outputs[0]["video_uncertainty"]
-        if video_uncertainty.size(0) != matrix.shape[1]:
-            raise ValueError(
-                "SAP uncertainty axis does not align with retrieval matrix"
-            )
-        merged["video_uncertainty"] = video_uncertainty
     return matrix, merged
 
 
@@ -3892,41 +3868,6 @@ def _compute_score_risk_baseline_metrics(
     return by_method
 
 
-def _sap_uncertainty_direct_auroc(
-    video_uncertainty, risk_similarity_matrix, positive_mask
-):
-    """AUROC of each raw SAP uncertainty head against V2T retrieval failure.
-
-    The gated A3 metric scores a trained head that merely *consumes* SAP; this
-    scores SAP's uncertainty outputs themselves, using the same failure label
-    and the same AUROC estimator. Direction is fixed to v2t because the SAP
-    descriptor is per-video, so v2t is the only direction where it indexes the
-    query axis one-to-one.
-    """
-
-    if video_uncertainty is None:
-        return {}
-    descriptor = (
-        torch.as_tensor(video_uncertainty).detach().float().cpu().numpy()
-    )
-    scores = np.asarray(risk_similarity_matrix, dtype=np.float32).T
-    mask = np.asarray(positive_mask, dtype=bool).T
-    if descriptor.ndim != 2 or descriptor.shape[0] != scores.shape[0]:
-        raise ValueError(
-            "SAP uncertainty rows must match the number of v2t queries"
-        )
-    if descriptor.shape[1] != len(SAP_UNCERTAINTY_FIELDS):
-        raise ValueError("SAP uncertainty width differs from the field list")
-    top_index = scores.argmax(axis=1)
-    failure = ~mask[np.arange(mask.shape[0]), top_index]
-    if failure.all() or not failure.any():
-        return {}
-    return {
-        field: float(_binary_auroc(failure, descriptor[:, offset]))
-        for offset, field in enumerate(SAP_UNCERTAINTY_FIELDS)
-    }
-
-
 def _compute_contextual_retrieval_risk_metrics(
     *,
     model,
@@ -3936,7 +3877,6 @@ def _compute_contextual_retrieval_risk_metrics(
     video_means,
     directions,
     device,
-    video_uncertainty=None,
     bootstrap_samples=1000,
     return_evidence=False,
     artifact_array_store=None,
@@ -3951,20 +3891,6 @@ def _compute_contextual_retrieval_risk_metrics(
     text_tensor = torch.from_numpy(text_array)
     video_tensor = torch.from_numpy(video_array)
     contextual_sidecar = getattr(model, "contextual_risk_sidecar", None)
-    uses_sap = bool(
-        getattr(contextual_sidecar, "use_sap_uncertainty", False)
-    )
-    uncertainty_array = None
-    uncertainty_tensor = None
-    if video_uncertainty is not None:
-        uncertainty_array = (
-            torch.as_tensor(video_uncertainty).detach().float().cpu().numpy()
-        )
-        uncertainty_tensor = torch.from_numpy(uncertainty_array)
-    elif uses_sap:
-        raise ValueError(
-            "A3 sidecar was built with SAP uncertainty but none was supplied"
-        )
     cpu_sidecar = (
         copy.deepcopy(contextual_sidecar).cpu().eval()
         if contextual_sidecar is not None
@@ -3974,29 +3900,17 @@ def _compute_contextual_retrieval_risk_metrics(
         raw_logits = raw_logits.to(device)
         text_tensor = text_tensor.to(device)
         video_tensor = video_tensor.to(device)
-        if uncertainty_tensor is not None:
-            uncertainty_tensor = uncertainty_tensor.to(device)
     payload = {}
     failure_risk_arrays = {}
     evidence_arrays = {}
     with torch.no_grad():
         for offset, direction in enumerate(directions):
-            # SAP uncertainty is per-video: it is the query axis for v2t and
-            # the candidate axis for t2v.
-            axis_uncertainty = (
-                {}
-                if not uses_sap
-                else {"query_uncertainty": uncertainty_tensor}
-                if direction == "v2t"
-                else {"candidate_uncertainty": uncertainty_tensor}
-            )
             if cpu_sidecar is not None:
                 output = cpu_sidecar(
                     raw_logits,
                     text_tensor if direction == "t2v" else video_tensor,
                     video_tensor if direction == "t2v" else text_tensor,
                     direction,
-                    **axis_uncertainty,
                 )
             else:
                 output = model.score_contextual_retrieval_risk(
@@ -4004,12 +3918,6 @@ def _compute_contextual_retrieval_risk_metrics(
                     text_tensor,
                     video_tensor,
                     direction,
-                    # Keep the pre-SAP signature for control-arm models.
-                    **(
-                        {"video_uncertainty": uncertainty_tensor}
-                        if uses_sap
-                        else {}
-                    ),
                 )
             failure_risk = output["failure_risk"].float().cpu().numpy()
             failure_risk_arrays[direction] = failure_risk
@@ -4076,17 +3984,6 @@ def _compute_contextual_retrieval_risk_metrics(
             },
         },
     }
-    if uses_sap:
-        # Only emitted for the treatment arm, so control-arm evidence stays
-        # byte-identical to the pre-SAP schema and remains directly comparable.
-        evidence["metric_config"]["uses_sap_uncertainty"] = True
-    if uncertainty_array is not None:
-        evidence["video_uncertainty"] = uncertainty_array.tolist()
-        evidence["sha256"]["video_uncertainty"] = array_sha256(uncertainty_array)
-        evidence["array_metadata"]["video_uncertainty"] = metadata(
-            uncertainty_array
-        )
-        evidence["sap_uncertainty_fields"] = list(SAP_UNCERTAINTY_FIELDS)
     if artifact_array_store is not None:
         externalized = [
             ("raw_wti", raw_wti),
@@ -4094,8 +3991,6 @@ def _compute_contextual_retrieval_risk_metrics(
             ("video_means", video_array),
             ("positive_mask", mask_array),
         ]
-        if uncertainty_array is not None:
-            externalized.append(("video_uncertainty", uncertainty_array))
         for name, value in externalized:
             reference = artifact_array_store.write(name, value).as_dict()
             evidence[name] = reference
@@ -4612,7 +4507,6 @@ def _eval_epoch_impl(
             positive_mask=positive_mask,
             text_means=intrinsic["text_mu"],
             video_means=intrinsic["video_mu"],
-            video_uncertainty=intrinsic.get("video_uncertainty"),
             directions=directions,
             device=device,
             bootstrap_samples=getattr(
@@ -4638,10 +4532,6 @@ def _eval_epoch_impl(
                 a3_evidence["contextual_head_config"]["feature_set"] = (
                     contextual_sidecar.feature_set
                 )
-            if contextual_sidecar.use_sap_uncertainty:
-                a3_evidence["contextual_head_config"][
-                    "use_sap_uncertainty"
-                ] = True
         if report_retrieval_risk:
             a3_evidence["a1_failure_risk"] = {
                 direction: risk_array_digests[direction]["failure_risk_values"]
@@ -4736,21 +4626,6 @@ def _eval_epoch_impl(
                 contextual_metrics["failure_auroc"]["value"],
                 contextual_metrics["aurc"],
             )
-        # Direct read on SAP's own uncertainty heads. The contextual AUROC above
-        # scores the A3 head, which can be discriminative even when every SAP
-        # uncertainty output is uninformative; this separates the two claims.
-        sap_direct = _sap_uncertainty_direct_auroc(
-            intrinsic.get("video_uncertainty"),
-            risk_similarity_matrix,
-            positive_mask,
-        )
-        if sap_direct:
-            result["sap_uncertainty_direct"] = sap_direct
-            a3_evidence["sap_uncertainty_direct"] = sap_direct
-            for field, value in sap_direct.items():
-                logger.info(
-                    "  V2T SAP direct | %-16s AUROC=%.4f", field, value
-                )
         if artifact_array_store is not None:
             validate_artifact_json_payload(a3_evidence)
     if report_csd_logvar:
@@ -4831,7 +4706,6 @@ def _contextual_evidence_array(
         "raw_wti": np.dtype("float32"),
         "text_means": np.dtype("float32"),
         "video_means": np.dtype("float32"),
-        "video_uncertainty": np.dtype("float32"),
         "positive_mask": np.dtype("bool"),
         "failure_risk": np.dtype("float32"),
         "a1_failure_risk": np.dtype("float32"),
@@ -4938,8 +4812,6 @@ def _registered_a3_head_configs(args, evidence, *, artifact_run_dir=None):
     feature_set = str(getattr(args, "contextual_risk_feature_set", "full"))
     if feature_set != "full":
         contextual["feature_set"] = feature_set
-    if feature_set in SAP_CONTEXTUAL_FEATURE_SETS:
-        contextual["use_sap_uncertainty"] = True
     return {
         "contextual": contextual,
         "a1": {
@@ -5018,31 +4890,16 @@ def _verify_contextual_risk_checkpoint_outputs(
     raw_tensor = torch.from_numpy(np.asarray(raw_wti, dtype=np.float32))
     text_tensor = torch.from_numpy(np.asarray(text_means, dtype=np.float32))
     video_tensor = torch.from_numpy(np.asarray(video_means, dtype=np.float32))
-    uncertainty_tensor = None
-    if verify_contextual and contextual.use_sap_uncertainty:
-        uncertainty_tensor = torch.from_numpy(
-            _contextual_evidence_array(
-                evidence, "video_uncertainty", artifact_run_dir=artifact_run_dir
-            )
-        )
     with _a3_exact_fp32_backend(
         argparse.Namespace(contextual_risk_sidecar_only=True)
     ), torch.inference_mode():
         for direction in ("t2v", "v2t"):
             if verify_contextual:
-                axis_uncertainty = (
-                    {}
-                    if uncertainty_tensor is None
-                    else {"query_uncertainty": uncertainty_tensor}
-                    if direction == "v2t"
-                    else {"candidate_uncertainty": uncertainty_tensor}
-                )
                 contextual_output = contextual(
                     raw_tensor,
                     text_tensor if direction == "t2v" else video_tensor,
                     video_tensor if direction == "t2v" else text_tensor,
                     direction,
-                    **axis_uncertainty,
                 )["failure_risk"].numpy()
                 stored_contextual = _contextual_evidence_array(
                     evidence, "failure_risk", direction,

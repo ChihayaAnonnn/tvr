@@ -43,11 +43,6 @@ _CONTEXTUAL_FEATURE_BLOCKS = {
     "no_score_geometry": frozenset(
         {"query_semantics", "top1_semantics", "context_semantics", "direction"}
     ),
-    # sap-contextual-uncertainty-v1. These are the only sets whose sidecar
-    # consumes SAP's own uncertainty heads, so they widen the registered
-    # feature vector; every set above keeps the pre-SAP contract byte for byte.
-    "full_sap": _ALL_CONTEXTUAL_FEATURE_BLOCKS | {"sap_uncertainty"},
-    "sap_only": frozenset({"sap_uncertainty", "direction"}),
 }
 
 
