@@ -1,0 +1,145 @@
+trusted-v1 validated: train=8500 val=500 test=1000
+[run_train_msrvtt_bg:worker] CUDA_VISIBLE_DEVICES=0,1,2,3 NPROC=4 TRAIN_NUM_WORKERS=12 TRAIN_PREFETCH_FACTOR=4 TRAIN_BATCH_SIZE=256 TRAIN_GRADIENT_ACCUMULATION_STEPS=1 CLIP_CACHE_DIR=/data2/hxj/project/UATVR/.cache
+[run_train_msrvtt_bg:worker] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=fp32 CLIP_GRADIENT_CHECKPOINTING=1 CLIP_VISUAL_CHECKPOINT_LAYERS=4
+[Runtime] python=/home/xujie/.conda/envs/tvr/bin/python torchrun=/home/xujie/.conda/envs/tvr/bin/torchrun
+08/21/2026 16:38:07 - INFO -   Effective parameters:
+08/21/2026 16:38:07 - INFO -       [Experiment] SAP contextual uncertainty v1 — A3 feature_set=full_sap, w_sap_failure_bce=0.1, 4-GPU (seed=0)
+08/21/2026 16:38:07 - INFO -     [Training] epochs=3 | batch_size=256 | lr=0.0001 | coef_lr=0.001 | gradient_accumulation_steps=1 | fp16=False | max_frames=8 | max_words=32 | seed=0
+08/21/2026 16:38:07 - INFO -     [Model] pretrained_clip_name=ViT-B/16 | clip_layer_norm_precision=fp32 | clip_gradient_checkpointing=True | clip_visual_checkpoint_layers=4 | sim_header=seqTransf | loose_type=True | linear_patch=2d | extra_video_cls_num=2 | extra_text_cls_num=2 | n_video_embeddings=7 | n_text_embeddings=7 | use_attributes=False | max_words_attrs=None | attr_num_blocks=4
+08/21/2026 16:38:07 - INFO -     [Protocol] datatype=msrvtt | do_train=True | do_eval=False | eval_split=val | expand_msrvtt_sentences=True | source_train_csv=/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv | test_csv=/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv | split_manifest=/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/dataloaders/splits/msrvtt_trusted_v1_seed0.json | experiment_profile=default
+08/21/2026 16:38:07 - INFO -   device: cuda:0 n_gpu: 4
+08/21/2026 16:38:09 - INFO -   loading archive file /data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/modules/cross-base
+08/21/2026 16:38:09 - INFO -   Model config {
+  "attention_probs_dropout_prob": 0.1,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.1,
+  "hidden_size": 512,
+  "initializer_range": 0.02,
+  "intermediate_size": 2048,
+  "max_position_embeddings": 128,
+  "num_attention_heads": 8,
+  "num_hidden_layers": 4,
+  "type_vocab_size": 2,
+  "vocab_size": 512
+}
+
+08/21/2026 16:38:09 - WARNING -   Test retrieval by loose type.
+08/21/2026 16:38:09 - WARNING -   	 embed_dim: 512
+08/21/2026 16:38:09 - WARNING -   	 image_resolution: 224
+08/21/2026 16:38:09 - WARNING -   	 vision_layers: 12
+08/21/2026 16:38:09 - WARNING -   	 vision_width: 768
+08/21/2026 16:38:09 - WARNING -   	 vision_patch_size: 16
+08/21/2026 16:38:09 - WARNING -   	 context_length: 77
+08/21/2026 16:38:09 - WARNING -   	 vocab_size: 49408
+08/21/2026 16:38:09 - WARNING -   	 transformer_width: 512
+08/21/2026 16:38:09 - WARNING -   	 transformer_heads: 8
+08/21/2026 16:38:09 - WARNING -   	 transformer_layers: 12
+08/21/2026 16:38:09 - WARNING -   		 linear_patch: 2d
+08/21/2026 16:38:09 - WARNING -   	 cut_top_layer: 0
+08/21/2026 16:38:10 - WARNING -   	 sim_header: seqTransf
+08/21/2026 16:38:10 - WARNING -   CLIP UATVR Model ......
+08/21/2026 16:38:10 - WARNING -   	 Extra video Class token number: 2
+08/21/2026 16:38:10 - WARNING -   	 Extra text Class token number: 2
+08/21/2026 16:38:10 - WARNING -   	 Number of video sampling probabilistic embeddings: 7
+08/21/2026 16:38:10 - WARNING -   	 Number of text sampling probabilistic embeddings: 7
+08/21/2026 16:38:19 - INFO -   UATVR: 8 个参数为新增模块，将随机初始化 (contextual_risk_sidecar×8)
+08/21/2026 16:38:19 - INFO -   UATVR: 3 个 pretrained 参数在当前模型中未使用（通常为 config 元数据），已忽略
+08/21/2026 16:38:20 - INFO -   [A3] trainable parameters: 188033 scalars
+Traceback (most recent call last):
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 7038, in <module>
+    main()
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 7009, in main
+    _run_main(args)
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 6480, in _run_main
+    tracking_payload = build_experiment_manifest(
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/experiment_tracking.py", line 270, in build_experiment_manifest
+    payload["contextual_risk"] = _contextual_risk_manifest_section(
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/experiment_tracking.py", line 336, in _contextual_risk_manifest_section
+    raise ValueError("contextual risk feature set is not registered")
+ValueError: contextual risk feature set is not registered
+Traceback (most recent call last):
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 7038, in <module>
+    main()
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 7009, in main
+    _run_main(args)
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 6480, in _run_main
+    tracking_payload = build_experiment_manifest(
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/experiment_tracking.py", line 270, in build_experiment_manifest
+    payload["contextual_risk"] = _contextual_risk_manifest_section(
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/experiment_tracking.py", line 336, in _contextual_risk_manifest_section
+    raise ValueError("contextual risk feature set is not registered")
+ValueError: contextual risk feature set is not registered
+Traceback (most recent call last):
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 7038, in <module>
+    main()
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 7009, in main
+    _run_main(args)
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 6480, in _run_main
+    tracking_payload = build_experiment_manifest(
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/experiment_tracking.py", line 270, in build_experiment_manifest
+    payload["contextual_risk"] = _contextual_risk_manifest_section(
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/experiment_tracking.py", line 336, in _contextual_risk_manifest_section
+    raise ValueError("contextual risk feature set is not registered")
+ValueError: contextual risk feature set is not registered
+Traceback (most recent call last):
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 7038, in <module>
+    main()
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 7009, in main
+    _run_main(args)
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 6480, in _run_main
+    tracking_payload = build_experiment_manifest(
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/experiment_tracking.py", line 270, in build_experiment_manifest
+    payload["contextual_risk"] = _contextual_risk_manifest_section(
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/experiment_tracking.py", line 336, in _contextual_risk_manifest_section
+    raise ValueError("contextual risk feature set is not registered")
+ValueError: contextual risk feature set is not registered
+[2026-08-21 16:38:25,314] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: 1) local_rank: 0 (pid: 1130445) of binary: /home/xujie/miniconda3/envs/ret/bin/python
+Traceback (most recent call last):
+  File "/home/xujie/.conda/envs/tvr/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py FAILED
+------------------------------------------------------------
+Failures:
+[1]:
+  time      : 2026-08-21_16:38:25
+  host      : node199
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 1130446)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[2]:
+  time      : 2026-08-21_16:38:25
+  host      : node199
+  rank      : 2 (local_rank: 2)
+  exitcode  : 1 (pid: 1130447)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[3]:
+  time      : 2026-08-21_16:38:25
+  host      : node199
+  rank      : 3 (local_rank: 3)
+  exitcode  : 1 (pid: 1130448)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-08-21_16:38:25
+  host      : node199
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 1130445)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

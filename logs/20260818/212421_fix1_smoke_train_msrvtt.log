@@ -1,0 +1,60 @@
+trusted-v1 validated: train=8500 val=500 test=1000
+[run_train_msrvtt_bg:worker] CUDA_VISIBLE_DEVICES=2,3 NPROC=2 TRAIN_NUM_WORKERS=12 TRAIN_PREFETCH_FACTOR=4 TRAIN_BATCH_SIZE=256 TRAIN_GRADIENT_ACCUMULATION_STEPS=1 CLIP_CACHE_DIR=/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/.cache
+[run_train_msrvtt_bg:worker] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=fp32 CLIP_GRADIENT_CHECKPOINTING=1 CLIP_VISUAL_CHECKPOINT_LAYERS=4
+[Runtime] python=/home/xujie/.conda/envs/tvr/bin/python torchrun=/home/xujie/.conda/envs/tvr/bin/torchrun
+Traceback (most recent call last):
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 6901, in <module>
+    main()
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 6872, in main
+    _run_main(args)
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 6245, in _run_main
+    _assert_registered_a3_initial_environment(args)
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 2033, in _assert_registered_a3_initial_environment
+    raise ValueError(
+ValueError: registered A3 initial environment mismatch: CUDA_VISIBLE_DEVICES='2,3' (registered '0,2,3,4'); CUDA_MODULE_LOADING=None (registered 'LAZY'); CLIP_CACHE_DIR='/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/.cache' (registered '/data2/hxj/project/UATVR/.cache'); REGISTERED_CLIP_ASSET_PATH=None (registered '/data2/hxj/project/UATVR/.cache/ViT-B-16.pt'); REGISTERED_CLIP_ASSET_SHA256=None (registered '5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f'); MASTER_PORT='29548' (registered '29547'); WORLD_SIZE='2' (registered '4'); LOCAL_WORLD_SIZE='2' (registered '4'); ROLE_WORLD_SIZE='2' (registered '4'); NPROC='2' (registered '4'); A800_THROUGHPUT_COMPARISON=None (registered '0'); DATA_PATH=None (registered '/data2/hxj/data/MSRVTT'); EXPERIMENT_PROFILE='default' (registered 'hygiene'); EXPERIMENT_DESC='Fix 1 PoC — BCE(u_mode, V2T failure), w=0.1, 2-GPU pilot {2,3}' (registered 'A3 contextual retrieval-risk sidecar'); TVR_PYTHON=None (registered '/home/xujie/.conda/envs/tvr/bin/python'); TVR_TORCHRUN=None (registered '/home/xujie/.conda/envs/tvr/bin/torchrun'); SMOKE_STEPS is forbidden in a registered A3 worker
+Traceback (most recent call last):
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 6901, in <module>
+    main()
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 6872, in main
+    _run_main(args)
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 6245, in _run_main
+    _assert_registered_a3_initial_environment(args)
+  File "/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py", line 2033, in _assert_registered_a3_initial_environment
+    raise ValueError(
+ValueError: registered A3 initial environment mismatch: CUDA_VISIBLE_DEVICES='2,3' (registered '0,2,3,4'); CUDA_MODULE_LOADING=None (registered 'LAZY'); CLIP_CACHE_DIR='/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/.cache' (registered '/data2/hxj/project/UATVR/.cache'); REGISTERED_CLIP_ASSET_PATH=None (registered '/data2/hxj/project/UATVR/.cache/ViT-B-16.pt'); REGISTERED_CLIP_ASSET_SHA256=None (registered '5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f'); MASTER_PORT='29548' (registered '29547'); WORLD_SIZE='2' (registered '4'); LOCAL_WORLD_SIZE='2' (registered '4'); ROLE_WORLD_SIZE='2' (registered '4'); NPROC='2' (registered '4'); A800_THROUGHPUT_COMPARISON=None (registered '0'); DATA_PATH=None (registered '/data2/hxj/data/MSRVTT'); EXPERIMENT_PROFILE='default' (registered 'hygiene'); EXPERIMENT_DESC='Fix 1 PoC — BCE(u_mode, V2T failure), w=0.1, 2-GPU pilot {2,3}' (registered 'A3 contextual retrieval-risk sidecar'); TVR_PYTHON=None (registered '/home/xujie/.conda/envs/tvr/bin/python'); TVR_TORCHRUN=None (registered '/home/xujie/.conda/envs/tvr/bin/torchrun'); SMOKE_STEPS is forbidden in a registered A3 worker
+[2026-08-18 21:24:29,481] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: 1) local_rank: 0 (pid: 439070) of binary: /home/xujie/miniconda3/envs/ret/bin/python
+Traceback (most recent call last):
+  File "/home/xujie/.conda/envs/tvr/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/main_task_retrieval.py FAILED
+------------------------------------------------------------
+Failures:
+[1]:
+  time      : 2026-08-18_21:24:29
+  host      : node199
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 439071)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-08-18_21:24:29
+  host      : node199
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 439070)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
