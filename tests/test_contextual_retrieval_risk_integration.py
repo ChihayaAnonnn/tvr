@@ -256,19 +256,28 @@ def test_gathered_rectangular_shapes_reach_detached_a3_objective():
     assert terms["contextual_risk_rank"].ndim == 0
 
 
-class _FakeSAP(nn.Module):
-    def forward(self, spatial_tokens, padding_mask):
-        batch, _, width = spatial_tokens.shape
-        mean = torch.nn.functional.normalize(spatial_tokens.mean(dim=1), dim=-1)
-        return {
-            "anchors": mean[:, None, :].expand(-1, 2, -1),
-            "mu_raw": mean,
-            "logsigma": mean.new_zeros(batch, width),
-            "epistemic_cont": mean.new_zeros(batch, 2, width),
-            "u_mode": mean.new_zeros(batch),
-            "alpha_dir": mean.new_ones(batch, 2),
-            "modal_probs": mean.new_full((batch, 2), 0.5),
-        }
+def test_pooled_video_embedding_is_masked_mean_then_l2_normalised():
+    visual = torch.tensor(
+        [[[3.0, 0.0], [0.0, 4.0], [100.0, 100.0]]]
+    )
+    mask = torch.tensor([[1.0, 1.0, 0.0]])
+
+    pooled = UATVR._pooled_video_embedding(visual, mask)
+
+    expected = torch.nn.functional.normalize(
+        torch.tensor([[1.5, 2.0]]), dim=-1
+    )
+    torch.testing.assert_close(pooled, expected)
+    torch.testing.assert_close(pooled.norm(dim=-1), torch.ones(1))
+
+
+def test_pooled_video_embedding_survives_an_all_padded_row():
+    pooled = UATVR._pooled_video_embedding(
+        torch.randn(2, 3, 4), torch.zeros(2, 3)
+    )
+
+    assert torch.isfinite(pooled).all()
+    torch.testing.assert_close(pooled, torch.zeros(2, 4))
 
 
 class _FakeClip(nn.Module):
@@ -293,7 +302,6 @@ def test_wti_path_gathers_global_axes_before_a3_objective(monkeypatch):
     monkeypatch.setattr(modeling, "allgather_no_grad", gather_no_grad)
     model = _tiny_uatvr_for_a3()
     model.task_config = SimpleNamespace()
-    model.sap = _FakeSAP()
     model.clip = _FakeClip()
     model.text_weight_fc = nn.Linear(4, 1)
     model.video_weight_fc = nn.Linear(4, 1)
@@ -313,7 +321,7 @@ def test_wti_path_gathers_global_axes_before_a3_objective(monkeypatch):
 
     assert output["retrieve_logits"].shape == (4, 4)
     assert output["contextual_risk_loss"].requires_grad
-    assert (2, 4) in gathered_shapes
+    assert (2, 1, 4) in gathered_shapes
     assert (2, 3, 4) in gathered_shapes
     assert (2, 2, 4) in gathered_shapes
     assert gathered_group_shapes == [(2,)]

@@ -124,14 +124,74 @@ After this the sidecar is back to the five pre-SAP feature sets, which is exactl
 `scripts/manage_experiment_run.py:REGISTERED_A3_FEATURE_SETS` already expects — so the
 archive-plane gap recorded in `known_limits` closes for free.
 
-### Phase 3 — remove the module
-- `modules/modeling_mulit.py`: remove the import (21), `self.sap = SemanticAnchorProbing(...)`
-  (325), `num_anchors` (366), the `sap_out` block (1044–1054), and the `anchor_ent`
-  normalisation at 1231 (**check what consumes `anchor_ent` before deleting — it may feed
-  a CRF/diagnostic path that is not SAP-specific**).
-- Delete `query_models/module_sap.py`.
-- Update the help text at `main_task_retrieval.py:903` — it currently advertises
-  "SAP + spatial_enhancer + ada_norm text".
+### Phase 3 — remove the module (REVISED 2026-08-22, supersedes the original phase 3)
+
+The original phase 3 was written on a wrong premise and the executing agent correctly
+halted. Corrected dataflow fact, verified 2026-08-22:
+
+> **`mu_video` / `sap_out["mu_raw"]` does not appear anywhere in the retrieval score.**
+> `modeling_mulit.py:1071` computes `wti_logits = weighted_token_wise_intersection(
+> text_token, visual_output, attention_mask, video_mask) * logit_scale`, and that
+> function (`:1369`) consumes only CLIP text tokens and frame tokens — token-pair max
+> interaction with learned per-token softmax weights. There is no pooled video vector
+> in the ranking function at all.
+
+So SAP is a **parallel branch** feeding sidecars and auxiliary training losses, not the
+video representation used for retrieval. The user reviewed this and chose full removal
+(option C, 2026-08-22) with no pooling replacement in the retrieval path — there is
+nothing there to replace.
+
+**Consumers of `sap_out`, and their disposition:**
+
+| Output | Consumer | Disposition |
+|---|---|---|
+| `mu_raw` → `mu_video` | `_contextual_risk_terms` (A3), `_csd_logvar_terms` (CSD), aux `video_mu` | **replace** with masked mean-pool of `visual_output` |
+| `mu_raw`, `logsigma` | `sample_gaussian_tensors` → `MIL_loss` (1150–1153) | **delete** the loss |
+| `mu_raw`, `epistemic_cont`, `alpha_dir` | `_evidential_similarity`, `_evidential_nll_loss`, `_evidential_neg_reg_loss` | **delete** |
+| `anchors` | `orth_loss` (1238–1243) | **delete** |
+| `num_anchors` | `confidence_mlp`, `anchor_attn`, `anchor_ent`, `weighted_logits` | **delete** |
+| `logsigma` | `logsigma_v_mean` diagnostic (1231) | **delete** |
+
+Steps:
+1. `modules/modeling_mulit.py`: delete the import (21), `self.sap` (322–324),
+   `num_anchors`/`confidence_mlp` (359–363), the `sap_out` block (1020–1046), the
+   MIL/evidential/orth loss computation and their entries in the loss dict
+   (728–742, 1085–1132, 1144–1163, 1179–1182, 1214, 1231, 1237–1253), and the three
+   `_evidential_*` staticmethods (1277–1330).
+2. Introduce `_pooled_video_embedding(visual_output, video_mask)` — masked mean over
+   frame tokens, then L2 normalise — and use it wherever `F.normalize(mu_video, dim=-1)`
+   was passed to `_contextual_risk_terms` / `_csd_logvar_terms` / the aux `video_mu` key.
+   This is the **only** new code; it is a sidecar input, not a ranking component.
+3. `_select_training_retrieval_logits` (494–501) becomes vacuous once `weighted_logits`
+   is gone — collapse it and delete the branch.
+4. Delete `query_models/module_sap.py`.
+5. CLI: remove `--w_evidential`, `--w_orth`, and `--num_queries` if unused elsewhere;
+   `--w_mil` only if `modules/modeling.py` does not also consume it (**check**).
+   Update the help text at `main_task_retrieval.py:899` and the comment at `:114`.
+6. Record in the commit message the removed loss weights as they stood
+   (`--w_mil`, `--w_evidential`, `--w_orth`, `--num_queries` defaults) so the A1
+   checkpoint's training configuration stays reconstructible from git.
+
+**Acceptance — two different bars, do not conflate them:**
+
+- **Retrieval metrics must be bit-identical.** T2V R@1 75.9 / V2T R@1 93.0. Statically
+  they cannot move; if they move, there is a path into the score that this analysis
+  missed — halt and report, do not patch.
+- **A3 sidecar AUROC is expected to move** and is *not* a gate. Swapping the sidecar's
+  candidate embedding from `mu_raw` to mean-pool changes the `context_semantics` and
+  `top1_semantics` feature blocks. Re-measure A1 V2T failure AUROC (was 0.7294) and
+  **report the new number as a measurement**; do not assert it must match.
+
+**Known behaviour change to state explicitly, not to hide:** for a *full* training run
+with `use_retrieval_risk_sidecar` off, the training objective previously used
+`weighted_logits = wti_logits * confidence`. After this phase it is always `wti_logits`.
+Every A3/CSD run bypassed `confidence` already (`_select_training_retrieval_logits`
+returns bare `wti_logits` when the sidecar is on), so no run in the experimental record
+is affected — but a future full retrain is not identical to the A1 recipe. Say so in the
+commit message.
+
+**Out of scope for this phase:** the text-side probabilistic path (`pie_net_text`,
+`prob_text`, text `logsigma`) and `modules/modeling.py`. Leave both alone.
 
 ### Phase 4 — launchers and loose ends
 - Delete the three launcher scripts listed above.
@@ -180,8 +240,10 @@ Halt and report rather than working around, if any of these occur:
 - Phase-4 eval numbers differ from T2V R@1 75.9 / V2T R@1 93.0 / A1 V2T failure AUROC
   0.7294. Finding F1 predicts they must not move. If they move, that is a new finding
   and the removal is not neutral — stop.
-- `anchor_ent` (`modules/modeling_mulit.py:1231`) turns out to have a non-SAP consumer
-  that cannot be cleanly separated.
+- Retrieval metrics move at all (see revised phase 3 acceptance). A3 sidecar AUROC
+  moving is expected and is *not* a stop condition.
+- A pooled video vector turns out to reach `weighted_token_wise_intersection` after all,
+  contradicting the revised phase-3 premise.
 - Any test failure that is not obviously caused by the edit just made.
 - Any change that would require touching `main_task_retrieval.py:6329`'s strict
   `load_state_dict` call to make old checkpoints load. Loosening strictness there to

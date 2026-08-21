@@ -14,11 +14,9 @@ from modules.spatial_enhancer import SpatialEnhancer
 from modules.until_module import (
     AllGather,
     CrossEn,
-    MILNCELoss_BoF,
     PreTrainedModel,
     allgather_no_grad,
 )
-from query_models.module_sap import SemanticAnchorProbing
 from modules.crf_head import CRFTrainingHead, paired_visual_forward
 from prob_models.contextual_retrieval_risk import (
     ContextualRetrievalRiskSidecar,
@@ -282,7 +280,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 heads=transformer_heads,
             )
 
-        # 视频侧 PIENet 已移除：SAP 的 Dirichlet 模态概率聚合替代了 PIENet 的 cross-modal attention
+        # 视频侧 PIENet 已移除；视频侧概率建模不再参与检索打分。
 
         self.pie_net_text = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
         # Text-side uncertainty head can be configured (default keeps previous lightweight head).
@@ -317,16 +315,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
             nn.Linear(transformer_width, transformer_width), nn.ReLU(inplace=True), nn.Linear(transformer_width, 1)
         )
 
-        # Semantic Anchor Probing (SAP): decomposes video into semantic anchors
-        # with per-anchor uncertainty for the probabilistic pipeline.
-        self.num_anchors = getattr(self.task_config, "num_queries", 16)
-        self.sap = SemanticAnchorProbing(
-            d_model=transformer_width, num_anchors=self.num_anchors,
-            nhead=transformer_heads, num_layers=2,
-            log_sigma_min=getattr(task_config, "log_sigma_min", None),
-            log_sigma_max=getattr(task_config, "log_sigma_max", None),
-        )
-
         # Video-ColBERT style expansion tokens: 可学习 token 拼接在 anchor 序列旁，
         # 给 PIENet/WTI 更多聚合自由度。
         self.num_expansion_tokens = getattr(self.task_config, "num_expansion_tokens", 0)
@@ -338,14 +326,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         # Loss functions
         self.loss_fct = CrossEn()
-        self.loss_MIL_fct = MILNCELoss_BoF()
 
         # Loss weights
-        self.w_mil = getattr(self.task_config, "w_mil", 1e-2)
-        self.w_evidential = getattr(self.task_config, "w_evidential", 1e-2)
-        self.w_neg_reg = getattr(self.task_config, "w_neg_reg", 1e-2)
         self.w_uncertainty_reg = getattr(self.task_config, "w_uncertainty_reg", 1e-3)
-        self.w_orth = getattr(self.task_config, "w_orth", 0.0)
         # 退火系数：默认关闭；warmup_epochs > 0 时前 N 个 epoch 线性增大到 1.0
         self.anneal_warmup_epochs = getattr(self.task_config, "anneal_warmup_epochs", 0)
         self._current_epoch = 0  # 由外部 train_loop 更新
@@ -353,16 +336,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
         # 方案 A：不确定性置信度 warmup（步数级别）
         self._current_step = 0
         self.warmup_steps = getattr(self.task_config, "warmup_steps", 500)
-
-        # per-pair 置信度编码器：从 text-anchor 注意力分布 → 匹配置信度
-        # 输入 detach 切断到 text/video encoder 的梯度，仅 ~150 可学习参数
-        num_anchors = self.sap.num_anchors
-        self.confidence_mlp = nn.Sequential(
-            nn.Linear(num_anchors, num_anchors // 2),
-            nn.ReLU(),
-            nn.Linear(num_anchors // 2, 1),
-            nn.Sigmoid(),
-        )
 
         # 不确定性训练模式：nig_mil / none
         self.uncertainty_mode = getattr(self.task_config, "uncertainty_mode", "none")
@@ -491,14 +464,21 @@ class UATVR(CLIP4ClipPreTrainedModel):
         if self.use_csd_logvar_sidecar:
             self.csd_logvar_sidecar.reset_output_parameters()
 
-    def _select_training_retrieval_logits(
-        self,
-        wti_logits,
-        confidence_weighted_logits,
-    ):
-        if self.use_retrieval_risk_sidecar:
-            return wti_logits
-        return confidence_weighted_logits
+    @staticmethod
+    def _pooled_video_embedding(visual_output, video_mask):
+        """Masked mean over frame tokens, L2 normalised.
+
+        This is the candidate video embedding handed to the *detached* risk
+        sidecars (A3 contextual risk, CSD log-var) and to the auxiliary
+        ``video_mu`` diagnostic. It is deliberately **not** part of the
+        retrieval score: ranking is produced solely by
+        ``weighted_token_wise_intersection`` over text/frame tokens.
+        """
+        mask = video_mask.to(dtype=visual_output.dtype).unsqueeze(-1)
+        denom = mask.sum(dim=1)
+        denom = torch.where(denom == 0, torch.ones_like(denom), denom)
+        pooled = (visual_output * mask).sum(dim=1) / denom
+        return F.normalize(pooled, dim=-1)
 
     def _retrieval_risk_terms(self, wti_logits, group_ids):
         if not self.use_retrieval_risk_sidecar:
@@ -725,10 +705,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 sim_loss = (sim_loss1 + sim_loss2) / 2
 
             loss += sim_loss
-            loss += res["MIL_loss"]
-            loss += res["evidential_loss"]
-            loss += res["neg_reg_loss"]
-            loss += res["orth_loss"]
             loss += res["retrieval_risk_loss"]
             loss += res.get("csd_logvar_loss", sim_matrix.new_zeros(()))
             loss += res.get("contextual_risk_loss", sim_matrix.new_zeros(()))
@@ -736,10 +712,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
             loss_dict = {
                 "total": loss,
                 "sim_loss": sim_loss,
-                "mcsoft_loss": res["MIL_loss"],
-                "evidential_loss": res["evidential_loss"],
-                "neg_reg_loss": res["neg_reg_loss"],
-                "orth_loss": res["orth_loss"],
                 "retrieval_risk_loss": res["retrieval_risk_loss"],
                 "retrieval_risk_edl": res["retrieval_risk_edl"],
                 "retrieval_risk_fit": res["retrieval_risk_fit"],
@@ -965,8 +937,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
             sequence_output.contiguous(),
             visual_output.contiguous(),
         )  # visual_output [B, T, D]
-        visual_output_hidden = visual_output_hidden.contiguous()  # [B, T, 197, D]
-        frame_num = visual_output.size(1)
         word_num = text_token.size(1)
 
         if sim_header == "seqTransf":
@@ -1011,27 +981,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
             text_token[:, : text_original.size(1), :] += text_original
             attention_mask = tempo_mask_
 
-        # ===== SAP: rank-local，先于 allgather，避免 4D hidden 张量广播 =====
-        B_vis = visual_output_hidden.size(0)
-        T_vis = visual_output_hidden.size(1)
-        S_vis = visual_output_hidden.size(2)
-        spatial_tokens = visual_output_hidden.reshape(B_vis, T_vis * S_vis, -1)
-        spatial_mask = video_mask[:, 0:frame_num].unsqueeze(-1).expand(-1, -1, S_vis).reshape(B_vis, -1)
-        sap_out = self.sap(
-            spatial_tokens.contiguous(),
-            padding_mask=(spatial_mask == 0),
-        )
-        anchors = sap_out["anchors"]           # [B, K, D] decoder 输出
-        mu_video = sap_out["mu_raw"]           # [B, D] 模态概率聚合均值 (L2 norm)
-        logsigma_video = sap_out["logsigma"]   # [B, D] mixture log 方差
-        epistemic_video = sap_out["epistemic_cont"]  # [B, K, D] 连续认知不确定性
-        u_mode = sap_out["u_mode"]             # [B] 离散模态不确定性
-        alpha_dir = sap_out["alpha_dir"]       # [B, K] Dirichlet 证据量
-        modal_probs = sap_out["modal_probs"]   # [B, K] 模态概率
-
-        if self.log_sigma_min is not None and self.log_sigma_max is not None:
-            logsigma_video = torch.clamp(logsigma_video, min=float(self.log_sigma_min), max=float(self.log_sigma_max))
-
         # ===== DDP allgather：只广播紧凑张量，不再广播 visual_output_hidden =====
         if self.training:
             global_group_ids = None
@@ -1042,12 +991,6 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 global_group_ids = allgather_no_grad(
                     local_group_ids.contiguous(), self.task_config
                 )
-            mu_video = allgather(mu_video.contiguous(), self.task_config)
-            logsigma_video = allgather(logsigma_video.contiguous(), self.task_config)
-            epistemic_video = allgather(epistemic_video.contiguous(), self.task_config)
-            anchors = allgather(anchors.contiguous(), self.task_config)
-            u_mode = allgather(u_mode.contiguous(), self.task_config)
-            alpha_dir = allgather(alpha_dir.contiguous(), self.task_config)
             visual_output = allgather(visual_output.contiguous(), self.task_config)
             video_mask = allgather(video_mask.contiguous(), self.task_config)
             sequence_output = allgather(sequence_output.contiguous(), self.task_config)
@@ -1072,24 +1015,22 @@ class UATVR(CLIP4ClipPreTrainedModel):
             text_token, visual_output, attention_mask, video_mask
         ) * logit_scale
 
+        # Sidecar-only candidate embedding. Not a ranking component.
+        video_pooled = self._pooled_video_embedding(visual_output, video_mask)
+
         if self.training and self.contextual_risk_sidecar_only:
             contextual_terms = self._contextual_risk_terms(
                 wti_logits,
                 text_pooled,
-                F.normalize(mu_video, dim=-1),
+                video_pooled,
                 global_group_ids,
             )
-            zero = wti_logits.new_zeros(())
             return {
                 "retrieve_logits": wti_logits,
-                "MIL_loss": zero,
-                "evidential_loss": zero,
-                "neg_reg_loss": zero,
-                "orth_loss": zero,
-                "retrieval_risk_loss": zero,
-                "retrieval_risk_edl": zero,
-                "retrieval_risk_fit": zero,
-                "retrieval_risk_rank": zero,
+                "retrieval_risk_loss": wti_logits.new_zeros(()),
+                "retrieval_risk_edl": wti_logits.new_zeros(()),
+                "retrieval_risk_fit": wti_logits.new_zeros(()),
+                "retrieval_risk_rank": wti_logits.new_zeros(()),
                 **contextual_terms,
             }
 
@@ -1097,20 +1038,15 @@ class UATVR(CLIP4ClipPreTrainedModel):
             csd_terms = self._csd_logvar_terms(
                 wti_logits,
                 text_pooled,
-                F.normalize(mu_video, dim=-1),
+                video_pooled,
                 global_group_ids,
             )
-            zero = wti_logits.new_zeros(())
             return {
                 "retrieve_logits": wti_logits,
-                "MIL_loss": zero,
-                "evidential_loss": zero,
-                "neg_reg_loss": zero,
-                "orth_loss": zero,
-                "retrieval_risk_loss": zero,
-                "retrieval_risk_edl": zero,
-                "retrieval_risk_fit": zero,
-                "retrieval_risk_rank": zero,
+                "retrieval_risk_loss": wti_logits.new_zeros(()),
+                "retrieval_risk_edl": wti_logits.new_zeros(()),
+                "retrieval_risk_fit": wti_logits.new_zeros(()),
+                "retrieval_risk_rank": wti_logits.new_zeros(()),
                 **csd_terms,
             }
 
@@ -1118,75 +1054,18 @@ class UATVR(CLIP4ClipPreTrainedModel):
             risk_terms = self._retrieval_risk_terms(
                 wti_logits, global_group_ids
             )
-            zero = wti_logits.new_zeros(())
             return {
                 "retrieve_logits": wti_logits,
-                "MIL_loss": zero,
-                "evidential_loss": zero,
-                "neg_reg_loss": zero,
-                "orth_loss": zero,
                 **risk_terms,
             }
-
-        # ===== Evidential 相似度：cosine × epistemic 置信折扣 =====
-        ev_sim = self._evidential_similarity(
-            mu_video, text_pooled, epistemic_video
-        )
 
         # ===== Text 侧概率建模（保持 Gaussian，非对称设计） =====
         prob_text = self.probabilistic_text(
             text_pooled, text_token[:, 0:word_num, :].contiguous()
         )
-        prob_text_embedding = prob_text["embedding"]
         prob_text_logsigma = prob_text["logsigma"]
 
         if self.training:
-            bs = mu_video.size(0)
-            n_video = self.n_video_samples
-            n_text = self.n_text_samples
-            dim = mu_video.size(-1)
-
-            # MIL loss：从 N(gamma, logsigma) 采样做多实例对比
-            prob_video_embedding = sample_gaussian_tensors(mu_video, logsigma_video, n_video)
-            prob_sim_v = torch.einsum("ad,bd->ab", prob_video_embedding.view(-1, dim), prob_text_embedding.view(-1, dim))
-            prob_sim_t = torch.einsum("ad,bd->ab", prob_text_embedding.view(-1, dim), prob_video_embedding.view(-1, dim))
-            MIL_loss = (self.loss_MIL_fct(prob_sim_v, bs, n_video, n_text)
-                        + self.loss_MIL_fct(prob_sim_t, bs, n_video, n_text)) / 2
-
-            # Evidential NLL + neg_reg：仅在 uncertainty_mode=none 时保留（作为对照）
-            # 方案 A/B 通过 MIL 或 WTI confidence 训练不确定性，不再需要独立的 evidential loss
-            if self.uncertainty_mode == "none":
-                evidential_loss = self._evidential_nll_loss(ev_sim, alpha_dir)
-                neg_reg_loss = self._evidential_neg_reg_loss(ev_sim)
-            else:
-                evidential_loss = torch.tensor(0.0, device=mu_video.device)
-                neg_reg_loss = torch.tensor(0.0, device=mu_video.device)
-
-            # 退火系数：warmup_epochs <= 0 时关闭退火，直接使用完整权重
-            if self.anneal_warmup_epochs <= 0:
-                anneal_factor = 1.0
-            else:
-                anneal_factor = min(1.0, self._current_epoch / self.anneal_warmup_epochs)
-
-            # per-pair 置信度：独立 MLP 从 text-anchor 注意力分布预测匹配置信度
-            # 输入全部 detach，梯度只传 MLP（~150 参数），不污染 text/video encoder
-            anchors_n = F.normalize(anchors.detach(), dim=-1)              # [B, K, D]
-            text_n = F.normalize(text_pooled.detach(), dim=-1)              # [B, D]
-            pairwise_sim = torch.einsum('id,jkd->ijk', text_n, anchors_n)  # [B, B, K]
-            logit_scale = self.clip.logit_scale.exp()
-            anchor_attn = F.softmax(pairwise_sim * logit_scale, dim=-1)    # [B, B, K]
-            # 注意力熵（诊断用）
-            anchor_ent = -(anchor_attn * torch.log(anchor_attn + 1e-8)).sum(dim=-1)  # [B, B]
-            anchor_ent = anchor_ent / math.log(self.sap.num_anchors)        # ∈ [0, 1]
-            # 独立的置信度编码器
-            confidence = self.confidence_mlp(anchor_attn).squeeze(-1)       # [B, B]
-            if self.warmup_steps > 0:
-                alpha = min(1.0, self._current_step / self.warmup_steps)
-                confidence = 1.0 - alpha + alpha * confidence
-            else:
-                alpha = 1.0
-            weighted_logits = wti_logits * confidence  # [B, B] * [B, B]
-
             # ── 诊断统计（不参与 loss，detach 后计算，每 N 步采集一次） ──
             self._diag_step += 1
             if self._diag_step % self._diag_interval == 0:
@@ -1203,54 +1082,18 @@ class UATVR(CLIP4ClipPreTrainedModel):
                         "pos_std":  float(diag.std(unbiased=False)),
                     }
 
-                    # 链二：Per-pair 置信度统计
+                    # 链二：文本侧不确定性统计
                     ls_t = prob_text_logsigma.detach()
-                    conf_val = confidence.detach()  # [B, B] per-pair 置信度
-                    conf_diag = conf_val.diagonal()
-                    B_c = conf_val.size(0)
-                    mask_off_c = ~torch.eye(B_c, dtype=torch.bool, device=conf_val.device)
-                    conf_off = conf_val[mask_off_c]
                     self._prob_chain = {
-                        "anchor_ent_mean":    float(anchor_ent.detach().mean()),
-                        "confidence_mean":    float(conf_val.mean()),
-                        "confidence_diag":    float(conf_diag.mean()),
-                        "confidence_off":     float(conf_off.mean()),
-                        "confidence_gap":     float(conf_diag.mean() - conf_off.mean()),
-                        "u_mode_mean":        float(u_mode.detach().mean()),
-                        "u_mode_std":         float(u_mode.detach().std(unbiased=False)),
-                        "epistemic_v_mean":   float(epistemic_video.detach().mean()),
                         "var_text_mean":      float(ls_t.exp().mean()),
                         "kl_text_mean":       float((0.5 * (ls_t.exp() - 1 - ls_t)).mean(dim=-1).mean()),
-                        "warmup_alpha":       float(alpha),
                     }
-
-                    # 链三：辅助 loss 子项
                     self._aux_chain = {
-                        "evidential_loss_val":      float(evidential_loss.item()),
-                        "neg_reg_loss_val":         float(neg_reg_loss.item()),
-                        "logsigma_v_mean":          float(logsigma_video.detach().mean().item()),
-                        "anneal_factor":            float(anneal_factor),
                         "uncertainty_mode":         self.uncertainty_mode,
                     }
             # ──────────────────────────────────────────────────────────────────
 
-            # Anchor 正交损失：只对 SAP 的 K 个语义 anchor
-            orth_loss = torch.tensor(0.0, device=anchors.device)
-            if self.w_orth > 0:
-                anchor_norm = F.normalize(anchors, dim=-1)
-                sim_qq = torch.bmm(anchor_norm, anchor_norm.transpose(1, 2))
-                eye = torch.eye(sim_qq.size(1), device=sim_qq.device).unsqueeze(0)
-                orth_loss = ((sim_qq - eye) ** 2).mean()
-
-            loss = {}
-            loss["retrieve_logits"] = self._select_training_retrieval_logits(
-                wti_logits, weighted_logits
-            )
-            loss["MIL_loss"] = self.w_mil * MIL_loss
-            # 退火系数应用于 evidential_loss 和 neg_reg_loss，避免 Epoch 2 初期梯度崩塌
-            loss["evidential_loss"] = self.w_evidential * evidential_loss * anneal_factor
-            loss["neg_reg_loss"] = self.w_neg_reg * neg_reg_loss * anneal_factor
-            loss["orth_loss"] = self.w_orth * orth_loss
+            loss = {"retrieve_logits": wti_logits}
             loss.update(
                 self._retrieval_risk_terms(wti_logits, global_group_ids)
             )
@@ -1258,76 +1101,20 @@ class UATVR(CLIP4ClipPreTrainedModel):
         else:
             if return_csd_aux and self.use_csd_logvar_sidecar:
                 csd_output = self.csd_logvar_sidecar(
-                    text_pooled.detach(), mu_video.detach()
+                    text_pooled.detach(), video_pooled.detach()
                 )
                 return wti_logits, {
                     "text_mu": text_pooled.detach(),
-                    "video_mu": mu_video.detach(),
+                    "video_mu": video_pooled.detach(),
                     "text_logvar": csd_output["text_logvar"].detach(),
                     "video_logvar": csd_output["video_logvar"].detach(),
                 }
             if return_contextual_aux and self.use_contextual_risk_sidecar:
                 return wti_logits, {
                     "text_mu": text_pooled.detach(),
-                    "video_mu": mu_video.detach(),
+                    "video_mu": video_pooled.detach(),
                 }
             return wti_logits
-
-    @staticmethod
-    def _evidential_similarity(mu_video, text_pooled, epistemic_video):
-        """Evidential 相似度：cosine sim × 认知不确定性折扣。
-
-        Args:
-            mu_video: [B, D] SAP 模态概率聚合均值 (L2 normalized)。
-            text_pooled: [B, D] 文本 pooled 表征 (L2 normalized)。
-            epistemic_video: [B, K, D] SAP 每锚点认知不确定性 β/(ν(α-1))。
-
-        Returns:
-            sim_matrix: [B, B] cosine 相似度 × exp(-mean_epistemic)。
-        """
-        cosine_sim = torch.mm(mu_video, text_pooled.t())  # [B, B]
-        # 锚点维度平均 → 每视频的标量不确定性惩罚
-        epistemic_penalty = epistemic_video.mean(dim=(1, 2))  # [B]
-        confidence = torch.exp(-epistemic_penalty)  # [B]，不确定性越大，置信越低
-        sim_matrix = cosine_sim * confidence.unsqueeze(1)  # [B, B]
-        return sim_matrix
-
-    @staticmethod
-    def _evidential_nll_loss(sim_matrix, alpha_dir):
-        """Evidential 负对数似然损失：鼓励正对高证据、抑制负对证据。
-
-        Args:
-            sim_matrix: [B, B] evidential 相似度（非 detach，梯度回传到 SAP 和 text）。
-            alpha_dir: [B, K] SAP 的 Dirichlet 证据量。
-
-        Returns:
-            loss: 标量，正对 NLL + 负对 evidence 正则。
-        """
-        B = sim_matrix.size(0)
-        diag_scores = sim_matrix.diagonal()  # [B] 正对分数
-        # 正对 NLL：relu 截断负值（cosine sim 可能为负），鼓励高证据
-        nll_pos = -torch.log(torch.relu(diag_scores) + 1e-8).mean()
-        # 负对 evidence 正则：对每行非对角元素求和
-        mask_off = ~torch.eye(B, dtype=torch.bool, device=sim_matrix.device)
-        neg_scores = sim_matrix[mask_off].view(B, B - 1)  # [B, B-1]
-        evidence_neg = torch.relu(neg_scores).sum(dim=-1)  # [B]
-        nll_neg = torch.log(1.0 + evidence_neg).mean()
-        return nll_pos + nll_neg
-
-    @staticmethod
-    def _evidential_neg_reg_loss(sim_matrix):
-        """负对 evidence 正则：独立的负对证据量惩罚项。
-
-        Args:
-            sim_matrix: [B, B] evidential 相似度（可 detach 也可不 detach）。
-
-        Returns:
-            loss: 标量，log(1 + sum(relu(neg))) 的均值。
-        """
-        B = sim_matrix.size(0)
-        mask_off = ~torch.eye(B, dtype=torch.bool, device=sim_matrix.device)
-        neg_scores = sim_matrix[mask_off].view(B, B - 1)
-        return torch.log(1.0 + torch.relu(neg_scores).sum(dim=-1)).mean()
 
     @staticmethod
     def evidential_matrix_loss(sim_matrix):

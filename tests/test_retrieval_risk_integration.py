@@ -126,18 +126,6 @@ def _tiny_uatvr_for_risk():
     return model
 
 
-def test_sidecar_mode_selects_raw_wti_logits_bit_for_bit():
-    model = _tiny_uatvr_for_risk()
-    raw = torch.randn(4, 4)
-    confidence_weighted = raw * torch.sigmoid(torch.randn(4, 4))
-
-    selected = model._select_training_retrieval_logits(
-        raw, confidence_weighted
-    )
-
-    torch.testing.assert_close(selected, raw, rtol=0, atol=0)
-
-
 def test_model_risk_terms_use_group_ids_and_isolate_logits():
     model = _tiny_uatvr_for_risk()
     logits = torch.tensor(
