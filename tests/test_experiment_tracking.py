@@ -10,12 +10,27 @@ import pytest
 
 from crf_ladder import TRAIN_CRFS, X264_RECIPE
 from experiment_tracking import (
+    _CONTEXTUAL_FEATURE_BLOCKS,
     CONTEXTUAL_RISK_CANONICAL_A1_CHECKPOINT,
     CONTEXTUAL_RISK_CANONICAL_A1_SHA256,
     atomic_write_json,
     build_experiment_manifest,
     validate_contextual_risk_resume_manifest,
 )
+from prob_models.contextual_retrieval_risk import CONTEXTUAL_FEATURE_SETS
+
+
+def test_manifest_feature_set_registry_matches_the_sidecar():
+    """The manifest keeps its own copy of the table; it must not drift.
+
+    A set that the sidecar accepts but the manifest does not aborts the run
+    only after model construction, i.e. minutes into a reserved GPU phase.
+    """
+
+    assert _CONTEXTUAL_FEATURE_BLOCKS == {
+        name: frozenset(blocks)
+        for name, blocks in CONTEXTUAL_FEATURE_SETS.items()
+    }
 
 
 def test_tracking_atomic_writer_rejects_nested_nonstandard_json_number(tmp_path):

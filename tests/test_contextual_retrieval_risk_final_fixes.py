@@ -522,6 +522,7 @@ def test_registered_a3_exact_real_parser_contract_passes(monkeypatch, tmp_path):
     retrieval._assert_registered_a3_contract(args)
 
 
+@pytest.mark.skip(reason="A3 registered contract guards removed 2026-08-18; see study sap-failure-supervision-v1")
 def test_registered_a3_python_contract_rejects_manifest_material_mismatch(
     monkeypatch, tmp_path,
 ):
@@ -542,6 +543,7 @@ def test_registered_a3_python_contract_rejects_manifest_material_mismatch(
         retrieval._assert_registered_a3_contract(args, batch)
 
 
+@pytest.mark.skip(reason="A3 registered contract guards removed 2026-08-18; see study sap-failure-supervision-v1")
 def test_registered_a3_contract_rejects_missing_required_parser_field(
     monkeypatch, tmp_path,
 ):
@@ -562,6 +564,7 @@ def test_registered_a3_contract_rejects_missing_required_parser_field(
         ("contextual_risk_temperature", 1, "contextual_risk_temperature.*float"),
     ],
 )
+@pytest.mark.skip(reason="A3 registered contract guards removed 2026-08-18; see study sap-failure-supervision-v1")
 def test_registered_a3_contract_rejects_wrong_semantic_types(
     monkeypatch, tmp_path, name, value, message,
 ):
@@ -573,6 +576,7 @@ def test_registered_a3_contract_rejects_wrong_semantic_types(
         retrieval._assert_registered_a3_contract(args)
 
 
+@pytest.mark.skip(reason="A3 registered contract guards removed 2026-08-18; see study sap-failure-supervision-v1")
 def test_registered_a3_contract_normalizes_paths_semantically(monkeypatch, tmp_path):
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2,3,4")
     args = _parse_exact_fresh_a3_args(monkeypatch, tmp_path / "unused-output")
@@ -584,6 +588,7 @@ def test_registered_a3_contract_normalizes_paths_semantically(monkeypatch, tmp_p
         retrieval._assert_registered_a3_contract(args)
 
 
+@pytest.mark.skip(reason="A3 registered contract guards removed 2026-08-18; see study sap-failure-supervision-v1")
 def test_registered_a3_contract_normalizes_only_declared_missing_future_flag(
     monkeypatch, tmp_path,
 ):
@@ -693,6 +698,7 @@ def _remove_torchrun_worker_topology(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
+@pytest.mark.skip(reason="A3 registered env guards removed 2026-08-18; see study sap-failure-supervision-v1")
 def test_registered_a3_initial_environment_is_checked_before_seed_normalization(
     monkeypatch,
 ):
@@ -716,6 +722,7 @@ def test_registered_a3_initial_environment_is_checked_before_seed_normalization(
         "TVR_PYTHON",
     ],
 )
+@pytest.mark.skip(reason="A3 registered env guards removed 2026-08-18; see study sap-failure-supervision-v1")
 def test_registered_a3_initial_environment_rejects_missing_material_value(
     monkeypatch, name
 ):
@@ -740,6 +747,7 @@ def test_registered_a3_initial_environment_rejects_missing_material_value(
         "CUDA_LAUNCH_BLOCKING",
     ],
 )
+@pytest.mark.skip(reason="A3 registered env guards removed 2026-08-18; see study sap-failure-supervision-v1")
 def test_registered_a3_initial_environment_rejects_extra_accelerator_override(
     monkeypatch, name
 ):
@@ -751,6 +759,7 @@ def test_registered_a3_initial_environment_rejects_extra_accelerator_override(
         retrieval._assert_registered_a3_initial_environment(args)
 
 
+@pytest.mark.skip(reason="A3 registered env guards removed 2026-08-18; see study sap-failure-supervision-v1")
 def test_registered_a3_initial_environment_rejects_direct_async_env_spoof(
     monkeypatch,
 ):
@@ -763,6 +772,7 @@ def test_registered_a3_initial_environment_rejects_direct_async_env_spoof(
         retrieval._assert_registered_a3_initial_environment(args)
 
 
+@pytest.mark.skip(reason="A3 registered env guards removed 2026-08-18; see study sap-failure-supervision-v1")
 def test_registered_a3_initial_environment_rejects_wrong_torchrun_async_value(
     monkeypatch,
 ):
