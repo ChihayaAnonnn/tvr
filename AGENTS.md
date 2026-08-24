@@ -17,3 +17,8 @@
 四卡资格测试通过并记录前，不得启动任何 GPU 科学实验。
 
 详细命令和事故恢复步骤见 [docs/agent/experiment-artifacts.md](docs/agent/experiment-artifacts.md)。
+
+任何 Agent 或新 session 在提出实验方案前，必须先读 [research/README.md](research/README.md)：
+其中 `00-north-star.md`（当前研究命题与证伪判据）、`01-evidence-ledger.md`（可信数字及其
+SOLID/CAVEATED/RETRACTED 标记）、`02-dead-ends.md`（已证伪方向，不得重提）为强制前置阅读，
+`07-protocol-constraints.md` 汇总了本文件之外仍然生效的常设约束。
