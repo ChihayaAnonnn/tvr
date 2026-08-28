@@ -165,6 +165,35 @@
 
 ---
 
+## K. OQ-1 Tier −1 增益形状普查（2026-08-28，全部为外部报告值）
+
+> 完整表与混淆变量备注见 `research/oq1/tier-minus1-gain-shapes.md`。
+> `A = (ΔR@5+ΔR@10)/2 − ΔR@1`；均为 MSRVTT-1K-A T2V，各方法相对**自己的** baseline。
+
+| ID | 事实 | 数字 | Artifact | 状态 |
+|---|---|---|---|---|
+| E-76 | UATVR 概率增量（+DUA†+KL† vs TI+DSA，B/16 消融）是 **R@1-forward** | +1.2/+0.8/+0.6，MnR 12.5→12.4；A=−0.5 | UATVR arXiv 2301.06309 Table 1；`research/oq1/tier-minus1-gain-shapes.md` | **SOLID（外部报告值，已对官方 PDF 复核 ✓ E-89；原 WebFetch 转录，投稿前对 PDF 复核）** |
+| E-77 | T-MASS vs X-Pool 是 R@1-forward | B/32：+3.3/+2.5/+2.9，MnR −17%，A=−0.6；B/16：+4.5/+3.4/+3.0，A=−1.3 | T-MASS arXiv 2403.17998 Table 6(a)/Table 1 | 同上（已对官方 PDF 复核 ✓ E-89） |
+| E-78 | ProTA 概率增量（vs 确定性 DPA）是 R@1-forward | +1.1/+0.4/+0.2（消融表无 MnR）；A=−0.8 | ProTA arXiv 2404.12216v2 Table 1 | 同上（已对官方 PDF 复核 ✓ E-89） |
+| E-79 | DiffusionRet（+Gen vs Dis）是 R@1-forward | +2.2/+1.7/−0.2，MnR −7%；A=−1.45 | DiffusionRet arXiv 2303.09867 Table 3d | 同上（已对官方 PDF 复核 ✓ E-89） |
+| E-80 | PAU（含其乘性不确定性重排）是 R@1-forward | +2.9/−0.2/+1.0，MnR −3%；A=−2.5 | PAU arXiv 2309.17093 Table 6/Table 1 | 同上（已对官方 PDF 复核 ✓ E-89） |
+| E-81 | DUQ（含其乘性重排 Eq.16）是 R@1-forward | T2V +4.3/+2.8/+3.9，MnR −25%，A=−0.95；V2T +6.0/+5.9/+3.5，A=−1.3 | `related_work/duq_ijcai2025/duq.pdf` Table 3（IJCAI'25, DOI 10.24963/ijcai.2025/643） | **SOLID（外部报告值，直接读自 PDF）** |
+| E-82 | **DAB 表 5b：KL→W₂ 后 R@1 增益归零、全局重排效应保留** —— 论文自带的 F-A 近似实验 | 52.6→46.8（baseline 46.9），但 R@5 +6.9 / R@10 +6.2 / MnR −54%；A=+6.65 | `related_work/dab_eccv2026/dab.txt:565-567` | **SOLID（外部报告值）** |
+| E-83 | **Tier −1 结论：hubness 签名（A>0 + MnR 崩塌）为 DAB 独有**，六个非 DAB 概率方法全部 A<0 | DAB 各配置 A ∈ [+2.1, +7.65]；UATVR/T-MASS/ProTA/DiffusionRet/PAU/DUQ A ∈ [−2.5, −0.25] | `research/oq1/tier-minus1-gain-shapes.md` | **SOLID（汇总观察）→ north-star thesis 家族版收窄** |
+| E-89 | **Tier −1 的五篇 WebFetch 转录来源已对官方 PDF 逐数复核：5/5 完全一致，零转录错误** —— E-76…E-80 的转录风险警告解除，数字可直接投稿引用 | UATVR TI 48.4/74.2/83.3/2.0/14.1、+DSA 49.6/75.5/84.9/2.0/12.5、+KL†(UATVR) 50.8/76.3/85.5/1.0/12.4（B/16 确认，另补获 +DUA† 50.1/75.8/84.6 中间行）；T-MASS B/32 50.2/75.3/85.1/1.0/11.9 vs X-Pool 46.9/72.8/82.2/2.0/14.3，B/16 52.7/77.1/85.6/1.0/10.5 vs 48.2/73.7/82.6/2.0/12.7；ProTA DPA 47.0/75.0/84.1 → 48.1/75.4/84.3（消融表确无 MnR 列）；DiffusionRet Dis 46.8/73.5/82.9/13.0 → Both 49.0/75.2/82.7/12.1；PAU Baseline 45.6/72.9/81.5/2.0/14.5 → ours 48.5/72.7/82.5/2.0/14.0 | 官方 PDF 经 `arxiv==4.0.1` 下载至 `related_work/{uatvr_iccv2023,tmass_cvpr2024,prota_2024,diffusionret_iccv2023,pau_neurips2023}/paper.pdf`（各附 `SOURCE.txt` 记 v2/v1/v2/v2/v3 版本号），`pdftotext -layout` 转文本后比对 | **SOLID（一手核对）** |
+
+## L. OQ-1 Tier 0 修正族能力包络（2026-08-28，冻结 fp32 val 矩阵，无 GPU）
+
+| # | 结论 | 数字 | 出处 | 状态 |
+|---|---|---|---|---|
+| E-84 | 冻结矩阵的 GT 对齐规则（caption i → video ⌊i/20⌋）与 MnR 口径（0-based rank 均值+1）经数值复现验证：用仓库自身函数从 raw 矩阵复现契约 JSON 全部 7 项 post-DSL 指标 | T2V 75.85/94.78/97.26/MdR1；V2T 93.0/99.8/100.0 逐位一致（V2T 走 `independent_directions=False`，从 T2V DSL 矩阵取组内 max） | `scripts/oq1_tier0_correction_envelope.py` verify 段；`main_task_retrieval.py:4378-4384` | **SOLID** |
+| E-85 | trusted-v1 val 矩阵是**低 hubness、近饱和 regime** | raw 76.50/95.50/97.89，MdR 1，MnR 2.109；S(N5)=0.355，S(N10)=0.528，maxN10=472（均匀期望 200）；对照 DAB regime：1K-A baseline R@1 46.9 / MnR 14.3 | `artifacts/oq1_tier0/tier0_results.json` | **SOLID** |
+| E-86 | **DSL T=2.0 在 val 上是负增益**（训练选点用 raw val R@1，June training_args 无 DSL 键，不受影响）——与 E-08（test +2.6）对照，同一修正的增益完全由矩阵 hubness regime 决定 | val：ΔR@1 −0.65，ΔMnR +16.8%，S(N10) 0.53→0.70；温度网格 0.5–20 内 DSL/逆softmax 全部 ≤ raw | 同上 | **SOLID → "DSL=hubness 校正"解读的正面佐证** |
+| E-87 | Sinkhorn 是唯一正增益的 label-free 臂，且其 T2V 作用严格等价加性 b_j=T·log v_j（族内成员）；形状 R@1-forward；**偏度与增益不单调**（T=1 增益最大但 S(N10) 0.53→1.29） | T=1.0：+1.72/+0.25/+0.09，MnR −1.4%，A=−1.55；T=2.0：+1.13，A=−1.05 | 同上 | **SOLID** |
+| E-88 | **Oracle 包络：加性/仿射族在本矩阵上造不出 DAB 形状**——split-half 可迁移增益 ≤+0.5（γ=0.3 收缩后；γ=1 时 −0.08，输给 label-free Sinkhorn +0.98）；in-sample 加性 +2.30（A=−1.97）/仿射 +3.54（A=−2.75）全为 R@1-forward，偏度上升（学到标签先验而非反 hub）；corr(b_j, N_k) 全部 \|r\|≤0.12 不显著。**因 regime 错配（E-85），此结果不构成 F-A 证伪，产出为 thesis 精化：签名 = 修正 × 高 hubness 几何** | 500 dof / 5000 样本 MLE：in-sample 增益几乎全为过拟合（方法论警示：小验证集上调出的 per-candidate 校正增益应照此打折） | `research/oq1/tier0-correction-envelope.md` §3-4 | **SOLID（分析性结论）** |
+
+---
+
 ## 引用速查：什么可以写进论文
 
 - ✅ 可直接引用：E-01~E-09、E-10a、E-20~E-24、E-31、E-32、E-40~E-42、E-44、E-46~E-48、E-52、E-55、E-60~E-64。

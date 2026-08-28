@@ -6,6 +6,191 @@
 
 ---
 
+## 2026-08-28 (6) —— Tier 1 预注册签署并冻结（commit 20a4a1d）
+
+研究者审阅 §5 阈值后指示"先松一手"：P5（加性分量回收比例）60% → **50%**——七个阈值中
+唯一没有数据参照点的判断值，取"过半"的自然语义界；修订记录写入预注册 §12.5，其余六个
+阈值未动（P1–P3 架在 Tier −1 两族群空隙上，P0 是两个实测 regime 的插值）。随后研究者
+签署。`study.yaml` status → **registered**（registered_at: 2026-08-28），以只含
+`experiments/oq1-kl-variance-hubness-v1/` 的 commit `20a4a1d` 提交，**此后该文件冻结**
+（PC-2：任何改动 = 新 study 目录 + 新 protocol_version）。
+下一步：等外部进程让出显存 → PC-9 四卡资格测试 → Stage 0。
+
+---
+
+## 2026-08-28 (5) —— OQ-1 Tier 1 预注册起草（解 PC-4 的那份 study）
+
+**触发。** Tier −1/Tier 0 都做完后，唯一的路障是 PC-4：MSRVTT/MSVD test 在"新 study 的
+Stages 4/5 通过"之前保持 sealed。研究者指示"请你起草"。
+
+**产出。** `experiments/oq1-kl-variance-hubness-v1/`：
+`PREREGISTRATION.md`（散文体：问题、设计决策及其理由、七臂、六条定量预测 P1–P6 + 前置
+门 P0、证伪映射、局限、签署栏）与 `study.yaml`（冻结协议，照 contextual-risk-v2 的结构
++ sap-contextual-uncertainty-v1 的 header/lineage 约定；已用 yaml.safe_load 验证可解析）。
+`status: draft`，待研究者签署后改 `registered` 并冻结。
+
+**四个非显然的设计决策（都写进了文档，防事后合理化）：**
+
+1. **第一道门是 regime 门，不是效应门。** 这是 Tier 0 教训的制度化。低 hubness regime 下
+   任何 candidate-only 修正都无的放矢，"消掉 (A) 项增益不变"会让 **F-A 假阳性触发**。
+   故 P0（`S(N₁₀)≥1.5` 且 `MnR≥8.0` 且 `R@1≤60`）不过 → 判 inconclusive、不开火 F-A、
+   不解封 test。P1（arm1 根本没重现签名）不过同样判 inconclusive。
+2. **放弃 X-Pool 主线，改用本仓 June/WTI。** X-Pool 的价值是 DAB 表 5a 的 46.9 外部锚，
+   但那个锚在 1K-A test 上、PC-4 下够不着；为一个 Stage 6 前收益为零的锚引入未经本仓
+   协议（PC-8/PC-9/确定性契约）审计的外部代码库不划算。X-Pool 降为可选 Stage 7。
+   代价已写进 limitations：与 DAB 的可比性靠机制同构论证，不靠数字对齐。
+3. **新建 `val1k` 分区绕开 test。** regime 差异主要来自评测几何而非 backbone
+   （同 backbone 同 DSL：val −0.65 / test +2.6）。从 8500 个 train 视频划 1000 视频 ×
+   1 caption，与 1K-A 结构同构、与 test 零交集（Stage 0 硬断言），train 缩到 7500，
+   全部臂在同一训练集重训。**Stage 1–5 因此一次都不用碰 test。**
+4. **两条会毁掉实验的默认值被显式关死。** 主指标 no-post-processing（DSL/QB-Norm 本身
+   就是 candidate-only 加性修正，开着比较各臂会吸收掉待测的隐式修正 → F-A 假阴性）；
+   λ 权重固定 0/1 不扫描（扫描 = 在 val 上做选择，污染 Stage 6 的一次性 test）。
+   若 arm1 因不扫描而偏弱，代价由 P1 门承担（判 inconclusive），不允许事后补扫描。
+
+**顺带解掉的协议债。** PC-10（GPU 拓扑冲突）：起草当日实测 GPU 0/1/4 各被外部进程占
+~74.5 GiB、2 空闲、3 占 22.4 GiB，即**当下根本起不了 4 卡**。study.yaml 因此不再硬编码
+卡号，改为 reserve 期探测空闲显存、选前 4 张、把 UUID 与实测空闲量写进 manifest，
+不足 4 张则拒绝启动并归档探测结果——"用了哪几张卡、为什么"永远有据可查。
+PC-3（MSVD launcher 未入库）：v1 全程不碰 MSVD，直接规避。
+PC-7 / PC-11 / PC-1：在 `not_applicable_constraints` 里逐条写明为何不适用
+（不用 A3 代码 / 训练新检索器而非复用冻结矩阵 / 不同 study）。
+
+**强制条款。** F-A 或 F-B 触发时照常走完 Stage 5 并以 negative result 归档，
+不得以"实现不对/超参没调好"撤销注册换配置重跑；任何改动 = 新 study 目录 + 新
+protocol_version（PC-2/PC-5）。Stage 6 不做任何选择，配置在 Stage 5 末冻结进
+`stage6_frozen_config.json`（记 sha256），每臂只跑一次。
+test 解封授权 `authorization_scope: this_study_only`，不外溢到 OQ-2/OQ-3。
+
+**下一步。** 研究者签署 → PC-9 四卡资格测试（需先等外部进程让出显存）→ Stage 0。
+
+---
+
+## 2026-08-28 (4) —— Tier −1 文献转录债还清：五篇官方 PDF 逐数复核 5/5 一致
+
+**背景。** 研究者问及第三方插件 `ai-research-skills` 的 `autoresearch` skill（Orchestra
+Research，MIT，非 Anthropic 官方）能否接管本项目。判断：**整体不启用**——其 SKILL.md
+明令 "Do not ask for permission / Never stop"，与 **PC-4**（test 集需 pre-registered
+study 解锁）直接冲突，一个不停机的 agent 极可能烧掉 test 集（不可逆）；其
+`research-state.yaml`/`findings.md`/`experiments/` 与本 `research/` 语料功能重复，
+并行维护即制造它本要防的漂移；20 分钟心跳节奏也不匹配 GPU-day 级实验。
+**单点借用其文献工具链**（`pip install semanticscholar arxiv`，绕开本环境被 org
+policy 封掉的 WebSearch）；`ml-paper-writing` skill 留待写稿期独立调用。
+
+**执行。** 用 `arxiv==4.0.1` 下载五篇官方 PDF（注意 4.x 已移除 `Result.download_pdf`，
+改用 `pdf_url` + requests），`pdftotext -layout` 转文本，逐数比对 Tier −1 表全部引用值。
+存于 `related_work/{uatvr_iccv2023,tmass_cvpr2024,prota_2024,diffusionret_iccv2023,
+pau_neurips2023}/paper.{pdf,txt}`，各附 `SOURCE.txt` 记版本号（v2/v1/v2/v2/v3）。
+按 dab.pdf/duq.pdf 先例，PDF 保留本地、暂不入 git（注意 `.gitignore` 的 `*.pdf` 是
+注释掉的，这些文件处于 untracked 而非 ignored 状态）。
+
+**结果：5/5 完全一致，零转录错误**（E-89）。UATVR B/16 确认，另补获 `+DUA†
+50.1/75.8/84.6/1.5/12.8` 中间行（本表取累积口径，不受影响）；ProTA 消融表确无 MnR 列，
+"n/a" 成立。E-76…E-80 的转录风险警告解除，Tier −1 数字现可直接投稿引用。
+
+## 2026-08-28 (3) —— OQ-1 Tier 0 完成：修正族在 val 上全为 R@1-forward，thesis 精化为"修正 × 高 hubness 几何"
+
+**执行。** 冻结 fp32 val 矩阵（`sim_june_fp32.npy`,sha 8ebf27ae4446）上的修正族
+能力包络。产物：`scripts/oq1_tier0_correction_envelope.py`、
+`artifacts/oq1_tier0/tier0_results.json`、`research/oq1/tier0-correction-envelope.md`；
+ledger 新增 §L（E-84…E-88）；OQ-1 状态与结案判据修订；`00-north-star.md` P0 状态更新；
+tier-minus1 表的 DSL 参照行补齐说明。
+
+**预检（全过）。** GT 规则 caption i → video ⌊i/20⌋：代码强制（每视频恰 20 caption
+否则 raise）+ 数值终检（用仓库自身函数从 raw 矩阵复现契约 JSON 全部 7 项 post-DSL
+指标，逐位一致）。踩坑一次：multi-sentence eval 的 V2T 走 `independent_directions=False`
+——从 **T2V 的 DSL 矩阵**分组取 max，不是 v2t DSL 矩阵。MnR 口径 = 0-based rank 均值+1。
+另核实训练选点用 raw val R@1（June training_args 无 DSL 键），不受下述 DSL 结论影响。
+
+**结果。**
+- **val 矩阵是低 hubness、近饱和 regime**：raw 76.50/95.50/97.89，MnR 2.109，
+  S(N10)=0.53（E-85）。DAB 形状（MnR 腰斩）在此物理上不可表达。
+- **DSL T=2 在 val 上 −0.65 R@1**（MnR +17%，全温度网格 ≤ raw）；对照 test 上
+  +2.6（E-08）→ 增益 regime 依赖，佐证 hubness-校正解读（E-86）。
+- Sinkhorn 唯一正增益 label-free 臂（T=1:+1.72，A=−1.55；其 T2V 作用严格等价
+  加性 b_j=T·log v_j）；偏度与增益不单调（E-87）。QB-Norm 以 val 自身为 bank
+  时严格退化为逆 softmax（activation set 恒命中）。
+- **Oracle 包络（500 dof / 5000 样本,split-half）**：可迁移增益 ≤+0.5（γ=1 时 −0.08,
+  输给 label-free Sinkhorn）；in-sample 加性 +2.30 / 仿射 +3.54 全为 A<0、
+  偏度上升（学到标签先验而非反 hub）；corr(b_j,N_k) 全部不显著（E-88）。
+
+**判读。** 本结果**既不证伪也不支持** thesis（regime 错配,"oracle 造不出 DAB 形状
+→ 证伪"判据的前提不满足,不开火）；产出是 thesis 精化：
+**hubness 签名 = candidate-only 修正 × 高 hubness 分数几何，缺一不可**。
+Tier −1 的分野解释不受影响（七方法均在 1K-A test 高 hubness regime 比较）。
+高 hubness regime 的包络测量归并入 Tier 1（X-Pool/1K-A,PC-4 需 pre-registration）。
+方法论副产品：小验证集上调出的 per-candidate 校正增益应按 in-sample 过拟合打折。
+
+**下一步。** Tier 1 是下一个关键实验，但被 PC-4 阻塞——需先写 pre-registered study
+（Stages 4/5）解锁 1K-A test 对齐。无 GPU 可先行项：pre-registration 文本起草；
+OQ-5 的 1000/1012 分母对账。
+
+## 2026-08-28 (2) —— OQ-1 Tier −1 完成：hubness 签名为 DAB 独有，thesis 家族版收窄
+
+**执行。** 七方法增益形状普查（各自 vs 自己的确定性 baseline，MSRVTT-1K-A T2V）。
+产物：`research/oq1/tier-minus1-gain-shapes.md`（完整表 + 混淆变量 + 来源）；
+ledger 新增 §K（E-76…E-83）；`00-north-star.md` 头部加 2026-08-28 修正块；
+OQ-1 状态更新。DUQ 原文存档 `related_work/duq_ijcai2025/duq.pdf`（964K，IJCAI 官方 PDF，
+与 dab.pdf 同待遇——本地保留，暂不入 git）。
+
+**结果。** 不对称指数 `A = (ΔR@5+ΔR@10)/2 − ΔR@1`：
+- DAB 各配置 A ∈ [+2.1, +7.65]（w/Prob only 甚至 R@1 **−2.6** 而 MnR −48%）；
+- UATVR(+1.2 R@1, A=−0.5) / T-MASS(+3.3, −0.6) / ProTA(+1.1, −0.8) /
+  DiffusionRet(+2.2, −1.45) / PAU(+2.9, −2.5) / DUQ(+4.3, −0.95) **全部 R@1-forward**。
+
+**意外收获（E-82）。** DAB 表 5b 自带 F-A 近似实验：cost 从 directional KL 换成 W₂
+（自由加性 log σ² 项消失）后 R@1 52.6→46.8 ≈ baseline 46.9（增益归零），
+而 R@5/R@10/MnR 重排效应保留。臂 5（对称 KL）/ 臂 6（ELK）的先验大幅增强。
+
+**Thesis 影响。** "概率方法=隐式 hubness 校正"的家族版**被 Tier −1 证伪**；
+收窄后的 claim（"非对称 KL 的 candidate-only 方差项是学习出的 hubness 校正，
+解释 DAB 与其余方法的形状分野"）反而更强、更可防守，且这张表就是它的第一份证据。
+PAU/DUQ 两个乘性重排方法也是 R@1-forward → "乘性修正"不自动产生签名，
+Tier 0 的仿射 oracle 上界更有必要。
+
+**方法论备注。** 五篇经 WebFetch 转录（UATVR/T-MASS/ProTA/DiffusionRet/PAU），
+已做四组跨论文交叉校验（详见产物文件）；**投稿引用前须对原 PDF 复核**。
+DUQ 直接读自 PDF 页面图像；DAB 逐行核对本地 dab.txt。
+UATVR 消融是 B/16、其余 B/32；DAB 表 5 为 5 epoch——均已按行标注，未跨用。
+WebSearch 在本环境被组织策略禁用，全程用直接 URL（ar5iv / arxiv HTML / ijcai.org）。
+
+**下一步。** Tier 0（fp32 val 矩阵上 label-free 四法 + 加性/仿射双 oracle 包络，
+无 GPU、PC-4 不涉及）；开工前先核矩阵的 ground-truth 对齐规则与 MnR 口径。
+
+---
+
+## 2026-08-28 —— OQ-1 设计定稿：四级阶梯 + 六臂消融（讨论产物，未执行）
+
+**新核实的 scoping 事实。** `artifacts/rescued_from_tmp/frozen_equiv/` 的 8 个
+`sim_*.npy` 实为 **2 个不同矩阵**（fp32/bf16 各一，SHA 分别 `8ebf27ae4446` /
+`25ac139d80d6`）——frozen-retriever 契约使 June/A1/A3 逐位相同。推论：仓库内
+**没有任何真正改变打分的概率检索器**，OQ-1 的 F-A/F-B 严格检验必须复现外部方法。
+DAB **无公开代码**（`related_work/dab_eccv2026/NOTES.md:6`）。
+
+**OQ-1 重写为四级阶梯**（详见 `04-open-questions.md` OQ-1，此处只记增量决策）：
+- Tier −1 文献增益形状普查（对照物必须是各方法**自己的**确定性 baseline；
+  登记 backbone/split/帧数/后处理四个混淆变量）→ Tier 0 val 矩阵上加性+**仿射**
+  oracle 包络 → Tier 1 只复现 DAB 表 5a 的 `w/ Prob. only` 行 → Tier 2 仅审稿要求时做。
+- Tier 1 打分按 KL 四项分解实现（lam_* 开关），臂 1–4 之外新增两个对照臂：
+  **臂 5 对称 KL**（log σ 项相消，加性偏置天然为零——DAB 明确弃用对称 KL，
+  `NOTES.md:45-46`，这个选择本身可疑）；**臂 6 同头换 ELK 打分**
+  （log(σ_t²+σ_v²) 双侧耦合，无可分离 candidate-only 项——"概率≠偏置"的存在性对照）。
+- 机制指纹三件套：b_j 分布、**corr(b_j, N_k^{baseline}(j))**（预测显著为负）、
+  各臂 S(N_k) 轨迹；评测期增益分解 ΔS = b·1ᵀ + R。
+- backbone 定为 X-Pool（1b）：有公开代码 + 表 5a 的 46.9 做实现正确性锚点；
+  1a-hybrid（WTI+KL 融合）**禁止**。分布定为高斯+非对称 KL(Q_v‖P_t)；
+  vMF（乘性族）仅作扩展。(B) 项是 V2T 方向的镜像偏置，T2V/V2T 分开报。
+- 联动：Tier 1 的头训完即为 OQ-2 所缺的"外部方差头"。
+- 约束重申：Tier 0 全程 val-only（PC-4 不涉及）；Tier 1 对齐表 5a 需 MSRVTT 1K-A
+  test → **PC-4 阻塞**，先写 pre-registered study。
+
+**顺手修正。** `04-open-questions.md` OQ-1 中已过期的 `/tmp/frozen_equiv/` 路径
+改为权威路径 `artifacts/rescued_from_tmp/frozen_equiv/`。
+
+**未执行任何实验。** 下一步：Tier −1 抄表（需拉 UATVR/T-MASS/ProTA/DUQ/DiffusionRet 原文）。
+
+---
+
 ## 2026-08-24 (4) —— `research/` 纳入版本管理；孤儿脚本删除
 
 **`scripts/evaluate_sap_uncertainty.py` 已真删**（研究者授权）。它 import 的

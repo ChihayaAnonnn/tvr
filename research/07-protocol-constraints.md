@@ -40,7 +40,13 @@ Stage 1 已经 finalize（commit `eb2ee0b`），它的 FAIL 是**已注册的终
 在新 study 的 **Stages 4/5 通过之前**，MSRVTT / MSVD test 集保持 sealed。
 所有选择、消融、阈值、K、校准**只准用 validation**（trusted-v1）。
 
-**这条直接阻塞 OQ-3（conformal coverage under CRF shift）** —— 它必须先写成 pre-registered study。
+**状态更新（2026-08-28）**：那个"新 study"现已存在并签署——
+`experiments/oq1-kl-variance-hubness-v1/`（status: registered，commit `20a4a1d`）。
+其 stage4_multiseed + stage5_mechanism 双门通过是 **MSRVTT** test 解封的唯一授权路径，
+且授权 `this_study_only`；**MSVD 不在其 v1 范围内，继续 sealed**。
+在双门通过前，本条对一切评估照常生效。
+
+**这条直接阻塞 OQ-3（conformal coverage under CRF shift）** —— 它必须先写成自己的 pre-registered study（oq1 study 的授权不外溢）。
 
 *出处：`todo.md:40`；AGENTS.md 规则 6。*
 

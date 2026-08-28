@@ -1,6 +1,13 @@
 # 00 · North Star —— 当前研究命题与证伪判据
 
 > 状态：**PROPOSED（提出于 2026-08-22 brainstorm），尚未验证。**
+> **2026-08-28 修正（OQ-1 Tier −1，ledger E-76…E-83）：** thesis 中"概率化 embedding
+> （UATVR / T-MASS / ProTA / DUQ / DAB 一系）的增益 = 隐式 hubness 校正"的**家族普适
+> 表述已被证伪**——七方法普查显示 hubness 签名为 DAB（非对称 KL cost）独有，其余六个
+> 方法的概率组件均为 R@1-forward。thesis 的诊断半部分**收窄为**："非对称 KL 打分中
+> candidate-only 方差项是学习出来的 hubness 校正；该项的有无解释了 DAB 与其余概率方法
+> 增益形状的分野。"（该分野本身成为新证据：DAB 表 5b KL→W₂ 后 R@1 增益归零，E-82。）
+> uncertainty 半部分（usable signal 完全来自 score geometry）与 constructive half 不受影响。
 > 来源：2026-08-22 与研究者的 brainstorm（跨 session 记忆，仓库内无对应文档，`[未溯源]`）；
 > 其证据基础来自 `research/01-evidence-ledger.md` 中已标 SOLID 的条目
 > 与 `related_work/dab_eccv2026/NOTES.md:87-97, 107-122`。
@@ -69,4 +76,17 @@ variable）**。压缩鲁棒探针在这里不再是"第二个卖点"，而是�
 AUROC 在所有 variance 描述子上 ≤ +0.01，则 thesis 的诊断半部分成立，可以启动
 constructive half（conformal + CRF 分层）。
 
-**Pilot P0 尚未开始。任何新实验提案都应先与 P0 对齐。**
+**P0 第 1 项的 val 半（2026-08-28,OQ-1 Tier 0,E-84…E-88）已完成**：val 矩阵为低
+hubness、近饱和 regime（S(N10)=0.53,MnR 2.11），DSL T=2 在 val 上 **−0.65** R@1
+（test 上 +2.6,E-08）——增益 regime 依赖，佐证 hubness-校正解读；加性/仿射 oracle
+split-half 可迁移增益 ≤+0.5，全部 R@1-forward。**判据修正**："偏度随增益操作下降且
+单调相关"在低 hubness regime 不适用（Sinkhorn 反例,E-87），thesis 精化为
+**"hubness 签名 = candidate-only 修正 × 高 hubness 分数几何，缺一不可"**。
+test 半与 P0 第 2 项（增量 AUROC,对应 F-C/OQ-2）仍未开始；前者已归并入 OQ-1 Tier 1。
+
+**F-A / F-B 的正式检验已预注册并签署（2026-08-28,status: registered,commit `20a4a1d`,已冻结）**：
+`experiments/oq1-kl-variance-hubness-v1/{PREREGISTRATION.md,study.yaml}`。
+其中 F-A = 预测 P2（arm2 即 λ_A=0 臂），F-B = 预测 P6（相对显式修正的增量形状）；
+两者的开火条件均**以 P0 regime 门通过为前提**——低 hubness regime 下 F-A 会假阳性触发
+（Tier 0 教训）。negative result 强制归档，不得撤销注册换配置重跑。
+该 study 的 stage4+stage5 双门通过，也是 PC-4 下 MSRVTT test 解封的唯一授权路径。
