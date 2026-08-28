@@ -1,0 +1,1096 @@
+                                                      DiffusionRet: Generative Text-Video Retrieval with Diffusion Model
+
+                                                                    Peng Jin1,3 * Hao Li1,3 * Zesen Cheng1,3 Kehan Li1,3 Xiangyang Ji4
+                                                                                   Chang Liu4 Li Yuan1,2,3† Jie Chen1,2,3†
+                                           1                                                                                                    2
+                                               School of Electronic and Computer Engineering, Peking University, Shenzhen, China                    Peng Cheng Laboratory, Shenzhen, China
+                                                          3
+                                                              AI for Science (AI4S)-Preferred Program, Peking University Shenzhen Graduate School, Shenzhen, China
+                                                                          4
+arXiv:2303.09867v2 [cs.CV] 19 Aug 2023
+
+
+
+
+                                                                              Department of Automation and BNRist, Tsinghua University, Beijing, China
+                                               {jp21, cyanlaser, kehanli}@stu.pku.edu.cn   {lihao1984, yuanli-ece}@pku.edu.cn        {liuchang2022, xyji}@tsinghua.edu.cn          chenj@pcl.ac.cn
+
+
+
+
+                                                                       Abstract                                         Query: A man speaks to a camera for an interview.
+
+                                             Existing text-video retrieval solutions are, in essence, dis-
+                                         criminant models focused on maximizing the conditional
+                                         likelihood, i.e., p(candidates|query). While straightforward,
+                                         this de facto paradigm overlooks the underlying data distri-
+                                         bution p(query), which makes it challenging to identify out-
+                                         of-distribution data. To address this limitation, we creatively                  (a) The joint distribution of query and candidates
+                                         tackle this task from a generative viewpoint and model the
+                                         correlation between the text and the video as their joint prob-
+                                                                                                                                                           𝑝𝜑 𝑥𝑘−1 ȁ𝑥𝑘
+                                         ability p(candidates, query). This is accomplished through                     𝑥𝐾                      𝑥𝑘                          𝑥𝑘−1                  𝑥0
+                                         a diffusion-based text-video retrieval framework (Diffusion-
+                                         Ret), which models the retrieval task as a process of gradu-                                                      𝑞 𝑥𝑘 ȁ𝑥𝑘−1
+                                         ally generating joint distribution from noise. During training,
+                                         DiffusionRet is optimized from both the generation and dis-
+                                         crimination perspectives, with the generator being optimized                           𝑥𝐾                    𝑥𝑘                 𝑥𝑘−1                𝑥0
+                                         by generation loss and the feature extractor trained with
+                                                                                                                         (b) Diffusion model for generating joint distribution
+                                         contrastive loss. In this way, DiffusionRet cleverly lever-
+                                         ages the strengths of both generative and discriminative                     Figure 1: Diffusion model for text-video retrieval. (a) We
+                                         methods. Extensive experiments on five commonly used text-                   propose to model the correlation between the query and the
+                                         video retrieval benchmarks, including MSRVTT, LSMDC,                         candidates as their joint probability. (b) The diffusion model
+                                         MSVD, ActivityNet Captions, and DiDeMo, with superior                        has demonstrated remarkable generative power in various
+                                         performances, justify the efficacy of our method. More en-                   fields, and due to its coarse-to-fine nature, we utilize the
+                                         couragingly, without any modification, DiffusionRet even                     diffusion model for joint probability generation.
+                                         performs well in out-domain retrieval settings. We believe
+                                         this work brings fundamental insights into the related fields.
+                                         Code is available at https://github.com/jpthu17/DiffusionRet.
+                                                                                                                      tion as discriminant models [24, 54]. Under the discriminant
+                                                                                                                      paradigm based on contrastive learning [57], the primary
+                                                                                                                      focus of mainstream methods is to improve the dense fea-
+                                         1. Introduction                                                              ture extractor to learn better representation. This has led
+                                                                                                                      to the emergence of a large number of discriminative so-
+                                            In recent years, text-video retrieval has made significant                lutions [31, 4, 53, 22], and recent advances in large-scale
+                                         progress, allowing humans to associate textual concepts with                 vision-language pre-training models [60, 42] have pushed
+                                         video entities and vice versa [71, 70]. Existing methods for                 their state-of-the-art performance even further.
+                                         video-text retrieval typically model the cross-modal interac-                    However, from a probabilistic perspective, discriminant
+                                            * Equal contribution.                                                     models only learn the conditional probability distribution,
+                                            † Corresponding author: Li Yuan, Jie Chen.                                i.e., p(candidates|query). This leads to a limitation of dis-
+criminant models that they fail to model the underlying data       labeled visual data with paired text descriptions are available
+distribution [6, 51], and their latent space contains fewer        in one domain (the “source”), but no data are available in
+intrinsic data characteristics p(query), making it difficult to    the domain of interest (the “target”). Our method not only
+achieve good generalization on unseen data [51]. In con-           represents a novel effort to promote generative methods for
+trast to discriminant models, generative models capture the        in-domain retrieval, but also provides evidence of the merits
+joint probability distribution of the query and candidates,        of generative approaches in challenging out-domain retrieval
+i.e., p(candidates, query), which allows them to project data      settings. The main contributions are as follows:
+into the correct latent space based on the semantic infor-
+mation of the data. As a typical consequence, generative              • To the best of our knowledge, we are the first to tackle
+models are often more generalizable and transferrable than              the text-video retrieval from a generative viewpoint.
+discriminant models. Recently, generative models have made              Moreover, we are the first to adapt the diffusion model
+significant progress in various fields, such as generating high-        for cross-modal retrieval.
+quality synthetic images [19, 9, 63], natural language [10],
+speech [56], and music [18]. One of the most popular gener-           • Our method achieves new state-of-the-art perfor-
+ative paradigms is the diffusion model [65, 29, 19], which              mance on text-video retrieval benchmarks of MSRVTT,
+is a type of likelihood-based model that gradually remove               LSMDC, MSVD, ActivityNet Captions and DiDeMo.
+noise via a learned denoising model to generate the signal.
+In particular, the coarse-to-fine nature of the diffusion model       • More impressively, our method performs well on out-
+enables it to progressively uncover the correlation between             domain retrieval without any modification, which may
+text and video, making it a promising solution for cross-               have a significant impact on the community.
+modal retrieval. Therefore, we argue that it is time to rethink
+the current discriminant retrieval regime from a generative        2. Related Work
+perspective, utilizing the diffusion model.
+                                                                       Text-Video Retrieval. Text-video retrieval is one of the
+   To this end, we propose a novel diffusion-based text-           most popular cross-modal tasks [46, 49, 39, 15, 40]. Most
+video retrieval framework, called DiffusionRet, which ad-          existing text-video retrieval works [21, 69, 47, 48] employ
+dresses the limitations of current discriminative solutions        a mapping technique that places both text and video inputs
+from a generative perspective. As shown in Fig. 1, we model        in the same latent space for direct similarity calculation.
+the retrieval task as a process of gradually generating joint      For instance, CLIP4Clip [54] transfers knowledge from the
+distribution from noise. Given a query and a gallery of can-       text-image pre-training model, i.e., CLIP [60], to enhance
+didates, we adopt the diffusion model to generate the joint        video representation. EMCL-Net [31] improves representa-
+probability distribution p(candidates, query). To improve          tion capabilities by bridging the gap between text and video.
+the performance of the generative model, we optimize the           HBI [32] models video-text as game players with multivari-
+proposed method from both generation and discrimination            ate cooperative game theory to handle the uncertainty during
+perspectives. During training, the generator is optimized          fine-grained semantic interaction. These methods are dis-
+by common generation loss, i.e., Kullback-Leibler diver-           criminant models and focus primarily on maximizing the
+gence [37]. Simultaneously, the feature extractor is trained       conditional likelihood p(candidates|query), without consid-
+with the contrastive loss, i.e., InfoNCE loss [57], to enable      ering the underlying data distribution p(query). As a result,
+discriminative representation learning. In this way, Diffu-        identifying out-of-distribution data becomes a challenging
+sionRet has both the high performance of discriminant meth-        task. In contrast, our DiffusionRet adopts a generative view-
+ods and the generalization ability of generative methods.          point to tackle the task and provides evidence of the merits
+    The proposed DiffusionRet has two compelling advan-            of generative approaches in a challenging, out-domain re-
+tages: First, the generative paradigm of our method makes          trieval. To the best of our knowledge, we are the first to
+it inherently generalizable and transferrable, enabling Diffu-     tackle text-video retrieval from a generative viewpoint.
+sionRet to adapt to out-of-domain samples without requiring            Diffusion models. Diffusion models [65, 29, 19] are
+additional design. Second, the iterative refinement property       a type of neural generative model that uses the stochastic
+of the diffusion model allows DiffusionRet to progressively        diffusion process, which is based on thermodynamics. The
+enhance the retrieval results from coarse to fine. Experimen-      process involves gradually adding noise to a sample from
+tal results on five benchmark datasets for text-video retrieval,   the data distribution, and then training a neural network to
+including MSRVTT [74], LSMDC [64], MSVD [11], Ac-                  reverse this process by gradually removing the noise. Re-
+tivityNet Captions [36], and DiDeMo [2], demonstrate the           cent developments in diffusion models have focused on gen-
+advantages of DiffusionRet. To further evaluate the general-       erative tasks, e.g., image generation [29, 66, 19, 30, 72],
+ization of our method to unseen data, we propose a new out-        natural language generation [3, 50, 26], and audio genera-
+domain retrieval task. In the out-domain retrieval task [13],      tion [59]. Some other works have attempted to adapt the
+  Query: A young
+  girl is talking to                                                               Query                                                                                            Query                                                                               Query                                                                                                        Query                                                                                                                                         Retrieval result
+    judges on a
+   singing show.                                                         Candidates                                                                                       Candidates                                                                                 Candidates                                                                                         Candidates
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      Rank 1
+
+
+
+
+                                                                                                                                         Denoising Network
+
+
+
+
+                                                                                                                                                                                                                                          Denoising Network
+
+
+
+
+                                                                                                                                                                                                                                                                                                                             Denoising Network
+                                                                    Noise level K                                                                             Noise level K-1                                                                                       Noise level 1
+     Candidates:
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                            Ranking
+                                                                                           𝑥𝐾1                                                                                              1
+                                                                                                                                                                                           𝑥𝐾−1                                                                           𝑥11                                                                                                                   𝑥01
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      Rank 2
+                                                                                           𝑥𝐾2                                                                                              2
+                                                                                                                                                                                           𝑥𝐾−1                                                                           𝑥12                                                                                                                   𝑥02
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  …
+                                                                                           𝑥𝐾3                                                                                              3
+                                                                                                                                                                                           𝑥𝐾−1                                                                 …         𝑥13                                                                                                                   𝑥03
+                                                                                      …
+
+
+
+
+                                                                                                                                                                                      …
+
+
+
+
+                                                                                                                                                                                                                                                                        …
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                                        …
+                   …
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     Rank N
+                                                                                           𝑥𝐾𝑁                                                                                              𝑁
+                                                                                                                                                                                           𝑥𝐾−1                                                                           𝑥1𝑁                                                                                                                  𝑥0𝑁
+
+
+
+
+                                                                           …                                                                                             …                                                                                                    …                                                                                         …
+                                                                 Distribution 𝑥𝐾                                                                              Distribution 𝑥𝐾−1                                                                                     Distribution 𝑥1                                                                           Distribution 𝑥0
+
+Figure 2: Our DiffusionRet framework for generative text-video retrieval. We model the retrieval task as a process of
+gradually generating joint distribution from Gaussian noise. In contrast to the prior works, which typically optimize the
+posterior probabilities p(v|t) + p(t|v), our method builds the joint probabilities p(v, t).
+
+
+diffusion model for discriminant tasks, e.g., image segmen-                                                                                                                                                                                                             all video candidates based on the posterior probability
+tation [1, 5, 8], visual grounding [16], and detection [12].                                                                                                                                                                                                            p(v|t; θt , θv ). Similarly, in the video-to-text retrieval, they
+However, there are no previous works that adapt generative                                                                                                                                                                                                              rank all text candidates based on p(t|v; θt , θv ). The param-
+diffusion models for cross-modal retrieval. This work ad-                                                                                                                                                                                                               eters {θt , θv } of text feature extractor and video feature
+dresses this gap by modeling the correlation between text                                                                                                                                                                                                               extractor are optimized by minimizing the contrastive learn-
+and video as their joint probability and utilizing the diffusion                                                                                                                                                                                                        ing loss [57, 78, 77, 79]:
+model to gradually generate the joint probability distribution
+from noise. To the best of our knowledge, we are the first to                                                                                                                                                                                                                     \begin {aligned} \bm {\theta _{t}^{*}}, \bm {\theta _{v}^{*}}=\mathop {\arg \min }\limits _{\bm {\theta _{t}}, \bm {\theta _{v}}} -\frac {1}{2} \mathbb {E}_{(t,v)\in \mathcal {D}} \big [ \log p(v|t;\bm {\theta _{t}},\bm {\theta _{v}})\\ + \log p(t|v;\bm {\theta _{t}},\bm {\theta _{v}}) \big ], \end {aligned} 
+adapt the diffusion model for cross-modal retrieval.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       (2)
+
+3. Method
+                                                                                                                                                                                                                                                                        where D is a corpus of text-video pairs (t, v). Such learning
+   In this paper, we tackle the tasks of text-to-video and                                                                                                                                                                                                              strategy
+video-to-text retrieval. In the task of text-to-video retrieval,                                                                                                                                                                                                             Q is equivalent toQ  maximizing conditional likelihood,
+                                                                                                                                                                                                                                                                        i.e., (t,v)∈D p(v|t) + (t,v)∈D p(t|v), which is called dis-
+we are given a text query t and a gallery of videos V . The                                                                                                                                                                                                             criminative training [6].
+goal is to rank all videos v ∈ V so that the video corre-                                                                                                                                                                                                                   Since existing methods directly model the conditional
+sponding to the text query t is ranked as high as possible.                                                                                                                                                                                                             probability distribution p(v|t) + p(t|v), without considering
+Similarly, the goal of video-to-text retrieval is to rank all text                                                                                                                                                                                                      the input distribution p(t) and p(v), they fail to achieve good
+candidates t ∈ T based on the video query v.                                                                                                                                                                                                                            generalization on unseen data.
+3.1. Existing Solutions: Discriminant Modeling                                                                                                                                                                                                                          3.2. DiffusionRet: Generation Modeling
+   A common method for the retrieval problem is similarity                                                                                                                                                                                                                  Our method reformulates the retrieval task from a gener-
+learning [73]. Specifically, the caption as well as the video                                                                                                                                                                                                           ative modeling perspective. As Feynman’s mantra “what I
+are represented in a common multi-dimensional embedding                                                                                                                                                                                                                 cannot create, I do not understand” shows, we argue that it
+space, where the similarity can be calculated as the dot                                                                                                                                                                                                                is time to rethink the current discriminative retrieval regime.
+product of their corresponding representations. In the task                                                                                                                                                                                                                 Inspired by the great success of diffusion models [65, 29,
+of text-to-video retrieval, such methods [54, 28, 31] use the                                                                                                                                                                                                           19], we adopt the diffusion model as the generator. Con-
+logits to calculate the posterior probability:                                                                                                                                                                                                                          cretely, given a query and N candidates, our goal is to
+                                                                                                                                                                                                                                                                        synthesize the distribution x1:N = {xi }N  i=1 from Gaussian
+     p(v|t;\bm {\theta ^{t}},\bm {\theta ^{v}})\!=\!\frac {\exp \big (f_{\bm {\theta ^{t}}}(t)^\top f_{\bm {\theta ^{v}}}(v)/\tau \big )}{\sum _{v^{'}\in \bm {V}}\exp \big (f_{\bm {\theta ^{t}}}(t)^\top f_{\bm {\theta ^{v}}}(v^{'})/\tau \big )},         (1)       noise N (0, I). In contrast to the prior works, which typ-
+                                                                                                                                                                                                                                                                        ically optimize the posterior probabilities p(v|t; θt , θv ) +
+where τ is the temperature hyper-parameter. θt and θv                                                                                                                                                                                                                   p(t|v; θt , θv ), our method builds the joint probabilities:
+are parameters of the text feature extractor and video fea-
+ture extractor, respectively. Finally, existing methods rank                                                                                                                                                                                                                                                                 \begin {aligned} x^{1:N}=p(v, t|\bm {\phi })=f_{\bm {\phi }}\big (v, t, \mathcal {N}(0,\bm {\textrm {I}})\big ), \end {aligned}                                                                                                                                               (3)
+where ϕ is the parameter of the generator. It is worth noting                                                                                                                                                                                                      Text-Frame Attention Encoder
+that the learning objective of the generatorQis equivalent to
+                                                                                                                                                                                                                                                                Frame representation 𝐹              𝑣𝑎𝑙𝑢𝑒                        Video
+
+
+
+
+                                                                                                                                                                                                                                              Video Encoder
+approximating the data distribution, i.e., (t,v)∈D p(v, t),                                                                                                                                                                                                              (𝑁𝜈 × D)                                           Representation 𝐶𝜈
+                                                                                                                                                                                                                                                                                                   (𝑁𝜈 × 1)                      (1 × 𝐷)
+which is called generative training [6]. The overview of our                                                                                                                                                    Input
+                                                                                                                                                                                                                Video
+DiffusionRet is shown in Fig. 2.                                                                                                                                                                                                                                 𝑘𝑒𝑦
+                                                                                                                                                                                                                                                                                                             Text-Frame
+
+
+
+
+                                                                                                                                                                                                                                                                             Softmax
+                                                                                                                                                                                                                                                                                                            attention map
+
+
+
+
+                                                                                                                                                                                                                            …
+                                                                                                                                                                                                                                                                𝑞𝑢𝑒𝑟𝑦                                                  …
+3.2.1   Text-Frame Attention Encoder
+
+
+
+
+                                                                                                                                                                                                                                            Encoder
+                                                                                                                                                                                                                                                                                                                                  Text
+
+
+
+
+                                                                                                                                                                                                                                             Text
+                                                                                                                                                                                                               Input Text
+To extract the joint encoding of text and video, we propose                                                                                                                                                                                                     (1 × 𝐷)                                                     Representation 𝐶𝑡
+                                                                                                                                                                                                                                                                                                                                 (1 × 𝐷)
+the text-frame attention encoder, which takes text represen-
+tation as query and frame representation as key and value.
+
+
+
+
+                                                                                                                                                                                                                                Encoder
+                                                                                                                                                                                                             Candidates
+    Specifically, for text representation, we adopt the text en-                                                                                                                                                                                                       (𝑁 × 𝐷)                                               Matrix multiplication
+                                                                                                                                                                                                             Query
+coder of CLIP (ViT-B/32) [60] and take the output from the                                                                                                                                                                                  (1 × 𝐷)                                                                          Weighted sum
+
+[CLS] token as the text representation Ct ∈ RD , where D                                                                                                                                                                                                                                                                     Element-wise sum
+
+
+
+
+                                                                                                                                                                                                                                Proj
+                                                                                                                                                                                                             Noise level                    (1 × 𝐷)                                      (𝑁 × 𝐷)
+is the size of the dimension. For video frame representation,                                                                                                                                                    k
+we extract the frames evenly from the video clip as the input                                                                                                                                                                    𝑥𝑘1                          Linear        Linear                 Linear                                    𝑥𝑘−1
+                                                                                                                                                                                                                                                                                                                                              1
+                                                                                                                                                                                                                                                                                                                           Distribution
+frame sequence. Then we use ViT [20] to encode the frame                                                                                                                                                                         𝑥𝑘2           𝑞𝑢𝑒𝑟𝑦                       𝑘𝑒𝑦                   𝑣𝑎𝑙𝑢𝑒                        𝑥𝑘−1           𝑥𝑘−1
+                                                                                                                                                                                                                                                                                                                                              2
+
+sequence and adapt the output from the [CLS] token as the                                                                                                                                                    Distribution
+                                                                                                                                                                                                                                                               (𝑁 × 1)
+                                                                                                                                                                                                                  𝑥𝑘             𝑥𝑘3                                                                                                         𝑥𝑘−1
+                                                                                                                                                                                                                                                                                                                                              3
+
+
+
+
+                                                                                                                                                                                                                                                                                       Softmax
+                                                                                                                                                                                                                                                                                                                                   Diffuse
+
+
+
+
+                                                                                                                                                                                                                                                                                                              Concat
+frame embedding. After extracting the frame embedding,
+
+
+
+
+                                                                                                                                                                                                                                                                                                                           MLP
+                                                                                                                                                                                                                                …
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                             …
+                                                                                                                                                                                                                                              (𝑁 × 1)                                                                                 𝑥ො0
+we use a 4-layer transformer to aggregate the embedding of                                                                                                                                                                      𝑥𝑘𝑁                                                                                                           𝑁
+                                                                                                                                                                                                                                                                                                                                             𝑥𝑘−1
+
+all frames and obtain the frame representation F .
+    Then, we aggregate frame representation with the text-
+                                                                                                                                                                                                            Figure 3: The model architecture of the denoising net-
+frame attention encoder. Concretely, we feed the text repre-
+                                                                                                                                                                                                            work. We first leverage the text-frame attention encoder to
+sentation Ct ∈ RD as query and the frame representation F
+                                                                                                                                                                                                            extract the joint encoding of text and video. Then, we feed
+as key and value into an attention module. The final video
+                                                                                                                                                                                                            a distribution xk of length N , as well as noise level k, and
+representation is defined as:
+                                                                                                                                                                                                            the text and video representations into the query-candidate
+                                                                                                                                                                                                            attention network. In each sampling step, the denoising net-
+                  C_v=\textrm {Softmax}(C_tF^\top /{{\tau }^{'}})F,                                                                                                                                   (4)
+                                                                                                                                                                                                            work predicts the final clean distribution x̂0 .
+        ′                                                                                                                                                                                               ′
+where τ is the trade-off hyper-parameter. The smaller τ
+allows visual features to take more textual information into                                                                                                                                                give more weight to the video candidates with higher joint
+account when aggregated.                                                                                                                                                                                    probabilities of the previous noise level, we add the distri-
+                                                                                                                                                                                                            bution xk to the attention weight. The attention mechanism
+3.2.2   Query-Candidate Attention Denoising Network                                                                                                                                                         can be defined as:
+Different from other generation tasks which only focus on                                                                                                                                                                                   E_t=\textrm {Softmax}({Q_tK_v^\top }+x_{k})V_v.                                                      (6)
+the authenticity and diversity of generation, the key to the re-
+                                                                                                                                                                                                            We treat the output Et of the attention module as high se-
+trieval task is to mine the correspondence between the query
+                                                                                                                                                                                                            mantic level embedding which contains textual query infor-
+and candidates. To this end, we propose the query-candidate
+                                                                                                                                                                                                            mation. Then, we concatenate video representation Cv and
+attention denoising network to capture the correspondence
+                                                                                                                                                                                                            embedding Et , generating the input data of the denoising
+between query and candidates in the generation process. The
+                                                                                                                                                                                                            decoder [Cv , Et ] ∈ RN ×2D . The denoising decoder is a
+overview of the denoising network is shown in Fig. 3.
+                                                                                                                                                                                                            multi-layer perceptron (MLP) containing a linear layer with
+    We start with the task of text-to-video retrieval. To elab-
+                                                                                                                                                                                                            a Relu activation function [25] for encoding features and a
+orate, we first project the text representation Ct ∈ RD into
+                                                                                                                                                                                                            linear layer for calculating output distribution.
+the query and video representation Cv ∈ RN ×D into key
+                                                                                                                                                                                                               Similarly, in the video-to-text retrieval, we feed the pro-
+and value, where N is the number of video candidates. The
+                                                                                                                                                                                                            jection of video representation as query and the projection of
+projections are formulated as:
+                                                                                                                                                                                                            text representation as key and value into an attention module.
+                  \begin {aligned} &Q_t=W_{Q_t}\big (C_t+\textrm {Proj}(k)\big ),\\ &K_v=W_{K_v}\big (C_v+\textrm {Proj}(k)\big ),\\ &V_v=W_{V_v}\big (C_v+\textrm {Proj}(k)\big ), \end {aligned}          The output distribution is calculated in the same way.
+                                                                                                                                                                                                      (5)
+                                                                                                                                                                                                            3.2.3       Optimization from both Generation Perspective
+                                                                                                                                                                                                                        and Discrimination Perspective
+where WQt , WKv and WVv are projection matrices. “Proj”                                                                                                                                                     Compared to the generation methods, discriminant methods
+projects the noise level k into D dimensional embedding. To                                                                                                                                                 usually give good predictive performance [6]. To leverage
+      Positive Pairs                                                                                                                 MSRVTT                                                                                      MSRVTT -> DiDeMo                                                                                                                                                        MSRVTT -> LSMDC
+      Negative Pairs
+
+
+
+                                                        Density
+
+
+
+
+                                                                                                                                                                                                                 Density
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                   Density
+  CLIP4Clip
+
+
+                                                                                                                                             Similarity                                                                               Similarity                                                                                                                                                                                                Similarity
+                                                        Density
+
+
+
+
+                                                                                                                                                                                                                 Density
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                   Density
+  EMCL-Net
+
+
+                                                                                                                                             Similarity                                                                               Similarity                                                                                                                                                                                                Similarity
+                                                        Density
+
+
+
+
+                                                                                                                                                                                                                 Density
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                   Density
+DiffusionRet
+   (Ours)
+
+                                                                                                                                             Similarity                                                                               Similarity                                                                                                                                                                                                Similarity
+
+
+Figure 4: Similarity distribution for positive and negative pairs in in-domain retrieval and out-domain retrieval.
+“MSRVTT” represents the similarity distribution on the MSRVTT test setting using pre-trained models on the MSRVTT dataset.
+“A->B” indicates that “A” is the source domain and “B” is the target domain. For example, “MSRVTT->DiDeMo” denotes that
+the generalization results on unseen DiDeMo test setting using pre-trained models on the MSRVTT dataset.
+
+
+the benefit of both generative and discriminative methods,                                                                                                                                                                             Contrastive Learning (Discrimination Perspective).
+we optimize the proposed generation model from both gen-                                                                                                                                                                            In the discrimination perspective, we optimize the features
+eration and discrimination perspectives.                                                                                                                                                                                            which are input into the generator so that these features con-
+    Probabilistic Diffusion (Generation Perspective). In                                                                                                                                                                            tain discriminant semantic information. Inspired by [69],
+the generation perspective, we model the distribution x =                                                                                                                                                                           we align representations of text and video at the token level.
+p(v, t|ϕ) as the reversed diffusion process of the K-length                                                                                                                                                                         Specifically, we take all tokens output by the text encoder as
+Markov Chain. Specifically, our method learns the joint dis-                                                                                                                                                                        word-level features {wi }N  i=1 , where Nt is the length of the
+                                                                                                                                                                                                                                                                  t
+
+
+tribution of text and video by gradually denoising a variable                                                                                                                                                                       text. Frame-level features {f j }N  v
+                                                                                                                                                                                                                                                                       j=1 are all tokens output by
+sampled from Gaussian distribution. In a forward diffusion                                                                                                                                                                          the video encoder, where Nv is the length of the video. Then,
+process q(xk |xk−1 ), noised sampled from Gaussian distribu-                                                                                                                                                                        we calculate the alignment matrix A = [aij ]Nt ×Nv , where
+                                                                                                                                                                                                                                                               i ⊤                     j
+tion is added to a ground truth data distribution x0 at every                                                                                                                                                                       aij = ∥w(w ) f
+                                                                                                                                                                                                                                              i ∥∥f j ∥ is the cosine similarity between the ith word
+noise level k:
+                                                                                                                                                                                                                                    and the jth frame. The total similarity score consists of two
+               \begin {aligned} q(x_k|x_{k-1})&=\mathcal {N}(x_k;\sqrt {1-\beta _{k}}x_{k-1},\beta _{k}\bm {\textrm {I}}),\\ q(x_{1:K}|x_{0})&=\prod _{k=1}^{K}q(x_k|x_{k-1}), \end {aligned} \label {Markov}                       parts: text-to-video similarity and video-to-text similarity.
+                                                                                                                                                                                                                           (7)      For the text-to-video similarity, we first calculate the maxi-
+                                                                                                                                                                                                                                    mum alignment score of the ith word as max aij . We then
+                                                                                                                                                                                                                                                                                                                                                                                                                                                          j
+                                                                                                                                                                                                                                    take the weighted average maximum alignment score over all
+where βk decides the noise schedule which gradually in-                                                                                                                                                                             words. For the video-to-text similarity, we take the weighted
+creases. We can sample xk by the following formula:                                                                                                                                                                                 average maximum alignment score over all frames. The total
+                                                                                                                                                                                                                                    similarity score can be defined as:
+                   x_k = \sqrt {\bar {\alpha }_{k}}x_0 + \sqrt {1-\bar {\alpha }_{k}}\epsilon ,  (8)
+             Qk
+where ᾱk = i=1 αi and αk = 1 − βk . ϵ is a noise sampled
+from N (0, 1). Instead of predicting the noise component ϵ,                                                                                                                                                                                 s=\frac {1}{2}(\underbrace {\sum _{i=1}^{N_t} g_t^i\ \underset {j}{\textrm {max}}\ a_{ij}}_{\textrm {text-to-video similarity}}+\underbrace {\sum _{j=1}^{N_v} g_v^j\ \underset {i}{\textrm {max}}\ a_{ij}}_{\textrm {video-to-text similarity}}),    (10)
+we follow [62] and predict the data distribution itself, i.e.,
+x̂0 = fϕ (v, t, xk ). The training objective of the diffusion
+model can be defined as:
+                         \mathcal {L}_{G} = \mathbb {E}_{(t,v)\in \mathcal {D}} \Big [\textrm {KL}\big (x_0\|f_{\bm {\phi }}(v, t, x_k)\big ) \Big ].                                                                      (9)
+                                                                                                                                                                                                                                    where {gti }N             MLPt ({wi }N            j Nv
+                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                i=1 = Softmax           i=1 ) and {gv }j=1=
+                                                                                                                                                                                                                                                  t                        t
+
+                                                                                                                                                                                                                                                        j Nv
+This loss maximizes the likelihood of p(v, t) by bringing                                                                                                                                                                           Softmax MLPv ({f }j=1 ) are the weights of the text words
+fϕ (v, t, xk ) and x0 closer together.                                                                                                                                                                                              and video frames, respectively. Then, the contrastive
+                                                                                                                                                                                                                                                                                  Text-to-Video                                                                                 Video-to-Text
+  Methods
+                                                                                                                                                            R@1↑                                                  R@5↑                                                  R@10↑                                                    Rsum↑     MdR↓      MnR↓     R@1↑    R@5↑     R@10↑    Rsum↑    MdR↓     MnR↓
+  MMT [24] ECCV20                                                                                                                                                 26.6                                                  57.1                                                     69.6                                            153.3      4.0       24.0     27.0    57.5     69.7     154.2     3.7    21.3
+  Support-Set [58] ICLR21                                                                                                                                         30.1                                                  58.5                                                     69.3                                            157.9      3.0        -       28.5    58.6     71.6     158.7     3.0      -
+  T2VLAD [71] CVPR21                                                                                                                                              29.5                                                  59.0                                                     70.1                                            158.6      4.0        -       31.8    60.0     71.1     162.9     3.0      -
+  TT-CE [17] ICCV21                                                                                                                                               29.6                                                  61.6                                                     74.2                                            165.4      3.0        -       32.1    62.7     75.0     169.8     3.0      -
+  FROZEN [4] ICCV21                                                                                                                                               31.0                                                  59.5                                                     70.5                                            161.0      3.0        -        -       -        -         -        -       -
+  CLIP4Clip [54] Neurocomputing22                                                                                                                                 44.5                                                  71.4                                                     81.6                                            197.5      2.0       15.3     42.7    70.9     80.6     194.2     2.0    11.6
+  X-Pool [28] CVPR22                                                                                                                                              46.9                                                  72.8                                                     82.2                                            201.9      2.0       14.3     44.4    73.3     84.0     201.7     2.0     9.0
+  TS2-Net [53] ECCV22                                                                                                                                             47.0                                                  74.5                                                     83.8                                            205.3      2.0       13.0     45.3    74.1     83.7     203.1     2.0     9.2
+  EMCL-Net [31] NeurIPS22                                                                                                                                         46.8                                                  73.1                                                     83.1                                            203.0      2.0       12.8     46.5    73.5     83.5     203.5     2.0     8.8
+  TABLE [14]† AAAI23                                                                                                                                              47.1                                                  74.3                                                     82.9                                            204.3      2.0       13.4     47.2    74.2     84.2     205.6     2.0    11.0
+  DiCoSA [33] IJCAI23                                                                                                                                             47.5                                                  74.7                                                     83.8                                            206.0      2.0       13.2     46.7    75.2     84.3     206.2     2.0     8.9
+  HBI [32] CVPR23                                                                                                                                                 48.6                                                  74.6                                                     83.4                                            206.6      2.0       12.0     46.8    74.3     84.3     205.4     2.0     8.9
+  DiffusionRet (Ours)                                                                                                                                             49.0                                                  75.2                                                     82.7                                            206.9      2.0       12.1     47.7    73.8     84.5     206.0     2.0     8.8
+  + QB-Norm [7]                                                                                                                                                   48.9                                                  75.2                                                     83.1                                            207.2      2.0       12.1     49.3    74.3     83.8     207.4     2.0     8.5
+
+
+Table 1: Comparisons to current state-of-the-art methods on the MSRVTT dataset. “↑” denotes that higher is better. “↓”
+denotes that lower is better. “† ” denotes that the model uses additional expert features, e.g., TABLE uses the object, person,
+scene, motion, and audio features from multiple pretrained experts. We gray out TABLE for a fair comparison.
+
+                                                                                                                                                                                                                                                                                                 LSMDC                                                                             MSVD
+  Method
+                                                                                                                                                            R@1↑                                                  R@5↑                                                  R@10↑                                                    Rsum↑     MdR↓      MnR↓     R@1↑    R@5↑     R@10↑    Rsum↑    MdR↓     MnR↓
+  FROZEN [4] ICCV21                                                                                                                                               15.0                                                  30.8                                                     39.8                                             85.6     20.0        -       33.7    64.7     76.3     174.7     3.0     -
+  TT-CE [17] ICCV21                                                                                                                                               17.2                                                  36.5                                                     46.3                                            100.0     13.7        -       25.4    56.9     71.3     153.6     4.0     -
+  CLIP4Clip [54] Neurocomputing22                                                                                                                                 22.6                                                  41.0                                                     49.1                                            112.7     11.0       61.0     45.2    75.5     84.3     205.0     2.0    10.3
+  TS2-Net [53] ECCV22                                                                                                                                             23.4                                                  42.3                                                     50.9                                            116.6      9.0       56.9      -       -        -         -        -      -
+  EMCL-Net [31] NeurIPS22                                                                                                                                         23.9                                                  42.4                                                     50.9                                            117.2     10.0        -       42.1    71.3     81.1     194.5     2.0    17.6
+  DiffusionRet (Ours)                                                                                                                                             24.4                                                  43.1                                                     54.3                                            121.8      8.0       40.7     46.6    75.9     84.1     206.6     2.0    15.7
+  + QB-Norm [7]                                                                                                                                                   23.9                                                  42.7                                                     53.6                                            120.2      8.0       40.7     47.9    77.2     84.8     209.9     2.0    15.6
+                                                                                                                                                                                                                                                              ActivityNet Captions                                                                                                 DiDeMo
+  Method
+                                                                                                                                                            R@1↑                                                  R@5↑                                                  R@10↑                                                    Rsum↑     MdR↓      MnR↓     R@1↑    R@5↑     R@10↑    Rsum↑    MdR↓     MnR↓
+  ClipBERT [38] CVPR21                                                                                                                                            21.3                                                  49.0                                                     63.5                                            133.8      6.0        -       20.4    48.0     60.8     129.2     6.0     -
+  CLIP4Clip [54] Neurocomputing22                                                                                                                                 40.5                                                  72.4                                                     83.6                                            196.5      2.0       7.5      42.8    68.5     79.2     190.5     2.0    18.9
+  TS2-Net [53] ECCV22                                                                                                                                             41.0                                                  73.6                                                     84.5                                            199.1      2.0       8.4      41.8    71.6     82.0     195.4     2.0    14.8
+  EMCL-Net [31] NeurIPS22                                                                                                                                         41.2                                                  72.7                                                     83.6                                            197.5      2.0       8.6      45.3    74.2     82.3     201.8     2.0    12.3
+  DiCoSA [33] IJCAI23                                                                                                                                             42.1                                                  73.6                                                     84.6                                            200.3      2.0       6.8      45.7    74.6     83.5     203.8     2.0    11.7
+  HBI [32] CVPR23                                                                                                                                                 42.2                                                  73.0                                                     84.6                                            199.8      2.0       6.6      46.9    74.9     82.7     204.5     2.0    12.1
+  DiffusionRet (Ours)                                                                                                                                             45.8                                                  75.6                                                     86.3                                            207.7      2.0       6.5      46.7    74.7     82.7     204.1     2.0    14.3
+  + QB-Norm [7]                                                                                                                                                   48.1                                                  75.6                                                     85.7                                            209.4      2.0       6.8      48.9    75.5     83.3     207.7     2.0    14.1
+
+
+Table 2: Text-to-video retrieval performance on other datasets. “↑” denotes that higher is better. “↓” denotes that lower is
+better. Video-to-text retrieval performance is provided in the supplementary material.
+
+
+loss [57] can be formulated as:                                                                                                                                                                                                                                                                                                                   4. Experiments
+                                                                                                                                                                                                                                                                                                                                                  4.1. Experimental Settings
+       \begin {aligned} \mathcal {L}_{D}=-\frac {1}{2}\mathbb {E}_{(t,v)\in \mathcal {D}}\big [ \log \frac {\exp (s_{t,v}/\hat {\tau })}{\sum _{v^{'}\in \bm {V}}\exp (s_{t,v^{'}}/\hat {\tau })}\\ +\log \frac {\exp (s_{t,v}/\hat {\tau })}{\sum _{t^{'}\in \bm {T}}\exp (s_{t^{'},v}/\hat {\tau })} \big ], \end {aligned} 
+                                                                                                                                                                                                                                                                                                                                    (11)             Datasets. MSRVTT [74] contains 10,000 YouTube
+                                                                                                                                                                                                                                                                                                                                                  videos, each with 20 text descriptions. We follow the 1k-A
+                                                                                                                                                                                                                                                                                                                                                  split [52] with 9,000 videos for training and 1,000 for testing.
+                                                                                                                                                                                                                                                                                                                                                  LSMDC [64] contains 118,081 video clips from 202 movies.
+where st,v is the similarity score between text t and video                                                                                                                                                                                                                                                                                       We follow the split of [24] with 1,000 videos for testing.
+v. τ̂ is the temperature hyper-parameter. This loss brings                                                                                                                                                                                                                                                                                        MSVD [11] contains 1,970 videos. We follow the official
+semantically similar texts and videos closer together in the                                                                                                                                                                                                                                                                                      split of 1,200 and 670 as the train and test set, respectively.
+representation space, thus helping the diffusion model to                                                                                                                                                                                                                                                                                         ActivityNet Captions [36] contains 20,000 YouTube videos.
+generate the joint distribution of text and video.                                                                                                                                                                                                                                                                                                We report results on the “val1” split of 10,009 and 4,917 as
+  Loss type R@1↑ R@5↑ R@10↑ MnR↓                   Sampling R@1↑ R@5↑ R@10↑ MnR↓                           Schedule of β R@1↑ R@5↑ R@10↑ MnR↓
+  MSE         46.9      75.0    82.5     12.2      DDPM          48.9      75.2        82.6     12.1       Linear           48.7     75.1     82.8      12.3
+  KL          49.0      75.2    82.7     12.1      DDIM          49.0      75.2        82.7     12.1       Cosine           49.0     75.2     82.7      12.1
+
+    (a) Effect of the generation loss type.              (b) Effect of the sampling strategy.                       (c) Effect of the schedule of β.
+
+
+ Training strategy      R@1↑ R@5↑ R@10↑ MnR↓                            eval                                  Scale of β R@1↑ R@5↑ R@10↑ MnR↓
+                                                                               10       50     100 1000
+                                                               train
+ CLIP zero-shot          25.3    46.5     56.0    75.8                                                        0.1            48.4    75.3      82.7     12.1
+                                                               10              48.7      ✘      ✘    ✘        0.5            48.5    75.1      82.6     12.0
+ Generation (Gen)        40.2    68.6     78.8    16.1         50              48.6     49.0    ✘    ✘        1.0            49.0    75.2      82.7     12.1
+ Discrimination (Dis)    46.8    73.5     82.9    13.0         100             48.1     48.5   48.6 ✘         1.5            48.3    75.3      82.7     12.2
+ Both Gen and Dis        49.0    75.2     82.7    12.1         1000            48.2     48.4   48.5 48.6      2.0            48.5    75.2      82.5     12.1
+           (d) Effect of the training strategy.              (e) Effect of the diffusion steps on R@1.                  (f) Effect of the scale of β.
+
+Table 3: Ablation study on the MSRVTT dataset. “KL” denotes Kullback-Leibler divergence. “Gen” denotes generation.
+“Dis” denotes discrimination. “✘” denotes that the evaluation process fails. Default settings are marked in blue .
+
+
+the train and test set. DiDeMo [2] contains 10,464 videos                             results on the MSRVTT dataset. Our model outperforms
+annotated 40,543 text descriptions. We follow the training                            the recently proposed state-of-the-art methods on both text-
+and evaluation protocol in [54].                                                      to-video retrieval and video-to-text retrieval tasks. Tab. 2
+    Metrics. We choose Recall at rank K (R@K), the Sum                                shows text-to-video retrieval results on the LSMDC, MSVD,
+of Recall at rank {1, 5, 10} (Rsum), Median Rank (MdR),                               ActivityNet Captions, and DiDeMo datasets. DiffusionRet
+and mean rank (MnR) to evaluate the retrieval performance.                            achieves consistent improvements across different datasets,
+    Implementation Details.             Following previous                            which demonstrates the effectiveness of our method.
+works [54, 53, 31, 32], we utilize the CLIP (ViT-B/32) [60]
+as the pre-trained model. The dimension of the feature is 512.                        4.3. Ablation Study
+The temporal transformer [68, 44] is composed of 4-layer                                  Generation loss type. In Tab. 3a, we compare two com-
+blocks, each including 8 heads and 512 hidden channels. The                           mon generation losses, i.e., mean-squared loss (MSE) and
+temporal position embedding and parameters are initialized                            Kullback-Leibler (KL) divergence. Results demonstrate that
+from the text encoder of the CLIP. We use the Adam opti-                              the KL divergence achieves optimal retrieval performance.
+mizer [34] and set the batch size to 128. The initial learning                        We explain that it is because KL divergence can better mea-
+rate is 1e-7 for the text encoder and video encoder and 1e-3                          sure the distance between probabilities than MSE, so it is
+                                                             ′
+for other modules. We set the temperature τ̂ to 0.01 and τ                            more suitable for probability generation.
+to 1. For short video datasets, i.e., MSRVTT, LSMDC, and                                  Sampling strategy. Denoising diffusion probabilistic
+MSVD, the word length is 32 and the frame length is 12. For                           models [29] (DDPM) learn the underlying data distribution
+long video datasets, i.e., ActivityNet Captions and DiDeMo,                           by a Markov chain as shown in Eq. 7. To accelerate the
+the word length is 64 and the frame length is 64. The training                        sampling process of diffusion models, denoising diffusion
+is divided into two stages. In the first stage, we train the                          implicit models [66] (DDIM) formulate a Markov chain that
+feature extractor from the discrimination perspective. In the                         reverses a non-Markovian perturbation process. As shown
+second stage, we optimize the generator from the generation                           in Tab. 3b, we find that the two sampling strategies have
+perspective. For the MSRVTT and LSMDC datasets, the                                   similar performance. To speed up the sampling process, we
+experiments are carried out on 2 NVIDIA Tesla V100 GPUs.                              use DDIM by default in practice.
+For the MSVD, ActivityNet Captions, and DiDeMo datasets,                                  Schedule of β. The schedule of β controls how the
+the experiments are carried out on 8 NVIDIA Tesla V100                                step size increases. We compare the linear schedule and
+GPUs. In both of the tasks of text-to-video and video-to-text                         cosine schedule in Tab. 3c. As shown in Tab. 3c, we find that
+retrieval, we assume that only the candidate sets are known                           the cosine schedule performs well, so we adopt the cosine
+in advance. In the inference phase, we consider both the dis-                         schedule by default, which is the same as the default setting
+tance of video and text representations in the representation                         in the motion generation task [67].
+space and the joint probability of video and text.                                        Training strategy. In Tab. 3d, we compare different
+                                                                                      training strategies. Similar to the findings of the pioneer
+4.2. Comparison with State-of-the-art
+                                                                                      work [6], we find that pure discriminant training has better
+  We compare the proposed DiffusionRet with other meth-                               performance on limited data than pure generative training.
+ods on five benchmarks. In Tab. 1, we show the retrieval                              The hybrid training method we proposed achieves the best
+                                       Candidate gallery size is 1,000     Candidate gallery size is is 3,000     Candidate gallery size is 5,000
+  Methods                   Steps
+                                     Inference        GPU                 Inference        GPU                  Inference       GPU
+                                                                  R@1↑                                  R@1↑                                 R@1↑
+                                     Time (s)↓     Memory (M)↓            Time (s)↓     Memory (M)↓             Time (s)↓    Memory (M)↓
+  CLIP4Clip [54]              ✘        53.20            3043       43.3    137.24            3095        37.5   244.63             3147       32.6
+  X-Pool [28]                 ✘        63.02            5585       45.9    330.02            5587        31.3   833.11             5590       27.0
+  TS2-Net [53]                ✘       117.71            2803       46.5    702.65            3053        37.8   1866.18            3303       32.8
+  DiffusionRet (Ours)          1      59.02             3253       23.4    143.04            3747        16.6    260.67            4297       13.1
+  DiffusionRet (Ours)          3      59.32             3253       47.8    144.42            3747        37.8    260.96            4297       30.5
+  DiffusionRet (Ours)          5      59.55             3253       47.9    144.63            3747        37.8    261.11            4297       32.9
+  DiffusionRet (Ours)         10      59.70             3253       48.6    145.97            3747        37.9    261.69            4297       33.0
+  DiffusionRet (Ours)         30      60.66             3253       48.9    148.11            3747        38.1    274.49            4297       33.1
+  DiffusionRet (Ours)         50      62.04             3253       49.0    151.31            3747        38.2    281.27            4297       33.2
+
+
+Table 4: Evaluation of the Inference costs with a single RTX3090 GPU. We report the R@1 metric for the text-to-video
+task and repeat the experiment three times to take the average value. “Steps” denotes the diffusion steps. “✘” denotes that this
+method does not apply this parameter. “↑” denotes that higher is better. “↓” denotes that lower is better.
+
+                                                   MSRVTT                         MSRVTT->DiDeMo                        MSRVTT->LSMDC
+  Method
+                                     R@1↑      R@5↑      R@10↑    MdR↓    R@1↑        R@5↑    R@10↑     MdR↓    R@1↑        R@5↑     R@10↑    MdR↓
+  CLIP4Clip [54]‡ Neurocomputing22   43.8        70.6     81.4     2.0    31.8        57.0      66.1      4.0    15.3       31.3      40.5     21.0
+  EMCL-Net [31]‡ NeurIPS22           47.0        72.3     82.6     2.0    30.0        56.1      65.8      4.0    16.6       29.3      36.5     24.0
+  DiffusionRet (Ours)                49.0        75.2     82.7     2.0    33.2        59.3      68.4      3.0    17.1       32.4      41.0     21.0
+
+
+Table 5: Text-to-video retrieval performance in out-domain retrieval settings. “A->B” indicates that “A” is the source
+domain and “B” is the target domain. “‡ ” denotes our own re-implementation of baselines.
+
+
+results, which indicates that our hybrid training strategy can                   while other methods use complex matching networks, e.g.,
+combine the advantages of the two training methods.                              TS2-Net which uses the token shift transformer and token
+    The number of steps. In Tab. 3e, we explore the influ-                       selection transformer for fine-grained alignment. (2) Effi-
+ence of the number of diffusion steps. Results demonstrate                       cient feature extractor. About 80% of the inference time
+that the number of steps of 50 achieves optimal performance                      is spent on feature extraction such as extracting query text
+in the retrieval task, outperforming the standard value of                       features. Compared with other methods with bulky feature
+1000 of the image generation task [29, 19]. We consider                          extractors, e.g., X-Pool which uses an additional transformer-
+that this is due to the simpler probability distribution in re-                  based pooling module to aggregate features, our method only
+trieval compared to the pixel distribution in natural images.                    uses vanilla transformer to extract features and is therefore
+Therefore, compared with the image generation task, the                          more efficient. (3) Scalability. We can increase the number
+cross-modal retrieval task only needs fewer diffusion steps.                     of diffusion steps to boost performance at a negligible time
+    Scale of β. The scale of β indicates the signal-to-noise                     cost, indicating the scalability of our method. Compared
+ratio of the diffusion process [12]. We evaluate the scale                       with other methods, our method is more flexible and better
+range [0.1, 2.0] as shown in Tab. 3f. We find that the model                     suited to different retrieval scenarios where accuracy and
+achieves the best performance at the scaling of 1.0, so we                       speed are required differently.
+set the scale of β to 1.0 in practice, which is the same as the
+default setting in the image generation task [19].                               4.5. Out-domain Retrieval
+
+4.4. The Efficiency of DiffusionRet                                                  Current text-video retrieval methods are mainly evaluated
+                                                                                 on the same dataset. To further evaluate the generalization
+   We provide comparisons of the inference time and mem-                         to unseen data, we conduct out-domain retrieval [13]: we
+ory consumption of our method with other methods under                           first pre-train a model on one dataset (the “source”) and
+different conditions (the number of diffusion steps and the                      then measure its performance on another dataset (the “tar-
+size of the candidate gallery) in Tab. 4. As shown in Tab. 4,                    get”) that is unseen in the training. As shown in Tab. 5,
+our method is as efficient as the existing state-of-the-art meth-                we compare the proposed DiffusionRet with other baselines
+ods during the inference stage, which we explain in the fol-                     (i.e., CLIP4Clip [54] and EMCL-Net [31]) in out-domain
+lowing three aspects. (1) Lightweight denoising network.                         retrieval settings. We find that the discriminant approaches
+Our denoising network is lightweight (2.50 M parameter),                         fail to migrate the performance of in-domain retrieval to
+Query: A man is playing guitar and singing.
+                     0.5304                                                                     0.5357
+           0.2759                                0.2750            0.3778
+                                         …                                             …
+ 0.0833                       0.1105                      0.2179             0.1292                      0.1456   0.1566   0.1621
+
+                                       denoise                                        denoise
+
+           Distribution 𝑥50                               Distribution 𝑥25                               Distribution 𝑥0
+
+
+Query: A woman in black dress and a man in a black suit sits together.
+                              0.5661                               0.5988                                         0.6189
+                     0.2712                                                  0.2907
+ 0.1604
+           0.0022                        …       0.1042   0.0062                       …        0.1129   0.1364            0.1318
+                                       denoise                                        denoise
+
+           Distribution 𝑥50                               Distribution 𝑥25                               Distribution 𝑥0
+
+Figure 5: The visualization of the diffusion process of the probability distribution. We highlight the ground truth in green,
+and show the process from randomly initialized noise input (x50 ) to the final predicted distribution (x0 ).
+
+
+out-of-domain retrieval well. For example, the performance           retrieval tasks than other generation training methods, such
+of EMCL-Net is significantly higher than that of CLIP4Clip           as generative adversarial network [27] and variational au-
+in in-domain retrieval. However, in out-domain retrieval,            toencoder [35]. Second, the many-to-many nature of the
+the performance of EMCL-Net is slightly lower than that of           diffusion model makes it more suitable for generating joint
+CLIP4Clip. In contrast, DiffusionRet performs well for both          probabilities than the auto-regressive networks [23, 61]. In
+in-domain and out-of-domain retrieval.                               Fig. 5, we show the visualization of the diffusion process.
+    To further illustrate the benefits of our generative model-      These results further demonstrate the above two advantages
+ing, we provide the visualization of the similarity distribution     of applying the diffusion model rather than other generative
+in in-domain retrieval and out-domain retrieval. As shown            approaches to cross-modal retrieval.
+in Fig. 4, compared to the baseline models, our DiffusionRet
+maximally keeps the distributions of positive and negative           5. Conclusion
+pairs separate from each other in both in-domain and out-
+domain settings. These results confirm that our method is               In this paper, we propose DiffusionRet, the first genera-
+more generalizable and transferrable for the unseen data than        tive diffusion-based framework for text-video retrieval. By
+typical discriminant models.                                         explicitly modeling the joint probability distribution of text
+                                                                     and video, DiffusionRet shows promise to solve the intrinsic
+4.6. Qualitative Analysis
+                                                                     limitations of the current discriminant regime. It success-
+    The coarse-to-fine nature of the diffusion model enables         fully optimizes the DiffusionRet from both the generation
+it to progressively uncover the correlation between text and         perspective and discrimination perspective. This makes Dif-
+video, rendering it an effective approach for cross-modal            fusionRet principled and well-applicable in both in-domain
+retrieval. To better understand the diffusion process, we            retrieval and out-domain retrieval settings. To the best of
+show the additional visualization of the diffusion process           our knowledge, we are the first to tackle text-video retrieval
+in Fig. 5. These results demonstrate that our method can             from the generative viewpoint. Besides, we show that our
+progressively uncover the correlation between text and video.        generation modeling method is superior to existing discrim-
+                                                                     inant methods in terms of performance and generalization
+4.7. Why Diffusion Models                                            ability. This work is the first effort to promote generative
+   Diffusion models have demonstrated remarkable genera-             methods for text-video retrieval, which may be meaningful
+tive power in various fields. Besides the powerful generative        and helpful to the community.
+power of diffusion models, we explain other advantages of            Acknowledgements. This work was supported in part
+applying the diffusion model rather than other generative            by the National Key R&D Program of China (No.
+approaches to cross-modal retrieval, mainly in two aspects.          2022ZD0118201), Natural Science Foundation of China
+First, the coarse-to-fine nature of the diffusion model en-          (No. 61972217, 32071459, 62176249, 62006133, 62271465,
+ables it to progressively uncover the correlation between            62202014). Li Yuan is also sponsored by CCF Tencent Open
+text and video, rendering it a more effective approach for           Research Fund.
+References                                                              [17] Ioana Croitoru, Simion-Vlad Bogolin, Marius Leordeanu,
+                                                                             Hailin Jin, Andrew Zisserman, Samuel Albanie, and Yang
+ [1] Tomer Amit, Eliya Nachmani, Tal Shaharbany, and Lior Wolf.              Liu. Teachtext: Crossmodal generalized distillation for text-
+     Segdiff: Image segmentation with diffusion probabilistic mod-           video retrieval. In ICCV, pages 11583–11593, 2021.
+     els. arXiv preprint arXiv:2112.00390, 2021.                        [18] Prafulla Dhariwal, Heewoo Jun, Christine Payne, Jong Wook
+ [2] Lisa Anne Hendricks, Oliver Wang, Eli Shechtman, Josef                  Kim, Alec Radford, and Ilya Sutskever. Jukebox: A gen-
+     Sivic, Trevor Darrell, and Bryan Russell. Localizing moments            erative model for music. arXiv preprint arXiv:2005.00341,
+     in video with natural language. In ICCV, pages 5803–5812,               2020.
+     2017.                                                              [19] Prafulla Dhariwal and Alexander Nichol. Diffusion models
+ [3] Jacob Austin, Daniel D Johnson, Jonathan Ho, Daniel Tarlow,             beat gans on image synthesis. In NeurIPS, pages 8780–8794,
+     and Rianne van den Berg. Structured denoising diffusion                 2021.
+     models in discrete state-spaces. In NeurIPS, pages 17981–          [20] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov,
+     17993, 2021.                                                            Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner,
+ [4] Max Bain, Arsha Nagrani, Gül Varol, and Andrew Zisserman.              Mostafa Dehghani, Matthias Minderer, Georg Heigold, Syl-
+     Frozen in time: A joint video and image encoder for end-to-             vain Gelly, Jakob Uszkoreit, and Neil Houlsby. An image is
+     end retrieval. In ICCV, pages 1728–1738, 2021.                          worth 16x16 words: Transformers for image recognition at
+ [5] Dmitry Baranchuk, Ivan Rubachev, Andrey Voynov, Valentin                scale. In ICLR, 2021.
+     Khrulkov, and Artem Babenko. Label-efficient seman-                [21] Bo Fang, Chang Liu, Yu Zhou, Min Yang, Yuxin Song, Fu
+     tic segmentation with diffusion models. arXiv preprint                  Li, Weiping Wang, Xiangyang Ji, Wanli Ouyang, et al. Uatvr:
+     arXiv:2112.03126, 2021.                                                 Uncertainty-adaptive text-video retrieval. arXiv preprint
+ [6] JM Bernardo, MJ Bayarri, JO Berger, AP Dawid, D Hecker-                 arXiv:2301.06309, 2023.
+     man, AFM Smith, and M West. Generative or discriminative?          [22] Han Fang, Pengfei Xiong, Luhui Xu, and Yu Chen.
+     getting the best of both worlds. Bayesian Statistics, 8(3):3–24,        Clip2video: Mastering video-text retrieval via image clip.
+     2007.                                                                   arXiv preprint arXiv:2106.11097, 2021.
+ [7] Simion-Vlad Bogolin, Ioana Croitoru, Hailin Jin, Yang Liu,         [23] Brendan J Frey, Geoffrey E Hinton, and Peter Dayan. Does
+     and Samuel Albanie. Cross modal retrieval with querybank                the wake-sleep algorithm produce good density estimators?
+     normalisation. In CVPR, pages 5194–5205, 2022.                          In NeurIPS, 1995.
+ [8] Emmanuel Asiedu Brempong, Simon Kornblith, Ting Chen,              [24] Valentin Gabeur, Chen Sun, Karteek Alahari, and Cordelia
+     Niki Parmar, Matthias Minderer, and Mohammad Norouzi.                   Schmid. Multi-modal transformer for video retrieval. In
+     Denoising pretraining for semantic segmentation. In CVPR,               ECCV, pages 214–229, 2020.
+     pages 4175–4186, 2022.                                             [25] Xavier Glorot, Antoine Bordes, and Yoshua Bengio. Deep
+ [9] Andrew Brock, Jeff Donahue, and Karen Simonyan. Large                   sparse rectifier neural networks. In JMLR, pages 315–323,
+     scale gan training for high fidelity natural image synthesis.           2011.
+     arXiv preprint arXiv:1809.11096, 2018.                             [26] Shansan Gong, Mukai Li, Jiangtao Feng, Zhiyong Wu, and
+[10] Tom Brown, Benjamin Mann, Nick Ryder, Melanie Sub-                      LingPeng Kong. Diffuseq: Sequence to sequence text genera-
+     biah, Jared D Kaplan, Prafulla Dhariwal, Arvind Neelakantan,            tion with diffusion models. arXiv preprint arXiv:2210.08933,
+     Pranav Shyam, Girish Sastry, Amanda Askell, et al. Language             2022.
+     models are few-shot learners. In NeurIPS, pages 1877–1901,         [27] Ian Goodfellow, Jean Pouget-Abadie, Mehdi Mirza, Bing
+     2020.                                                                   Xu, David Warde-Farley, Sherjil Ozair, Aaron Courville, and
+[11] David Chen and William Dolan. Collecting highly parallel                Yoshua Bengio. Generative adversarial networks. Communi-
+     data for paraphrase evaluation. In ACL, pages 190–200, 2011.            cations of the ACM, 63(11):139–144, 2020.
+[12] Shoufa Chen, Peize Sun, Yibing Song, and Ping Luo. Diffu-          [28] Satya Krishna Gorti, Noël Vouitsis, Junwei Ma, Keyvan
+     siondet: Diffusion model for object detection. arXiv preprint           Golestan, Maksims Volkovs, Animesh Garg, and Guangwei
+     arXiv:2211.09788, 2022.                                                 Yu. X-pool: Cross-modal language-video attention for text-
+[13] Shizhe Chen, Yida Zhao, Qin Jin, and Qi Wu. Fine-grained                video retrieval. In CVPR, pages 5006–5015, 2022.
+     video-text retrieval with hierarchical graph reasoning. In         [29] Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising dif-
+     CVPR, pages 10638–10647, 2020.                                          fusion probabilistic models. In NeurIPS, pages 6840–6851,
+[14] Yizhen Chen, Jie Wang, Lijian Lin, Zhongang Qi, Jin Ma,                 2020.
+     and Ying Shan. Tagging before alignment: Integrating               [30] Jonathan Ho and Tim Salimans. Classifier-free diffusion
+     multi-modal tags for video-text retrieval. arXiv preprint               guidance. arXiv preprint arXiv:2207.12598, 2022.
+     arXiv:2301.12644, 2023.                                            [31] Peng Jin, JinFa Huang, Fenglin Liu, Xian Wu, Shen Ge,
+[15] Zesen Cheng, Peng Jin, Hao Li, Kehan Li, Siheng Li, Xi-                 Guoli Song, David A. Clifton, and Jie Chen. Expectation-
+     angyang Ji, Chang Liu, and Jie Chen. Wico: Win-win coop-                maximization contrastive learning for compact video-and-
+     eration of bottom-up and top-down referring image segmenta-             language representations. In NeurIPS, pages 30291–30306,
+     tion. arXiv preprint arXiv:2306.10750, 2023.                            2022.
+[16] Zesen Cheng, Kehan Li, Peng Jin, Xiangyang Ji, Li Yuan,            [32] Peng Jin, Jinfa Huang, Pengfei Xiong, Shangxuan Tian,
+     Chang Liu, and Jie Chen. Parallel vertex diffusion for unified          Chang Liu, Xiangyang Ji, Li Yuan, and Jie Chen. Video-
+     visual grounding. arXiv preprint arXiv:2303.07216, 2023.                text as game players: Hierarchical banzhaf interaction for
+     cross-modal representation learning. In CVPR, pages 2472–         [49] Pandeng Li, Hongtao Xie, Shaobo Min, Jiannan Ge, Xun
+     2482, 2023.                                                            Chen, and Yongdong Zhang. Deep fourier ranking quantiza-
+[33] Peng Jin, Hao Li, Zesen Cheng, Jinfa Huang, Zhennan Wang,              tion for semi-supervised image retrieval. TIP, 31:5909–5922,
+     Li Yuan, Chang Liu, and Jie Chen. Text-video retrieval                 2022.
+     with disentangled conceptualization and set-to-set alignment.     [50] Xiang Lisa Li, John Thickstun, Ishaan Gulrajani, Percy Liang,
+     arXiv preprint arXiv:2305.12218, 2023.                                 and Tatsunori B Hashimoto. Diffusion-lm improves control-
+[34] Diederik P Kingma and Jimmy Ba. Adam: A method for                     lable text generation. arXiv preprint arXiv:2205.14217, 2022.
+     stochastic optimization. arXiv preprint arXiv:1412.6980,          [51] Chen Liang, Wenguan Wang, Jiaxu Miao, and Yi Yang. Gmm-
+     2014.                                                                  seg: Gaussian mixture based generative semantic segmenta-
+[35] Diederik P Kingma and Max Welling. Auto-encoding varia-                tion models. arXiv preprint arXiv:2210.02025, 2022.
+     tional bayes. arXiv preprint arXiv:1312.6114, 2013.               [52] Yang Liu, Samuel Albanie, Arsha Nagrani, and Andrew Zis-
+[36] Ranjay Krishna, Kenji Hata, Frederic Ren, Li Fei-Fei, and              serman. Use what you have: Video retrieval using representa-
+     Juan Carlos Niebles. Dense-captioning events in videos. In             tions from collaborative experts. In BMVC, 2019.
+     ICCV, pages 706–715, 2017.                                        [53] Yuqi Liu, Pengfei Xiong, Luhui Xu, Shengming Cao, and
+[37] Solomon Kullback. Information theory and statistics. Courier           Qin Jin. Ts2-net: Token shift and selection transformer for
+     Corporation, 1997.                                                     text-video retrieval. In ECCV, pages 319–335, 2022.
+[38] Jie Lei, Linjie Li, Luowei Zhou, Zhe Gan, Tamara L. Berg,         [54] Huaishao Luo, Lei Ji, Ming Zhong, Yang Chen, Wen Lei,
+     Mohit Bansal, and Jingjing Liu. Less is more: Clipbert for             Nan Duan, and Tianrui Li. Clip4clip: An empirical study
+     video-and-language learning via sparse sampling. In CVPR,              of clip for end to end video clip retrieval and captioning.
+     pages 7331–7341, 2021.                                                 Neurocomputing, 508:293–304, 2022.
+                                                                       [55] Antoine Miech, Dimitri Zhukov, Jean-Baptiste Alayrac,
+[39] Hao Li, Jinfa Huang, Peng Jin, Guoli Song, Qi Wu, and Jie
+                                                                            Makarand Tapaswi, Ivan Laptev, and Josef Sivic.
+     Chen. Weakly-supervised 3d spatial reasoning for text-based
+                                                                            Howto100m:         Learning a text-video embedding by
+     visual question answering. TIP, 32:3367–3382, 2023.
+                                                                            watching hundred million narrated video clips. In ICCV,
+[40] Hao Li, Peng Jin, Zesen Cheng, Songyang Zhang, Kai                     pages 2630–2640, 2019.
+     Chen, Zhennan Wang, Chang Liu, and Jie Chen. Tg-vqa:
+                                                                       [56] Aaron van den Oord, Sander Dieleman, Heiga Zen, Karen
+     Ternary game of video question answering. arXiv preprint
+                                                                            Simonyan, Oriol Vinyals, Alex Graves, Nal Kalchbrenner,
+     arXiv:2305.10049, 2023.
+                                                                            Andrew Senior, and Koray Kavukcuoglu. Wavenet: A gener-
+[41] Hao Li, Xu Li, Belhal Karimi, Jie Chen, and Mingming Sun.              ative model for raw audio. arXiv preprint arXiv:1609.03499,
+     Joint learning of object graph and relation graph for visual           2016.
+     question answering. In ICME, pages 01–06, 2022.
+                                                                       [57] Aaron van den Oord, Yazhe Li, and Oriol Vinyals. Repre-
+[42] Junnan Li, Dongxu Li, Caiming Xiong, and Steven Hoi.                   sentation learning with contrastive predictive coding. arXiv
+     Blip: Bootstrapping language-image pre-training for unified            preprint arXiv:1807.03748, 2018.
+     vision-language understanding and generation. arXiv preprint      [58] Mandela Patrick, Po-Yao Huang, Yuki Asano, Florian Metze,
+     arXiv:2201.12086, 2022.                                                Alexander G Hauptmann, Joao F. Henriques, and Andrea
+[43] Kehan Li, Zhennan Wang, Zesen Cheng, Runyi Yu, Yian                    Vedaldi. Support-set bottlenecks for video-text representation
+     Zhao, Guoli Song, Li Yuan, and Jie Chen. Dynamic cluster-              learning. In ICLR, 2021.
+     ing network for unsupervised semantic segmentation. arXiv         [59] Vadim Popov, Ivan Vovk, Vladimir Gogoryan, Tasnima
+     preprint arXiv:2210.05944, 2022.                                       Sadekova, and Mikhail Kudinov. Grad-tts: A diffusion proba-
+[44] Kehan Li, Runyi Yu, Zhennan Wang, Li Yuan, Guoli Song,                 bilistic model for text-to-speech. In ICML, pages 8599–8608,
+     and Jie Chen. Locality guidance for improving vision trans-            2021.
+     formers on tiny datasets. In ECCV, pages 110–127, 2022.           [60] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya
+[45] Kehan Li, Yian Zhao, Zhennan Wang, Zesen Cheng, Peng                   Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry,
+     Jin, Xiangyang Ji, Li Yuan, Chang Liu, and Jie Chen. Multi-            Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen
+     granularity interaction simulation for unsupervised interactive        Krueger, and Ilya Sutskever. Learning transferable visual
+     segmentation. arXiv preprint arXiv:2303.13399, 2023.                   models from natural language supervision. In ICML, pages
+[46] Pandeng Li, Yan Li, Hongtao Xie, and Lei Zhang.                        8748–8763, 2021.
+     Neighborhood-adaptive structure augmented metric learning.        [61] Alec Radford, Karthik Narasimhan, Tim Salimans, Ilya
+     In AAAI, pages 1367–1375, 2022.                                        Sutskever, et al. Improving language understanding by gener-
+[47] Pandeng Li, Chen-Wei Xie, Hongtao Xie, Liming Zhao, Lei                ative pre-training. OpenAI, 2018.
+     Zhang, Yun Zheng, Deli Zhao, and Yongdong Zhang. Mo-              [62] Aditya Ramesh, Prafulla Dhariwal, Alex Nichol, Casey Chu,
+     mentdiff: Generative video moment retrieval from random to             and Mark Chen. Hierarchical text-conditional image gen-
+     real. arXiv preprint arXiv:2307.02869, 2023.                           eration with clip latents. arXiv preprint arXiv:2204.06125,
+[48] Pandeng Li, Hongtao Xie, Jiannan Ge, Lei Zhang, Shaobo                 2022.
+     Min, and Yongdong Zhang. Dual-stream knowledge-                   [63] Ali Razavi, Aaron Van den Oord, and Oriol Vinyals. Generat-
+     preserving hashing for unsupervised video retrieval. In ECCV,          ing diverse high-fidelity images with vq-vae-2. In NeurIPS,
+     pages 181–197, 2022.                                                   2019.
+[64] Anna Rohrbach, Marcus Rohrbach, Niket Tandon, and Bernt         A. Appendix
+     Schiele. A dataset for movie description. In CVPR, pages
+     3202–3212, 2015.                                                   This appendix provides the descriptions of datasets
+[65] Jascha Sohl-Dickstein, Eric Weiss, Niru Maheswaranathan,        (Sec. A.1.1), implementation details (Sec. A.1.2), video-
+     and Surya Ganguli. Deep unsupervised learning using             to-text retrieval performance on the LSMDC, MSVD, and
+     nonequilibrium thermodynamics. In ICML, pages 2256–2265,        ActivityNet Captions datasets (Sec. A.2.1), additional exper-
+     2015.                                                           iments for the out-domain retrieval (Sec. A.2.2), the reason
+[66] Jiaming Song, Chenlin Meng, and Stefano Ermon. Denoising        for applying diffusion models (Sec. A.2.3), discussion of
+     diffusion implicit models. arXiv preprint arXiv:2010.02502,     the limitations (Sec. A.2.4), the additional visualization of
+     2020.                                                           the diffusion process (Sec. A.3.1), the visualization of the
+[67] Guy Tevet, Sigal Raab, Brian Gordon, Yonatan Shafir, Daniel     text-frame attention map (Sec. A.3.2), and the visualization
+     Cohen-Or, and Amit H Bermano. Human motion diffusion            of the text-to-video retrieval examples (Sec. A.3.3).
+     model. arXiv preprint arXiv:2209.14916, 2022.
+[68] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkor-
+                                                                     A.1. Datasets and Implementation Details
+     eit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia      A.1.1   Datasets
+     Polosukhin. Attention is all you need. In NeurIPS, pages
+     5998–6008, 2017.                                                We compare the proposed DiffusionRet with other methods
+[69] Qiang Wang, Yanhao Zhang, Yun Zheng, Pan Pan, and Xian-         on five benchmark text-video retrieval datasets, including
+     Sheng Hua. Disentangled representation learning for text-       MSRVTT [74], LSMDC [64], MSVD [11], ActivityNet Cap-
+     video retrieval. arXiv preprint arXiv:2203.07111, 2022.         tions [36], and DiDeMo [2].
+[70] Wenzhe Wang, Mengdan Zhang, Runnan Chen, Guanyu Cai,                MSRVTT. MSRVTT [74] contains 10,000 YouTube
+     Penghao Zhou, Pai Peng, Xiaowei Guo, Jian Wu, and Xing          videos, each with 20 text descriptions. We follow the training
+     Sun. Dig into multi-modal cues for video retrieval with hier-   protocol in [52, 24, 55] and evaluate on text-to-video and
+     archical alignment. In IJCAI, pages 1113–1121, 2021.            video-to-text search tasks on the 1K-A testing split with 1K
+[71] Xiaohan Wang, Linchao Zhu, and Yi Yang. T2vlad: Global-         video or text candidates defined by [76].
+     local sequence alignment for text-video retrieval. In CVPR,         LSMDC. LSMDC [64] contains 118,081 video clips
+     pages 5079–5088, 2021.                                          from 202 movies. The duration of videos in the LSMDC
+[72] Yinhuai Wang, Jiwen Yu, and Jian Zhang. Zero-shot image         dataset is short. We follow the split of [24] with 1,000 videos
+     restoration using denoising diffusion null-space model. arXiv   for testing.
+     preprint arXiv:2212.00490, 2022.                                    MSVD. MSVD [11] contains 1,970 videos. Each video
+[73] Eric Xing, Michael Jordan, Stuart J Russell, and Andrew Ng.     has approximately 40 associated text description. Videos in
+     Distance metric learning with application to clustering with    the MSVD dataset are short in duration, lasting about 10 to
+     side-information. In NeurIPS, 2002.
+                                                                     25 seconds. We follow the official split of 1,200 and 670 as
+[74] Jun Xu, Tao Mei, Ting Yao, and Yong Rui. Msr-vtt: A large       the train and test set, respectively.
+     video description dataset for bridging video and language. In
+                                                                         ActivityNet Captions. ActivityNet Captions [36] con-
+     CVPR, pages 5288–5296, 2016.
+                                                                     sists densely annotated temporal segments of 20K YouTube
+[75] Runyi Yu, Zhennan Wang, Yinhuai Wang, Kehan Li, Yian            videos. Following [24, 58, 71], we concatenate descriptions
+     Zhao, Jian Zhang, Guoli Song, and Jie Chen. Position em-
+                                                                     of segments in a video to construct “video-paragraph” for
+     bedding needs an independent layer normalization. arXiv
+     preprint arXiv:2212.05262, 2022.
+                                                                     retrieval. We report results on the “val1” split of 10,009 and
+                                                                     4,917 as the train and test set.
+[76] Youngjae Yu, Jongseok Kim, and Gunhee Kim. A joint
+     sequence fusion model for video question answering and
+                                                                         DiDeMo. DiDeMo [2] contains 10,464 videos anno-
+     retrieval. In ECCV, pages 471–487, 2018.                        tated 40,543 text descriptions. We concatenate descriptions
+                                                                     of segments in a video to construct “video-paragraph” for
+[77] Shaofeng Zhang, Lyn Qiu, Feng Zhu, Junchi Yan, Hengrui
+     Zhang, Rui Zhao, Hongyang Li, and Xiaokang Yang. Align          retrieval. We follow the training and evaluation protocol
+     representations with base: A new approach to self-supervised    in [54].
+     learning. In CVPR, pages 16600–16609, 2022.
+[78] Shaofeng Zhang, Feng Zhu, Junchi Yan, Rui Zhao, and Xi-         A.1.2   Implementation Details.
+     aokang Yang. Zero-cl: Instance and feature decorrelation for
+     negative-free symmetric contrastive learning. In ICLR, 2021.    Following previous works [54, 31, 32, 33], we utilize the
+[79] Shaofeng Zhang, Feng Zhu, Rui Zhao, and Junchi Yan. Patch-      CLIP (ViT-B/32) [60] as the pre-trained model. The dimen-
+     level contrasting without patch correspondence for accurate     sion of the feature is 512. The temporal transformer [68, 44]
+     and dense contrastive representation learning. arXiv preprint   is composed of 4-layer blocks, each including 8 heads and
+     arXiv:2306.13337, 2023.                                         512 hidden channels. The temporal position embedding [75]
+                                                                     and parameters are initialized from the text encoder of the
+                                                            LSMDC                                                           MSVD
+  Method
+                                    R@1↑     R@5↑     R@10↑      Rsum↑      MdR↓      MnR↓       R@1↑      R@5↑      R@10↑        Rsum↑      MdR↓   MnR↓
+  TT-CE [17] ICCV21                 17.5      36.0      45.0      98.5      14.3        -        27.1      55.3          67.1      149.5      4.0     -
+  CLIP4Clip [54] Neurocomputing22   20.8      39.0      48.6     108.4      12.0       54.2      62.0      87.3          92.6      241.9      1.0    4.3
+  EMCL-Net [31] NeurIPS22           22.2      40.6      49.2     112.0      12.0        -        54.3      81.3          88.1      223.7      1.0    5.6
+  DiffusionRet (Ours)               23.0      43.5      51.5     118.0       9.0       40.2      61.9      88.3          92.9      243.1      1.0    4.5
+  + QB-Norm [7]                     22.8      43.2      51.6     117.6       9.0       40.0      60.3      86.4          92.0      238.7      1.0    4.5
+                                                     ActivityNet Captions                                                  DiDeMo
+  Method
+                                    R@1↑     R@5↑     R@10↑      Rsum↑      MdR↓      MnR↓       R@1↑      R@5↑      R@10↑        Rsum↑      MdR↓   MnR↓
+  TT-CE [17] ICCV21                 23.0      56.1       -         -         4.0        -        21.1      47.3          61.1      129.5      6.3      -
+  CLIP4Clip [54] Neurocomputing22   41.4      73.7      85.3     200.4       2.0       6.7       41.4      68.2          79.1      188.7      2.0    12.4
+  EMCL-Net [31] NeurIPS22           42.7      74.0       -         -         2.0        -        45.7      74.3          82.7      202.7      2.0    10.9
+  HBI [32] CVPR23                   42.4      73.0      86.0     201.4       2.0       6.5       46.2      73.0          82.7      201.9      2.0     8.7
+  DiffusionRet (Ours)               43.8      75.3      86.7     205.8       2.0       6.3       46.2      74.3          82.2      202.7      2.0    10.7
+  + QB-Norm [7]                     47.4      76.3      86.7     210.4       2.0       6.7       50.3      75.1          82.9      208.3      1.0    10.3
+
+
+Table A: Video-to-text retrieval performance on the LSMDC, MSVD, and ActivityNet Captions datasets. “↑” denotes
+that higher is better. “↓” denotes that lower is better.
+
+                                                               MSRVTT                                      MSRVTT->ActivityNet Captions
+  Method
+                                           R@1↑      R@5↑      R@10↑        Rsum↑      MdR↓        R@1↑       R@5↑          R@10↑          Rsum↑    MdR↓
+  CLIP4Clip [54]‡ Neurocomputing22         43.8      70.6       81.4        195.8          2.0      29.1          58.3          72.1       159.5     4.0
+  EMCL-Net [31]‡ NeurIPS22                 47.0      72.3       82.6        201.9          2.0      28.7          56.8          70.6       156.1     4.0
+  DiffusionRet (Ours)                      49.0      75.2       82.7        206.9          2.0      31.5          60.0          73.8       165.3     3.0
+
+Table B: Text-to-video retrieval performance in out-domain retrieval settings. “MSRVTT->ActivityNet Captions” denotes
+that the generalization results on unseen ActivityNet Captions test setting using pre-trained models on the MSRVTT dataset.“‡ ”
+denotes our own re-implementation of baselines. “↑” denotes that higher is better. “↓” denotes that lower is better.
+
+
+CLIP. We use the Adam optimizer [34] and set the batch size                        A.2. Additional Results and Discussions
+to 128. The initial learning rate is 1e-7 for the text encoder
+                                                                                   A.2.1      Video-to-Text Retrieval
+and video encoder and 1e-3 for other modules. We set the
+                             ′
+temperature τ̂ to 0.01 and τ to 1. For short video datasets,                       We compare the proposed DiffusionRet with other meth- ods
+i.e., MSRVTT, LSMDC, and MSVD, the word length is 32                               on five benchmark. In addition to the text-to-video retrieval
+and the frame length is 12. For long video datasets, i.e.,                         results in the main paper, we provide video-to-text retrieval
+ActivityNet Captions and DiDeMo, the word length is 64                             results on the LSMDC, MSVD, ActivityNet Captions, and
+and the frame length is 64.                                                        DiDeMo datasets in Tab. A. Extensive experiments on five
+                                                                                   datasets, including MSRVTT, LSMDC, MSVD, ActivityNet
+   The training is divided into two stages. In the first stage,                    Captions, and DiDeMo, demonstrate that our method is capa-
+we train the feature extractor from the discrimination per-                        ble of dealing with both short and long videos. DiffusionRet
+spective. In the second stage, we optimize the generator                           achieves consistent improvements across different datasets,
+from the generation perspective. For the MSRVTT and                                which demonstrates the effectiveness of our method.
+LSMDC datasets, the experiments are carried out on 2
+NVIDIA Tesla V100 GPUs. For the MSVD, ActivityNet
+                                                                                   A.2.2      Out-domain Retrieval
+Captions, and DiDeMo datasets, the experiments are car-
+ried out on 8 NVIDIA Tesla V100 GPUs. In both of the                               Most text-video retrieval methods [54, 31, 32, 33] are eval-
+tasks of text-to-video and video-to-text retrieval, we assume                      uated using the same dataset, which may not reflect their
+that only the candidate sets are known in advance. In the                          ability to generalize to unseen data. To this end, we per-
+inference phase, we consider both the distance of video                            form out-domain retrieval by pre-training a model on one
+and text representations in the representation space and the                       dataset (referred to as the “source”) and evaluating its per-
+joint probability of video and text. Code is available at                          formance on another dataset (referred to as the “target”)
+https://github.com/jpthu17/DiffusionRet.                                           that is not included in the training. In addition to the out-
+ Query: A young girl petting a dog that is laying on a couch.
+                     0.8554
+                                                                    0.6539                                0.5560
+ 0.0380     0.0188             0.0878    …        0.0729   0.1362             0.1370    …        0.1486            0.1417   0.1537
+
+                                        denoise                                        denoise
+
+
+            Distribution 𝑥50                               Distribution 𝑥25                               Distribution 𝑥0
+
+
+ Query: A cook prepares food items in a metal bowl.
+            0.4918                                                                                                          0.5065
+                     0.2453                                0.3252   0.2580    0.2704
+ 0.1789                        0.0840     …       0.1464                                …        0.1374   0.1582   0.1979
+
+                                        denoise                                        denoise
+
+
+            Distribution 𝑥50                               Distribution 𝑥25                               Distribution 𝑥0
+
+
+ Query: Two men stand on a platform suspended high above the city.
+                               0.7671                                         0.6279             0.6143
+
+                                         …                                              …
+ 0.0702     0.1577                                0.1379   0.2142                                         0.1575   0.1584   0.0698
+                     0.0050                                         0.0200
+                                        denoise                                        denoise
+
+
+            Distribution 𝑥50                               Distribution 𝑥25                               Distribution 𝑥0
+
+
+ Query: A woman with blonde hair and a black shirt is talking.
+            0.5693                                                                                                 0.6302
+ 0.3796                                           0.3357   0.4703
+                     0.0248    0.0263    …                          0.1447    0.0493    …        0.1240   0.1228            0.1230
+                                        denoise                                        denoise
+
+
+            Distribution 𝑥50                               Distribution 𝑥25                               Distribution 𝑥0
+
+Figure A: The visualization of the diffusion process of the probability distribution. We highlight the ground truth in
+green, and show the process from randomly initialized noise input (x50 ) to the final predicted distribution (x0 ). The iterative
+refinement property and many-to-many nature of the diffusion model render it an effective approach for text-video retrieval.
+
+
+domain retrieval experiments in the main paper, we provide           power of diffusion models, we explain other advantages of
+additional experiments in the out-domain retrieval setting           applying the diffusion model rather than other generative
+(MSRVTT->ActivityNet Captions) in Tab. B. We find that               approaches to cross-modal retrieval, mainly in two aspects.
+discriminant approaches do not transfer well from in-domain          First, the coarse-to-fine nature of the diffusion model en-
+to out-of-domain retrieval. For instance, EMCL-Net outper-           ables it to progressively uncover the correlation between
+forms CLIP4Clip in in-domain retrieval, but its performance          text and video, rendering it a more effective approach for
+is slightly lower than CLIP4Clip in out-domain retrieval. In         retrieval tasks than other generation training methods, such
+contrast, DiffusionRet achieves good performance in both             as generative adversarial network [27] and variational au-
+in-domain and out-of-domain retrieval.                               toencoder [35]. Second, the many-to-many nature of the
+                                                                     diffusion model makes it more suitable for generating joint
+                                                                     probabilities than the auto-regressive networks [23, 61]. We
+A.2.3     Why Diffusion Models                                       recommend further investigation of the potential of the gen-
+Diffusion models have demonstrated remarkable generative             erative method for discriminant tasks in future research. In
+power in various fields. Besides the powerful generative             our future work, we will explore our algorithm in segmenta-
+Text: A man is playing guitar and singing.
+                                   0.47167
+                        0.23237               0.22713
+  0.040949   0.027884                                     8.8433e-11 1.1272e-10 4.1640e-10 6.5730e-10 9.5705e-09 8.5675e-09 2.7120e-10
+
+
+
+
+Text: A man rides his motorcycle to a building.
+
+                                                           0.46169
+                        0.13486                                       0.18767    0.17628
+ 3.9523e-06 0.039481              2.7323e-11 2.8919e-09                                    1.0816e-07 1.6481e-06 1.4238e-06 1.0926e-05
+
+
+
+
+Figure B: The visualization of the text-frame attention map. These results demonstrate that our method can capture the
+correlation between text and frames.
+
+Query: The women sit at the lap top and talk to one another.          Query: A boy is playing with a dump truck.
+
+Rank 1                                                                Rank 1
+
+
+Rank 2                                                                Rank 2
+
+
+Rank 3                                                                Rank 3
+
+
+Rank 4                                                                Rank 4
+
+
+Rank 5                                                                Rank 5
+
+
+Figure C: The visualization of the text-to-video results. We highlight the ground truth in green. These results demonstrate
+that our method can mine the correlation between text and video effectively.
+
+
+tion [43, 45] and visual question answering [41, 39, 40].              ited data, we believe that pure generative training is a more
+                                                                       promising solution when the data is sufficient. We suggest
+                                                                       exploring a pure generative training approach to the retrieval
+A.2.4    Limitations of our Work
+                                                                       problem in the future.
+Generative models have focused on generative tasks, e.g., im-
+age generation [29, 66], natural language generation [3, 50],          A.3. Additional Visualizations
+and audio generation [59]. Some other works have attempted             A.3.1    Diffusion Process
+to adapt the generative models for discriminant tasks, e.g.,
+image segmentation [1], visual grounding [16], and detec-              The coarse-to-fine nature of the diffusion model enables it to
+tion [12]. However, these precursor methods require addi-              progressively uncover the correlation between text and video,
+tional discriminative training. To train on limited data, we           rendering it an effective approach for cross-modal retrieval.
+optimize the proposed generation model from both genera-               To better understand the diffusion process, we show the
+tion and discrimination perspectives. Although such a hybrid           additional visualization of the diffusion process in Fig. A.
+training method can improve model performance with lim-                These results demonstrate that our method can progressively
+uncover the correlation between text and video.
+
+A.3.2   Text-Frame Attention Map
+To extract the joint encoding of text and video, we propose
+the text-frame attention encoder, which takes text representa-
+tion as query and frame representation as key and value. To
+better understand the process of joint encoding of text and
+video, we show the visualization of the text-frame attention
+map in Fig. B. As shown in Fig. B, the text-frame attention
+encoder adaptively extracts the frames that are similar to
+the text so that fine-grained video features can be extracted.
+These results demonstrate that our method can capture the
+correlation between text and frames.
+
+A.3.3   Text-to-Video Retrieval
+We show two retrieval examples from the MSRVTT testing
+set for text-to-video retrieval in Fig. C. As shown in Fig. C,
+our method successfully retrieves the ground-truth video.
+These results demonstrate that our method can mine the
+correlation between text and video effectively.
+

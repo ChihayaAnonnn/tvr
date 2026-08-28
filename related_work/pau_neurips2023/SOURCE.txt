@@ -1,0 +1,6 @@
+title: Prototype-based Aleatoric Uncertainty Quantification for Cross-modal Retrieval
+arxiv_id: 2309.17093v3
+published: 2023-09-29 09:41:19+00:00
+updated: 2024-01-14 17:32:19+00:00
+pdf_url: https://arxiv.org/pdf/2309.17093v3
+fetched: 2026-08-28 via arxiv==4.0.1

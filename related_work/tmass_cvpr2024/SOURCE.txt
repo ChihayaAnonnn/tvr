@@ -1,0 +1,6 @@
+title: Text Is MASS: Modeling as Stochastic Embedding for Text-Video Retrieval
+arxiv_id: 2403.17998v1
+published: 2024-03-26 17:59:52+00:00
+updated: 2024-03-26 17:59:52+00:00
+pdf_url: https://arxiv.org/pdf/2403.17998v1
+fetched: 2026-08-28 via arxiv==4.0.1
