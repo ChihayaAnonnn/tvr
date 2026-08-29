@@ -1,0 +1,48 @@
+{
+  "phase": "stage0-archive-qualification",
+  "phase_path": "experiments/oq1-kl-variance-hubness-v1/phases/stage0-archive-qualification-attempt2.json",
+  "runs": [
+    {
+      "manifest_sha256": "5fa5255e9385af6460dbcece006039f4571e2e5adb1c33728080ad95c3c6d4fd",
+      "output_hashes": {
+        "command.sh": "8b4cf3f0874aaae92b160990f944a4a1bb0496c3b5eb31dfff724cd2bc15a413",
+        "logs/controller.log": "0cff397854e164083cb44f5413bb325e1b2ced7af65e9912b76f9b6327924996",
+        "provenance/gpu-probe-launch.json": "d514610b5e3c9dda904e6975b6a1a6361f2b68d84053c459ffbf8754379259de"
+      },
+      "run_id": "msrvtt-baseline-qual_success-seed000-20260829T101500Z-f51f0232e970",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "80382801589e514132de316df96616f0dddfa19980023056ba4627ccf04a72f8",
+      "output_hashes": {
+        "command.sh": "8f7f22cf8a2694b36cff80e3730acec302e9d4bd9adc301f507e5be816de8db1"
+      },
+      "run_id": "msrvtt-baseline-qual_nonowner_fail-seed000-20260829T101600Z-f51f0232e970",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "e05276c0a6202c69fd589d669ce9883f669b79895293e3c27e6f4af4fb7fb4bf",
+      "output_hashes": {
+        "command.sh": "eff89a4818663a2a454aa6eb46fb37f649717d35bc8a6abd920680ee0696da59"
+      },
+      "run_id": "msrvtt-baseline-qual_owner_collective_fail-seed000-20260829T101700Z-f51f0232e970",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "985de7d8f5ae7b9f2c3d24c3025119ff1136d62daa145584e82c91ab3360bc5c",
+      "output_hashes": {
+        "command.sh": "5bad781542859f9980e9a6a9f078472494e7a18d3d277408be91bbc074299285"
+      },
+      "run_id": "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T101800Z-f51f0232e970",
+      "state": "cancelled",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "oq1-kl-variance-hubness-v1",
+  "terminal_counts": {
+    "cancelled": 4
+  }
+}
