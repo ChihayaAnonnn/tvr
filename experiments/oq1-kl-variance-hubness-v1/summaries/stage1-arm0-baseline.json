@@ -1,0 +1,78 @@
+{
+  "phase": "stage1-arm0-baseline",
+  "phase_path": "experiments/oq1-kl-variance-hubness-v1/phases/stage1-arm0-baseline.json",
+  "runs": [
+    {
+      "manifest_sha256": "9de3c0ae8bf6a3eb56ae86892c3232bab3cb7ddc3243d8dc3249aefe60633265",
+      "output_hashes": {
+        "arrays/sha256/18/18e6c12c445f6952f7bda5e4cb4203812aa53600dab86b9f23f0b87469a832b8.npy": "ed1f7f50bd72361ce4e946e9d7b480aa5348d6a622984fc96612121da9dd6a85",
+        "arrays/sha256/28/2818be8653252e37eaaa4fc9ce30cb2a40279a505551f305cce00555b9a70d25.npy": "c38e4263c6e50b9760ed1747680bb608b767a2dce809f3779774304580c60971",
+        "arrays/sha256/99/99cdd108decd830869ad16bad2e2b3561de3fec504da8233b80028c63b73873c.npy": "1cc8d6f6481b127fcc3c193b69306eb7e41400c815bd901b25daf5039363e434",
+        "arrays/sha256/9e/9e22484f984d8a35dd7464925f5024cce04f9b3997a1e72ef091274487742535.npy": "9eb6e42351d5b0a55cf92ddf99db2e85a309f18310c96994fc4d0de5d605c7d4",
+        "arrays/sha256/a2/a2e6d6d8234672b3b31edd7352c94ab96743c4f952b4f3b821bc3f9d28e85e68.npy": "f827b1d953a7c69b6203d5bed971303298cc11b9760df8c8d4d6e543f550179d",
+        "checkpoints/pytorch_model.bin.0": "8ca1e04ef5813672fa15a7b11f55343eb65e425cfafc4a9cb1b13ca0ead6639f",
+        "checkpoints/pytorch_model.bin.1": "7910f0526f075a3f2f37a21649278ffe61a3cc7d3b0a0bb7efee4a113dfb6b7c",
+        "checkpoints/pytorch_model.bin.2": "49f46b534e955666e9dbb8a5c094b037a58d45986157398330f8872adf361b0a",
+        "checkpoints/pytorch_model.bin.3": "7a7ddde552e6e2c57a5a01ae26130a77223c826745f878ae0b23004d811dfd6c",
+        "checkpoints/pytorch_model.bin.4": "34e20f55f319053d62b0c4ace2b14adb52738f2f874975433ad0f5784a4cafb3",
+        "checkpoints/pytorch_opt.bin.0": "7e17315c3f6a4ef3adaaa2a31a81ec6282458746e41690b7299b6efad652aca7",
+        "checkpoints/pytorch_opt.bin.1": "f1ff146d7730aa60241dbab7b094e1dad1d781334a60ff6a2521b2b22c327ef0",
+        "checkpoints/pytorch_opt.bin.2": "63300a9ba1325cfa327ef14a0d5eca1e3569ee55cfec2cdde7e6095d160276af",
+        "checkpoints/pytorch_opt.bin.3": "b72f71c82131e2124a83484e356cb3edd43993200d1b3cb861b6f503cd361893",
+        "checkpoints/pytorch_opt.bin.4": "ba0147183c986af8ae5cb3dc553f318d307385dfe5ff9da5b91fe91e2d5307d8",
+        "command.sh": "d62ce877b5b162002392296fed5e0fb44929d69180a9ca5bb68f9f7f0a6adfa9",
+        "logs/controller.log": "42c0359223b793f4c743da32f21181899ad659a9a0444673b7e36f0fda3c81d1",
+        "logs/runtime.log": "f833f68713f7702a615ee0f82610c585542d3b73c1ddac0f6db7447a4d5b51fd",
+        "metrics/best_validation_checkpoints.json": "262df41a0169ffb6e43c6995135cb00b435b7d89319902982257acc94dcfdbae",
+        "metrics/selected_validation.json": "c6377fba516613b43655ee87fc56a87fc4d666ff2b531efb1ee5710d494c04ad",
+        "metrics/val1k_eval_000.json": "ab8cbaefb6415b771700db3c2b3cc4610806f14f886dc9fe0c1b5d3eb462808b",
+        "metrics/val1k_eval_001.json": "b5ac8d3df7cd98cf04ffb8f059c22d0afb25340429139e364c3fbef5d79c8534",
+        "metrics/val1k_eval_002.json": "6615d32acde36a24e117ad37e5c70f466b403fdcd2e5e52ee8229e8cae5d9c52",
+        "metrics/val1k_eval_003.json": "a2fd5d2fa9aae8eca7923fa9d0eb6cf965eb1559b5172f22691e1827b5fa5cd4",
+        "metrics/val1k_eval_004.json": "f41205c85a5108255628bdbf031166dfb5d4433d345db3b0512fe0f47db80d82",
+        "provenance/gpu-probe-launch.json": "db0b37ba5de8ff56a7b89df0ab0d6b30b64ebd40320b567fa83f378c5c80e14f",
+        "provenance/training_args.json": "718466fcb8053b4f23bc9e7bf2e18fb7865cf9329901e72741c111fc901b8c4a",
+        "provenance/training_manifest.json": "d0b06a4c99c92beb3a2d1e908e531eae0721283a6845bb014d8cafc051ca1cc9"
+      },
+      "run_id": "msrvtt-baseline-arm0-seed000-20260829T194200Z-09641b60cd15",
+      "state": "completed",
+      "summary_metrics": {
+        "best_epoch": 4.0,
+        "eval_sequence": 4.0,
+        "t2v_MR": 16.0,
+        "t2v_MeanR": 115.02621167161226,
+        "t2v_R1": 22.65084075173096,
+        "t2v_R10": 45.00494559841741,
+        "t2v_R5": 38.57566765578635,
+        "v2t_MR": 8.0,
+        "v2t_MeanR": 64.13371104815863,
+        "v2t_R1": 25.722379603399432,
+        "v2t_R10": 53.88101983002833,
+        "v2t_R5": 45.09915014164306
+      }
+    },
+    {
+      "manifest_sha256": "215c1cbfdc11818d40300ffec938b748459a1f4d54a5624e02942894663e27bc",
+      "output_hashes": {
+        "command.sh": "aba498a1b1140810b2efc1c13b44f1833a82e20a461ddebf6b1116cf7368734f"
+      },
+      "run_id": "msrvtt-baseline-arm0-seed001-20260829T194201Z-09641b60cd15",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "44e3ae91f132b222f8da076a6b0ef9ff2fb264bb8568e3ba47c7571cefcb6581",
+      "output_hashes": {
+        "command.sh": "a09acf9dad44391d3cbe35e804dc56c3bbca66fea5076f5a98e57554aa384f9c"
+      },
+      "run_id": "msrvtt-baseline-arm0-seed002-20260829T194202Z-09641b60cd15",
+      "state": "cancelled",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "oq1-kl-variance-hubness-v1",
+  "terminal_counts": {
+    "cancelled": 2,
+    "completed": 1
+  }
+}
