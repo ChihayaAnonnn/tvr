@@ -4,7 +4,7 @@
   "runs": [
     {
       "dataset": "msrvtt",
-      "stage": "stage0",
+      "stage": "baseline",
       "variant": "qual_success",
       "seed": 0,
       "scheduled_timestamp_utc": "20260829T100000Z",
@@ -41,7 +41,7 @@
     },
     {
       "dataset": "msrvtt",
-      "stage": "stage0",
+      "stage": "baseline",
       "variant": "qual_nonowner_fail",
       "seed": 0,
       "scheduled_timestamp_utc": "20260829T100100Z",
@@ -65,7 +65,7 @@
     },
     {
       "dataset": "msrvtt",
-      "stage": "stage0",
+      "stage": "baseline",
       "variant": "qual_owner_collective_fail",
       "seed": 0,
       "scheduled_timestamp_utc": "20260829T100200Z",
@@ -89,7 +89,7 @@
     },
     {
       "dataset": "msrvtt",
-      "stage": "stage0",
+      "stage": "baseline",
       "variant": "qual_sigterm_mismatch",
       "seed": 0,
       "scheduled_timestamp_utc": "20260829T100300Z",
