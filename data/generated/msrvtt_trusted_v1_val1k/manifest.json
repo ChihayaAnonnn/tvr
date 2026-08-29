@@ -1,0 +1,34 @@
+{
+  "study": "oq1-kl-variance-hubness-v1",
+  "partition_ids": {
+    "train": "msrvtt_trusted_v1_train7500",
+    "val": "msrvtt_trusted_v1_val1k"
+  },
+  "rule": {
+    "source": "data/generated/msrvtt_trusted_v1/train.csv",
+    "video_selection": "sort ids lexicographically, numpy RandomState(0) permutation, first 1000 -> val1k, rest -> train7500",
+    "seed": 0,
+    "caption_selection": "lowest_index_in_annotation_list (first occurrence in MSRVTT_v2.json sentences)"
+  },
+  "counts": {
+    "train7500": 7500,
+    "val1k": 1000
+  },
+  "assertions": {
+    "val1k_disjoint_from_jsfusion_test": true,
+    "val1k_disjoint_from_train7500": true,
+    "union_equals_train8500": true,
+    "train7500_disjoint_from_jsfusion_test": true
+  },
+  "inputs_sha256": {
+    "data/generated/msrvtt_trusted_v1/train.csv": "838191d15fefaa8b2898d23a2a8c8579c0e256411f4b47bd3cf16944457a0cfd",
+    "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a",
+    "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33"
+  },
+  "outputs_sha256": {
+    "train.csv": "0185e4e5f3c3aa61f8980ab6ade4411d9d8004880d2bb8cb479d7582755fbd72",
+    "val1k.csv": "69ca57d803f0cfb7a981afe751e4fb9179617de545077dee94e73a82118c4ec3"
+  },
+  "built_at_utc": "2026-08-29T09:47:23+00:00",
+  "git_head_at_build": "366591585204689a6c26be163808474ae7b394a7"
+}
