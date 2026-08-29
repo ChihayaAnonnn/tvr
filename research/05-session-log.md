@@ -6,39 +6,6 @@
 
 ---
 
-## 2026-08-30 (2) —— Stage 1 首跑揪出 bf16 评测量化 bug；顺带解开 OQ-5 分母之谜
-
-**发生了什么。** Stage 1 attempt-1（arm0 seed000，四卡全程 5 epoch）跑完后指标可疑
-（val1k t2v R@1 22.65 / MnR 115.0，且 compute_metrics 分母 1011≠1000）。追查：归档
-矩阵 **100% 精确 bf16 值**，每行 1000 候选仅 ~198 个唯一分数,238 行对角线并列
-（1022 个额外精确相等）——评测在 bf16 autocast 下计算,量化摧毁了排名信息,
-`metrics.py::compute_metrics` 又按并列重复计数。同一 checkpoint 用 fp32 复评：
-**t2v R@1 45.2 / MnR 21.5**（CLIP4Clip 量级,数字健康）。E-89b。
-
-**OQ-5 结案（机制层面,E-90）。** contextual-risk 的 1000→1012 V2T 分母同源：
-不存在第二个 query 集,12 条=低精度分数并列重复计数。双向复现:冻结 val 矩阵
-fp32 版 0 个 gt 并列,bf16 版 2455 个(june/a1 两 ckpt 完全一致)。唯一口径 =
-fp32 + 1000 分母。
-
-**处置（全按协议）。** 修复 commit `912a452`（oq1 评测强制 exact fp32;训练不变);
-attempt-1 finalize 存档（seed000 completed、seed001/002 cancelled,{completed:1,
-cancelled:2}）;r2 phase 以 implementation-review 授权重开（预注册允许的一次实现
-审查,发生在任何 gate 判定前,lineage 完整链接）;r2 seed000 已开跑（step20 loss
-2.4860 与 attempt-1 分毫不差——训练确定性旁证）。
-
-**两条流程教训（写入控制面 README #10）。** (a) 源码提交前先清账活跃预留——归档
-契约禁止 reserved 跨源码漂移做任何转换,我这次不得不 revert→取消→finalize→
-unrevert;(b) 控制器 stdout 不可接管道（SIGPIPE 会杀看护进程）。
-
-**P0 预览（非正式,fp32 诊断复评,split=val1k, DSL off, t2v）。** R@1 45.2 ✓(≤60)、
-MnR 21.5 ✓(≥8);S(N₁₀) 待 r2 归档矩阵（bf16 矩阵上的 0.898 不作数,并列任意打散
-会稀释偏度）。P0 是否过门由 r2 三 seed 的冻结脚本输出决定。
-
-**产物。** commits `45fbf24`(P0 工具) `912a452`(fp32 修复) `5ec22b0`(attempt-1
-finalize) `d501632`(r2 预留);`scripts/oq1_stage1_p0_metrics.py`;E-89b/E-90 入 ledger。
-
----
-
 ## 2026-08-30 (1) —— 确定性契约 PASS：Stage 0 四门全关，Stage 1 解锁
 
 **发生了什么。** GPU 空出后按 PC-8 走完确定性探针归档流程：phase
