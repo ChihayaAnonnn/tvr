@@ -585,9 +585,12 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     )
     parser.add_argument(
         "--eval_split",
-        choices=["val", "test"],
+        choices=["val", "val1k", "test"],
         default="val",
-        help="Evaluation split. Training always evaluates internal val.",
+        help=(
+            "Evaluation split. Training evaluates internal val, or the "
+            "oq1 study's val1k partition when requested."
+        ),
     )
     parser.add_argument(
         "--run_final_test",
@@ -829,6 +832,41 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
         default="",
         type=str,
         help="实验描述，会写入日志便于后续分析。",
+    )
+    # ==============================================================
+    # Study oq1-kl-variance-hubness-v1 (frozen protocol: experiments/
+    # oq1-kl-variance-hubness-v1/study.yaml). The arm selects the scoring
+    # head; everything else stays the shared training configuration.
+    # ==============================================================
+    parser.add_argument(
+        "--oq1_arm",
+        default="none",
+        type=str,
+        choices=[
+            "none", "arm0_deterministic", "arm1_full_akl", "arm2_no_A",
+            "arm3_D_only", "arm4_unit_sigma_t", "arm5_symmetric_kl",
+            "arm6_elk",
+        ],
+        help="Registered OQ-1 study arm; none keeps historical behaviour.",
+    )
+    parser.add_argument(
+        "--strict_determinism",
+        action="store_true",
+        help=(
+            "cudnn.benchmark=False, cudnn.deterministic=True and "
+            "torch.use_deterministic_algorithms(True); requires "
+            "CUBLAS_WORKSPACE_CONFIG to be exported."
+        ),
+    )
+    parser.add_argument(
+        "--determinism_probe_steps",
+        type=int,
+        default=0,
+        help=(
+            "If > 0: cap training at N forward/backward steps, dump the "
+            "per-step loss sequence and a parameter digest to provenance/, "
+            "then stop (stage-0 determinism contract)."
+        ),
     )
     parser.add_argument(
         "--experiment_profile",
@@ -1169,6 +1207,20 @@ def get_args(description="CLIP4Clip on Retrieval Task"):
     if args.dsl_temperature <= 0:
         raise ValueError("dsl_temperature must be positive")
 
+    if args.determinism_probe_steps < 0:
+        raise ValueError("--determinism_probe_steps must be non-negative")
+    if args.determinism_probe_steps > 0 and not args.strict_determinism:
+        raise ValueError(
+            "--determinism_probe_steps requires --strict_determinism"
+        )
+    if args.strict_determinism and not os.environ.get("CUBLAS_WORKSPACE_CONFIG"):
+        raise ValueError(
+            "--strict_determinism requires CUBLAS_WORKSPACE_CONFIG "
+            "(e.g. :4096:8) in the environment"
+        )
+    if args.oq1_arm != "none" and args.use_uatvr_full:
+        raise ValueError("--oq1_arm binds the HEAD arch; --use_uatvr_full is not allowed")
+
     validate_trusted_cli(args)
 
     # Check paramenters
@@ -1212,7 +1264,7 @@ def prepare_requested_dataloaders(args, tokenizer):
         train_bundle = train_factory(args, tokenizer)
 
     if args.do_train:
-        split = "val"
+        split = "val1k" if getattr(args, "eval_split", "val") == "val1k" else "val"
         factory = loaders.get(split)
         if factory is None and args.datatype != "msrvtt":
             split = "test"
@@ -1236,10 +1288,18 @@ def set_seed_logger(args):
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)  # if you are using multi-GPU.
-    # A800: 打开 cuDNN autotune + TF32，让固定 shape 的 conv/matmul 走 Tensor Core。
-    # deterministic 关掉，让 autotune 生效；如果日后要复现严格基线，把这两项翻回来即可。
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = False
+    if getattr(args, "strict_determinism", False):
+        # oq1 stage-0 determinism contract: fixed cuDNN algorithms, no
+        # autotune, deterministic-only kernels. TF32 stays on — it is
+        # run-to-run deterministic and matches the production numeric mode.
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        torch.use_deterministic_algorithms(True)
+    else:
+        # A800: 打开 cuDNN autotune + TF32，让固定 shape 的 conv/matmul 走 Tensor Core。
+        # deterministic 关掉，让 autotune 生效；如果日后要复现严格基线，把这两项翻回来即可。
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = False
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
@@ -1506,6 +1566,10 @@ def _registered_a3_expected_values():
         "dsl_temperature": 1.0,
         "experiment_profile": "hygiene",
         "experiment_desc": "A3 contextual retrieval-risk sidecar",
+        # oq1-kl-variance-hubness-v1 knobs are frozen off for registered A3.
+        "oq1_arm": "none",
+        "strict_determinism": False,
+        "determinism_probe_steps": 0,
         "use_uatvr_full": True,
         "use_ada_norm": True,
         "disable_spatial_enhancer": False,
@@ -3104,6 +3168,63 @@ def _time_per_dataloader_step_since_log(
     )
 
 
+def _dump_determinism_probe(args, model, probe_losses):
+    """Write the stage-0 determinism evidence for one probe run (rank 0).
+
+    Two same-seed probe runs pass the gate iff their step-loss NPY files and
+    parameter digests are byte-identical
+    (study.yaml stage0_qualification.determinism_first_200_steps_bitwise_equal_same_seed).
+    """
+    inner = model.module if hasattr(model, "module") else model
+    losses = np.asarray(probe_losses, dtype=np.float64)
+
+    param_digest = hashlib.sha256()
+    for name, tensor in sorted(inner.named_parameters()):
+        param_digest.update(name.encode("utf-8"))
+        param_digest.update(tensor.detach().cpu().contiguous().numpy().tobytes())
+    buffer_digest = hashlib.sha256()
+    for name, tensor in sorted(inner.named_buffers()):
+        buffer_digest.update(name.encode("utf-8"))
+        buffer_digest.update(tensor.detach().cpu().contiguous().numpy().tobytes())
+
+    provenance = _run_provenance_dir(args)
+    provenance.mkdir(parents=True, exist_ok=True)
+    losses_path = provenance / "determinism-probe-step-losses-rank0.npy"
+    np.save(losses_path, losses)
+    losses_sha = hashlib.sha256(losses_path.read_bytes()).hexdigest()
+    atomic_write_json(
+        provenance / "determinism-probe-rank0.json",
+        {
+            "oq1_arm": str(getattr(args, "oq1_arm", "none")),
+            "seed": int(args.seed),
+            "probe_steps": len(probe_losses),
+            "step_losses_npy_sha256": losses_sha,
+            "parameters_sha256": param_digest.hexdigest(),
+            "buffers_sha256": buffer_digest.hexdigest(),
+        },
+    )
+
+    metrics_dir = getattr(args, "artifact_metrics_dir", None)
+    if metrics_dir is not None:
+        atomic_write_json(
+            Path(metrics_dir) / "selected_validation.json",
+            {
+                "split": "validation",
+                "summary_metrics": {
+                    "probe_steps": len(probe_losses),
+                    "probe_loss_first": float(losses[0]),
+                    "probe_loss_last": float(losses[-1]),
+                    "probe_loss_sum": float(losses.sum()),
+                },
+                "array_references": [],
+            },
+        )
+    logger.info(
+        "[determinism-probe] steps=%d losses_sha=%s params_sha=%s",
+        len(probe_losses), losses_sha[:16], param_digest.hexdigest()[:16],
+    )
+
+
 def _train_epoch_impl(epoch, args, model, train_dataloader, device, n_gpu, optimizer, scheduler, global_step, local_rank=0):
     global logger
     torch.cuda.empty_cache()
@@ -3130,6 +3251,17 @@ def _train_epoch_impl(epoch, args, model, train_dataloader, device, n_gpu, optim
     if smoke_cap is not None and local_rank == 0:
         logger.info("[SMOKE_STEPS] cap=%d — will exit train_epoch after %d step(s)",
                     smoke_cap, smoke_cap)
+
+    # oq1 stage-0 determinism contract: cap the loop and record the exact
+    # per-step local loss sequence for the bitwise two-run comparison.
+    probe_steps = int(getattr(args, "determinism_probe_steps", 0) or 0)
+    probe_losses: list[float] | None = None
+    if probe_steps > 0:
+        smoke_cap = probe_steps if smoke_cap is None else min(smoke_cap, probe_steps)
+        probe_losses = []
+        if local_rank == 0:
+            logger.info("[determinism-probe] cap=%d steps, dumping losses + parameter digest",
+                        probe_steps)
 
     crf_window: dict[str, float] = {"cf": 0.0, "cv": 0.0, "of": 0.0, "ov": 0.0,
                                     "rank_total": 0.0, "retrieval": 0.0}
@@ -3213,6 +3345,8 @@ def _train_epoch_impl(epoch, args, model, train_dataloader, device, n_gpu, optim
         loss.backward()
 
         total_loss += float(loss)
+        if probe_losses is not None:
+            probe_losses.append(float(loss))
         if loss_terms is not None:
             if any(name.startswith("csd_logvar_") for name in loss_terms):
                 for name, tensor in loss_terms.items():
@@ -3343,6 +3477,9 @@ def _train_epoch_impl(epoch, args, model, train_dataloader, device, n_gpu, optim
                     csd_window_count = 0
                 if contextual_window_means is not None:
                     _log_contextual_risk_window(contextual_window_means)
+
+    if probe_losses is not None and local_rank == 0:
+        _dump_determinism_probe(args, model, probe_losses)
 
     total_loss = total_loss / len(train_dataloader)
     epoch_time = time.time() - epoch_start_time
@@ -6444,6 +6581,18 @@ def _run_main(args):
                 global_step,
                 local_rank=args.local_rank,
             )
+
+            if int(getattr(args, "determinism_probe_steps", 0) or 0) > 0:
+                # Stage-0 determinism probe: evidence is dumped inside
+                # train_epoch; checkpointing and eval are out of scope.
+                if args.local_rank == 0:
+                    logger.info(
+                        "[determinism-probe] probe run complete — skipping "
+                        "checkpoint/eval by design"
+                    )
+                if dist.is_available() and dist.is_initialized():
+                    dist.barrier()
+                return
 
             checkpoint_rng_states = (
                 _gather_distributed_rng_states() if a3_only else None

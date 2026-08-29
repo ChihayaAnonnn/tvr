@@ -533,6 +533,7 @@ class MSRVTT_TrainDataLoader(Dataset):
             split_manifest_path=None,
             expected_captions_per_video=20,
             crf_ladder_root=None,
+            allow_manifest_subset=False,
     ):
         # `crf_ladder_root` opts the dataset into CRF-mode `__getitem__` when the
         # batch index is a `CRFBatchIndex`. Non-CRF training passes remain
@@ -569,7 +570,20 @@ class MSRVTT_TrainDataLoader(Dataset):
         )
         csv_video_id_set = set(self.csv_video_ids)
         manifest_video_id_set = set(self.video_group_ids)
-        if duplicate_csv_ids or csv_video_id_set != manifest_video_id_set:
+        if allow_manifest_subset:
+            # oq1 study path (train7500 = trusted train8500 minus val1k): the
+            # CSV must still stay inside the trusted train pool, so nothing
+            # from val/test can ever enter training; exactness of the val1k
+            # complement is asserted by scripts/build_val1k_partition.py and
+            # its committed manifest.
+            if duplicate_csv_ids or not csv_video_id_set <= manifest_video_id_set:
+                extra = sorted(csv_video_id_set - manifest_video_id_set)
+                raise ValueError(
+                    "train CSV video IDs are not a subset of trusted manifest "
+                    f"train_video_ids: extra={extra[:5]} "
+                    f"duplicates={duplicate_csv_ids[:5]}"
+                )
+        elif duplicate_csv_ids or csv_video_id_set != manifest_video_id_set:
             missing = sorted(manifest_video_id_set - csv_video_id_set)
             extra = sorted(csv_video_id_set - manifest_video_id_set)
             raise ValueError(

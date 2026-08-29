@@ -177,6 +177,105 @@ run_worker() {
         return
     fi
 
+    if [[ -n "${OQ1_ARM:-}" ]]; then
+        # Study oq1-kl-variance-hubness-v1 arm training. Fixed command line —
+        # everything scientific is pinned here or in the frozen study.yaml;
+        # trailing "$@" only carries the artifact identity from the
+        # registered launcher (scripts/oq1_arm_launch.sh).
+        case "${OQ1_ARM}" in
+            arm0_deterministic|arm1_full_akl|arm2_no_A|arm3_D_only|arm4_unit_sigma_t|arm5_symmetric_kl|arm6_elk) ;;
+            *) echo "invalid OQ1_ARM=${OQ1_ARM}" >&2; exit 2 ;;
+        esac
+        DATA_PATH=${DATA_PATH:-/data2/hxj/data/MSRVTT}
+        SOURCE_TRAIN_CSV="${DATA_PATH}/csv/MSRVTT_train.9k.csv"
+        TEST_CSV="${DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv"
+        ANNOTATION_JSON="${DATA_PATH}/annotation/MSRVTT_v2.json"
+        SPLIT_MANIFEST="${ROOT_DIR}/dataloaders/splits/msrvtt_trusted_v1_seed0.json"
+        GENERATED_SPLIT_DIR="${ROOT_DIR}/data/generated/msrvtt_trusted_v1"
+        VAL1K_DIR="${ROOT_DIR}/data/generated/msrvtt_trusted_v1_val1k"
+        export CLIP_CACHE_DIR=${CLIP_CACHE_DIR:-${ROOT_DIR}/.cache}
+
+        # Rebuild the trusted split (byte-stable), then hold the committed
+        # val1k partition to its own manifest hashes before consuming it.
+        "${TVR_PYTHON}" "${ROOT_DIR}/scripts/build_msrvtt_trusted_split.py" \
+            --train-csv "${SOURCE_TRAIN_CSV}" \
+            --annotation-json "${ANNOTATION_JSON}" \
+            --test-csv "${TEST_CSV}" \
+            --manifest "${SPLIT_MANIFEST}" \
+            --output-dir "${GENERATED_SPLIT_DIR}"
+        "${TVR_PYTHON}" - "${VAL1K_DIR}" <<'PYEOF'
+import hashlib, json, sys
+from pathlib import Path
+val1k_dir = Path(sys.argv[1])
+manifest = json.loads((val1k_dir / "manifest.json").read_text())
+for name, expected in manifest["outputs_sha256"].items():
+    digest = hashlib.sha256((val1k_dir / name).read_bytes()).hexdigest()
+    if digest != expected:
+        raise SystemExit(f"val1k partition drifted: {name} {digest} != {expected}")
+print("[oq1] val1k partition verified against committed manifest")
+PYEOF
+
+        OQ1_SEED="${OQ1_SEED:-0}"
+        OQ1_EPOCHS="${OQ1_EPOCHS:-5}"
+        OQ1_PROBE_STEPS="${OQ1_PROBE_STEPS:-0}"
+        OQ1_STRICT_DETERMINISM="${OQ1_STRICT_DETERMINISM:-1}"
+        NPROC="${NPROC:-4}"
+        if [[ "${NPROC}" != "4" ]]; then
+            echo "oq1 arm training requires NPROC=4 (study.yaml hardware_policy)" >&2
+            exit 2
+        fi
+        if [[ -z "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+            echo "oq1 arm training requires an explicit probed CUDA_VISIBLE_DEVICES" >&2
+            exit 2
+        fi
+        OQ1_EXTRA_ARGS=()
+        if [[ "${OQ1_STRICT_DETERMINISM}" == "1" ]]; then
+            export CUBLAS_WORKSPACE_CONFIG=${CUBLAS_WORKSPACE_CONFIG:-:4096:8}
+            OQ1_EXTRA_ARGS+=(--strict_determinism)
+        fi
+        if [[ "${OQ1_PROBE_STEPS}" != "0" ]]; then
+            OQ1_EXTRA_ARGS+=(--determinism_probe_steps "${OQ1_PROBE_STEPS}")
+        fi
+        echo "[run_train_msrvtt_bg:worker] oq1 arm=${OQ1_ARM} seed=${OQ1_SEED} epochs=${OQ1_EPOCHS} probe_steps=${OQ1_PROBE_STEPS} strict=${OQ1_STRICT_DETERMINISM}"
+        CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES}" \
+            "${TVR_TORCHRUN}" --nproc_per_node=4 \
+            --master_addr="${MASTER_ADDR:-127.0.0.9}" \
+            --master_port="${MASTER_PORT:-29547}" \
+            "${ROOT_DIR}/main_task_retrieval.py" \
+            --do_train --num_thread_reader 12 \
+            --prefetch_factor 4 --epochs="${OQ1_EPOCHS}" \
+            --batch_size 256 \
+            --gradient_accumulation_steps 1 \
+            --n_display=20 \
+            --seed "${OQ1_SEED}" \
+            --train_csv "${VAL1K_DIR}/train.csv" \
+            --val_csv "${VAL1K_DIR}/val1k.csv" \
+            --source_train_csv "${SOURCE_TRAIN_CSV}" \
+            --test_csv "${TEST_CSV}" \
+            --split_manifest "${SPLIT_MANIFEST}" \
+            --eval_split val1k \
+            --data_path "${ANNOTATION_JSON}" \
+            --features_path "${DATA_PATH}/videos/compressed_videos/msrvtt_224_12fps/" \
+            --output_dir "${OUTPUT_DIR}" \
+            --lr 1e-4 --max_words 32 --max_frames 8 --batch_size_val 16 \
+            --datatype msrvtt --expand_msrvtt_sentences \
+            --feature_framerate 1 --coef_lr 1e-3 \
+            --freeze_layer_num -1 --slice_framepos 3 \
+            --linear_patch 2d --sim_header seqTransf \
+            --pretrained_clip_name ViT-B/16 \
+            --clip_layer_norm_precision fp32 \
+            --clip_gradient_checkpointing \
+            --clip_visual_checkpoint_layers 4 \
+            --extra_video_cls_num 2 \
+            --extra_text_cls_num 2 \
+            --experiment_profile default \
+            --experiment_desc "${EXPERIMENT_DESC:-}" \
+            --oq1_arm "${OQ1_ARM}" \
+            "${OQ1_EXTRA_ARGS[@]}" \
+            "$@"
+        return
+    fi
+
     DATA_PATH=${DATA_PATH:-/data2/hxj/data/MSRVTT}
     SOURCE_TRAIN_CSV="${DATA_PATH}/csv/MSRVTT_train.9k.csv"
     TEST_CSV="${DATA_PATH}/csv/MSRVTT_JSFUSION_test.csv"

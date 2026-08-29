@@ -49,6 +49,7 @@ def dataloader_msrvtt_train(args, tokenizer):
         attributes_path=getattr(args, "msrvtt_attributes_path", ""),
         attr_num_blocks=getattr(args, "attr_num_blocks", 4),
         split_manifest_path=args.split_manifest,
+        allow_manifest_subset=getattr(args, "oq1_arm", "none") != "none",
     )
 
     local_batch_size = args.batch_size // args.n_gpu
@@ -141,6 +142,27 @@ def dataloader_msrvtt_val(args, tokenizer, subset="val"):
     return _build_msrvtt_eval_loader(msrvtt_valset, args), len(msrvtt_valset)
 
 
+def dataloader_msrvtt_val1k(args, tokenizer, subset="val1k"):
+    """oq1 study validation partition: 1000 videos x 1 caption (one row per
+    video in args.val_csv), evaluated exactly like the 1K-A test geometry."""
+    msrvtt_val1kset = MSRVTT_DataLoader(
+        csv_path=args.val_csv,
+        features_path=args.features_path,
+        max_words=args.max_words,
+        max_words_attrs=getattr(args, "max_words_attrs", None),
+        feature_framerate=args.feature_framerate,
+        tokenizer=tokenizer,
+        max_frames=args.max_frames,
+        frame_order=args.eval_frame_order,
+        slice_framepos=args.slice_framepos,
+        use_attributes=getattr(args, "use_attributes", False),
+        attributes_path=getattr(args, "msrvtt_attributes_path", ""),
+        attr_num_blocks=getattr(args, "attr_num_blocks", 4),
+        multi_sentence_per_video=False,
+    )
+    return _build_msrvtt_eval_loader(msrvtt_val1kset, args), len(msrvtt_val1kset)
+
+
 def dataloader_msrvtt_test(args, tokenizer, subset="test"):
     msrvtt_testset = MSRVTT_DataLoader(
         csv_path=args.test_csv,
@@ -220,6 +242,7 @@ DATALOADER_DICT["msrvtt"] = {
     "train": dataloader_msrvtt_train,
     "crf_train": dataloader_msrvtt_crf_train,
     "val": dataloader_msrvtt_val,
+    "val1k": dataloader_msrvtt_val1k,
     "test": dataloader_msrvtt_test,
 }
 DATALOADER_DICT["msvd"] = {"train":dataloader_msvd_train, "val":dataloader_msvd_test, "test":dataloader_msvd_test}

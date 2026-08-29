@@ -10,6 +10,11 @@ from modules.crf_head import CRFTrainingHead, paired_visual_forward
 from modules.module_clip import CLIP, convert_weights
 from modules.module_cross import CrossConfig, CrossModel
 from modules.module_cross import Transformer as TransformerClip
+from modules.oq1_probabilistic_scoring import (
+    OQ1_ALL_ARMS,
+    OQ1_PROBABILISTIC_ARMS,
+    oq1_cost_matrix,
+)
 from modules.until_module import AllGather, CrossEn, KLdivergence, MILNCELoss_BoF, PreTrainedModel
 
 try:
@@ -289,22 +294,44 @@ class UATVR(CLIP4ClipPreTrainedModel):
                 num_layers=1,
             )
 
-        self.pie_net_video = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
-        self.uncertain_net_video = UncertaintyModuleImage(embed_dim, embed_dim, embed_dim // 2)
+        # OQ-1 study arms (oq1-kl-variance-hubness-v1). "none" keeps the
+        # historical June/WTI+aux behaviour byte-for-byte. arm0 is the study's
+        # deterministic baseline (WTI scoring, no probabilistic head). The
+        # probabilistic arms score with a Gaussian cost instead of WTI, so
+        # each configuration only constructs the heads its scoring uses —
+        # required by DDP(find_unused_parameters=False).
+        self.oq1_arm = getattr(task_config, "oq1_arm", "none") or "none"
+        if self.oq1_arm not in ("none",) + OQ1_ALL_ARMS:
+            raise ValueError(f"unknown oq1_arm: {self.oq1_arm}")
+        oq1_probabilistic = self.oq1_arm in OQ1_PROBABILISTIC_ARMS
+        oq1_deterministic = self.oq1_arm == "arm0_deterministic"
 
-        self.pie_net_text = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
-        self.uncertain_net_text = UncertaintyModuleImage(embed_dim, embed_dim, embed_dim // 2)
+        if oq1_deterministic:
+            self.pie_net_video = None
+            self.uncertain_net_video = None
+            self.pie_net_text = None
+            self.uncertain_net_text = None
+        else:
+            self.pie_net_video = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
+            self.uncertain_net_video = UncertaintyModuleImage(embed_dim, embed_dim, embed_dim // 2)
+
+            self.pie_net_text = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
+            self.uncertain_net_text = UncertaintyModuleImage(embed_dim, embed_dim, embed_dim // 2)
 
         self.n_video_samples = self.task_config.n_video_embeddings  # numbers sampling from video distribution
         self.n_text_samples = self.task_config.n_text_embeddings  # numbers sampling from text distribution
 
         # head
-        self.text_weight_fc = nn.Sequential(
-            nn.Linear(transformer_width, transformer_width), nn.ReLU(inplace=True), nn.Linear(transformer_width, 1)
-        )
-        self.video_weight_fc = nn.Sequential(
-            nn.Linear(transformer_width, transformer_width), nn.ReLU(inplace=True), nn.Linear(transformer_width, 1)
-        )
+        if oq1_probabilistic:
+            self.text_weight_fc = None
+            self.video_weight_fc = None
+        else:
+            self.text_weight_fc = nn.Sequential(
+                nn.Linear(transformer_width, transformer_width), nn.ReLU(inplace=True), nn.Linear(transformer_width, 1)
+            )
+            self.video_weight_fc = nn.Sequential(
+                nn.Linear(transformer_width, transformer_width), nn.ReLU(inplace=True), nn.Linear(transformer_width, 1)
+            )
 
         # CRF training head: aleatoric risk over CRF-degraded video pairs.
         # `video_aleatoric.global_uncertainty_head` is frozen inside CRFTrainingHead's
@@ -697,8 +724,40 @@ class UATVR(CLIP4ClipPreTrainedModel):
         )
         text_pooled = text_pooled / text_pooled.norm(dim=-1, keepdim=True)
 
+        if self.oq1_arm in OQ1_PROBABILISTIC_ARMS:
+            # Registered study arms score with the Gaussian cost in place of
+            # WTI (PREREGISTRATION.md §4); no sampling, no MIL/VIB aux losses.
+            prob_video = self.probabilistic_video(
+                visual_pooled, visual_output[:, 0:frame_num, :].contiguous(), sample=False
+            )
+            prob_text = self.probabilistic_text(
+                text_pooled, text_token[:, 0:word_num, :].contiguous(), sample=False
+            )
+            logit_scale = self.clip.logit_scale.exp()
+            cost = oq1_cost_matrix(
+                self.oq1_arm,
+                prob_text["mean"],
+                prob_text["logsigma"],
+                prob_video["mean"],
+                prob_video["logsigma"],
+            )
+            retrieve_logits = logit_scale * (-cost)
+            if self.training:
+                zero = retrieve_logits.new_zeros(())
+                return retrieve_logits, zero, zero
+            return retrieve_logits
+
         # ti_logits = self.token_wise_interaction(text_token=text_token, frame_token=visual_output, attention_mask=attention_mask, video_mask=video_mask)
         wti_logits = self.weighted_token_wise_intersection(text_token, visual_output, attention_mask, video_mask)
+
+        if self.oq1_arm == "arm0_deterministic":
+            # Study baseline: pure WTI scoring, no probabilistic head at all.
+            logit_scale = self.clip.logit_scale.exp()
+            retrieve_logits = logit_scale * wti_logits
+            if self.training:
+                zero = retrieve_logits.new_zeros(())
+                return retrieve_logits, zero, zero
+            return retrieve_logits
 
         ####################################################################
         ############### probabilistic embedding modeling part ##############
@@ -790,7 +849,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         retrieve_logits = (t2v_logits + v2t_logits) / 2.0
         return retrieve_logits
 
-    def probabilistic_video(self, video_pooled, videos):
+    def probabilistic_video(self, video_pooled, videos, sample=True):
         output = {}
 
         out, attn, residual = self.pie_net_video(
@@ -809,13 +868,14 @@ class UATVR(CLIP4ClipPreTrainedModel):
         out = l2_normalize(out)  # B 512     l2 normalization后 均值
         output["mean"] = out
 
-        output["embedding"] = sample_gaussian_tensors(
-            out, logsigma, self.n_video_samples
-        )  # B 7 512    从高斯分布中采样N个embedding
+        if sample:
+            output["embedding"] = sample_gaussian_tensors(
+                out, logsigma, self.n_video_samples
+            )  # B 7 512    从高斯分布中采样N个embedding
 
         return output
 
-    def probabilistic_text(self, text_pooled, text_token):
+    def probabilistic_text(self, text_pooled, text_token, sample=True):
         output = {}
 
         out, attn, residual = self.pie_net_text(
@@ -834,7 +894,8 @@ class UATVR(CLIP4ClipPreTrainedModel):
         out = l2_normalize(out)
         output["mean"] = out
 
-        output["embedding"] = sample_gaussian_tensors(out, logsigma, self.n_text_samples)
+        if sample:
+            output["embedding"] = sample_gaussian_tensors(out, logsigma, self.n_text_samples)
 
         return output
 
