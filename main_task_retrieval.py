@@ -4539,6 +4539,22 @@ def _eval_epoch_impl(
         direction: _serialize_retrieval_metrics(directional_metrics[direction])
         for direction in directions
     }
+    if (
+        artifact_array_store is not None
+        and getattr(args, "oq1_arm", "none") != "none"
+    ):
+        # oq1 study: externalize the raw (pre-DSL) similarity matrix so the
+        # frozen P0/hubness metrics are recomputable from archived bytes
+        # (PC-8: numeric payloads > 1 MiB live as content-addressed NPY).
+        oq1_reference = artifact_array_store.write(
+            "oq1_raw_sim", np.asarray(risk_similarity_matrix, dtype=np.float32)
+        )
+        result["oq1_raw_sim"] = {
+            "dsl_setting": "off_raw_pre_dsl",
+            "rows": "text_queries",
+            "cols": "video_candidates",
+            "reference": oq1_reference.as_dict(),
+        }
     report_retrieval_risk = bool(
         getattr(model, "use_retrieval_risk_sidecar", False)
     )
@@ -6486,6 +6502,7 @@ def _run_main(args):
 
         best_t2v_score = float("-inf")
         best_t2v_checkpoint = "None"
+        oq1_selected_validation = None
         best_v2t_score = float("-inf")
         best_v2t_checkpoint = "None"
         a2_only = bool(getattr(args, "csd_logvar_sidecar_only", False))
@@ -6770,12 +6787,33 @@ def _run_main(args):
                             winner["path"],
                         )
                 else:
+                    previous_best_t2v = best_t2v_checkpoint
                     best_t2v_score, best_t2v_checkpoint = select_best_checkpoint(
                         best_t2v_score,
                         best_t2v_checkpoint,
                         validation_metrics["t2v"]["R1"],
                         output_model_file,
                     )
+                    if (
+                        getattr(args, "oq1_arm", "none") != "none"
+                        and best_t2v_checkpoint != previous_best_t2v
+                    ):
+                        # oq1 selection convention: best epoch by val1k t2v
+                        # R@1; the winning epoch's full metrics feed the
+                        # registry summary via selected_validation.json.
+                        oq1_selected_validation = {
+                            "best_epoch": float(epoch),
+                            "eval_sequence": float(
+                                getattr(args, "_artifact_eval_sequence", 1) - 1
+                            ),
+                            **{
+                                f"{direction}_{name}": float(
+                                    validation_metrics[direction][name]
+                                )
+                                for direction in ("t2v", "v2t")
+                                for name in ("R1", "R5", "R10", "MR", "MeanR")
+                            },
+                        }
                     best_v2t_score, best_v2t_checkpoint = select_best_checkpoint(
                         best_v2t_score,
                         best_v2t_checkpoint,
@@ -6871,6 +6909,23 @@ def _run_main(args):
                     _run_metadata_dir(args) / "best_validation_checkpoints.json",
                     selection_payload,
                 )
+                if (
+                    getattr(args, "oq1_arm", "none") != "none"
+                    and getattr(args, "artifact_metrics_dir", None) is not None
+                ):
+                    if oq1_selected_validation is None:
+                        raise RuntimeError(
+                            "oq1 run finished without a selected validation epoch"
+                        )
+                    atomic_write_json(
+                        Path(args.artifact_metrics_dir)
+                        / "selected_validation.json",
+                        {
+                            "split": "validation",
+                            "summary_metrics": oq1_selected_validation,
+                            "array_references": [],
+                        },
+                    )
 
             if args.run_final_test and a3_only:
                 model_to_evaluate = model.module if hasattr(model, "module") else model
