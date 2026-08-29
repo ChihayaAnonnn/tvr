@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-08-29 (2) —— arm 训练栈落地（commit 1c0cc4e），确定性探针待四卡
+
+**发生了什么。** 实现了 Stage 0 最后一门所依赖的全部四块：
+1. **打分模块** `modules/oq1_probabilistic_scoring.py`：七臂高斯 cost（AKL 按
+   lam_{A..D}∈{0,1} 分项 / 对称 KL / ELK），CPU 上对暴力展开逐元素验证 <1e−12，
+   arm1 与闭式 KL(v‖t) 恰差弃常数。0 权重项保留在计算图（零梯度参与）以满足
+   DDP find_unused_parameters=False 与臂间参数量不变式。
+2. **模型接线** `modules/modeling.py`：`--oq1_arm` 选头。none = June 路径逐字节不变；
+   arm0 = 纯 WTI CrossEn（不构造概率模块）；arm1–6 = PIE+Uncertainty 头 +
+   `logit_scale·(−cost)`（不构造 WTI weight-fc，无采样/MIL/VIB）。
+3. **训练器**：`--strict_determinism`（cudnn 定死 + use_deterministic_algorithms +
+   CUBLAS_WORKSPACE_CONFIG）与 `--determinism_probe_steps N`（截断 N 步、落盘逐步
+   loss NPY + 参数/buffer sha256、跳过 ckpt/eval）；训练期 `--eval_split val1k`。
+4. **数据与 launcher**：msrvtt val1k 评测工厂（1000×1，test 同构几何）；train
+   loader 仅在 oq1 臂激活时把"与 trusted manifest 相等"放宽为"⊆"；
+   `run_train_msrvtt_bg.sh` 新增 OQ1_ARM 固定命令行分支（启动前按已提交 manifest
+   校验 val1k 字节一致）；`scripts/oq1_arm_launch.sh` 注册 launcher。
+   实现自由度的定死清单（clamp [−3,3]、维度均值归一、双向 CrossEn、precision=fp32
+   的解释等）记录在控制面 README。
+
+**验证。** 单卡冒烟：同 seed 两次 2 步探针 losses/params sha 逐字节一致；arm0/arm6
+路径各 1 步通过；全 pytest 747 passed（新参数已按默认值钉进注册 A3 契约 schema）。
+数字口径：冒烟 loss（train7500 batch=8, DSL n/a, t2v+v2t 训练损失）arm1≈2.08≈ln 8。
+
+**产物。** commit `1c0cc4e`；`/tmp/gen_oq1_det_phase.py`（⚠️ 易失，reserve 期生成
+determinism-probe phase JSON，含活体 GPU 探测 + 输入哈希）。
+
+**下一步。** 四卡 200 步 a/b 探针（归档运行）。当前 GPU0/1 被研究者本人的 UGR 任务
+占用（各 ~22 GB），按 `on_insufficient_gpus: refuse_launch` 等待空出后 reserve+launch。
+
+---
+
 ## 2026-08-29 (1) —— Stage 0 开工：val1k 分区 + 四卡资格测试 3/4 过门
 
 **触发。** GPU 空出来了（siqi 的 VLLM 只剩一个、挪到 GPU 2；0/1/3/4 各 ~81 GB 空闲）。
