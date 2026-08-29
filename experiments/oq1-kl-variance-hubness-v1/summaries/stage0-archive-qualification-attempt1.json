@@ -1,0 +1,48 @@
+{
+  "phase": "stage0-archive-qualification",
+  "phase_path": "experiments/oq1-kl-variance-hubness-v1/phases/stage0-archive-qualification-attempt1.json",
+  "runs": [
+    {
+      "manifest_sha256": "5ac82c71eb7e535a8d43d519da3af9970a17f842454113a6b67c45a2096892dd",
+      "output_hashes": {
+        "command.sh": "2825f2d08221b2c8237910ba4df0ccf84a9e926ca2ffa4675921e187d94cac1a",
+        "logs/controller.log": "780b5a045a4c9765839b434a243da1ee59b506c61ed1b242b2a227377c2234c0",
+        "provenance/gpu-probe-launch.json": "a4af7dfc80a27767b592695c31f3bf39da0fa31bd0c5f157d8b627b84418b165"
+      },
+      "run_id": "msrvtt-baseline-qual_success-seed000-20260829T100000Z-90c583c8db05",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "f686062dc75f6182b823df73cc31b065542433c3e85aa3831c7bc48fb68565b1",
+      "output_hashes": {
+        "command.sh": "33d74cfb159a7920844e4abdecf1566bb14d00504eba325f39005642590e5dda"
+      },
+      "run_id": "msrvtt-baseline-qual_nonowner_fail-seed000-20260829T100100Z-90c583c8db05",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "57f63501af75e51ccece1a717d789f4d7db6046d0359cf40b6c1d5801ef497e6",
+      "output_hashes": {
+        "command.sh": "b80a8c61cbfc192413b26060053d1cc05a11970a6b34799f664c3f3f1335dd88"
+      },
+      "run_id": "msrvtt-baseline-qual_owner_collective_fail-seed000-20260829T100200Z-90c583c8db05",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "859c39623efadceed1bb97a9f2d6bf43e4f822eaa94583a0e8da98d52b11ac7d",
+      "output_hashes": {
+        "command.sh": "07998fbdc87572a4b92410ade9d647502c45fa0445efbdcfa2a045b3c7a596f4"
+      },
+      "run_id": "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T100300Z-90c583c8db05",
+      "state": "cancelled",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "oq1-kl-variance-hubness-v1",
+  "terminal_counts": {
+    "cancelled": 4
+  }
+}
