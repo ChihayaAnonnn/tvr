@@ -7,7 +7,7 @@
       "stage": "baseline",
       "variant": "qual_success",
       "seed": 0,
-      "scheduled_timestamp_utc": "20260829T101500Z",
+      "scheduled_timestamp_utc": "20260829T103000Z",
       "environment": {
         "python": "3.10.0",
         "pytorch": "2.1.2+cu121",
@@ -15,7 +15,7 @@
         "gpu_model": "NVIDIA A800 80GB PCIe",
         "gpu_count": 4,
         "precision": "fp32",
-        "distributed_topology": "torchrun-4-rank"
+        "distributed_topology": "torchrun-4"
       },
       "input_checkpoints": [],
       "dataset_splits": [],
@@ -34,13 +34,18 @@
         }
       },
       "parent_run_ids": [
-        "msrvtt-baseline-qual_success-seed000-20260829T100000Z-90c583c8db05"
+        "msrvtt-baseline-qual_success-seed000-20260829T100000Z-90c583c8db05",
+        "msrvtt-baseline-qual_success-seed000-20260829T101500Z-f51f0232e970"
       ],
       "selection_lineage": [
         "Stage 0 archive qualification only; not a scientific candidate (study.yaml stage0_qualification, PC-9)",
         {
           "authorization": "retry after deterministic preflight config-schema mismatch (device_selection_probe is not an effective evaluation arg); predecessor cancelled from reserved with evidence preserved",
           "predecessor": "msrvtt-baseline-qual_success-seed000-20260829T100000Z-90c583c8db05"
+        },
+        {
+          "authorization": "retry after deterministic preflight environment mismatch (runtime derives distributed_topology as torchrun-4; manifest said torchrun-4-rank, the study.yaml label); predecessor cancelled from reserved with evidence preserved",
+          "predecessor": "msrvtt-baseline-qual_success-seed000-20260829T101500Z-f51f0232e970"
         },
         {
           "device_selection_probe": {
@@ -107,7 +112,7 @@
       "stage": "baseline",
       "variant": "qual_nonowner_fail",
       "seed": 0,
-      "scheduled_timestamp_utc": "20260829T101600Z",
+      "scheduled_timestamp_utc": "20260829T103100Z",
       "environment": {
         "python": "3.10.0",
         "pytorch": "2.1.2+cu121",
@@ -115,7 +120,7 @@
         "gpu_model": "NVIDIA A800 80GB PCIe",
         "gpu_count": 4,
         "precision": "fp32",
-        "distributed_topology": "torchrun-4-rank"
+        "distributed_topology": "torchrun-4"
       },
       "input_checkpoints": [],
       "dataset_splits": [],
@@ -134,13 +139,18 @@
         }
       },
       "parent_run_ids": [
-        "msrvtt-baseline-qual_nonowner_fail-seed000-20260829T100100Z-90c583c8db05"
+        "msrvtt-baseline-qual_nonowner_fail-seed000-20260829T100100Z-90c583c8db05",
+        "msrvtt-baseline-qual_nonowner_fail-seed000-20260829T101600Z-f51f0232e970"
       ],
       "selection_lineage": [
         "Stage 0 archive qualification: non-owner rank failure must be propagated and preserved as evidence (PC-8 rule 7)",
         {
           "authorization": "retry after deterministic preflight config-schema mismatch (device_selection_probe is not an effective evaluation arg); predecessor cancelled from reserved with evidence preserved",
           "predecessor": "msrvtt-baseline-qual_nonowner_fail-seed000-20260829T100100Z-90c583c8db05"
+        },
+        {
+          "authorization": "retry after deterministic preflight environment mismatch (runtime derives distributed_topology as torchrun-4; manifest said torchrun-4-rank, the study.yaml label); predecessor cancelled from reserved with evidence preserved",
+          "predecessor": "msrvtt-baseline-qual_nonowner_fail-seed000-20260829T101600Z-f51f0232e970"
         },
         {
           "device_selection_probe": {
@@ -205,7 +215,7 @@
       "stage": "baseline",
       "variant": "qual_owner_collective_fail",
       "seed": 0,
-      "scheduled_timestamp_utc": "20260829T101700Z",
+      "scheduled_timestamp_utc": "20260829T103200Z",
       "environment": {
         "python": "3.10.0",
         "pytorch": "2.1.2+cu121",
@@ -213,7 +223,7 @@
         "gpu_model": "NVIDIA A800 80GB PCIe",
         "gpu_count": 4,
         "precision": "fp32",
-        "distributed_topology": "torchrun-4-rank"
+        "distributed_topology": "torchrun-4"
       },
       "input_checkpoints": [],
       "dataset_splits": [],
@@ -232,13 +242,18 @@
         }
       },
       "parent_run_ids": [
-        "msrvtt-baseline-qual_owner_collective_fail-seed000-20260829T100200Z-90c583c8db05"
+        "msrvtt-baseline-qual_owner_collective_fail-seed000-20260829T100200Z-90c583c8db05",
+        "msrvtt-baseline-qual_owner_collective_fail-seed000-20260829T101700Z-f51f0232e970"
       ],
       "selection_lineage": [
         "Stage 0 archive qualification: lifecycle-owner failure while peers occupy a collective",
         {
           "authorization": "retry after deterministic preflight config-schema mismatch (device_selection_probe is not an effective evaluation arg); predecessor cancelled from reserved with evidence preserved",
           "predecessor": "msrvtt-baseline-qual_owner_collective_fail-seed000-20260829T100200Z-90c583c8db05"
+        },
+        {
+          "authorization": "retry after deterministic preflight environment mismatch (runtime derives distributed_topology as torchrun-4; manifest said torchrun-4-rank, the study.yaml label); predecessor cancelled from reserved with evidence preserved",
+          "predecessor": "msrvtt-baseline-qual_owner_collective_fail-seed000-20260829T101700Z-f51f0232e970"
         },
         {
           "device_selection_probe": {
@@ -303,7 +318,7 @@
       "stage": "baseline",
       "variant": "qual_sigterm_mismatch",
       "seed": 0,
-      "scheduled_timestamp_utc": "20260829T101800Z",
+      "scheduled_timestamp_utc": "20260829T103300Z",
       "environment": {
         "python": "3.10.0",
         "pytorch": "2.1.2+cu121",
@@ -311,7 +326,7 @@
         "gpu_model": "NVIDIA A800 80GB PCIe",
         "gpu_count": 4,
         "precision": "fp32",
-        "distributed_topology": "torchrun-4-rank"
+        "distributed_topology": "torchrun-4"
       },
       "input_checkpoints": [],
       "dataset_splits": [],
@@ -330,13 +345,18 @@
         }
       },
       "parent_run_ids": [
-        "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T100300Z-90c583c8db05"
+        "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T100300Z-90c583c8db05",
+        "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T101800Z-f51f0232e970"
       ],
       "selection_lineage": [
         "Stage 0 archive qualification: SIGTERM drain with ranks parked in mismatched collectives",
         {
           "authorization": "retry after deterministic preflight config-schema mismatch (device_selection_probe is not an effective evaluation arg); predecessor cancelled from reserved with evidence preserved",
           "predecessor": "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T100300Z-90c583c8db05"
+        },
+        {
+          "authorization": "retry after deterministic preflight environment mismatch (runtime derives distributed_topology as torchrun-4; manifest said torchrun-4-rank, the study.yaml label); predecessor cancelled from reserved with evidence preserved",
+          "predecessor": "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T101800Z-f51f0232e970"
         },
         {
           "device_selection_probe": {
