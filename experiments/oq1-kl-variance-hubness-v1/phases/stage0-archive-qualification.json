@@ -8,36 +8,91 @@
       "variant": "qual_success",
       "seed": 0,
       "scheduled_timestamp_utc": "20260829T100000Z",
-      "environment": {"python": "3.10.0", "pytorch": "2.1.2+cu121", "cuda": "12.1", "gpu_model": "NVIDIA A800 80GB PCIe", "gpu_count": 4, "precision": "fp32", "distributed_topology": "torchrun-4-rank"},
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "gpu_count": 4,
+        "precision": "fp32",
+        "distributed_topology": "torchrun-4-rank"
+      },
       "input_checkpoints": [],
       "dataset_splits": [],
       "config": {
-        "model": {"datatype": "archive_qualification"},
+        "model": {
+          "datatype": "archive_qualification"
+        },
         "loss": {},
         "optimizer": {},
         "scheduler": {},
-        "evaluation": {"archive_qualification_scenario": "success", "do_train": true, "eval_split": "val", "run_final_test": false},
-        "device_selection_probe": {
-          "policy": "study.yaml hardware_policy.device_selection (probe_at_reserve_time, min_free_mib_per_gpu 70000)",
-          "probed_at_utc": "20260829T095233Z",
-          "driver_version": "560.35.05",
-          "selected_cuda_visible_devices": "0,1,3,4",
-          "gpus": [
-            {"index": 0, "uuid": "GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece", "free_mib": 81142},
-            {"index": 1, "uuid": "GPU-4cd26468-4bf3-4a57-cbc1-cab67ea6ff89", "free_mib": 81142},
-            {"index": 3, "uuid": "GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede", "free_mib": 81142},
-            {"index": 4, "uuid": "GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a", "free_mib": 81142}
-          ],
-          "excluded": [{"index": 2, "uuid": "GPU-19f58384-1ce3-9658-5a8b-7d79f437289d", "free_mib": 6632, "reason": "below min_free_mib, external VLLM service"}]
+        "evaluation": {
+          "archive_qualification_scenario": "success",
+          "do_train": true,
+          "eval_split": "val",
+          "run_final_test": false,
+          "device_selection_probe": {
+            "policy": "study.yaml hardware_policy.device_selection (probe_at_reserve_time, min_free_mib_per_gpu 70000)",
+            "probed_at_utc": "20260829T095233Z",
+            "driver_version": "560.35.05",
+            "selected_cuda_visible_devices": "0,1,3,4",
+            "gpus": [
+              {
+                "index": 0,
+                "uuid": "GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece",
+                "free_mib": 81142
+              },
+              {
+                "index": 1,
+                "uuid": "GPU-4cd26468-4bf3-4a57-cbc1-cab67ea6ff89",
+                "free_mib": 81142
+              },
+              {
+                "index": 3,
+                "uuid": "GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede",
+                "free_mib": 81142
+              },
+              {
+                "index": 4,
+                "uuid": "GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a",
+                "free_mib": 81142
+              }
+            ],
+            "excluded": [
+              {
+                "index": 2,
+                "uuid": "GPU-19f58384-1ce3-9658-5a8b-7d79f437289d",
+                "free_mib": 6632,
+                "reason": "below min_free_mib, external VLLM service"
+              }
+            ]
+          }
         }
       },
       "parent_run_ids": [],
-      "selection_lineage": ["Stage 0 archive qualification only; not a scientific candidate (study.yaml stage0_qualification, PC-9)"],
+      "selection_lineage": [
+        "Stage 0 archive qualification only; not a scientific candidate (study.yaml stage0_qualification, PC-9)"
+      ],
       "validation_authorized": true,
       "test_authorized": false,
-      "expected_scalar_outputs": ["qualification_loss"],
+      "expected_scalar_outputs": [
+        "qualification_loss"
+      ],
       "array_references": [],
-      "command": ["bash", "scripts/oq1_stage0_launch.sh", "--scenario", "success", "--run-id", "{run_id}", "--run-dir", "{artifact_run_dir}", "--devices", "0,1,3,4", "--port", "29561"]
+      "command": [
+        "bash",
+        "scripts/oq1_stage0_launch.sh",
+        "--scenario",
+        "success",
+        "--run-id",
+        "{run_id}",
+        "--run-dir",
+        "{artifact_run_dir}",
+        "--devices",
+        "0,1,3,4",
+        "--port",
+        "29561"
+      ]
     },
     {
       "dataset": "msrvtt",
@@ -45,23 +100,53 @@
       "variant": "qual_nonowner_fail",
       "seed": 0,
       "scheduled_timestamp_utc": "20260829T100100Z",
-      "environment": {"python": "3.10.0", "pytorch": "2.1.2+cu121", "cuda": "12.1", "gpu_model": "NVIDIA A800 80GB PCIe", "gpu_count": 4, "precision": "fp32", "distributed_topology": "torchrun-4-rank"},
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "gpu_count": 4,
+        "precision": "fp32",
+        "distributed_topology": "torchrun-4-rank"
+      },
       "input_checkpoints": [],
       "dataset_splits": [],
       "config": {
-        "model": {"datatype": "archive_qualification"},
+        "model": {
+          "datatype": "archive_qualification"
+        },
         "loss": {},
         "optimizer": {},
         "scheduler": {},
-        "evaluation": {"archive_qualification_scenario": "non_owner_failure", "do_train": true, "eval_split": "val", "run_final_test": false}
+        "evaluation": {
+          "archive_qualification_scenario": "non_owner_failure",
+          "do_train": true,
+          "eval_split": "val",
+          "run_final_test": false
+        }
       },
       "parent_run_ids": [],
-      "selection_lineage": ["Stage 0 archive qualification: non-owner rank failure must be propagated and preserved as evidence (PC-8 rule 7)"],
+      "selection_lineage": [
+        "Stage 0 archive qualification: non-owner rank failure must be propagated and preserved as evidence (PC-8 rule 7)"
+      ],
       "validation_authorized": true,
       "test_authorized": false,
       "expected_scalar_outputs": [],
       "array_references": [],
-      "command": ["bash", "scripts/oq1_stage0_launch.sh", "--scenario", "non_owner_failure", "--run-id", "{run_id}", "--run-dir", "{artifact_run_dir}", "--devices", "0,1,3,4", "--port", "29562"]
+      "command": [
+        "bash",
+        "scripts/oq1_stage0_launch.sh",
+        "--scenario",
+        "non_owner_failure",
+        "--run-id",
+        "{run_id}",
+        "--run-dir",
+        "{artifact_run_dir}",
+        "--devices",
+        "0,1,3,4",
+        "--port",
+        "29562"
+      ]
     },
     {
       "dataset": "msrvtt",
@@ -69,23 +154,53 @@
       "variant": "qual_owner_collective_fail",
       "seed": 0,
       "scheduled_timestamp_utc": "20260829T100200Z",
-      "environment": {"python": "3.10.0", "pytorch": "2.1.2+cu121", "cuda": "12.1", "gpu_model": "NVIDIA A800 80GB PCIe", "gpu_count": 4, "precision": "fp32", "distributed_topology": "torchrun-4-rank"},
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "gpu_count": 4,
+        "precision": "fp32",
+        "distributed_topology": "torchrun-4-rank"
+      },
       "input_checkpoints": [],
       "dataset_splits": [],
       "config": {
-        "model": {"datatype": "archive_qualification"},
+        "model": {
+          "datatype": "archive_qualification"
+        },
         "loss": {},
         "optimizer": {},
         "scheduler": {},
-        "evaluation": {"archive_qualification_scenario": "owner_collective_failure", "do_train": true, "eval_split": "val", "run_final_test": false}
+        "evaluation": {
+          "archive_qualification_scenario": "owner_collective_failure",
+          "do_train": true,
+          "eval_split": "val",
+          "run_final_test": false
+        }
       },
       "parent_run_ids": [],
-      "selection_lineage": ["Stage 0 archive qualification: lifecycle-owner failure while peers occupy a collective"],
+      "selection_lineage": [
+        "Stage 0 archive qualification: lifecycle-owner failure while peers occupy a collective"
+      ],
       "validation_authorized": true,
       "test_authorized": false,
       "expected_scalar_outputs": [],
       "array_references": [],
-      "command": ["bash", "scripts/oq1_stage0_launch.sh", "--scenario", "owner_collective_failure", "--run-id", "{run_id}", "--run-dir", "{artifact_run_dir}", "--devices", "0,1,3,4", "--port", "29563"]
+      "command": [
+        "bash",
+        "scripts/oq1_stage0_launch.sh",
+        "--scenario",
+        "owner_collective_failure",
+        "--run-id",
+        "{run_id}",
+        "--run-dir",
+        "{artifact_run_dir}",
+        "--devices",
+        "0,1,3,4",
+        "--port",
+        "29563"
+      ]
     },
     {
       "dataset": "msrvtt",
@@ -93,23 +208,53 @@
       "variant": "qual_sigterm_mismatch",
       "seed": 0,
       "scheduled_timestamp_utc": "20260829T100300Z",
-      "environment": {"python": "3.10.0", "pytorch": "2.1.2+cu121", "cuda": "12.1", "gpu_model": "NVIDIA A800 80GB PCIe", "gpu_count": 4, "precision": "fp32", "distributed_topology": "torchrun-4-rank"},
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "gpu_count": 4,
+        "precision": "fp32",
+        "distributed_topology": "torchrun-4-rank"
+      },
       "input_checkpoints": [],
       "dataset_splits": [],
       "config": {
-        "model": {"datatype": "archive_qualification"},
+        "model": {
+          "datatype": "archive_qualification"
+        },
         "loss": {},
         "optimizer": {},
         "scheduler": {},
-        "evaluation": {"archive_qualification_scenario": "sigterm_different_collectives", "do_train": true, "eval_split": "val", "run_final_test": false}
+        "evaluation": {
+          "archive_qualification_scenario": "sigterm_different_collectives",
+          "do_train": true,
+          "eval_split": "val",
+          "run_final_test": false
+        }
       },
       "parent_run_ids": [],
-      "selection_lineage": ["Stage 0 archive qualification: SIGTERM drain with ranks parked in mismatched collectives"],
+      "selection_lineage": [
+        "Stage 0 archive qualification: SIGTERM drain with ranks parked in mismatched collectives"
+      ],
       "validation_authorized": true,
       "test_authorized": false,
       "expected_scalar_outputs": [],
       "array_references": [],
-      "command": ["bash", "scripts/oq1_stage0_launch.sh", "--scenario", "sigterm_different_collectives", "--run-id", "{run_id}", "--run-dir", "{artifact_run_dir}", "--devices", "0,1,3,4", "--port", "29564"]
+      "command": [
+        "bash",
+        "scripts/oq1_stage0_launch.sh",
+        "--scenario",
+        "sigterm_different_collectives",
+        "--run-id",
+        "{run_id}",
+        "--run-dir",
+        "{artifact_run_dir}",
+        "--devices",
+        "0,1,3,4",
+        "--port",
+        "29564"
+      ]
     }
   ]
 }
