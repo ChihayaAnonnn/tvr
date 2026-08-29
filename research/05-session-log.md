@@ -6,6 +6,40 @@
 
 ---
 
+## 2026-08-29 (1) —— Stage 0 开工：val1k 分区 + 四卡资格测试 3/4 过门
+
+**触发。** GPU 空出来了（siqi 的 VLLM 只剩一个、挪到 GPU 2；0/1/3/4 各 ~81 GB 空闲）。
+按注册协议直接进 Stage 0。
+
+**val1k 分区（gate `val1k_disjoint_from_test` ✅）。** `scripts/build_val1k_partition.py`：
+8500 个 trusted-v1 train 视频，按 id 字典序排序 + numpy RandomState(0) 置换，前 1000 个
+→ val1k（每视频取标注 JSON 首条 caption），其余 7500 → train7500。与 JSFUSION test
+零交集、并集恰等于 train8500 均为硬断言；manifest 含全部输入/输出 sha256；重建逐字节
+一致。产物 `data/generated/msrvtt_trusted_v1_val1k/`（commit b3d9f2f，force-add 循
+trusted_v1 惯例）。
+
+**四卡资格测试（gate `four_gpu_qualification_recorded` ✅，PC-9）。** 给新 study 搭了
+自己的控制面（registry/schemas/phases/summaries，commit 4e3d4ec 起），复用通用归档
+CLI（reserve → verify → worker → transition → finalize）与 `run_train_msrvtt_bg.sh`
+的 ARCHIVE_QUALIFICATION 分支。四场景终态：success `completed`（loss=7.5 解析精确，
+外置数组摘要与 contextual-risk-v2 历史夹具**逐位一致**）、两个故障场景 `failed`(1)、
+SIGTERM 排水 `cancelled`(143)（完整 TERM→TERM→KILL 升级链留痕，无 UNRESOLVED）。
+详见 `experiments/oq1-kl-variance-hubness-v1/summaries/archive-qualification.md`。
+
+**归档机制的三次教训（9 个取消的预留，全部证据保留）：**
+(a) manifest 的 `config.evaluation` 会与 worker 有效参数逐键核对——GPU 探测记录只能放
+`selection_lineage`；(b) 运行时拓扑词是 `torchrun-4` 不是 study.yaml 的
+`torchrun-4-rank`；(c) SIGTERM 场景必须确认控制器存活后再发信号（首试控制器提前退出，
+孤儿 NCCL 组手动排空）。另发现归档契约的 stage 词表跨 study 固定
+（`experiment_artifacts.py` ALLOWED_STAGES），本 study 的协议 stage 名 → 归档槽位
+映射记录在控制面 README（study.yaml 未动）。
+
+**Stage 0 剩余（进 Stage 1 前的最后一项）：** `determinism_first_200_steps_bitwise_
+equal_same_seed`——绑定在 arm 训练实现上（概率头 + val1k 评测 + 注册 launcher，
+且须把 `main_task_retrieval.py:1240-1242` 的 cudnn benchmark/deterministic 翻回来）。
+
+---
+
 ## 2026-08-28 (6) —— Tier 1 预注册签署并冻结（commit 20a4a1d）
 
 研究者审阅 §5 阈值后指示"先松一手"：P5（加性分量回收比例）60% → **50%**——七个阈值中
