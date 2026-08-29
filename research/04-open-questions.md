@@ -126,6 +126,13 @@ frozen-retriever 契约使 June/A1/A3 的相似度矩阵逐位相同。因此**�
   阻塞项：PC-9 四卡资格测试（起草当日实测 GPU 0/1/4 各被外部进程占
   ~74.5 GiB，**当下起不了 4 卡**，故 study.yaml 把 PC-10 改为 reserve 期探测 + 写入
   manifest 的 fail-closed 策略，不再硬编码卡号）。Tier 2 搁置。
+- **Stage 0 四门全部关闭（2026-08-29/30），Stage 1 解锁。** val1k 分区（b3d9f2f）、
+  四卡资格（PC-9，摘要 `summaries/archive-qualification.md`）、source-tree sha 绑定、
+  确定性契约（arm 训练栈 commit `1c0cc4e`；同 seed 两次 200 步 a/b 探针**逐位一致**，
+  losses npy sha `7039f69f…`、params sha `6c1f9b10…`，摘要 `summaries/determinism-probe.md`）。
+  arm 实现自由度的定死清单见控制面 README（clamp、维度均值、双向 CrossEn、
+  precision 解释）。下一步 = Stage 1：arm0 × 3 seed 全程训练 + val1k 上测 P0
+  regime 门（S(N₁₀)≥1.5 ∧ MnR≥8.0 ∧ R@1≤60，split=val1k, DSL off, t2v）。
 
 ---
 

@@ -46,6 +46,6 @@ manifest 的 `selection_lineage` 与 run 目录 `provenance/gpu-probe-launch.jso
 | `four_gpu_qualification_recorded` | ✅ 本文档 + registry 终态行 |
 | `val1k_disjoint_from_test` | ✅ `data/generated/msrvtt_trusted_v1_val1k/manifest.json`(构建即断言,重建逐字节一致) |
 | `source_tree_clean_and_sha_bound` | ✅ 每次 launch 前 `verify-run` 通过;run-id 内嵌精确 git sha |
-| `determinism_first_200_steps_bitwise_equal_same_seed` | ⬜ **未完成**——依赖 arm 训练实现(需先落地概率头 + val1k 评测 + 注册 launcher,且须翻回 `cudnn.deterministic`,见 `main_task_retrieval.py:1240-1242`) |
+| `determinism_first_200_steps_bitwise_equal_same_seed` | ✅ 2026-08-30 通过——arm 实现 commit `1c0cc4e`,a/b 两次同 seed 200 步逐位一致,见 `determinism-probe.md` |
 
-**结论:Stage 0 完成 3/4;确定性契约与 arm 实现绑定,是 Stage 1 前的最后一项。**
+**结论:Stage 0 完成 4/4(确定性契约于 2026-08-30 关闭),Stage 1 解锁。**

@@ -6,6 +6,32 @@
 
 ---
 
+## 2026-08-30 (1) —— 确定性契约 PASS：Stage 0 四门全关，Stage 1 解锁
+
+**发生了什么。** GPU 空出后按 PC-8 走完确定性探针归档流程：phase
+`stage0-determinism-probe`（活体 GPU 探测 + 8 个数据输入与 CLIP 资产的 sha256 绑定
+进 manifest）→ reserve 2 run（HEAD `0761a744dc85`）→ 顺序执行 a/b（arm1_full_akl，
+seed 0，四卡 {0,1,3,4}，batch 256，200 步，`--strict_determinism`）→ 逐字节比对 →
+双双 `completed` → finalize（terminal_counts {completed: 2}）。
+
+**结果（split=train7500, DSL n/a, t2v+v2t 训练损失）。** 两次运行的 200 步 loss 序列
+NPY（sha `7039f69f722dbfa6…`）、参数摘要（`6c1f9b10323c1bee…`）、metrics 文件
+**全部逐位一致**；step1 = 5.5449 = ln 256 反证四卡 AllGather 负例池正确，step200 =
+4.4448。`determinism_first_200_steps_bitwise_equal_same_seed` ✅ —— **Stage 0 4/4**。
+
+**插曲（协议按设计工作）。** run b 首次 launch 时研究者本人的 UGR sweep 占 GPU0/1，
+launcher fail-closed 拒启（`on_insufficient_gpus` 路径实弹验证），证据保留为
+`gpu-probe-launch-refused-….json`，预留未消耗，30 分钟后同一 reservation 重试成功。
+
+**产物。** `experiments/oq1-kl-variance-hubness-v1/summaries/determinism-probe.md`；
+registry 新增 2 行 completed；`artifacts/.../msrvtt/baseline/msrvtt-baseline-det_probe_arm1_{a,b}-…`。
+
+**下一步。** Stage 1：arm0_deterministic × seed {0,1,2} 全程训练（5 epoch），val1k
+上测 P0 regime 门（S(N₁₀)≥1.5 ∧ MnR≥8.0 ∧ R@1≤60；不过则 halt_study_as_inconclusive，
+不开火 F-A）。对应 OQ-1 Tier 1。
+
+---
+
 ## 2026-08-29 (2) —— arm 训练栈落地（commit 1c0cc4e），确定性探针待四卡
 
 **发生了什么。** 实现了 Stage 0 最后一门所依赖的全部四块：
