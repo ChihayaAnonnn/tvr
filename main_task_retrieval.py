@@ -4236,6 +4236,11 @@ def _eval_autocast_context(args):
         getattr(args, "csd_logvar_sidecar_only", False)
         or getattr(args, "contextual_risk_sidecar_only", False)
         or getattr(args, "use_contextual_risk_sidecar", False)
+        # oq1 study: bf16-autocast eval quantises the similarity matrix to
+        # ~200 distinct score levels per 1000 candidates (measured on
+        # msrvtt-baseline-arm0-seed000: 1022 exact diagonal ties), which
+        # destroys rank/hubness metrics. Study evals must run exact FP32.
+        or getattr(args, "oq1_arm", "none") != "none"
     )
     prior_benchmark = torch.backends.cudnn.benchmark
     prior_deterministic = torch.backends.cudnn.deterministic
