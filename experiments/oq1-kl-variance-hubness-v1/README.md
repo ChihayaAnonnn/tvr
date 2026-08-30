@@ -63,12 +63,3 @@ study.yaml 只冻结"各臂共享同一训练配置、打分为按项加权的�
 8. **确定性探针**：`--determinism_probe_steps N` 截断在 N 步并落盘
    `provenance/determinism-probe-step-losses-rank0.npy` + 参数/buffer sha256；
    两次同 seed 运行逐字节一致即过门。
-9. **评测精度 = 精确 fp32（2026-08-30 实现审查追加，commit 912a452）**：bf16
-   autocast 评测把相似度矩阵量化到每行 ~198 个唯一分数（1000 候选），大规模精确
-   并列使 rank/hubness 指标失真（E-89b/E-90，顺带解开 OQ-5 的 1012 分母）。oq1
-   runs 的评测一律走 exact-fp32 路径；训练数值模式不变（bf16 autocast + TF32）。
-   受影响的 attempt-1 phase（seed000 completed 但 eval 矩阵为 bf16）已 finalize
-   存档，Stage 1 分析只使用 r2 phase 的数据。
-10. **流程教训**：源码提交前必须先清账所有活跃预留（归档契约禁止 reserved 状态
-    跨源码漂移做任何转换，含取消）；控制器 stdout 不可接管道（head 之类会经
-    SIGPIPE 杀死看护进程，worker 虽存活但失去排水保障）。

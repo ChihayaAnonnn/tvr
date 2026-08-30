@@ -245,14 +245,7 @@ launcher `run_train_msvd_june_bg.sh` 与 `run_train_msvd_risk_sidecar_bg.sh`（�
 - `PAPER.md:95` 的 base ckpt SHA-256 写成了 A1 sidecar 的 SHA。正确值 `ee79f8a2…d030964`。
 - `PAPER.md:51` 写 CLIP-ViT-B/32，实际两份 `training_args.json` 都是 **ViT-B/16**。
 
-**状态。** **机制已解（2026-08-30，E-90）**：不存在第二个 V2T query 集——1012 = 1000 个
-query + **12 个低精度评测分数并列被 `compute_metrics` 重复计数**（`np.where(ind==0)` 对
-并列逐个计入）。双向复现：同一 checkpoint 的冻结 val 矩阵，fp32 版 0 个 gt 并列
-（每行 500/500 唯一值），bf16 版 2455 个额外并列（每行仅 ~58 个唯一值）。发现契机是
-OQ-1 Stage 1 的 val1k 评测在 bf16 下 R@1 被压掉 23 个点（E-89b，修复 commit 912a452：
-oq1 评测强制 fp32）。**唯一口径 = fp32 评测 + 1000 分母**（risk 模块一直是对的）。
-剩余收尾：PAPER.md:139/141 按 526/1000=52.6 修正 V2T 口径（连同 D-02/D-03 两处笔误），
-属 contextual-risk 论文侧工作，不阻塞 OQ-1。
+**状态。** 未开始。**成本最低、收益确定，建议与 OQ-1 并行做掉。**
 
 ---
 
