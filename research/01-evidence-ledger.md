@@ -194,6 +194,15 @@
 
 ---
 
+## M. 评测数值精度与 OQ-5 分母之谜（2026-08-30，Stage 1 实现审查）
+
+| # | 结论 | 数字 | 出处 | 状态 |
+|---|---|---|---|---|
+| E-89b | **bf16 autocast 评测把相似度矩阵量化到 ~8 位尾数,产生大规模精确分数并列**,`metrics.py::compute_metrics` 按并列重复计数导致指标严重失真 | arm0 seed000 val1k（1000×1000）：矩阵 100% 精确 bf16 值,每行仅 ~198 个唯一分数；238 行对角线值出现多次,共 1022 个额外并列；compute_metrics 报 t2v R@1 22.65 / MnR 115.0,同一 checkpoint fp32 复评 R@1 45.2 / MnR 21.5 | run `msrvtt-baseline-arm0-seed000-20260829T194200Z-09641b60cd15` 归档矩阵 + fp32 诊断复评；修复 commit 912a452 | **SOLID** |
+| E-90 | **OQ-5 的 1000→1012 分母解谜：不存在第二个 V2T query 集**,12 个"多出的 query"是 bf16/低精度评测分数并列被重复计数;risk 模块的 num_queries=1000 是正确口径 | 双向复现:同一 checkpoint 的冻结 val 矩阵,fp32 版 **0** 个 gt 并列(每行 500/500 唯一),bf16 版 2455 个额外 gt 并列(966 行受累,每行仅 ~58 个唯一值);june 与 a1 两个 ckpt 数字完全一致 | `artifacts/rescued_from_tmp/frozen_equiv/sim_{june,a1}_{fp32,bf16}.npy`;OQ-5 硬证据(final_test.json cols len 1012, 分子 526 两侧相同) | **SOLID → D-01/D-04 结案方向:以 fp32 + 1000 分母为唯一口径** |
+
+---
+
 ## 引用速查：什么可以写进论文
 
 - ✅ 可直接引用：E-01~E-09、E-10a、E-20~E-24、E-31、E-32、E-40~E-42、E-44、E-46~E-48、E-52、E-55、E-60~E-64。
