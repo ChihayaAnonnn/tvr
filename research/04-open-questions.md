@@ -133,6 +133,16 @@ frozen-retriever 契约使 June/A1/A3 的相似度矩阵逐位相同。因此**�
   arm 实现自由度的定死清单见控制面 README（clamp、维度均值、双向 CrossEn、
   precision 解释）。下一步 = Stage 1：arm0 × 3 seed 全程训练 + val1k 上测 P0
   regime 门（S(N₁₀)≥1.5 ∧ MnR≥8.0 ∧ R@1≤60，split=val1k, DSL off, t2v）。
+- **Tier 1 于 Stage 1 P0 regime 门 HALT (inconclusive)（2026-08-30）。** arm0 × 3 seed
+  （fp32 评测,val1k, DSL off, t2v）:R@1 45.20/45.30/45.20 ✓(≤60)、MnR
+  21.50/23.70/23.21 ✓(≥8),但 **S(N₁₀)=1.144/1.011/0.867 全部 <1.5**——三 seed 逐一
+  失败,无聚合口径歧义。按冻结协议判 **inconclusive:不开火 F-A、test 继续 sealed、
+  Stage 2–6 不执行**,negative result 已归档(`summaries/stage1-arm0-baseline.md`)。
+  机制记录:评测几何把 MnR 放大 ×10.8(2.11→22.8)但 t2v 偏度只 ×1.9(0.53→1.0)——
+  §3.2 的"regime=几何"假设只对 MnR 成立;**v2t 偏度 1.86–2.29 全部过 1.5**(文本侧
+  hub 更强,但注册主方向是 t2v,不得引用过门)。若开 v2 study:阈值须从实测 val1k
+  偏度重推,或改造 regime(更大候选池 / v2t 主方向 / 换 caption 选取),不允许降阈值
+  迁就(PC-2)。**是否开 v2 由研究者决定。**
 
 ---
 

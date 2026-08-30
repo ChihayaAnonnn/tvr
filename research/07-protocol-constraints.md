@@ -48,6 +48,12 @@ Stage 1 已经 finalize（commit `eb2ee0b`），它的 FAIL 是**已注册的终
 
 **这条直接阻塞 OQ-3（conformal coverage under CRF shift）** —— 它必须先写成自己的 pre-registered study（oq1 study 的授权不外溢）。
 
+**状态更新（2026-08-30）**：`oq1-kl-variance-hubness-v1` 于 **Stage 1 P0 regime 门
+不通过而 HALT (inconclusive)**（arm0 val1k 三 seed S(N₁₀)=1.144/1.011/0.867 均 <1.5；
+MnR、R@1 两条件过；`summaries/stage1-arm0-baseline.md`）。其 stage4/5 永不达成 →
+**该解封路径已死,MSRVTT/MSVD test 全部继续 sealed**,直到某个新的 pre-registered
+study（新目录 + 新 protocol_version）重新建立授权路径。
+
 *出处：`todo.md:40`；AGENTS.md 规则 6。*
 
 ---

@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-08-30 (3) —— Stage 1 判定:P0 regime 门不通过,study HALT (inconclusive)
+
+**发生了什么。** r2 phase 三个 arm0 seed 全程跑完并 finalize({completed: 3},
+registry 账平)。冻结脚本 `oq1_stage1_p0_metrics.py` 对三份归档 fp32 矩阵判 P0:
+
+| 条件 | seed000 | seed001 | seed002 | 判 |
+|---|---|---|---|---|
+| S(N₁₀)≥1.5 | 1.144 | 1.011 | 0.867 | **✗** |
+| MnR≥8.0 | 21.50 | 23.70 | 23.21 | ✓ |
+| R@1≤60 | 45.20 | 45.30 | 45.20 | ✓ |
+
+(split=val1k, DSL off, t2v。)三 seed 逐一失败,无聚合歧义。按冻结协议
+`on_failure: halt_study_as_inconclusive`:**不开火 F-A、test 继续 sealed
+(PC-4 解封路径随本 study 死亡)、Stage 2–6 不执行**。判定与机制记录见
+`experiments/oq1-kl-variance-hubness-v1/summaries/stage1-arm0-baseline.md`。
+
+**机制收获。** (a) §3.2 regime 假设半对:几何(1000 候选×1 caption)把 MnR 放大
+×10.8,但 t2v 偏度只 ×1.9——偏度还吃 backbone/caption 分布;(b) **v2t S(N₁₀)
+1.86–2.29 全部过 1.5**,文本侧 hub 显著强于视频侧(对 v2 设计有价值,但注册主方向
+t2v 不得引用);(c) 三 seed R@1 极差 0.1——严格确定性栈下 seed 方差极小,stage4
+式小差值检验的功效是真实的。
+
+**流程附注。** 归档契约的源码零漂移守卫在本日又拦了两次(seed001 launch、seed000
+终态转换),均以临时 revert 文档提交解决;git 历史上留了一串 revert 链,内容最终
+一致。规矩已写进控制面 README #10:phase 未清账期间除 registry 外不提交任何文件。
+
+**撤回/更正。** 无(P0 halt 是注册内结果,不推翻任何 ledger 条目;E-85 的低
+hubness 结论对 val,本日对 val1k 的测量是新数据点)。
+
+**下一步(研究者决定)。** 是否开 v2 study:候选方向 = 从实测 val1k 偏度重推阈值 /
+更大候选池(如 2000–3000×1)/ v2t 主方向 / 换 caption 选取。PC-2 禁止在原 study
+内降阈值迁就。
+
+---
+
 ## 2026-08-30 (2) —— Stage 1 首跑揪出 bf16 评测量化 bug；顺带解开 OQ-5 分母之谜
 
 **发生了什么。** Stage 1 attempt-1（arm0 seed000，四卡全程 5 epoch）跑完后指标可疑

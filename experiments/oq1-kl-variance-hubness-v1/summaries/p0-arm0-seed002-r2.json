@@ -1,0 +1,59 @@
+{
+  "study": "oq1-kl-variance-hubness-v1",
+  "matrix_shape": [
+    1000,
+    1000
+  ],
+  "provenance": {
+    "run_dir": "/data2/hxj/project/UATVR/artifacts/oq1-kl-variance-hubness-v1/oq1-kl-variance-hubness-v1/msrvtt/baseline/msrvtt-baseline-arm0-seed002-20260829T214102Z-4232ac5a7270",
+    "best_epoch": 1,
+    "eval_sequence": 1,
+    "array_sha256": "1be7bd88b2f10317b34dd446eff96e611d916277471e5c7392fd0533cc87166f"
+  },
+  "t2v": {
+    "split": "msrvtt_trusted_v1_val1k",
+    "dsl_setting": "off",
+    "direction": "t2v",
+    "R1": 45.2,
+    "R5": 70.8,
+    "R10": 80.4,
+    "MdR": 2.0,
+    "MnR": 23.208,
+    "S_N5": 1.0532046499396857,
+    "max_N5": 18,
+    "zero_N5": 28,
+    "S_N10": 0.8668690577288481,
+    "max_N10": 30,
+    "zero_N10": 4
+  },
+  "v2t": {
+    "split": "msrvtt_trusted_v1_val1k",
+    "dsl_setting": "off",
+    "direction": "v2t",
+    "R1": 45.5,
+    "R5": 71.89999999999999,
+    "R10": 82.69999999999999,
+    "MdR": 2.0,
+    "MnR": 16.009,
+    "S_N5": 1.9432942943974834,
+    "max_N5": 33,
+    "zero_N5": 18,
+    "S_N10": 2.0398036567870386,
+    "max_N10": 62,
+    "zero_N10": 2
+  },
+  "p0_gate": {
+    "thresholds": {
+      "arm0_val1k_hubness_skewness_n10_gte": 1.5,
+      "arm0_val1k_mnr_gte": 8.0,
+      "arm0_val1k_r1_lte": 60.0
+    },
+    "checks": {
+      "S_N10_gte_1.5": false,
+      "MnR_gte_8.0": true,
+      "R1_lte_60.0": true
+    },
+    "pass": false,
+    "on_failure": "halt_study_as_inconclusive (does NOT fire F-A, does NOT unseal test)"
+  }
+}
