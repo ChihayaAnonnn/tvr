@@ -135,17 +135,114 @@
 
 `BackboneEncoder` 输出具名 text tokens / pooled text / frame features / masks；`TemporalEncoder` 使用带 padding mask 的标准时序 Transformer，输出逐帧表示和 masked pooled video。层数等容量在后续预注册配置中固定，关闭时序模块提供基础对照。粗检索使用两侧独立投影并 L2 归一化的 pooled embedding，按 dot-product 排序；小库先使用确定性分块精确检索，大库再引入可验证的 ANN 索引，不继承旧 CrossConfig 或多余 CLS token 分支。
 
+以下三张图描述重建后的预期模块链路，尚未实现。实线表示数据、产物或控制流；虚线表示可选辅助路径或条件触发，具体含义写在边上。图中不包含旧 HEAD / June 模型、adapter 或旧主入口。
+
+**训练链路：数据 → 新模型 → 显式监督 → 参数更新。**
+
 ```mermaid
-flowchart LR
-    Q[查询编码] --> C[按 canonical ID 建库和粗检索]
-    C --> P[PairMatcher：片段对齐与匹配分数]
-    P --> S[SemanticSet：候选集合与语义组]
-    P --> A[AnswerabilityHead：候选中存在答案的概率]
-    S --> D[RetrievalPolicy]
-    A --> D
-    D --> O[返回集合 / 扩检 / 澄清 / 弃答]
-    D -->|扩检且预算未耗尽| C
+flowchart TB
+    EP["已审核 train episodes<br/>查询、候选 ID、三态标签、存在标签"]
+    EP --> LOAD["EpisodeDataset / Collate<br/>canonical 去重、tokenize、视频解码、mask"]
+    LOAD --> INPUT["具名输入 Batch<br/>tokens、当前候选视频、有效 mask"]
+    LOAD --> TARGET["监督 Target<br/>relevance / presence / 可选等价标签"]
+
+    subgraph MODEL["SemanticRetrievalModel：全新模型组合"]
+        INPUT --> TEXT["BackboneEncoder.text<br/>text tokens + pooled text"]
+        INPUT --> VIDEO["BackboneEncoder.video<br/>逐帧特征"]
+        VIDEO --> TEMP["TemporalEncoder<br/>有效帧表示 + pooled video"]
+        TEXT --> COARSE["CoarseProjector<br/>独立投影 + L2 归一化"]
+        TEMP --> COARSE
+        TEXT --> PAIR["PairMatcher<br/>masked WTI + 对齐 attention + residual"]
+        TEMP --> PAIR
+        PAIR --> SCORE["match logit + 共享 pair 表征 h"]
+        SCORE --> PRESENT["AnswerabilityHead<br/>canonical 集合 mean/max pooling"]
+        SCORE -. "有等价标注时" .-> GROUP["SemanticSet 可选等价判别器"]
+    end
+
+    COARSE --> LC["L_coarse：粗检索多正例目标<br/>需要跨 rank 时显式 gather"]
+    SCORE --> LM["L_match + L_pair<br/>多正例匹配 + 已知 pair BCE"]
+    PRESENT --> LE["L_exist<br/>候选存在事件 BCE"]
+    PAIR -. "后续启用" .-> LA["L_align<br/>detached OT target 监督 attention"]
+    GROUP -. "有监督时" .-> LG["L_group<br/>查询条件下答案等价监督"]
+    TARGET --> FILTER["按标签可靠性构造监督 mask<br/>unknown 排除；无答案不强塞正例"]
+    FILTER --> LC
+    FILTER --> LM
+    FILTER --> LE
+    FILTER -. "可选监督 mask" .-> LA
+    FILTER -. "可选等价标签" .-> LG
+    LC --> OBJ["Objective：具名损失与诊断"]
+    LM --> OBJ
+    LE --> OBJ
+    LA -. "辅助项" .-> OBJ
+    LG -. "辅助项" .-> OBJ
+    OBJ --> TRAINER["Trainer / DDP<br/>backward、梯度检查、AdamW、scheduler"]
+    TRAINER --> UPDATE["仅更新配置声明的可训练参数<br/>匹配与存在监督共享连续表征"]
+    TRAINER --> CKPT["新 schema checkpoint + provenance<br/>写入 run-local artifacts"]
 ```
+
+图中的 `Target` 只进入监督，不进入模型输入。候选 ID 可固定，但训练候选表征由当前编码器重新计算；不使用旧离线缓存训练已解冻的编码器。更新后的模型参与下一步前向；粗检索 top-K 和语义分组不属于可微梯度链路。最小闭环关闭 `L_align` 和 learned grouping，冻结 CLIP 与解冻训练分别记录。
+
+**在线链路：声明库建索引 → 粗检索 → 匹配与存在判断 → 动作。**
+
+```mermaid
+flowchart TB
+    FROZEN["validation 选定并冻结的新模型<br/>model SHA + 预处理版本"]
+    GALLERY["声明库 G<br/>gallery version + canonical ID / alias"]
+    GALLERY --> DEDUP["内容身份去重<br/>在建库与 top-K 截断前完成"]
+    DEDUP --> VENC["BackboneEncoder.video + TemporalEncoder<br/>canonical 视频编码"]
+    FROZEN --> VENC
+    VENC --> INDEX["粗检索索引<br/>projected pooled video embedding"]
+    VENC --> CACHE["逐帧特征缓存<br/>绑定 model SHA、解码版本与内容身份"]
+
+    QUERY["在线查询 q + 扩检预算"] --> QENC["Tokenizer + BackboneEncoder.text<br/>text tokens + projected pooled text"]
+    FROZEN --> QENC
+    QENC --> RETRIEVE["CoarseRetriever<br/>确定性分块 dot-product top-K"]
+    INDEX --> RETRIEVE
+    RETRIEVE --> CAND["canonical 候选集合 C<br/>candidate IDs + mask"]
+    CAND --> FETCH["读取相同模型版本的候选帧特征<br/>失配即拒绝使用"]
+    CACHE --> FETCH
+    FETCH --> MATCH["PairMatcher.score_pairs<br/>共享 h + match logits + 对齐证据"]
+    QENC --> MATCH
+    MATCH --> SET["SemanticSet<br/>canonical 集合 / 可选语义组 / 歧义描述"]
+    MATCH --> EXIST["AnswerabilityHead<br/>当前 C 中存在答案的 logit"]
+    MATCH --> CAL["冻结的概率校准<br/>pair 概率与 candidate-presence 概率"]
+    EXIST --> CAL
+    VALCFG["仅用 validation 确定的配置<br/>校准参数、阈值、分组参数、K 序列"] --> CAL
+    VALCFG --> SET
+    VALCFG --> POLICY["RetrievalPolicy.decide<br/>支持度 + 存在判断 + 冲突信号 + 剩余预算"]
+    CAL --> POLICY
+    SET --> POLICY
+    POLICY --> RETURN["返回支持的答案集合<br/>canonical IDs、aliases、证据"]
+    POLICY --> CLARIFY["澄清<br/>仅用于已验证的冲突解释"]
+    POLICY --> ABSTAIN["弃答<br/>候选无支持 / 预算耗尽"]
+    POLICY -. "候选无支持且仍可扩检" .-> EXPAND["扩大 K、扣减预算<br/>复用已评分候选，重算集合判断"]
+    EXPAND --> RETRIEVE
+```
+
+`SemanticSet` 和 `AnswerabilityHead` 并行消费匹配证据；存在判断不依赖预测语义组。推理链路没有 relevance、GT 或审核组标签输入。输入无效或缓存身份失配时直接报告错误，不解释为无答案。候选存在概率只对应 `C`；扩检耗尽后弃答不构成“整个库 G 无答案”的证明。索引与帧缓存均在最终模型冻结后重建。
+
+**实验与版本链路：受跟踪控制面 → 运行数据面 → validation 选择 → 冻结发布产物。**
+
+```mermaid
+flowchart TB
+    READ["读取研究前置与当前 study / registry<br/>新方向定义独立 study"]
+    READ --> READY["运行前置<br/>组件验收、Stage 0 四卡资格已记录"]
+    READY --> RESERVE["reserve-phase<br/>唯一 run ID、manifest、命令与输入哈希"]
+    RESERVE --> COMMIT["先提交整批 reserved 记录"]
+    COMMIT --> CHECK["启动校验<br/>干净精确 source SHA、manifest SHA、环境与配置"]
+    CHECK --> WORKER["新 runtime worker<br/>训练或 validation 评估"]
+    WORKER --> DATA["artifacts 数据面：唯一 run 目录<br/>logs、checkpoint、status、audit、数组及引用哈希"]
+    WORKER --> SEAL["test 保持 sealed<br/>本阶段不读取 test"]
+    DATA --> FINISH["同 phase 全部 worker 终态后<br/>追加 terminal registry + 简洁摘要并提交"]
+    FINISH --> SELECT["validation 开发部分<br/>模型、消融、容量与候选预算选择"]
+    SELECT --> MODEL["冻结模型与配置<br/>新 checkpoint schema + model SHA"]
+    MODEL --> REBUILD["按冻结模型重建 canonical 索引与特征缓存"]
+    REBUILD --> CALIBRATE["validation 校准部分<br/>概率校准与动作阈值"]
+    CALIBRATE --> LOCKED["validation 锁定评估部分<br/>强基线、各 episode 指标与停止 gate"]
+    LOCKED --> BUNDLE["版本绑定的可部署组合<br/>模型、索引、缓存、校准、policy、库版本"]
+```
+
+选择、校准和锁定评估也是正式实验时，各自通过相同的预留/启动/归档流程；图中省略重复展开。worker 期间只写 run-local 数据面，不修改控制面。大数组外置并校验引用哈希，失败终态不原地重试。最后的组合表示接口与版本完整，不表示性能 gate 自动通过，也不授权 test 访问或实际部署。
 
 | 组件 | 输入 / 输出合同 | 约束 |
 |---|---|---|
