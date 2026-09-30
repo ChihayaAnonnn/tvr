@@ -156,3 +156,7 @@ Existing tracked documentation edits are not included in this worktree. The foll
 - A1: named input/feature/target contracts; independent query/video counts; unknown=-1 preserved; no legacy configuration defaults.
 - Relative and lazy imports observed: SpatialEnhancer→RALA, decoder→TQFS, diagnostics→MUS. Archive tests import the old training entrypoint; A6 must remove those dependencies before A7.
 - Later task evidence will be appended here; no stage is claimed complete ahead of verification.
+
+## A2 evaluation migration
+
+Independent ranking, calibration, paired bootstrap and score proxies migrated. Unknown rows are excluded from Recall; undefined metrics serialize as null. Ties use score descending then candidate ID ascending; singleton entropy is zero and undefined margin is omitted. The transposed tie fixture expectation was corrected from [0,0] to [0,1] by manually sorting its second row. Initial missing-function run: 15 failures.
