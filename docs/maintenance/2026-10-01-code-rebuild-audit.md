@@ -164,3 +164,7 @@ Independent ranking, calibration, paired bootstrap and score proxies migrated. U
 ## A3 CLIP migration
 
 ViT/text primitives originate from OpenAI CLIP (MIT, source https://github.com/openai/CLIP), via baseline modules/module_clip.py and modules/tokenization_clip.py. ResNet, 3D patches, downloading, checkpoint wrappers and configurable low-precision LayerNorm are removed. Supported pretrained family: ViT-B/32; small ViT fixtures exercise the same calculation. The unchanged BPE SHA-256 is `924691ac288e54409236115652ad4aa250f48203de50a9e4722a6ecd48d6804a`. Local weights must match all keys and dimensions; only three original scalar metadata keys are checked and stripped. Initial test run: 7 missing-component failures; final: 7 passed. Python 3.10 lacks hashlib.file_digest; streaming SHA-256 fixes that compatibility failure.
+
+## A4 input migration
+
+Split schema and algorithms copied without changing frozen metadata; builder now imports the independent module. Decoder uses OpenCV frame indices (no FPS division), PIL bicubic Resize + CenterCrop + ToTensor and exact original CLIP mean/std. Missing/invalid inputs fail; undecodable requested frames stay zero with false masks. Synthetic short-video, zero-FPS, source-hash drift checks: 4 passed; builder --help passed. Versions: torch=2.1.2+cu121, torchvision=0.16.2+cu121, Pillow=11.0.0, opencv-python=4.11.0.86.

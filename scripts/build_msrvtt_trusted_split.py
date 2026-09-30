@@ -11,7 +11,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from dataloaders.msrvtt_protocol import (  # noqa: E402
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from semantic_retrieval.data.splits import (  # noqa: E402
     build_trusted_manifest,
     load_trusted_manifest,
     validate_trusted_manifest,
