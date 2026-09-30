@@ -70,3 +70,7 @@ PYTHONPATH=. /home/xujie/.conda/envs/tvr/bin/python scripts/manage_experiment_ru
 ```
 
 Stage 0 的 CPU E2E 与四卡 smoke 均通过且登记后，才可以申请后续 scientific phase。
+
+## 重建后的执行面
+
+2026-10-01 起旧 UATVR 与 launcher 已退役。历史 manifest/registry/schema 保持原样，只作证据或在记录的 source SHA 复现；管理器不再生成旧 A3 argv。新 worker 生命周期位于 `src/semantic_retrieval/runtime/artifacts.py`，CPU 保护 fixture 位于 `runtime/qualification.py`。A 阶段没有科学训练入口；不得把 CPU fixture 当成四卡资格通过，也不得因历史登记授权而重新启用旧入口。通用 reserve/verify/start/transition/finalize 命令和原封存规则继续生效。

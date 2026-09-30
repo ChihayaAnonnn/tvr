@@ -1,4 +1,4 @@
-# UATVR runtime and development dependencies.
+# Independent semantic retrieval foundation and archive tooling.
 #
 # Target platform: Linux x86_64, Python 3.10 or 3.11, NVIDIA CUDA.
 # The CUDA 12.1 wheels below work with the host's CUDA 12.3 driver and, unlike
@@ -6,21 +6,17 @@
 # wheels. Install with: python -m pip install -r requirements.txt
 --extra-index-url https://download.pytorch.org/whl/cu121
 
-# Core training and video preprocessing
+# CLIP components and video preprocessing
 torch==2.1.2+cu121
 torchvision==0.16.2+cu121
 numpy==1.26.0
 Pillow==10.0.1
 opencv-python==4.8.1.78
 
-# CLIP tokenization, model utilities, and pretrained-weight downloads
+# CLIP tokenization and score-only evaluation
 ftfy==6.1.1
 regex==2022.7.9
-tqdm==4.65.0
-requests==2.31.0
-boto3==1.28.85
-einops==0.7.0
-scikit-learn==1.3.2
+scipy==1.15.3
 
 # Experiment artifact schema contracts and custom cross-field validation
 jsonschema==4.23.0
@@ -28,19 +24,3 @@ jsonschema==4.23.0
 # Tests and repository checks
 pytest==7.1.2
 ruff==0.6.9
-
-# Optional: decord video reader.
-# Enables the `TVR_VIDEO_BACKEND=decord` fast path in dataloaders/rawvideo_util.py.
-# On MSRVTT-style short clips the optimized OpenCV backend is faster; decord
-# tends to win on longer videos where batched GOP-aware decode dominates the
-# per-open indexing cost. Kept optional so it can be enabled without a rebuild.
-decord==0.6.0
-
-# PyAV: required by the CRF degradation ladder codec + builder pipeline
-# (crf_ladder/codec.py, scripts/build_msrvtt_crf_ladder.py). Pins the FFmpeg /
-# libx264 ABI that Appendix A of the CRF plan is validated against.
-av==17.1.0
-
-# Intentionally not installed by default:
-# - mamba-ssm: required only by inactive legacy Mamba modules; it needs a
-#   CUDA/compiler build matching the installed PyTorch version.

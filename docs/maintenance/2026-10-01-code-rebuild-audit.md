@@ -178,3 +178,149 @@ Masked maxima exclude invalid pairs before reduction and zero invalid reduced po
 RuntimeConfig binds RunContext without Namespace or model imports. Source, reservation, command hash, canonical private inputs, environment/precision, registry/study and validation/test authorization are checked before attaching. Stage A rejects any unconsumed model/loss/optimizer settings; it is not a scientific worker. Worker completion remains validating; controller owns terminal output hashes. Metrics are exclusive, bounded JSON and verify referenced arrays. CPU qualification exercises success, tampering and actual SIGTERM under a temporary handler; failures retain evidence. This does not qualify Stage 0 GPUs.
 
 Manager retains generic reserve/verify/start/transition/finalize and historical manifests, but no longer generates retired A3 launch argv. Worker lifecycle, deferred hashing, sealed test, changed inputs and config-mismatch assertions in test_manage_experiment_run migrated to new RuntimeConfig/API. Old parser/A3 allowlist tests were removed because those launch interfaces are intentionally retired; identity and environment assertions now live in test_runtime_artifacts and the preserved generic archive suite. Model-specific CRF/risk/continuation manifest-constructor tests were removed with their constructors; generic strict JSON/source/batch telemetry tests remain in test_experiment_tracking. CPU archive end-to-end fixture now uses the real new prepare/start/publish/complete bridge; its >1 MiB reference and readonly legacy-directory assertions remain. Initial new tests: 9 failures; migrated archive suite: 141 passed. No frozen study/schema/registry or historical outputs changed.
+
+## A7 actual removal inventory
+
+Every executable below was checked against the A1 disposition table and removed using explicit git rm paths. scripts/__init__.py remains because the retained governance scripts are imported as a package by tests. Historical source remains at baseline ff8137c; no compatibility entrypoint is retained. Old uncertainty_modules/README.md remains only as historical documentation.
+
+- `crf_ladder/__init__.py`
+- `crf_ladder/codec.py`
+- `crf_ladder/protocol.py`
+- `crf_ladder/statistics.py`
+- `dataloaders/crf_pairing.py`
+- `dataloaders/data_dataloaders.py`
+- `dataloaders/dataloader_msrvtt_retrieval.py`
+- `dataloaders/dataloader_msvd_retrieval.py`
+- `dataloaders/hard_negative_mapping.py`
+- `dataloaders/hard_negative_sampler.py`
+- `dataloaders/msrvtt_protocol.py`
+- `dataloaders/preprocess/preprocess_msvd.py`
+- `dataloaders/rawframes_util.py`
+- `dataloaders/rawvideo_util.py`
+- `dataloaders/tqfs_util.py`
+- `eval.sh`
+- `main_task_retrieval.py`
+- `metrics.py`
+- `modules/crf_head.py`
+- `modules/file_utils.py`
+- `modules/modeling.py`
+- `modules/modeling_mulit.py`
+- `modules/module_clip.py`
+- `modules/module_cross.py`
+- `modules/module_mamba.py`
+- `modules/mus_util.py`
+- `modules/optimization.py`
+- `modules/oq1_probabilistic_scoring.py`
+- `modules/rala.py`
+- `modules/spatial_enhancer.py`
+- `modules/tokenization_clip.py`
+- `modules/until_config.py`
+- `modules/until_module.py`
+- `prob_models/contextual_retrieval_risk.py`
+- `prob_models/csd_logvar.py`
+- `prob_models/csd_logvar_protocol.py`
+- `prob_models/pie_model.py`
+- `prob_models/probemb.py`
+- `prob_models/reliability_campaign.py`
+- `prob_models/retrieval_risk.py`
+- `prob_models/retrieval_risk_baselines.py`
+- `prob_models/retrieval_risk_metrics.py`
+- `prob_models/tensor_utils.py`
+- `prob_models/uncertainty_module.py`
+- `prob_models/uncertainty_protocol.py`
+- `query_models/head.py`
+- `query_models/module_query.py`
+- `run_train_bg.sh`
+- `run_train_msrvtt_bg.sh`
+- `run_train_msrvtt_contextual_risk_bg.sh`
+- `run_train_msrvtt_crf_bg.sh`
+- `run_train_msrvtt_csd_logvar_bg.sh`
+- `run_train_msrvtt_risk_sidecar_bg.sh`
+- `run_train_msvd_bg.sh`
+- `scripts/build_idf_weights.py`
+- `scripts/build_msrvtt_crf_ladder.py`
+- `scripts/build_msrvtt_hard_negatives.py`
+- `scripts/build_msrvtt_model_mined_hard_negatives.py`
+- `scripts/build_msvd_crf_ladder.py`
+- `scripts/build_val1k_partition.py`
+- `scripts/diagnose_crf_training_contract.py`
+- `scripts/diagnose_msrvtt_hard_negative_runtime.py`
+- `scripts/diagnose_msrvtt_p1_baseline.py`
+- `scripts/diagnose_msrvtt_validation_errors.py`
+- `scripts/diagnose_uncertainty_retrieval_correlation.py`
+- `scripts/dump_training_args_for_existing_ckpt.py`
+- `scripts/evaluate_crf_ladder.py`
+- `scripts/merge_msrvtt_model_mined_hard_negatives.py`
+- `scripts/oq1_arm_launch.sh`
+- `scripts/oq1_stage0_launch.sh`
+- `scripts/oq1_stage1_p0_metrics.py`
+- `scripts/oq1_tier0_correction_envelope.py`
+- `scripts/run_reliability_campaign.py`
+- `scripts/verify_frozen_retrieval_equivalence.py`
+- `smoke_test_msrvtt.sh`
+- `tests/_bench_rawvideo_decode.py`
+- `tests/a3_four_rank_nccl_smoke.py`
+- `tests/test_build_crf_ladder.py`
+- `tests/test_contextual_retrieval_risk.py`
+- `tests/test_contextual_retrieval_risk_final_fixes.py`
+- `tests/test_contextual_retrieval_risk_integration.py`
+- `tests/test_contextual_retrieval_risk_launcher.py`
+- `tests/test_contextual_retrieval_risk_loss.py`
+- `tests/test_contextual_retrieval_risk_metrics.py`
+- `tests/test_contextual_retrieval_risk_protocol.py`
+- `tests/test_contextual_retrieval_risk_training.py`
+- `tests/test_crf_codec.py`
+- `tests/test_crf_model_integration.py`
+- `tests/test_crf_pairing.py`
+- `tests/test_crf_protocol.py`
+- `tests/test_crf_statistics.py`
+- `tests/test_csd_logvar.py`
+- `tests/test_csd_logvar_config.py`
+- `tests/test_csd_logvar_integration.py`
+- `tests/test_csd_logvar_launcher.py`
+- `tests/test_csd_logvar_loss.py`
+- `tests/test_csd_logvar_metrics.py`
+- `tests/test_csd_logvar_protocol.py`
+- `tests/test_diagnose_crf_contract.py`
+- `tests/test_directional_eval.py`
+- `tests/test_evaluate_crf_ladder.py`
+- `tests/test_reliability_campaign.py`
+- `tests/test_retrieval_risk_baselines.py`
+- `tests/test_retrieval_risk_features.py`
+- `tests/test_retrieval_risk_integration.py`
+- `tests/test_retrieval_risk_launcher.py`
+- `tests/test_retrieval_risk_loss.py`
+- `tests/test_retrieval_risk_metrics.py`
+- `tests/test_run_train_msrvtt_bg.py`
+- `tests/test_run_train_msrvtt_crf_bg.py`
+- `tests/test_uncertainty_protocol.py`
+- `train_msvd.sh`
+- `uncertainty_modules/__init__.py`
+- `uncertainty_modules/aleatoric.py`
+- `uncertainty_modules/epistemic.py`
+- `uncertainty_modules/losses.py`
+- `uncertainty_modules/tests/test_aleatoric.py`
+- `uncertainty_modules/tests/test_crf_ranking.py`
+- `uncertainty_modules/tests/test_epistemic.py`
+- `uncertainty_modules/tests/test_losses.py`
+- `uncertainty_modules/types.py`
+- `util.py`
+- `modules/bpe_simple_vocab_16e6.txt.gz`
+- `modules/cross-base/cross_config.json`
+- `dataloaders/VOCAB.json`
+
+### A7 protection and validation
+
+Removed 125 explicitly listed old files. Remaining executable closure consists of the new package plus four governance/data utilities and generic provenance. Dependencies removed: tqdm, requests, boto3, einops, scikit-learn, decord, PyAV; scipy is now explicit for evaluation. Structural negative injection and CLI/import closure: 12 passed. Full retained CPU tests: 236 passed (exit 0); Ruff and git diff --check passed. The exact test count is recorded by the task completion command below if pytest discovery changes. No GPU qualification/scientific run, dataset/test evaluation, phase reservation or real checkpoint loading occurred.
+
+Baseline and current protected Git subtree identities are identical, and the working diff for these paths is empty:
+
+```text
+040000 tree 115c7d6253a9ffc768f1e0b570caa45c1b8ad898	data/generated
+040000 tree 7969c1429e8c0e253dbeb48aad3676e03100605f	dataloaders/splits
+040000 tree 76439a72dcd02b192a5c5338c1c178c9c2f19651	experiments
+040000 tree 55e78c7bb49c60bc7ba36b797769bbf354a2483d	related_work
+040000 tree 020167bf57e1c6d753c8f0a553f3360bcf457bf4	research
+```
+
+Original main checkout and its untracked launchers are untouched; their approved deletion is reserved for hash-checked integration. No logs, ckpts or artifacts directories were deleted, moved or rewritten. Historical array/weight metadata is preserved without re-reading large weights.

@@ -1,4 +1,4 @@
-# UATVR
+# Semantic retrieval reconstruction
 
 UATVR 的可靠检索实验使用两层归档：受 Git 管理的控制面在
 `experiments/contextual-risk-v2/`，大文件和运行时证据在被忽略的
@@ -46,3 +46,19 @@ PYTHONPATH=. /home/xujie/.conda/envs/tvr/bin/python scripts/manage_experiment_ru
 选择模型、变体、K、阈值和校准仅可读取 validation 结果。MSRVTT/MSVD test 在
 最终配置冻结并获得登记授权前始终封存。完整的运行与恢复规程见
 [实验归档手册](docs/agent/experiment-artifacts.md)。
+
+## 当前开发状态
+
+A 阶段交付独立的 `src/semantic_retrieval/` 基础组件：输入合同、本地 CLIP/tokenizer、OpenCV 视频预处理、split 校验、masked WTI、可微 gather、检索/校准指标与归档生命周期。旧 HEAD/June UATVR、概率分支、训练入口和旧 launcher 已删除；历史复现需单独 checkout `ff8137c28039b2d8b61f7874538310825f3e3b21`，不得在当前代码上启动旧登记命令。
+
+本阶段尚无新研究模型、真实数据训练结果或 GPU 资格结论。B 阶段设计见 [研究模型计划](docs/superpowers/plans/2026-10-01-retrieval-rebuild-b-system.md)；A 阶段不提供科学训练 CLI。CPU qualification 只是归档保护测试，不能替代四卡 Stage 0 gate。
+
+```bash
+CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 PYTHONPATH=src:. \
+  /home/xujie/.conda/envs/tvr/bin/python -m pytest -q -p no:cacheprovider tests/semantic_retrieval
+
+/home/xujie/.conda/envs/tvr/bin/python scripts/manage_experiment_run.py --help
+/home/xujie/.conda/envs/tvr/bin/python scripts/build_msrvtt_trusted_split.py --help
+```
+
+完整迁移、删除范围与验证证据见 [A 阶段审计](docs/maintenance/2026-10-01-code-rebuild-audit.md)。运行新实验前仍须先阅读 [研究索引](research/README.md) 及控制面协议。
