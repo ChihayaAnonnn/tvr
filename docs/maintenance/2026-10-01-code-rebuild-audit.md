@@ -168,3 +168,7 @@ ViT/text primitives originate from OpenAI CLIP (MIT, source https://github.com/o
 ## A4 input migration
 
 Split schema and algorithms copied without changing frozen metadata; builder now imports the independent module. Decoder uses OpenCV frame indices (no FPS division), PIL bicubic Resize + CenterCrop + ToTensor and exact original CLIP mean/std. Missing/invalid inputs fail; undecodable requested frames stay zero with false masks. Synthetic short-video, zero-FPS, source-hash drift checks: 4 passed; builder --help passed. Versions: torch=2.1.2+cu121, torchvision=0.16.2+cu121, Pillow=11.0.0, opencv-python=4.11.0.86.
+
+## A5 matching and gather
+
+Masked maxima exclude invalid pairs before reduction and zero invalid reduced positions before weighting. Negative similarity remains -1 despite padding; chunking and suffix padding preserve scores; invalid/nonfinite rows fail; valid features and both learned weights backpropagate. Gather uses PyTorch autograd collectives and verifies equal shapes/dtypes across ranks. Two-rank CPU/Gloo gradient reference, metadata alignment and unequal-batch rejection pass. Initial missing components: 7 failures; final: 7 passed.
