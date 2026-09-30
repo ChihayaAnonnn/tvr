@@ -311,7 +311,7 @@ Every executable below was checked against the A1 disposition table and removed 
 
 ### A7 protection and validation
 
-Removed 125 explicitly listed old files. Remaining executable closure consists of the new package plus four governance/data utilities and generic provenance. Dependencies removed: tqdm, requests, boto3, einops, scikit-learn, decord, PyAV; scipy is now explicit for evaluation. Structural negative injection and CLI/import closure: 12 passed. Full retained CPU tests: 236 passed (exit 0); Ruff and git diff --check passed. The exact test count is recorded by the task completion command below if pytest discovery changes. No GPU qualification/scientific run, dataset/test evaluation, phase reservation or real checkpoint loading occurred.
+Removed 125 explicitly listed old files. Remaining executable closure consists of the new package plus four governance/data utilities and generic provenance. Dependencies removed: tqdm, requests, boto3, einops, scikit-learn, decord, PyAV; scipy is now explicit for evaluation. Structural negative injection and CLI/import closure: 12 passed. Full retained CPU tests: 237 passed (exit 0); Ruff and git diff --check passed. The exact test count is recorded by the task completion command below if pytest discovery changes. No GPU qualification/scientific run, dataset/test evaluation, phase reservation or real checkpoint loading occurred.
 
 Baseline and current protected Git subtree identities are identical, and the working diff for these paths is empty:
 
