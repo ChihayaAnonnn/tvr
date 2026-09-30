@@ -55,7 +55,7 @@ export OMP_NUM_THREADS=1
 
 表中路径除报告外均位于 `src/semantic_retrieval/`。包 init 文件随使用它的任务创建，不做独立 scaffolding 任务。
 
-## Task A1: 具名合同与迁移清单
+## Task 1: A1 — 具名合同与迁移清单
 
 **Files:** Create `src/semantic_retrieval/{__init__,config,types}.py`、`tests/semantic_retrieval/test_contracts.py`、上述审计报告；Modify `pyproject.toml` 的 pytest pythonpath 加入 `src`，保留现有根路径。
 
@@ -76,7 +76,7 @@ export OMP_NUM_THREADS=1
 - [ ] 同命令通过；报告建立每个受跟踪可执行文件的处置表（迁移/删除/治理工具保留），记录延迟/相对 import、现有未跟踪脚本与 dirty diff。只读取源码/config/shell，不扫描数据面。
 - [ ] 提交该任务的五类文件与必要 init；commit `feat: establish new retrieval contracts and migration inventory`。
 
-## Task A2: 指标与基础评分工具
+## Task 2: A2 — 指标与基础评分工具
 
 **Files:** Create `evaluation/{__init__,ranking,binary,baselines}.py`、`tests/semantic_retrieval/test_metrics.py`；Update 审计报告。
 
@@ -96,7 +96,7 @@ export OMP_NUM_THREADS=1
 - [ ] 同命令通过；迁移现有数学测试到新路径并保留其实际断言；单候选时 baseline 结果省略不可定义 margin key、entropy=0，报告不可定义原因，不能除以 log(1)。
 - [ ] 提交新指标/测试/报告；commit `fix: define deterministic retrieval and binary metric contracts`。
 
-## Task A3: CLIP 与 tokenizer 的最小迁移
+## Task 3: A3 — CLIP 与 tokenizer 的最小迁移
 
 **Files:** Create `models/{__init__,clip,weights}.py`、`data/{__init__,tokenizer}.py`、`data/bpe_simple_vocab_16e6.txt.gz`、`tests/semantic_retrieval/test_clip_components.py`；Update 报告。
 
@@ -116,7 +116,7 @@ export OMP_NUM_THREADS=1
 - [ ] 同命令通过；用相同小配置/state/tokens 验证迁移保留的编码计算，明确 dtype 与 shape，禁止旧完整模型参与此对照。
 - [ ] 提交组件、许可证/来源记录及测试；commit `refactor: migrate standalone verified CLIP and tokenizer components`。
 
-## Task A4: 视频预处理与 split 校验
+## Task 4: A4 — 视频预处理与 split 校验
 
 **Files:** Create `data/{video,splits}.py`、`tests/semantic_retrieval/test_video_and_splits.py`；Modify `scripts/build_msrvtt_trusted_split.py` 的 import；Update 报告。
 
@@ -136,7 +136,7 @@ export OMP_NUM_THREADS=1
 - [ ] 同命令通过，确认构建脚本 `--help` 正常且不加载模型；读旧 split 只做 schema/哈希验证，不读取 sealed test 内容。
 - [ ] 提交组件、工具 import 与测试；commit `refactor: migrate deterministic video and split utilities`。
 
-## Task A5: masked WTI 与 gather 的梯度合同
+## Task 5: A5 — masked WTI 与 gather 的梯度合同
 
 **Files:** Create `models/wti.py`、`runtime/{__init__,distributed}.py`、`tests/semantic_retrieval/test_wti.py`、`test_distributed.py`。
 
@@ -156,7 +156,7 @@ export OMP_NUM_THREADS=1
 - [ ] 同命令通过，包括两 rank CPU/Gloo 合成 backward 对单进程参考的梯度/缩放比较、metadata 对齐、错 batch 拒绝；这不是 GPU 科学实验。
 - [ ] 提交算子及梯度测试；commit `fix: implement padding-safe matching and explicit gather semantics`。
 
-## Task A6: 归档桥接迁出旧主程序
+## Task 6: A6 — 归档桥接迁出旧主程序
 
 **Files:** Create `runtime/{artifacts,qualification}.py`、`tests/semantic_retrieval/test_runtime_artifacts.py`；Modify `scripts/manage_experiment_run.py`、`experiment_tracking.py`、`tests/test_{manage_experiment_run,experiment_tracking,experiment_archive_e2e}.py`；通用 `experiment_artifacts.py` 仅有必要改动时修改。
 
@@ -177,7 +177,7 @@ export OMP_NUM_THREADS=1
 - [ ] Run 上述新测试及 `tests/test_experiment_artifacts.py tests/test_manage_experiment_run.py tests/test_experiment_tracking.py tests/test_experiment_archive_e2e.py`，全部相关 CPU 用例通过；若测试包含 GPU 子集，显式区分未运行项，不把 skip 当资格通过。
 - [ ] 提交桥接/工具/保护测试；commit `refactor: decouple experiment lifecycle from retired training entrypoint`。
 
-## Task A7: 删除旧架构及其完整依赖闭包
+## Task 7: A7 — 删除旧架构及其完整依赖闭包
 
 **Files:** Delete 以下明确范围；Update `requirements.txt`、`README.md`、`docs/agent/README.md`、审计报告；Create `tests/semantic_retrieval/test_no_legacy_dependencies.py`。
 
