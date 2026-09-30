@@ -39,7 +39,7 @@ ONE_MIB = 1024 * 1024
 
 def _run_manager(repo: Path, *arguments: object) -> dict[str, object]:
     environment = os.environ.copy()
-    environment["PYTHONPATH"] = str(REPOSITORY)
+    environment["PYTHONPATH"] = os.pathsep.join([str(REPOSITORY / "src"), str(REPOSITORY)])
     completed = subprocess.run(
         [sys.executable, str(MANAGER), *map(str, arguments)],
         cwd=repo,
@@ -75,48 +75,28 @@ def _tree_snapshot(root: Path) -> dict[str, str]:
 
 
 def _fixture_worker_source() -> str:
-    return '''\
+    return """\
 import argparse
 import json
 from pathlib import Path
-
-import numpy as np
-import torch
-
-from experiment_artifacts import (
-    ArtifactArrayStore,
-    artifact_json_bytes,
-    validate_artifact_json_payload,
-)
+from semantic_retrieval.config import RuntimeConfig
+from semantic_retrieval.runtime.artifacts import prepare_run, start_run, complete_run
+from semantic_retrieval.runtime.qualification import run_cpu_qualification
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--run-dir", required=True)
 args = parser.parse_args()
-run_dir = Path(args.run_dir)
-
-torch.manual_seed(0)
-model = torch.nn.Linear(2, 1)
-optimizer = torch.optim.SGD(model.parameters(), lr=0.05)
-features = torch.tensor([[1.0, -1.0], [0.5, 2.0]])
-targets = torch.tensor([[0.25], [0.75]])
-loss = torch.nn.functional.mse_loss(model(features), targets)
-if not torch.isfinite(loss):
-    raise RuntimeError("fixture loss is not finite")
-optimizer.zero_grad()
-loss.backward()
-optimizer.step()
-
-values = np.arange(524_288, dtype=np.float32)
-reference = ArtifactArrayStore(run_dir / "arrays").write("fixture_values", values)
-payload = {
-    "summary_metrics": {"fixture_loss": float(loss.detach())},
-    "split": "validation",
-    "array_references": [reference.as_dict()],
-}
-validate_artifact_json_payload(payload)
-metric_path = run_dir / "metrics" / "selected_validation.json"
-metric_path.write_bytes(artifact_json_bytes(payload))
-'''
+root = Path(args.run_dir)
+repo = Path.cwd()
+manifest = json.loads((root/"manifest.json").read_text())
+from experiment_artifacts import manifest_sha256
+config = RuntimeConfig(repo/"experiments/contextual-risk-v2/study.yaml",repo/manifest["registry_path"],root,manifest["run_id"],manifest_sha256(manifest),manifest["git_sha"],"val")
+context = prepare_run(config,repo_root=repo)
+start_run(context)
+run_cpu_qualification(context,scenario="success")
+(context.paths.metrics/"val_eval_000.json").rename(context.paths.metrics/"selected_validation.json")
+complete_run(context)
+"""
 
 
 def test_four_rank_worker_entry_resolves_repository_modules_without_pythonpath():
@@ -140,15 +120,14 @@ def test_archive_phase_round_trip_externalizes_arrays_without_legacy_outputs(tmp
     (repo / REGISTRY.parent).mkdir(parents=True)
     (repo / PHASE.parent).mkdir(parents=True)
     (repo / REGISTRY).write_text("", encoding="utf-8")
+    (repo / REGISTRY.parent / "study.yaml").write_text("study: contextual-risk-v2\n")
     worker = repo / "fixture_worker.py"
     worker.write_text(_fixture_worker_source(), encoding="utf-8")
 
     for legacy_root in (repo / "logs", repo / "ckpts"):
         legacy_root.mkdir()
         (legacy_root / "sentinel.txt").write_text("legacy-read-only\n", encoding="utf-8")
-    legacy_before = {
-        name: _tree_snapshot(repo / name) for name in ("logs", "ckpts")
-    }
+    legacy_before = {name: _tree_snapshot(repo / name) for name in ("logs", "ckpts")}
 
     phase = {
         "phase": "stage0-e2e-fixture",
@@ -172,17 +151,17 @@ def test_archive_phase_round_trip_externalizes_arrays_without_legacy_outputs(tmp
                 "input_checkpoints": [],
                 "dataset_splits": [],
                 "config": {
-                    "model": {"fixture": "linear-2x1"},
-                    "loss": {"name": "mse"},
-                    "optimizer": {"name": "sgd", "lr": 0.05},
+                    "model": {},
+                    "loss": {},
+                    "optimizer": {},
                     "scheduler": {},
-                    "evaluation": {"split": "validation"},
+                    "evaluation": {"eval_split": "val", "qualification_scenario": "success"},
                 },
                 "parent_run_ids": [],
                 "selection_lineage": ["Stage 0 archive qualification only"],
                 "validation_authorized": True,
                 "test_authorized": False,
-                "expected_scalar_outputs": ["fixture_loss"],
+                "expected_scalar_outputs": ["qualification_loss"],
                 "array_references": [],
                 "command": [
                     sys.executable,
@@ -204,10 +183,14 @@ def test_archive_phase_round_trip_externalizes_arrays_without_legacy_outputs(tmp
     reservation = _run_manager(
         repo,
         "reserve-phase",
-        "--repo-root", repo,
-        "--phase", PHASE,
-        "--registry", REGISTRY,
-        "--artifact-root", artifact_root,
+        "--repo-root",
+        repo,
+        "--phase",
+        PHASE,
+        "--registry",
+        REGISTRY,
+        "--artifact-root",
+        artifact_root,
     )
     run = reservation["runs"][0]
     run_dir = Path(run["artifact_path"])
@@ -216,42 +199,49 @@ def test_archive_phase_round_trip_externalizes_arrays_without_legacy_outputs(tmp
     assert _tracked_status(repo) == ""
 
     identity = (
-        "--repo-root", repo,
-        "--registry", REGISTRY,
-        "--run-dir", run_dir,
-        "--run-id", run["run_id"],
-        "--manifest-sha256", run["manifest_sha256"],
+        "--repo-root",
+        repo,
+        "--registry",
+        REGISTRY,
+        "--run-dir",
+        run_dir,
+        "--run-id",
+        run["run_id"],
+        "--manifest-sha256",
+        run["manifest_sha256"],
     )
     verified = _run_manager(repo, "verify-run", *identity)
     assert verified["state"] == "reserved"
-    _run_manager(repo, "start-run", *identity)
 
     command = shlex.split((run_dir / "command.sh").read_text(encoding="utf-8"))
     environment = os.environ.copy()
-    environment["PYTHONPATH"] = str(REPOSITORY)
+    environment["PYTHONPATH"] = os.pathsep.join([str(REPOSITORY / "src"), str(REPOSITORY)])
     subprocess.run(command, cwd=repo, env=environment, check=True)
     assert _tracked_status(repo) == ""
 
     metric_path = run_dir / "metrics" / "selected_validation.json"
     metrics = json.loads(metric_path.read_text(encoding="utf-8"))
-    assert np.isfinite(metrics["summary_metrics"]["fixture_loss"])
+    assert np.isfinite(metrics["summary_metrics"]["qualification_loss"])
     reference = metrics["array_references"][0]
     assert reference["byte_size"] == 2 * ONE_MIB
     restored = verify_array_reference(run_dir, reference)
     assert restored.shape == (524_288,)
     assert not any(isinstance(value, list) for value in metrics["summary_metrics"].values())
 
-    _run_manager(repo, "transition-run", *identity,
-                 "--expected", "running", "--next", "validating")
     terminal = _run_manager(
         repo,
         "transition-run",
         *identity,
-        "--expected", "validating",
-        "--next", "completed",
-        "--exit-code", 0,
-        "--output", "metrics/selected_validation.json",
-        "--output", reference["path"],
+        "--expected",
+        "validating",
+        "--next",
+        "completed",
+        "--exit-code",
+        0,
+        "--output",
+        "metrics/selected_validation.json",
+        "--output",
+        reference["path"],
     )
     assert terminal["state"] == "completed"
     assert _tracked_status(repo) == ""
@@ -259,11 +249,16 @@ def test_archive_phase_round_trip_externalizes_arrays_without_legacy_outputs(tmp
     finalized = _run_manager(
         repo,
         "finalize-phase",
-        "--repo-root", repo,
-        "--phase", PHASE,
-        "--registry", REGISTRY,
-        "--artifact-root", artifact_root,
-        "--summary", SUMMARY,
+        "--repo-root",
+        repo,
+        "--phase",
+        PHASE,
+        "--registry",
+        REGISTRY,
+        "--artifact-root",
+        artifact_root,
+        "--summary",
+        SUMMARY,
     )
     assert finalized["terminal_counts"] == {"completed": 1}
     assert _tracked_status(repo) == f" M {REGISTRY.as_posix()}\n"
@@ -358,19 +353,15 @@ def _run_four_rank_worker(mode: str, run_dir: Path) -> None:
             {"rank": rank, "pid": os.getpid(), "role": "lifecycle-owner"},
         )
         values = np.arange(524_288, dtype=np.float32)
-        reference = ArtifactArrayStore(run_dir / "arrays").write(
-            "four_rank_fixture_values", values
-        )
+        reference = ArtifactArrayStore(run_dir / "arrays").write("four_rank_fixture_values", values)
         metrics = {
-            "summary_metrics": {"fixture_loss": float(reduced_loss.cpu())},
+            "summary_metrics": {"qualification_loss": float(reduced_loss.cpu())},
             "split": "validation",
             "world_size": world_size,
             "array_references": [reference.as_dict()],
         }
         validate_artifact_json_payload(metrics)
-        (run_dir / "metrics" / "selected_validation.json").write_bytes(
-            artifact_json_bytes(metrics)
-        )
+        (run_dir / "metrics" / "selected_validation.json").write_bytes(artifact_json_bytes(metrics))
     dist.barrier()
     dist.destroy_process_group()
 

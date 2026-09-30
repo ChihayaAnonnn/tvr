@@ -8,23 +8,23 @@ worker-local lifecycle changes.  It never launches a training process.
 from __future__ import annotations
 
 import argparse
-from collections import Counter
 import hashlib
 import json
 import os
-from pathlib import Path
 import shlex
 import stat
 import subprocess
 import sys
 import tempfile
+from collections import Counter
+from pathlib import Path
 from typing import Mapping, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from experiment_artifacts import (
+from experiment_artifacts import (  # noqa: E402
     RunPaths,
     StrictJSONError,
     append_registry_records,
@@ -49,17 +49,7 @@ from experiment_artifacts import (
     verify_committed_reservation,
 )
 
-
 TERMINAL_STATES = frozenset({"completed", "failed", "cancelled"})
-REGISTERED_A3_FEATURE_SETS = frozenset(
-    {"full", "score_only", "semantic_only", "no_context", "no_score_geometry"}
-)
-REGISTERED_A3_TOPK = frozenset({1, 4, 8, 16, 32})
-REGISTERED_A3_LOSSES = frozenset(
-    {(0.0, 0.0), (0.25, 0.0), (0.0, 0.25), (0.25, 0.25)}
-)
-REGISTERED_A3_SEEDS = frozenset({0, 1, 2})
-REGISTERED_A3_EPOCHS = frozenset({3, 5})
 RUN_SPEC_FIELDS = frozenset(
     {
         "dataset", "stage", "variant", "seed", "environment",
@@ -69,73 +59,6 @@ RUN_SPEC_FIELDS = frozenset(
     }
 )
 RUN_SPEC_TIMESTAMP_FIELDS = frozenset({"timestamp_utc", "scheduled_timestamp_utc"})
-
-
-def registered_a3_variant_argv(manifest: Mapping[str, object]) -> list[str]:
-    """Derive the only mutable scientific A3 argv from a committed manifest."""
-
-    config = manifest.get("config")
-    if not isinstance(config, Mapping):
-        raise ValueError("registered A3 manifest config is required")
-    categories = {}
-    for name in ("model", "loss", "optimizer", "scheduler", "evaluation"):
-        value = config.get(name)
-        if not isinstance(value, Mapping):
-            raise ValueError(f"registered A3 config.{name} must be an object")
-        categories[name] = value
-    duplicated = sorted(
-        name
-        for name, count in Counter(
-            field for values in categories.values() for field in values
-        ).items()
-        if count > 1
-    )
-    if duplicated:
-        raise ValueError(
-            "registered A3 config duplicates effective field "
-            + ", ".join(duplicated)
-        )
-    scenario = categories["evaluation"].get("archive_qualification_scenario")
-    if scenario not in (None, "none"):
-        if scenario not in {
-            "success", "non_owner_failure", "owner_collective_failure",
-            "sigterm_different_collectives",
-        }:
-            raise ValueError("archive qualification scenario is not allowed")
-        return []
-
-    fields = {
-        "feature_set": categories["model"].get("contextual_risk_feature_set"),
-        "topk": categories["model"].get("contextual_risk_topk"),
-        "fit_weight": categories["loss"].get("w_contextual_risk_fit"),
-        "rank_weight": categories["loss"].get("w_contextual_risk_rank"),
-        "seed": categories["optimizer"].get("seed"),
-        "epochs": categories["scheduler"].get("epochs"),
-    }
-    if type(fields["feature_set"]) is not str or fields["feature_set"] not in REGISTERED_A3_FEATURE_SETS:
-        raise ValueError("registered A3 feature set is outside the frozen allowlist")
-    if type(fields["topk"]) is not int or fields["topk"] not in REGISTERED_A3_TOPK:
-        raise ValueError("registered A3 topk is outside the frozen allowlist")
-    if type(fields["fit_weight"]) is not float or type(fields["rank_weight"]) is not float:
-        raise ValueError("registered A3 loss weights must be explicit floats")
-    if (fields["fit_weight"], fields["rank_weight"]) not in REGISTERED_A3_LOSSES:
-        raise ValueError("registered A3 loss setting is outside the frozen allowlist")
-    if type(fields["seed"]) is not int or fields["seed"] not in REGISTERED_A3_SEEDS:
-        raise ValueError("registered A3 seed is outside the frozen allowlist")
-    if fields["seed"] != manifest.get("seed"):
-        raise ValueError("registered A3 optimizer seed must equal manifest seed")
-    if type(fields["epochs"]) is not int or fields["epochs"] not in REGISTERED_A3_EPOCHS:
-        raise ValueError("registered A3 epochs is outside the frozen allowlist")
-    if manifest.get("stage") == "final" and fields["feature_set"] != "full":
-        raise ValueError("registered A3 final stage allows only the full feature set")
-    return [
-        "--contextual_risk_feature_set", str(fields["feature_set"]),
-        "--contextual_risk_topk", str(fields["topk"]),
-        "--w_contextual_risk_fit", str(fields["fit_weight"]),
-        "--w_contextual_risk_rank", str(fields["rank_weight"]),
-        "--seed", str(fields["seed"]),
-        "--epochs", str(fields["epochs"]),
-    ]
 
 
 def _repo_relative(value: str | os.PathLike[str], field: str) -> Path:
@@ -554,10 +477,6 @@ def _verify_run_identity(
         command_argv = shlex.split(handle.read())
     if not command_argv:
         raise ValueError("sealed command must contain an executable argv")
-    registered_a3_command = [
-        "env", f"ARTIFACT_RUN_ID={manifest['run_id']}", "bash",
-        "run_train_msrvtt_contextual_risk_bg.sh",
-    ]
     return {
         "run_id": manifest["run_id"],
         "run_dir": manifest["artifact_path"],
@@ -566,12 +485,7 @@ def _verify_run_identity(
         "stage": manifest["stage"],
         "test_authorized": manifest["test_authorized"],
         "command_argv": command_argv,
-        "registered_a3_variant_argv": (
-            registered_a3_variant_argv(manifest)
-            if manifest["study"] == "contextual-risk-v2"
-            and command_argv == registered_a3_command
-            else []
-        ),
+
     }
 
 
