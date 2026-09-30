@@ -324,3 +324,34 @@ Baseline and current protected Git subtree identities are identical, and the wor
 ```
 
 Original main checkout and its untracked launchers are untouched; their approved deletion is reserved for hash-checked integration. No logs, ckpts or artifacts directories were deleted, moved or rewritten. Historical array/weight metadata is preserved without re-reading large weights.
+
+## Final independent review and one fix pass
+
+Fresh read-only review of ff8137c..23d58f5 found no critical issue and five important issues. All were reproduced with tests before fixes:
+
+1. Production CLIP family and same-shape head semantics: only the canonical ViT-B/32 config is accepted; tiny test models require explicit keyword-only fixture=True and the fixed width/64 text-head rule. test_production_clip_architecture_and_head_count_are_bound RED→GREEN.
+2. Missing eval_split no longer acts as a wildcard for validation partitions. New worker manifests must declare it; historical read-only validation remains unchanged. test_missing_reserved_split_is_not_a_wildcard RED→GREEN.
+3. start_run now rechecks preparation binding immediately before transition, including clean source and checkpoint hashes. test_start_rechecks_source_after_prepare and test_start_rechecks_input_after_prepare RED→GREEN; rejected startup remains reserved.
+4. Decoder treats failed seeks as invalid requested frames. test_failed_seek_never_labels_the_current_frame_as_requested RED→GREEN.
+5. Runtime rejects ambient autocast/reduced float32 matmul, and requires TF32 disabled when CUDA is available. CLIP and WTI arithmetic explicitly disables ambient autocast. CPU text/frame/matching outputs are bit-identical under an outer BF16 context. test_fp32_gate_rejects_ambient_autocast, test_clip_computation_remains_fp32_under_cpu_autocast, test_matching_remains_fp32_under_cpu_autocast RED→GREEN.
+
+Targeted fix suite: 32 passed. Initial new failure pass: 8 failed (input-drift fixture import corrected and intended failure separately reproduced). No second reviewer or GPU test was dispatched. Minor deferred: committed TorchScript/metadata regression fixtures; the independent reviewer verified success and mismatch behavior with temporary synthetic archives. Canonical episode validation, scientific training/continuation, GPU qualification and dirty-main integration remain assigned to later authorized work, as recorded in the plan rulings.
+
+Final whole retained suite: `CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 PYTHONPATH=src:. /home/xujie/.conda/envs/tvr/bin/python -m pytest -q -p no:cacheprovider tests` → **245 passed, 1 warning**, exit 0 (45.93s). The warning is PyTorch TypedStorage deprecation from local fixture deserialization. Relevant Ruff and git diff --check pass; protected subtrees remain identical. Stage A is complete as a CPU foundation; no B stage, scientific/GPU experiment, PR push or dirty-main integration was performed.
+
+### Execution rulings, in order
+
+- Ruling: Rename A1-A7 headings to numeric Task 1-7 retaining A labels — bundled task-start only parses numeric headings; no scope change.
+- Ruling: Use installed tvr environment and narrow relevant baseline rather than reinstalling requirements or running GPU tests — AGENTS narrow-validation rule and qualified environment; avoids changing dependencies outside worktree.
+- Ruling: Plan authorizes worktree creation; reuse no preexisting worktree and fallback to git because no native creation tool is exposed.
+- Task 2: Ruling: undefined Recall/AUROC use None (JSON null), rather than non-finite values. Corrected erroneous transposed tie expectation by explicit ID ordering.
+- Task 6: Ruling: Stage A rejects nonempty scientific config categories because no new model consumer exists yet; cost if wrong: implement the consumer in B before scientific launch, rather than falsely accepting an unbound field.
+- Final: Ruling: Add keyword-only fixture=True to ClipConfig and fix text heads to the width/64 rule; production dimensions are exactly ViT-B/32. This distinguishes explicitly authorized tiny tests from supported assets and binds non-shape attention settings — cost if wrong: callers constructing small fixtures must adopt the flag; widening architectures requires a new explicit compatibility design.
+- Final: Ruling: Canonical-content conflicts and episode supervision consistency remain assigned to B1; A has no episode ingestion — cost if wrong: foundation cannot validate arbitrary episodes until B1 is implemented.
+- Final: Ruling: Scientific training, optimizer/scheduler continuation, selection and performance remain outside A; scientific config is rejected — cost if wrong: users cannot train through this foundation alone.
+- Final: Ruling: Four-GPU/NCCL qualification and CUDA/TF32 numerical validation were not executed; CPU arithmetic was verified and runtime now checks actual precision flags — cost if wrong: GPU behavior still requires authorized Stage 0 qualification before science.
+- Final: Ruling: Dirty original checkout integration and hash-matched untracked launcher removal remain deferred; no original changes were overwritten — cost if wrong: old files remain visible in master until integration is explicitly selected.
+
+### Deferred minor
+
+- Final: minor (deferred): Add committed synthetic TorchScript success/metadata-mismatch regression tests; reviewer independently verified both paths, existing tests cover bare state dictionaries.

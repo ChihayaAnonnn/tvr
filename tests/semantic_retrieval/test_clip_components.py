@@ -7,7 +7,7 @@ import torch
 def components():
     from semantic_retrieval.models.clip import ClipBackbone, ClipConfig
 
-    return ClipBackbone(ClipConfig(8, 8, 64, 1, 4, 5, 20, 8, 2, 1))
+    return ClipBackbone(ClipConfig(8, 8, 64, 1, 4, 5, 20, 8, 1, 1, fixture=True))
 
 
 def test_encoding_matches_retained_clip_calculation():
@@ -65,3 +65,31 @@ def test_tokenizer_eos_padding_and_truncation():
     assert ids[1, -1] == 49407 and mask[1].all()
     with pytest.raises(ValueError):
         tokenizer.encode_batch(["a"], 1)
+
+
+def test_production_clip_architecture_and_head_count_are_bound():
+    from dataclasses import replace
+
+    from semantic_retrieval.models.clip import ClipConfig
+
+    with pytest.raises(ValueError, match="ViT-B/32"):
+        ClipConfig(512, 224, 768, 12, 16, 77, 49408, 512, 8, 12)
+    with pytest.raises(ValueError, match="head"):
+        replace(components().config, text_heads=2 if components().config.text_heads == 1 else 1)
+
+
+def test_clip_computation_remains_fp32_under_cpu_autocast():
+    model = components().eval()
+    ids = torch.tensor([[18, 2, 19, 0, 0]])
+    mask = ids != 0
+    video = torch.randn(1, 2, 3, 8, 8)
+    fm = torch.ones(1, 2, dtype=torch.bool)
+    expected_text = model.encode_text(ids, mask)
+    expected_frames = model.encode_frames(video, fm)
+    with torch.autocast("cpu", dtype=torch.bfloat16):
+        actual_text = model.encode_text(ids, mask)
+        actual_frames = model.encode_frames(video, fm)
+    for actual, expected in zip(actual_text, expected_text):
+        assert actual.dtype == torch.float32
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    torch.testing.assert_close(actual_frames, expected_frames, rtol=0, atol=0)

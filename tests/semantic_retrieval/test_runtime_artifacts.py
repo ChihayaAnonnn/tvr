@@ -1,3 +1,4 @@
+import hashlib
 import json
 import platform
 import subprocess
@@ -161,3 +162,99 @@ def test_cpu_fault_preserves_failure_evidence(reservation):
     evidence = json.loads((context.paths.provenance / "worker_failure.json").read_text())
     assert evidence["exit_code"] == (143 if scenario == "signal" else 1)
     assert json.loads(context.paths.status.read_text())["state"] == "running"
+
+
+def test_missing_reserved_split_is_not_a_wildcard(reservation):
+    from semantic_retrieval.runtime.artifacts import prepare_run
+
+    repo, config = reservation
+    # Use a new uniquely reserved fixture, not an in-place mutation of an existing run.
+    phase = config.study_path.parent / "phase.json"
+    payload = json.loads(phase.read_text())
+    payload["runs"][0]["variant"] = "missing-split"
+    payload["runs"][0]["config"]["evaluation"].pop("eval_split")
+    phase.write_text(json.dumps(payload))
+    git(repo, "add", str(phase.relative_to(repo)), str(config.registry_path.relative_to(repo)))
+    git(repo, "commit", "-qm", "new fixture phase source")
+    result = manager.reserve_phase(
+        SimpleNamespace(
+            repo_root=repo,
+            phase=phase.relative_to(repo),
+            registry=config.registry_path.relative_to(repo),
+            artifact_root=config.run_dir.parents[3],
+        )
+    )
+    run = result["runs"][0]
+    manifest = json.loads((Path(run["artifact_path"]) / "manifest.json").read_text())
+    config = replace(
+        config,
+        run_dir=Path(run["artifact_path"]),
+        run_id=run["run_id"],
+        manifest_sha256=run["manifest_sha256"],
+        source_sha=manifest["git_sha"],
+        eval_split="val_locked",
+    )
+    commit_reservation(repo, config)
+    with pytest.raises(ValueError, match="eval_split"):
+        prepare_run(config, repo_root=repo)
+
+
+def test_start_rechecks_source_after_prepare(reservation):
+    from semantic_retrieval.runtime.artifacts import prepare_run, start_run
+
+    repo, config = reservation
+    commit_reservation(repo, config)
+    context = prepare_run(config, repo_root=repo)
+    config.study_path.write_text("changed after preparation\n")
+    with pytest.raises(ValueError, match="clean"):
+        start_run(context)
+    assert json.loads(context.paths.status.read_text())["state"] == "reserved"
+
+
+def test_start_rechecks_input_after_prepare(reservation):
+    from semantic_retrieval.runtime.artifacts import prepare_run, start_run
+
+    repo, config = reservation
+    checkpoint = repo.parent / "fixture.bin"
+    checkpoint.write_bytes(b"bound")
+    phase = config.study_path.parent / "phase.json"
+    payload = json.loads(phase.read_text())
+    payload["runs"][0]["variant"] = "input-drift"
+    payload["runs"][0]["input_checkpoints"] = [
+        {"path": str(checkpoint), "sha256": hashlib.sha256(b"bound").hexdigest()}
+    ]
+    phase.write_text(json.dumps(payload))
+    git(repo, "add", str(phase.relative_to(repo)), str(config.registry_path.relative_to(repo)))
+    git(repo, "commit", "-qm", "input fixture phase")
+    result = manager.reserve_phase(
+        SimpleNamespace(
+            repo_root=repo,
+            phase=phase.relative_to(repo),
+            registry=config.registry_path.relative_to(repo),
+            artifact_root=config.run_dir.parents[3],
+        )
+    )
+    run = result["runs"][0]
+    manifest = json.loads((Path(run["artifact_path"]) / "manifest.json").read_text())
+    config = replace(
+        config,
+        run_dir=Path(run["artifact_path"]),
+        run_id=run["run_id"],
+        manifest_sha256=run["manifest_sha256"],
+        source_sha=manifest["git_sha"],
+    )
+    commit_reservation(repo, config)
+    context = prepare_run(config, repo_root=repo)
+    checkpoint.write_bytes(b"drifted")
+    with pytest.raises(ValueError, match="SHA-256"):
+        start_run(context)
+    assert json.loads(context.paths.status.read_text())["state"] == "reserved"
+
+
+def test_fp32_gate_rejects_ambient_autocast(reservation):
+    from semantic_retrieval.runtime.artifacts import prepare_run
+
+    repo, config = reservation
+    commit_reservation(repo, config)
+    with torch.autocast("cpu", dtype=torch.bfloat16), pytest.raises(ValueError, match="precision"):
+        prepare_run(config, repo_root=repo)

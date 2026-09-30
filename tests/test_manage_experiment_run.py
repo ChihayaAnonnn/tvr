@@ -71,7 +71,7 @@ def _phase_payload():
                     "loss": {},
                     "optimizer": {},
                     "scheduler": {},
-                    "evaluation": {},
+                    "evaluation": {"eval_split": "val"},
                 },
                 "parent_run_ids": [],
                 "selection_lineage": [],

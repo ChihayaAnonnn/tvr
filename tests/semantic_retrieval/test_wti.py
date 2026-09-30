@@ -48,3 +48,17 @@ def test_invalid_matching_input(defect):
         text[:] = float("nan")
     with pytest.raises(ValueError):
         MaskedWTI(2)(text, torch.ones(1, 1, 2), mask, torch.ones(1, 1, dtype=torch.bool))
+
+
+def test_matching_remains_fp32_under_cpu_autocast():
+    from semantic_retrieval.models.wti import MaskedWTI
+
+    model = MaskedWTI(4)
+    text = torch.randn(1, 2, 4)
+    frames = torch.randn(1, 2, 4)
+    mask = torch.ones(1, 2, dtype=torch.bool)
+    expected = model(text, frames, mask, mask)
+    with torch.autocast("cpu", dtype=torch.bfloat16):
+        actual = model(text, frames, mask, mask)
+    assert actual.dtype == torch.float32
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)

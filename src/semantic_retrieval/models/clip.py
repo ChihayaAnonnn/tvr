@@ -1,7 +1,7 @@
 """ViT/text CLIP primitives migrated from OpenAI CLIP via module_clip.py (MIT)."""
 
 from collections import OrderedDict
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 
 import torch
 from torch import nn
@@ -35,14 +35,35 @@ class ClipConfig:
     text_width: int
     text_heads: int
     text_layers: int
+    fixture: bool = field(default=False, kw_only=True, repr=False)
 
     def __post_init__(self):
-        if any(type(getattr(self, f.name)) is not int or getattr(self, f.name) <= 0 for f in fields(self)):
+        if any(
+            type(getattr(self, f.name)) is not int or getattr(self, f.name) <= 0
+            for f in fields(self)
+            if f.name != "fixture"
+        ):
             raise ValueError("CLIP dimensions must be positive integers; only ViT is supported")
         if self.vision_width % 64 or self.text_width % self.text_heads or self.image_size % self.patch_size:
             raise ValueError("incompatible CLIP head/patch dimensions")
         if self.context_length < 2 or self.vocab_size < 3:
             raise ValueError("CLIP needs BOS/EOS and a context of at least two tokens")
+        if type(self.fixture) is not bool:
+            raise ValueError("fixture must be an explicit boolean")
+        if self.text_heads != max(1, self.text_width // 64):
+            raise ValueError("text head count must follow the fixed CLIP width/64 architecture")
+        dimensions = tuple(getattr(self, f.name) for f in fields(self) if f.name != "fixture")
+        if not self.fixture and dimensions != (512, 224, 768, 12, 32, 77, 49408, 512, 8, 12):
+            raise ValueError("only production ViT-B/32 is supported; small fixtures require fixture=True")
+        if self.fixture and (
+            self.embed_dim > 64
+            or self.image_size > 32
+            or self.vision_width > 64
+            or self.vision_layers > 2
+            or self.text_width > 64
+            or self.text_layers > 2
+        ):
+            raise ValueError("fixture configuration must remain a small test-only ViT")
 
 
 class QuickGELU(nn.Module):
@@ -184,10 +205,11 @@ class ClipBackbone(nn.Module):
             input_ids[rows, lengths - 1] != self.config.vocab_size - 1
         ).any():
             raise ValueError("text must start with BOS and end with EOS")
-        hidden = self.token_embedding(input_ids) + self.positional_embedding[: input_ids.shape[1]]
-        hidden = self.transformer(hidden.permute(1, 0, 2)).permute(1, 0, 2)
-        tokens = (self.ln_final(hidden) @ self.text_projection).float()
-        return tokens.masked_fill(~text_mask[..., None], 0), tokens[rows, lengths - 1]
+        with torch.autocast(device_type=input_ids.device.type, enabled=False):
+            hidden = self.token_embedding(input_ids) + self.positional_embedding[: input_ids.shape[1]]
+            hidden = self.transformer(hidden.permute(1, 0, 2)).permute(1, 0, 2)
+            tokens = (self.ln_final(hidden) @ self.text_projection).float()
+            return tokens.masked_fill(~text_mask[..., None], 0), tokens[rows, lengths - 1]
 
     def encode_frames(self, video, frame_mask):
         # Reuse input validation without introducing an encoder-model dependency.
@@ -200,7 +222,8 @@ class ClipBackbone(nn.Module):
         if video.shape[-2:] != (self.config.image_size, self.config.image_size):
             raise ValueError("video image size does not match CLIP")
         result = video.new_zeros((*video.shape[:2], self.config.embed_dim), dtype=torch.float32)
-        if frame_mask.any():
-            hidden = self.visual(video[frame_mask].float())
-            result[frame_mask] = (self.visual.ln_post(hidden[:, 0]) @ self.visual.proj).float()
+        with torch.autocast(device_type=video.device.type, enabled=False):
+            if frame_mask.any():
+                hidden = self.visual(video[frame_mask].float())
+                result[frame_mask] = (self.visual.ln_post(hidden[:, 0]) @ self.visual.proj).float()
         return result

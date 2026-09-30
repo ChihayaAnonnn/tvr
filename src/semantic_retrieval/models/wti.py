@@ -27,12 +27,13 @@ class MaskedWTI(nn.Module):
                 raise ValueError(f"{name} requires a nonempty boolean mask per row")
         if text.device != frames.device or text_mask.device != text.device or frame_mask.device != frames.device:
             raise ValueError("matching inputs must share a device")
-        text, frames = text.float(), frames.float()
-        tw = self.text_weight(text).squeeze(-1).masked_fill(~text_mask, -torch.inf).softmax(-1)
-        fw = self.frame_weight(frames).squeeze(-1).masked_fill(~frame_mask, -torch.inf).softmax(-1)
-        similarities = torch.einsum("qld,vtd->qvlt", F.normalize(text, dim=-1), F.normalize(frames, dim=-1))
-        pair_mask = text_mask[:, None, :, None] & frame_mask[None, :, None, :]
-        similarities = similarities.masked_fill(~pair_mask, -torch.inf)
-        text_max = similarities.max(-1).values.masked_fill(~text_mask[:, None, :], 0)
-        frame_max = similarities.max(-2).values.masked_fill(~frame_mask[None, :, :], 0)
-        return ((text_max * tw[:, None, :]).sum(-1) + (frame_max * fw[None, :, :]).sum(-1)) / 2
+        with torch.autocast(device_type=text.device.type, enabled=False):
+            text, frames = text.float(), frames.float()
+            tw = self.text_weight(text).squeeze(-1).masked_fill(~text_mask, -torch.inf).softmax(-1)
+            fw = self.frame_weight(frames).squeeze(-1).masked_fill(~frame_mask, -torch.inf).softmax(-1)
+            similarities = torch.einsum("qld,vtd->qvlt", F.normalize(text, dim=-1), F.normalize(frames, dim=-1))
+            pair_mask = text_mask[:, None, :, None] & frame_mask[None, :, None, :]
+            similarities = similarities.masked_fill(~pair_mask, -torch.inf)
+            text_max = similarities.max(-1).values.masked_fill(~text_mask[:, None, :], 0)
+            frame_max = similarities.max(-2).values.masked_fill(~frame_mask[None, :, :], 0)
+            return ((text_max * tw[:, None, :]).sum(-1) + (frame_max * fw[None, :, :]).sum(-1)) / 2

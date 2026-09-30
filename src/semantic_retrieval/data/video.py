@@ -40,7 +40,8 @@ def decode_video(path, frame_indices, image_size):
         if not capture.isOpened():
             raise ValueError(f"cannot open video: {path}")
         for position, index in enumerate(indices):
-            capture.set(cv2.CAP_PROP_POS_FRAMES, index)
+            if not capture.set(cv2.CAP_PROP_POS_FRAMES, index):
+                continue
             ok, frame = capture.read()
             if ok:
                 image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))

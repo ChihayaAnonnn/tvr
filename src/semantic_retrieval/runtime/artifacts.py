@@ -34,6 +34,7 @@ class RunContext:
     manifest: dict
     array_store: ArtifactArrayStore
     config: RuntimeConfig
+    repo_root: Path
     sequence: int = 0
 
 
@@ -130,8 +131,14 @@ def prepare_run(config, *, repo_root):
     evaluation = manifest["config"]["evaluation"]
     if set(evaluation) - {"eval_split", "qualification_scenario"}:
         raise ValueError("effective config has unsupported evaluation fields")
-    if evaluation.get("eval_split", config.eval_split) != config.eval_split:
+    if evaluation.get("eval_split") != config.eval_split:
         raise ValueError("effective config eval_split mismatch")
+    if torch.is_autocast_enabled() or torch.is_autocast_cpu_enabled():
+        raise ValueError("runtime precision must be FP32 without ambient autocast")
+    if torch.get_float32_matmul_precision() != "highest":
+        raise ValueError("runtime precision forbids reduced-precision float32 matmul")
+    if torch.cuda.is_available() and (torch.backends.cuda.matmul.allow_tf32 or torch.backends.cudnn.allow_tf32):
+        raise ValueError("runtime precision requires CUDA matmul and cuDNN TF32 disabled")
     gpu_count = torch.cuda.device_count()
     environment = dict(
         python=platform.python_version(),
@@ -150,11 +157,18 @@ def prepare_run(config, *, repo_root):
         for reference in manifest[field]:
             if _hash_input(repository, reference) != reference["sha256"]:
                 raise ValueError(f"input {field} SHA-256 mismatch")
-    return RunContext(paths, manifest, ArtifactArrayStore(paths.arrays), config)
+    return RunContext(paths, manifest, ArtifactArrayStore(paths.arrays), config, repository)
 
 
 def start_run(context):
-    transition_run_status(context.paths, "reserved", "running")
+    fresh = prepare_run(context.config, repo_root=context.repo_root)
+    if (
+        fresh.paths != context.paths
+        or fresh.manifest != context.manifest
+        or context.array_store.run_root != fresh.paths.root
+    ):
+        raise ValueError("run context differs from freshly verified launch binding")
+    transition_run_status(fresh.paths, "reserved", "running")
 
 
 def complete_run(context):

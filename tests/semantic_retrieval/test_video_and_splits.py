@@ -51,7 +51,7 @@ def test_zero_fps_is_irrelevant_to_index_decode(tmp_path, monkeypatch):
             return 0
 
         def set(self, field, value):
-            pass
+            return True
 
         def read(self):
             return True, np.full((8, 8, 3), 127, np.uint8)
@@ -89,3 +89,27 @@ def test_split_source_hash_drift_is_rejected(tmp_path, monkeypatch):
     train.write_text("video_id\nb\na\n")
     with pytest.raises(ValueError, match="mismatch"):
         splits.validate_trusted_manifest(manifest, train, annotation, test)
+
+
+def test_failed_seek_never_labels_the_current_frame_as_requested(tmp_path, monkeypatch):
+    from semantic_retrieval.data.video import decode_video
+
+    path = tmp_path / "unseekable"
+    path.touch()
+
+    class Capture:
+        def isOpened(self):
+            return True
+
+        def set(self, field, index):
+            return index == 0
+
+        def read(self):
+            return True, np.full((8, 8, 3), 127, np.uint8)
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr(cv2, "VideoCapture", lambda _: Capture())
+    _, mask = decode_video(path, [0, 999], 8)
+    assert mask.tolist() == [True, False]
