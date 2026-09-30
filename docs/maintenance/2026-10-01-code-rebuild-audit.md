@@ -160,3 +160,7 @@ Existing tracked documentation edits are not included in this worktree. The foll
 ## A2 evaluation migration
 
 Independent ranking, calibration, paired bootstrap and score proxies migrated. Unknown rows are excluded from Recall; undefined metrics serialize as null. Ties use score descending then candidate ID ascending; singleton entropy is zero and undefined margin is omitted. The transposed tie fixture expectation was corrected from [0,0] to [0,1] by manually sorting its second row. Initial missing-function run: 15 failures.
+
+## A3 CLIP migration
+
+ViT/text primitives originate from OpenAI CLIP (MIT, source https://github.com/openai/CLIP), via baseline modules/module_clip.py and modules/tokenization_clip.py. ResNet, 3D patches, downloading, checkpoint wrappers and configurable low-precision LayerNorm are removed. Supported pretrained family: ViT-B/32; small ViT fixtures exercise the same calculation. The unchanged BPE SHA-256 is `924691ac288e54409236115652ad4aa250f48203de50a9e4722a6ecd48d6804a`. Local weights must match all keys and dimensions; only three original scalar metadata keys are checked and stripped. Initial test run: 7 missing-component failures; final: 7 passed. Python 3.10 lacks hashlib.file_digest; streaming SHA-256 fixes that compatibility failure.
