@@ -37,7 +37,7 @@
 验证沿用 A 的 `$SR_PY` / `PYTHONPATH=src:.` / CPU 环境，pytest 禁用 cacheprovider。训练/eval 合成 fixture 写入 tmp_path 的临时仓库，不能写真实 `logs/`、`ckpts/` 或 registry。
 断言示例 fixture 在各测试文件按任务合同构造；不是另一个生产模型或新运行接口。
 
-## Task B1: Episode loader 与三态监督
+## Task 1: B1 — Episode loader 与三态监督
 
 **Files:** Create `data/{episodes,collate}.py`、`tests/semantic_retrieval/test_episodes.py`；Modify `types.py`。
 
@@ -58,7 +58,7 @@
 - [ ] 同命令通过；测试 `inference_queries()` 无标签属性，模型无需 Episode 真值构造输入；空候选不伪造 padding 视频的有效帧。
 - [ ] 提交数据合同与测试；commit `feat: add audited retrieval episodes and unknown-aware supervision`。
 
-## Task B2: 新时序表示与模型组合
+## Task 2: B2 — 新时序表示与模型组合
 
 **Files:** Create `models/{temporal,coarse,model}.py`、`tests/semantic_retrieval/test_model.py`；Modify `config.py`。
 
@@ -79,7 +79,7 @@
 - [ ] 同命令通过；trace 新包 import 无旧模型依赖，coarse embedding 单位范数。
 - [ ] 提交组合模型与配置；commit `feat: compose a new retrieval encoder and coarse representation`。
 
-## Task B3: 共用排序表征与候选存在头
+## Task 3: B3 — 共用排序表征与候选存在头
 
 **Files:** Create `models/{pair_matcher,answerability}.py`、`tests/semantic_retrieval/test_matching_gradients.py`；Modify `models/model.py`。
 
@@ -103,7 +103,7 @@
 - [ ] 同命令通过，测试冻结 CLIP 时其 grad=None、解冻指定层后 grad 非零；默认 dropout=0 的 fixture 保证变化来自 step。
 - [ ] 提交头与接线；commit `feat: jointly connect matching and candidate answerability representations`。
 
-## Task B4: 显式多正例与存在 objective
+## Task 4: B4 — 显式多正例与存在 objective
 
 **Files:** Create `objectives/{__init__,retrieval}.py`、`tests/semantic_retrieval/test_objectives.py`。
 
@@ -124,7 +124,7 @@
 - [ ] 同命令通过；B3 的共享表征梯度测试同时通过。
 - [ ] 提交目标及测试；commit `feat: implement multi-positive and unknown-aware presence objectives`。
 
-## Task B5: canonical 索引与版本化特征缓存
+## Task 5: B5 — canonical 索引与版本化特征缓存
 
 **Files:** Create `retrieval/{__init__,index,cache}.py`、`tests/semantic_retrieval/test_index.py`。
 
@@ -144,7 +144,7 @@
 - [ ] 同命令通过；确保读缓存不实例化旧模型，也不在训练解冻路径中复用旧表征。
 - [ ] 提交检索/缓存；commit `feat: build canonical retrieval index with strict feature identity`。
 
-## Task B6: canonical 集合与动作 policy
+## Task 6: B6 — canonical 集合与动作 policy
 
 **Files:** Create `retrieval/{semantic_set,policy}.py`、`types.py` 中 Decision、`tests/semantic_retrieval/test_policy.py`。
 
@@ -165,7 +165,7 @@
 - [ ] 同命令通过；置换/alias 后输出 canonical 集合一致，存在头保持独立。
 - [ ] 提交决策与测试；commit `feat: add bounded expansion and semantic retrieval decision policy`。
 
-## Task B7: Trainer 与新 checkpoint
+## Task 7: B7 — Trainer 与新 checkpoint
 
 **Files:** Create `runtime/{trainer,checkpoint}.py`、`scripts/train_semantic_retrieval.py`、`tests/semantic_retrieval/test_trainer.py`；Modify `config.py`。
 
@@ -187,7 +187,7 @@
 - [ ] 同命令通过；两 rank CPU/Gloo fixture 检查粗检索梯度与本地 episode loss 归一化。全局 coarse relevance 只由已审核 `(query_id, canonical_id, label)` 关系构建，未审核的跨 rank pair 保持 unknown，不能假设 off-diagonal 为负。逐 rank 信息一致；不以此代替四卡 GPU 资格。
 - [ ] 提交 Trainer、薄入口及测试；commit `feat: train new retrieval model with explicit state and archive lifecycle`。
 
-## Task B8: 推理评估、validation 校准与闭环
+## Task 8: B8 — 推理评估、validation 校准与闭环
 
 **Files:** Create `evaluation/{calibration,episodes}.py`、`runtime/inference.py`、`scripts/evaluate_semantic_retrieval.py`、`tests/semantic_retrieval/test_end_to_end.py`。
 
@@ -208,7 +208,7 @@
 - [ ] 同命令通过；CPU 临时仓库闭环可从新 checkpoint 恢复，训练/评测薄入口 `--help` 正常，真实 test 未访问。
 - [ ] 提交服务、评测及测试；commit `feat: evaluate calibrated retrieval decisions end to end`。
 
-## Task B9: 有条件的语义分组扩展
+## Task 9: B9 — 有条件的语义分组扩展
 
 **Files:** Create `models/grouping.py`、`tests/semantic_retrieval/test_grouping.py`；Modify `retrieval/semantic_set.py`、`runtime/trainer.py`。
 
@@ -227,7 +227,7 @@
 - [ ] 同命令通过；B6/B8 覆盖存在判断与此组预测独立，无码/未审核标签时只能 canonical grouping。
 - [ ] 提交扩展；commit `feat: add supervised query-conditioned equivalence grouping`。生产启用另需 validation 选择及对应 study 记录。
 
-## Task B10: 有条件的局部 OT 辅助监督
+## Task 10: B10 — 有条件的局部 OT 辅助监督
 
 **Files:** Create `objectives/alignment.py`、`tests/semantic_retrieval/test_alignment.py`；Modify `runtime/trainer.py`、`config.py`。
 

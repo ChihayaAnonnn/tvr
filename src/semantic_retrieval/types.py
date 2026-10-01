@@ -107,3 +107,16 @@ def validate_targets(targets: Targets) -> None:
     for value in values:
         if value.dtype not in integer_types or not ((value == -1) | (value == 0) | (value == 1)).all():
             raise ValueError("labels must be integer -1 (unknown), 0 or 1")
+
+
+@dataclass(frozen=True)
+class EpisodeBatch:
+    inputs: EncoderInputs
+    targets: Targets
+    query_ids: tuple[str, ...]
+    canonical_ids: tuple[str, ...]
+    pair_indices: Tensor
+    query_offsets: Tensor
+
+    def inference_queries(self) -> QueryInputs:
+        return QueryInputs(self.inputs.input_ids, self.inputs.text_mask)
