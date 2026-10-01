@@ -11,3 +11,5 @@
 Review focus: reserved 输入与合成来源约束、GPU/world/rank/precision 绑定、DDP 局部全 unknown 的 reducer 行为、checkpoint rank RNG 和精确比较、校准/锁定集与 test 封存、输出仅位于 canonical run、意外失败保留与无静默重试。
 
 实现与审阅记录：CPU 初始窄测 16 项通过；新增四 rank CPU 链路和 FP32 检查通过；完整初次回归 314 项通过。独立审阅发现的验证文件未强制预留、缩减训练模块仍可能声称完整 PASS、数值 CUDA ordinal 不能证明 UUID 映射均修复并有 RED→GREEN 回归。GPU 入口逐 rank 向 CUDA driver 核验实际 UUID，visibility 使用完整 UUID。新增随机输入权重使用 NPZ，保留已有 PT/JIT 读取。核心配置严格匹配已完成并归档的 prep 模板。CPU 恢复比较要求 bitwise，GPU 参数及优化器 moment 最大绝对差要求 ≤1e-6（报告实际差值），各 rank 同一步参数仍要求完全一致。
+
+最终源码回归：`CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 PYTHONPATH=src:. /home/xujie/.conda/envs/tvr/bin/python -m pytest -q` → 321 passed，80.12 秒，1 个 PyTorch TypedStorage 弃用警告。没有未处理的审阅问题；GPU 验收记录另在受跟踪 phase/registry/summary 中归档。
