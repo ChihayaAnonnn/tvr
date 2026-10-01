@@ -59,8 +59,11 @@ class ModelConfig:
     coarse_dim: int
     grouping: "GroupingConfig | None" = None
     alignment: "AlignmentConfig | None" = None
+    pilot_arm: str | None = None
 
     def __post_init__(self):
+        if self.pilot_arm not in {None, "A0", "P1", "A1", "A2", "A3", "A4"}:
+            raise ValueError("invalid pilot arm")
         if not isinstance(self.clip, ClipConfig) or not isinstance(self.clip_weights, Path):
             raise ValueError("explicit CLIP configuration and local weights required")
         if not re.fullmatch("[0-9a-f]{64}", self.clip_sha256):
@@ -111,6 +114,7 @@ class TrainConfig:
     trainable_prefixes: tuple[str, ...]
     loss_weights: dict[str, float]
     checkpoint_interval: int = 20
+    pilot: "PilotTrainConfig | None" = None
 
     def __post_init__(self):
         import math
@@ -241,6 +245,7 @@ def effective_manifest_config(config, *, eval_split):
             data=payload["data"],
             deployment=payload["deployment"],
             resume=payload["resume"],
+            pilot=t["pilot"],
         ),
     )
 
@@ -252,7 +257,11 @@ def load_system_config(path):
         raise ValueError("system requires explicit runtime/model/train/policy/data")
 
     def construct(cls, values):
-        if not isinstance(values, dict) or set(values) != {f.name for f in fields(cls)}:
+        from dataclasses import MISSING
+
+        names = {f.name for f in fields(cls)}
+        required_names = {f.name for f in fields(cls) if f.default is MISSING and f.default_factory is MISSING}
+        if not isinstance(values, dict) or not required_names.issubset(values) or set(values) - names:
             raise ValueError(f"invalid {cls.__name__} fields")
         return cls(**values)
 
@@ -278,6 +287,12 @@ def load_system_config(path):
     t = payload["train"].copy()
     t.setdefault("checkpoint_interval", 20)
     t["trainable_prefixes"] = tuple(t["trainable_prefixes"])
+    if t.get("pilot") is not None:
+        pilot = t["pilot"].copy()
+        for name in ("candidate_order_path", "parent_config_path", "parent_checkpoint_path"):
+            if pilot.get(name) is not None:
+                pilot[name] = local(pilot[name])
+        t["pilot"] = construct(PilotTrainConfig, pilot)
     p = payload["policy"].copy()
     p["k_sequence"] = tuple(p["k_sequence"])
     d = payload["data"].copy()
@@ -393,3 +408,50 @@ class AlignmentConfig:
             or self.warmup_steps < 0
         ):
             raise ValueError("invalid explicit alignment solver configuration")
+
+
+@dataclass(frozen=True)
+class PilotTrainConfig:
+    arm: str
+    sampler_seed: int
+    candidate_order_path: Path
+    candidate_order_sha256: str
+    parent_config_path: Path | None = None
+    parent_config_sha256: str | None = None
+    parent_checkpoint_path: Path | None = None
+    parent_checkpoint_sha256: str | None = None
+    parent_metadata_sha256: str | None = None
+    parent_run_id: str | None = None
+
+    def __post_init__(self):
+        if self.arm not in {"A0", "P1", "A1", "A2", "A3", "A4"}:
+            raise ValueError("invalid pilot training arm")
+        if type(self.sampler_seed) is not int or self.sampler_seed < 0:
+            raise ValueError("sampler seed must be a nonnegative integer")
+        if not isinstance(self.candidate_order_path, Path) or not re.fullmatch(
+            "[0-9a-f]{64}", self.candidate_order_sha256
+        ):
+            raise ValueError("fixed candidate ordering requires a path and SHA")
+        parent = (
+            self.parent_config_path,
+            self.parent_config_sha256,
+            self.parent_checkpoint_path,
+            self.parent_checkpoint_sha256,
+            self.parent_metadata_sha256,
+            self.parent_run_id,
+        )
+        if self.arm in {"A0", "P1"}:
+            if any(x is not None for x in parent):
+                raise ValueError("A0/P1 do not consume a parent")
+        elif (
+            not all(x is not None for x in parent)
+            or not isinstance(self.parent_config_path, Path)
+            or not isinstance(self.parent_checkpoint_path, Path)
+            or any(
+                not isinstance(x, str) or not re.fullmatch("[0-9a-f]{64}", x)
+                for x in (self.parent_config_sha256, self.parent_checkpoint_sha256, self.parent_metadata_sha256)
+            )
+            or not isinstance(self.parent_run_id, str)
+            or not self.parent_run_id
+        ):
+            raise ValueError("branches require complete hashed parent identity")

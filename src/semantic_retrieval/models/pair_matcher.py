@@ -35,8 +35,9 @@ def validate_offsets(offsets, n):
 
 
 class PairMatcher(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, dim, *, wti_only=False):
         super().__init__()
+        self.wti_only = wti_only
         self.dim = dim
         self.feature_dim = dim * 4 + 2
         self.text_projection = nn.Linear(dim, dim, bias=False)
@@ -64,10 +65,6 @@ class PairMatcher(nn.Module):
                 raise ValueError("nonfinite pair features")
             sim = torch.einsum("nld,ntd->nlt", F.normalize(text, dim=-1), F.normalize(frames, dim=-1))
             masked = sim.masked_fill(~fm[:, None, :], -torch.inf)
-            att = torch.cat([masked, self.dustbin.expand(len(qi), text.shape[1], 1)], -1).softmax(-1) * tm[..., None]
-            aligned = torch.einsum("nlt,ntd->nld", att[..., :-1], frames)
-            pool = aligned.sum(1) / tm.sum(1, keepdim=True)
-            dust = att[..., -1].sum(1) / tm.sum(1)
             tw = self.wti.text_weight(text).squeeze(-1).masked_fill(~tm, -torch.inf).softmax(-1)
             fw = self.wti.frame_weight(frames).squeeze(-1).masked_fill(~fm, -torch.inf).softmax(-1)
             pair_sim = sim.masked_fill(~(tm[..., None] & fm[:, None, :]), -torch.inf)
@@ -75,6 +72,16 @@ class PairMatcher(nn.Module):
                 (pair_sim.max(-1).values.masked_fill(~tm, 0) * tw).sum(-1)
                 + (pair_sim.max(-2).values.masked_fill(~fm, 0) * fw).sum(-1)
             ) / 2
+            if self.wti_only:
+                if return_alignment:
+                    raise ValueError("WTI-only arm does not implement alignment")
+                h = torch.zeros(len(qi), self.feature_dim, device=wti.device)
+                h[:, -1] = wti
+                return PairScores(F.softplus(self.a_raw) * wti + self.b, h, None)
+            att = torch.cat([masked, self.dustbin.expand(len(qi), text.shape[1], 1)], -1).softmax(-1) * tm[..., None]
+            aligned = torch.einsum("nlt,ntd->nld", att[..., :-1], frames)
+            pool = aligned.sum(1) / tm.sum(1, keepdim=True)
+            dust = att[..., -1].sum(1) / tm.sum(1)
             q = self.text_projection(f.pooled_text[qi].float())
             v = self.frame_projection(f.pooled_video[vi].float())
             h = torch.cat([q, v, q * v, pool, dust[:, None], wti[:, None]], -1)

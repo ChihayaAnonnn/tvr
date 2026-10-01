@@ -2,6 +2,7 @@
 
 import math
 import random
+import time
 
 import numpy as np
 import torch
@@ -45,15 +46,26 @@ def global_coarse_relations(batch, video_embeddings):
         for v in range(len(vids))
         if batch.targets.relevance[q, v] >= 0
     ]
-    local = (vids, records)
+    positives = getattr(batch, "benchmark_positive_ids", None)
+    if positives is not None and (len(positives) != len(qids) or any(not row for row in positives)):
+        raise ValueError("benchmark batches require positive IDs for every query")
+    local = (vids, records, qids, positives)
     if dist.is_initialized():
         all_records = [None] * dist.get_world_size()
         dist.all_gather_object(all_records, local)
     else:
         all_records = [local]
-    gallery = [i for ids, _ in all_records for i in ids]
+    gallery = [i for ids, _, _, _ in all_records for i in ids]
+    global_queries = [q for _, _, queries, _ in all_records for q in queries]
+    if positives is not None and len(set(global_queries)) != len(global_queries):
+        raise ValueError("pilot queries must be unique across ranks")
     known = {}
-    for _, relations in all_records:
+    for _, relations, queries, positives in all_records:
+        if positives is not None:
+            for query, relevant in zip(queries, positives):
+                for video in set(gallery):
+                    known[query, video] = int(video in relevant)
+            continue
         for q, v, label in relations:
             if (q, v) in known and known[q, v] != label:
                 raise ValueError("cross-rank annotation conflict")
@@ -130,6 +142,14 @@ class Trainer:
         validate_offsets(batch.query_offsets, len(batch.pair_indices))
         self.model.train()
         self.optimizer.zero_grad(set_to_none=True)
+        pilot = self.context.system_config.train.pilot is not None
+
+        def timestamp():
+            if pilot and batch.inputs.video.device.type == "cuda":
+                torch.cuda.synchronize(batch.inputs.video.device)
+            return time.perf_counter()
+
+        started = timestamp()
         # forward is the same named matching pipeline, including when wrapped by DDP.
         gp = batch.targets.group_pairs
         weight = self.context.system_config.train.loss_weights["group"]
@@ -199,12 +219,22 @@ class Trainer:
             if global_counts[i] > 0:
                 loss = loss + weights[k] * terms[k] * counts[i] * world / global_counts[i]
         active = any(weights[k] > 0 and global_counts[i] > 0 for i, k in enumerate(LOSS_NAMES))
+        forward_done = timestamp()
         if active:
             loss.backward()
+        backward_done = timestamp()
         if active:
+            if pilot and any(p.grad is not None and not torch.isfinite(p.grad).all() for p in self.raw.parameters()):
+                raise ValueError("pilot has nonfinite gradients")
             self.optimizer.step()
             self.scheduler.step()
             self.step += 1
+        optimizer_done = timestamp()
+        self.last_timing = dict(
+            forward_seconds=forward_done - started,
+            backward_seconds=backward_done - forward_done,
+            optimizer_seconds=optimizer_done - backward_done,
+        )
         numerators = torch.stack([terms[k].detach() * counts[i] for i, k in enumerate(LOSS_NAMES)])
         if world > 1:
             dist.all_reduce(numerators)

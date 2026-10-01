@@ -70,13 +70,20 @@ def _validate_progress(progress, step):
     keys = set(LOSS_NAMES) | {"total", "step", "stepped"} | {"valid_" + k + "_count" for k in LOSS_NAMES}
     if (
         not isinstance(progress, dict)
-        or set(progress) != {"next_iteration", "metrics"}
+        or set(progress) not in ({"next_iteration", "metrics"}, {"next_iteration", "metrics", "sampler"})
         or type(progress["next_iteration"]) is not int
         or progress["next_iteration"] < step
         or not isinstance(progress["metrics"], dict)
         or set(progress["metrics"]) != keys
     ):
         raise ValueError("invalid checkpoint training progress")
+    if "sampler" in progress:
+        sampler = progress["sampler"]
+        if not isinstance(sampler, dict) or sampler.get("iteration") not in (
+            progress["next_iteration"],
+            progress["next_iteration"] + 120,
+        ):
+            raise ValueError("checkpoint sampler and training iteration disagree")
     metrics = progress["metrics"]
     if (
         any(type(x) not in (int, float) or not math.isfinite(x) for x in metrics.values())
@@ -110,6 +117,22 @@ def _publish_file(path, writer):
         os.close(descriptor)
 
 
+def validate_pilot_progress(progress, arm, step):
+    if arm is None:
+        return
+    offset = 120 if arm in {"A1", "A2", "A3", "A4"} else 0
+    maximum = 240 if arm == "A0" else 120
+    if (
+        not isinstance(progress, dict)
+        or "sampler" not in progress
+        or not isinstance(progress["sampler"], dict)
+        or not 0 <= step <= maximum
+        or progress.get("next_iteration") != step
+        or progress["sampler"].get("iteration") != step + offset
+    ):
+        raise ValueError("pilot checkpoint requires phase-consistent sampler/update progress")
+
+
 def assert_running(context):
     manifest, status, _ = load_validated_run_lifecycle(context.paths)
     if context.system_config is not None and (
@@ -129,6 +152,7 @@ def save_checkpoint(context, model, optimizer, scheduler, config, step, *, progr
 
     verify_training_contract(model, optimizer, scheduler, context, step)
     _validate_progress(progress, step)
+    validate_pilot_progress(progress, model.config.pilot_arm, step)
     name = f"step-{step:08d}" if progress is None else f"iteration-{progress['next_iteration']:08d}-step-{step:08d}"
     path = context.paths.checkpoints / f"{name}.pt"
     rng = [rng_state()]
@@ -200,6 +224,7 @@ def _validated_checkpoint(path, model, *, expected_config_sha256):
             raise ValueError("checkpoint v2 requires training progress")
         _validate_progress(payload["progress"], payload["step"])
     payload = _hydrate_array_references(payload, path.parent.parent)
+    validate_pilot_progress(payload.get("progress"), model.config.pilot_arm, payload["step"])
     current = model.state_dict()
     saved = payload["model"]
     if set(current) != set(saved) or any(

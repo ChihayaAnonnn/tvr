@@ -122,6 +122,50 @@ def _validate_resume(repository, manifest, system_config):
         raise ValueError("resume parent terminal record must be committed")
 
 
+def _validate_pilot(repository, manifest, system_config):
+    """All candidate and parent inputs belong to the committed reservation."""
+    pilot = system_config.train.pilot
+    if pilot is None or system_config.deployment is not None:
+        return
+    from semantic_retrieval.runtime.pilot import validate_pilot_config
+
+    validate_pilot_config(system_config, world_size=int(os.environ.get("WORLD_SIZE", "1")))
+    refs = {str(r["path"]): r["sha256"] for field in ("dataset_splits", "input_checkpoints") for r in manifest[field]}
+    inputs = [(pilot.candidate_order_path, pilot.candidate_order_sha256)]
+    if pilot.parent_checkpoint_path is not None:
+        inputs += [
+            (pilot.parent_config_path, pilot.parent_config_sha256),
+            (pilot.parent_checkpoint_path, pilot.parent_checkpoint_sha256),
+            (pilot.parent_checkpoint_path.with_suffix(".json"), pilot.parent_metadata_sha256),
+        ]
+    if any(refs.get(str(path)) != digest for path, digest in inputs):
+        raise ValueError("pilot candidate ordering/parent inputs must be reserved")
+    if pilot.parent_run_id is None:
+        return
+    if pilot.parent_run_id == manifest["run_id"] or pilot.parent_run_id not in manifest["parent_run_ids"]:
+        raise ValueError("pilot branch requires a distinct reserved P1 parent run")
+    root = Path(manifest["artifact_path"])
+    parent = make_run_paths(root.parents[3], manifest["study"], pilot.parent_run_id)
+    if pilot.parent_checkpoint_path.parent != parent.checkpoints:
+        raise ValueError("P1 checkpoint does not belong to declared parent")
+    parent_manifest, status, _ = load_validated_run_lifecycle(parent)
+    if status["state"] != "completed":
+        raise ValueError("P1 parent must be completed")
+    for path, digest in inputs[2:]:
+        if status["output_hashes"].get(path.relative_to(parent.root).as_posix()) != digest:
+            raise ValueError("P1 input differs from completed parent evidence")
+    committed = subprocess.run(
+        ["git", "show", f"HEAD:{manifest['registry_path']}"], cwd=repository, check=True, capture_output=True, text=True
+    ).stdout
+    if not any(
+        record["run_id"] == pilot.parent_run_id
+        and record["state"] == "completed"
+        and record["manifest_sha256"] == manifest_sha256(parent_manifest)
+        for record in parse_registry_text(committed)
+    ):
+        raise ValueError("P1 completed terminal record must be committed")
+
+
 def prepare_run(config, *, repo_root, system_config=None):
     repository = Path(repo_root).resolve()
     root = config.run_dir
@@ -260,6 +304,7 @@ def prepare_run(config, *, repo_root, system_config=None):
                 raise ValueError(f"input {field} SHA-256 mismatch")
     if system_config is not None:
         _validate_resume(repository, manifest, system_config)
+        _validate_pilot(repository, manifest, system_config)
     return RunContext(
         paths, manifest, ArtifactArrayStore(paths.arrays), config, repository, system_config=system_config
     )

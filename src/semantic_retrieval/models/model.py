@@ -1,8 +1,10 @@
 """New retrieval model composed from explicitly configured primitives."""
 
+from dataclasses import replace
+
 from torch import nn
 
-from semantic_retrieval.models.answerability import AnswerabilityHead
+from semantic_retrieval.models.answerability import AnswerabilityHead, ScoreOnlyAnswerabilityHead
 from semantic_retrieval.models.clip import ClipBackbone
 from semantic_retrieval.models.coarse import CoarseProjector
 from semantic_retrieval.models.grouping import EquivalencePredictor
@@ -20,8 +22,10 @@ class SemanticRetrievalModel(nn.Module):
         load_clip_state(config.clip_weights, config.clip_sha256, self.clip)
         self.temporal = TemporalEncoder(config.dim, config.num_layers, config.num_heads, config.max_frames)
         self.coarse = CoarseProjector(config.dim, config.coarse_dim)
-        self.matcher = PairMatcher(config.dim)
-        self.answerability = AnswerabilityHead(self.matcher.feature_dim)
+        self.matcher = PairMatcher(config.dim, wti_only=config.pilot_arm == "A0")
+        self.answerability = (
+            ScoreOnlyAnswerabilityHead() if config.pilot_arm == "A4" else AnswerabilityHead(self.matcher.feature_dim)
+        )
         self.grouping = EquivalencePredictor(self.matcher.feature_dim) if config.grouping is not None else None
 
     def encode_query(self, inputs):
@@ -51,6 +55,10 @@ class SemanticRetrievalModel(nn.Module):
         return self.matcher(features, pair_indices, return_alignment=return_alignment)
 
     def score_presence(self, pair_scores, query_offsets):
+        if self.config.pilot_arm == "A2":
+            pair_scores = replace(
+                pair_scores, features=pair_scores.features.detach(), logits=pair_scores.logits.detach()
+            )
         return self.answerability(pair_scores, query_offsets)
 
     def forward(self, inputs, pair_indices, query_offsets, *, group_pairs=None, return_alignment=False):

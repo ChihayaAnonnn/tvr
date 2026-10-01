@@ -70,4 +70,6 @@ def collate_episodes(episodes):
         torch.tensor(pairs, dtype=torch.long).reshape(-1, 2),
         torch.tensor(offsets, dtype=torch.long),
         tuple(group_provenance) if group_provenance else None,
+        tuple(e.benchmark_positive_ids for e in episodes)
+        if all(getattr(e, "relevance_space", None) == "benchmark_annotation" for e in episodes) else None,
     )

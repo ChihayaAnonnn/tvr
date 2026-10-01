@@ -118,6 +118,7 @@ class EpisodeBatch:
     pair_indices: Tensor
     query_offsets: Tensor
     group_provenance: tuple[str, ...] | None = None
+    benchmark_positive_ids: tuple[tuple[str, ...], ...] | None = None
 
     def inference_queries(self) -> QueryInputs:
         return QueryInputs(self.inputs.input_ids, self.inputs.text_mask)
