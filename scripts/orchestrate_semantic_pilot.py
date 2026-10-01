@@ -212,6 +212,14 @@ def main(argv=None):
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--artifact-root", type=Path)
     commands = parser.add_subparsers(dest="operation", required=True)
+    templates = commands.add_parser('templates',allow_abbrev=False)
+    templates.add_argument('--phase-id',required=True)
+    templates.add_argument('--evidence',type=Path,required=True)
+    templates.add_argument('--environment',type=Path,required=True)
+    templates.add_argument('--python-executable',type=Path,required=True)
+    templates.add_argument('--output',type=Path,required=True)
+    templates.add_argument('--gpu-uuids',help='comma-separated physical Q0 UUIDs in order 0,2,3,4')
+    templates.add_argument('--clip-weights',type=Path,help='immutable JSON pretrained CLIP file reference for E0')
     plan = commands.add_parser("plan", allow_abbrev=False)
     plan.add_argument("--phase-id", required=True)
     plan.add_argument("--phase-path", required=True)
@@ -226,7 +234,25 @@ def main(argv=None):
     args = parser.parse_args(argv)
     repo = args.repo_root.resolve()
     artifact_root = (args.artifact_root or repo / "artifacts").resolve()
-    if args.operation == "plan":
+    if args.operation == 'templates':
+        from semantic_retrieval.runtime.pilot_workflow import workflow_templates
+        manager._require_clean(repo)
+        path = args.output if args.output.is_absolute() else repo/args.output
+        if path.resolve() != path or not path.is_relative_to(repo/CONTROL/'configs'):
+            raise ValueError('workflow templates must be tracked pilot control-plane configs')
+        if path.exists(): raise ValueError('workflow templates are immutable; automatic replacement/retry is forbidden')
+        index_directory = path.parent/(args.phase_id+'-indices')
+        result = workflow_templates(repo,args.phase_id,evidence=strict_json_loads(args.evidence.read_text()),
+            environment=strict_json_loads(args.environment.read_text()),python_executable=args.python_executable,
+            index_directory=index_directory,gpu_uuids=args.gpu_uuids.split(',') if args.gpu_uuids else None,
+            clip_weights=strict_json_loads(args.clip_weights.read_text()) if args.clip_weights else None)
+        path.parent.mkdir(parents=True,exist_ok=True)
+        with path.open('xb') as stream: stream.write(artifact_json_bytes(result))
+        inputs = sorted(index_directory.glob('*.json')) if index_directory.exists() else []
+        _commit(repo,[path.relative_to(repo),*[p.relative_to(repo) for p in inputs]],f'config: bind complete {args.phase_id} pilot workflow batch')
+        result = dict(phase_id=args.phase_id,templates=str(path),run_count=len(result),
+                      sha256=hashlib.sha256(path.read_bytes()).hexdigest(),control_input_count=len(inputs))
+    elif args.operation == "plan":
         manager._require_clean(repo)
         timestamp = args.scheduled_timestamp_utc or datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         phase = build_phase(args.phase_id, phase_path=args.phase_path, scheduled_timestamp_utc=timestamp,

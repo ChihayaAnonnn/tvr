@@ -132,7 +132,38 @@ def verify_phase_evidence(repo_root, evidence_ref, expected_phase):
         if entries[0] != expected:
             raise ValueError("pilot predecessor terminal record differs from its archive")
         results.append(dict(manifest=manifest, status=status, paths=paths))
+    contract = phase_contract(expected_phase)
+    if ([(r['manifest']['variant'], r['manifest']['seed']) for r in results] != list(contract['runs'])
+            or any(r['manifest']['dataset'] != contract['dataset'] or r['manifest']['stage'] != 'baseline' for r in results)):
+        raise ValueError('pilot predecessor is not the complete registered phase batch')
     return dict(phase=summary["phase"], summary=summary, runs=results)
+
+
+def validate_frozen_prerequisite(repo_root, evidence):
+    """Require C0's actual immutable scientific freeze before any locked worker."""
+    from semantic_retrieval.data.episodes import file_sha256
+    from semantic_retrieval.evaluation import pilot_analysis
+    if len(evidence['runs']) != 1:
+        raise ValueError('locked access requires one completed C0 frozen analysis')
+    run = evidence['runs'][0]
+    path = run['paths'].provenance/'pilot_frozen.json'
+    digest = run['status']['output_hashes'].get('provenance/pilot_frozen.json')
+    if not path.is_file() or digest != file_sha256(path):
+        raise ValueError('locked access requires the hash-bound C0 frozen artifact')
+    frozen = strict_json_loads(path.read_text())
+    evaluation = run['manifest']['config']['evaluation']
+    expected_models = {f'{arm}_seed{seed}' for seed in (0,1,2) for arm in ('A0','A1','A2','A3','A4')}
+    if (run['manifest']['variant'] != 'pilot-analysis-freeze'
+            or evaluation != dict(eval_split='val_development',qualification_scenario='pilot_analysis')
+            or frozen.get('schema_version') != 1 or frozen.get('relevance_space') != 'benchmark_annotation'
+            or frozen.get('source_sha') != run['manifest']['git_sha']
+            or frozen.get('analysis_sha256') != file_sha256(pilot_analysis.__file__)
+            or set(frozen.get('model_identities',{})) != expected_models
+            or not isinstance(frozen.get('label_protocol'),dict) or not frozen['label_protocol']
+            or not isinstance(frozen.get('target_gallery'),dict)
+            or any(not isinstance(frozen.get(key),dict) or not frozen[key] for key in ('policies','scalar_policies','calibration','strongest_scalar'))):
+        raise ValueError('C0 frozen model, source, target or policy identity is incomplete')
+    return dict(path=str(path),sha256=digest)
 
 
 def validate_q0_report(report, *, source_sha):
@@ -173,7 +204,7 @@ def _marker(manifest):
 
 
 def _same_q0_source(repo, q0_source, source):
-    changed = _git_bytes(repo, "diff", "--name-only", f"{q0_source}..{source}", "--", "src/semantic_retrieval", "scripts", "experiment_artifacts.py", "artifact_schema_validator.py").decode().splitlines()
+    changed = _git_bytes(repo, "diff", "--name-only", f"{q0_source}..{source}", "--", "src/semantic_retrieval", "scripts", ":(top,glob)*.py", "experiments/contextual-risk-v2/schemas").decode().splitlines()
     if changed:
         raise ValueError("execution source changed after the new pilot qualification: " + ", ".join(changed))
 
@@ -194,6 +225,15 @@ def validate_pilot_gpu_qualification(context):
     _same_q0_source(context.repo_root, manifest["git_sha"], context.manifest["git_sha"])
     if manifest["run_id"] not in context.manifest["parent_run_ids"]:
         raise ValueError("pilot scientific worker must declare its qualified Q0 parent")
+    if hasattr(context,'config'):
+        import os
+        import torch
+        from scripts.qualify_semantic_retrieval import local_device_uuid
+        uuids = [r['gpu_uuid'] for r in sorted(report['rank_records'],key=lambda r:r['rank'])]
+        if (not torch.cuda.is_available() or torch.cuda.device_count() != 4
+                or os.environ.get('CUDA_VISIBLE_DEVICES','').split(',') != uuids
+                or [local_device_uuid(i) for i in range(4)] != uuids):
+            raise ValueError('worker physical GPU UUID topology differs from qualified Q0')
     return report
 
 
@@ -266,9 +306,23 @@ def assert_phase_authorized(repo_root, manifest, operation):
         if any(r["manifest"]["run_id"] not in manifest["parent_run_ids"] for r in evidence[required]["runs"]):
             raise ValueError("pilot prerequisite run must appear in parent_run_ids")
     if "D1" in evidence:
+        from semantic_retrieval.data.pilot_catalog import TARGETS
         ready = [r for r in evidence["D1"]["runs"] if r["manifest"]["variant"] == "benchmark_compile"]
-        if not ready or any(strict_json_loads((r["paths"].provenance / "input-summary.json").read_text()).get("ready") is not True for r in ready):
+        summaries = [strict_json_loads((r['paths'].provenance/'input-summary.json').read_text()) for r in ready]
+        if not summaries or any(s.get('ready') is not True or s.get('relevance_space') != 'benchmark_annotation'
+                or not s.get('label_protocol') or set(s.get('splits',{})) != {'train','val_development','val_calibration','val_locked'}
+                or any(s['splits'][sp].get('official_video_count',0) < (TARGETS['train_min'] if sp=='train' else TARGETS[sp])
+                    or s['splits'][sp].get('canonical_video_count',0) < TARGETS['canonical_min']
+                    or s['splits'][sp].get('query_count',0) != s['splits'][sp].get('official_video_count')
+                    for sp in s['splits'])
+                or s['splits']['val_locked'].get('component_count',0) < TARGETS['locked_components_min'] for s in summaries):
             raise ValueError("pilot D1 benchmark data compilation is not ready")
+    if marker['phase_id'] in {'V0E','V0S','V0'}:
+        frozen = validate_frozen_prerequisite(repo,evidence['C0'])
+        from semantic_retrieval.runtime.input_bindings import manifest_input_references
+        inputs = manifest_input_references(repo,manifest)
+        if inputs.get(frozen['path']) != frozen['sha256']:
+            raise ValueError('locked worker must reserve its exact C0 frozen artifact')
     if gpu and marker["phase_id"] != "Q0":
         validate_pilot_gpu_qualification(SimpleNamespace(manifest=manifest, repo_root=repo))
     if marker["phase_id"] in _TRAIN:
@@ -280,6 +334,8 @@ def assert_phase_authorized(repo_root, manifest, operation):
         # C2's effective serializer places the bound pilot config in evaluation.
         if not isinstance(pilot, dict) or pilot.get("arm") != manifest["variant"]:
             raise ValueError("scientific training requires the new dynamic sampler protocol")
+        if manifest['config']['optimizer'].get('seed') != manifest['seed']:
+            raise ValueError('training seed differs from reserved arm/seed identity')
     limits = dict(training=144.0, qualification=8.0, evaluation=24.0)
     totals = {key: 0.0 for key in limits}
     records = parse_registry_text(_git_bytes(repo, "show", f"HEAD:{CONTROL}/registry.jsonl").decode())

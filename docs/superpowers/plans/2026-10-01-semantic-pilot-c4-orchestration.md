@@ -42,7 +42,7 @@
 
 ### Task 2: Connected phase planning, provisioning and execution
 
-**Files:** Extend `pilot_protocol.py`; create `scripts/orchestrate_semantic_pilot.py`; create `tests/semantic_retrieval/test_pilot_orchestration.py`.
+**Files:** Extend `pilot_protocol.py`; create `scripts/orchestrate_semantic_pilot.py`, `runtime/pilot_workflow.py`, `runtime/pilot_candidates.py` and `scripts/prepare_semantic_pilot_candidates.py`; add focused orchestration/workflow/candidate tests.
 
 **Interfaces:** `build_phase(phase_id, *, phase_path, scheduled_timestamp_utc, run_templates, evidence)` produces existing manager payload `{phase,study,runs}` with exact arm/seed batch. `provision_run_config(repo_root, run_dir, template)` injects reserved runtime identity into immutable run-local config. CLI plan/reserve/run/finalize delegates to existing manager, commits batch reservation/terminal summary, invokes sealed command once and stops on failures.
 
@@ -62,6 +62,14 @@
 - [ ] Observe RED, implement shared CPU/GPU chain, and run GREEN including CPU four-rank coverage where required.
 - [ ] Run relevant suite and full project suite, record actual results in this plan, and commit only owned files.
 
+### Task 4: Authenticated analysis handoff
+
+Root requested a connected C0/V0 factory and removal of caller-supplied gate booleans. Extend the workflow with immutable bundle/config/qualification documents assembled from successful committed D1/Q0/training/score archives. Recompute gradient and stability gates from actual C2 logs, and invariance from hash-bound C3 probe arrays with required coverage; missing measurements remain unavailable and cannot pass. C3 consumes `validate_analysis_qualification(context, document)` before using any gates. No confirmatory power claim is inferred from pilot sample quantities.
+
+- [ ] Observe RED for changed executable dependencies, incomplete training evidence and forged qualification gates.
+- [ ] Implement archive-derived gate producer/validator and C0/V0 bundle/config templates with all inputs reserved.
+- [ ] Coordinate C3 frozen expansion/invariance schemas, verify CPU integration, and record any unavailable measurement honestly.
+
 ## Execution Record
 
 - Baseline: `a096015`; isolated branch `codex/semantic-pilot-c4`.
@@ -72,3 +80,11 @@
 - Task 1 GREEN: 42 protocol/CPU-policy tests passed in 1.36s. Owned commit `a089479`; C1/C2 dependency cherry-picks are not C4 deliverables.
 - Task 2 RED: three missing-orchestrator failures. Actual CPU worker success/failure paths now execute through committed reservation and terminal summary. Existing source verification rejects archived execution before checking state; controller now explicitly rejects terminal state first and preserves observed vs controller exit codes separately.
 - Ruling confirmed by root: E0 never ranks locked queries. Add V0E after C0 freeze for locked CLIP candidate panels. Evaluation allocation is E0=4, C0S=8, V0E=2, V0S=10 GPUh; C0/V0 are CPU analysis. This only subdivides the approved 24 GPUh budget.
+- Task 2 controller GREEN: 45 combined protocol/policy/controller tests passed in6.80s, then49 in7.20s after complete-batch/quota/freeze gates.
+- E0/V0E RED: four missing-module failures; GREEN: five tests passed in4.55s, including actual raw-video decode/CLIP encoding → ranks → v2 inventories → C3 panel files. Source labels/components and canonical source IDs are retained. Locked rank creation remains behind actual C0 freeze.
+- New Q0 RED: four missing-module failures. CPU binding fixtures initially used inconsistent WORLD_SIZE environment at prepare/start; corrected fixture identity rather than weakening runtime guards. GREEN: four tests passed in15.13s, including actual four-rank Gloo hook/probe/backward, dynamic raw panels, P1 sampler/RNG/Adam restoration and real C3 scoring/calibration. Added a later-calibration failure test retaining partial evidence; latest shared-core/controller/workflow subset11 passed in30.24s.
+- C1 source-proof/input-index dependencies integrated locally (`e7bf143`, `b043d18`, `f33988c`, `5add32a`); C2 `420f7ef` and C3 `742fdb0` integrated. These are dependencies, not C4 deliverables. Large gallery video refs now use the shared authenticated index contract; scientific configs/checkpoints remain direct.
+- Training/score workflow RED: two missing-module failures; GREEN: fixed arm config and9000-input refusal tests pass; added901-real-file index expansion. CLI templates feeds exact committed batch configs to plan/reserve/run. Actual worker topology rechecks qualified UUIDs after environment binding, including C2 training.
+- Full CPU suite:478 passed, one TypedStorage deprecation warning,128.89s. No real inputs/reservations/GPU workers launched by this implementer. CPU/fake fixture metadata cannot grant new Q0 GPU PASS. Real four-GPU qualification remains root's authorized task after integration and resource availability.
+- Task 4 RED: seven missing gate APIs plus the `experiment_tracking.py` source-change bypass; later missing analysis/producer/score-parent factory paths and incomplete invariance coverage reproduced before implementation. GREEN: archive-based evidence tests12 passed in18.91s. Full committed software fixtures exercise C0/V0 handoff, reject forged/unreserved gates, and verify Q0 consumes its complete own inventory and E0 binds separate scientific weights. No GPU worker is executed by these fixtures. C3 confirmed actual system trajectory and twenty invariance probes use reserved frozen policies, argsort orders and measured `[N,4,5]` arrays; its final integration remains separate.
+- Final owned-source verification:72 focused tests passed in51.46s; complete CPU suite500 passed in162.13s, one existing PyTorch TypedStorage warning. `git diff --check` and CLI help passed. C3 review commits `2d6cc974`/`72695a6` became available during this full run and will be integrated for a separate compatibility check; this500 result predates those commits. Real four-GPU PASS remains pending root execution.

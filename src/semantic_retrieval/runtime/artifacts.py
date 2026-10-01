@@ -301,6 +301,13 @@ def prepare_run(config, *, repo_root, system_config=None):
     )
     if environment != manifest["environment"]:
         raise ValueError("runtime environment or precision mismatch")
+    # This runs inside the actual worker after visibility/environment binding;
+    # reserve/controller policy checks intentionally stay CPU-safe.
+    if (manifest['study'] == 'semantic-answerability-pilot-v1' and gpu_count > 0
+            and manifest['variant'] != 'pilot-q0-v2'):
+        from types import SimpleNamespace
+        from .pilot_protocol import validate_pilot_gpu_qualification
+        validate_pilot_gpu_qualification(SimpleNamespace(manifest=manifest,repo_root=repository,config=config))
     references = manifest_input_references(repository, manifest)
     for name, digest in references.items():
         if _hash_input(repository, {"path": name, "sha256": digest}) != digest:

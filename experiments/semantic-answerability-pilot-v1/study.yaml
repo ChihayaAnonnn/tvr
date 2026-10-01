@@ -38,7 +38,7 @@ seeds:
 preparation_variants:
 - source_inventory
 - benchmark_compile
-scientific_gate: not_implemented_fail_closed
+scientific_gate: committed_new_q0_archive_evidence_required
 source_confirmation:
   path: docs/maintenance/2026-10-01-msrvtt-source-confirmation.json
   sha256: 722eaf027a34e9eebaa04778eae72acde35e57c13d46e9258a6b53fdf66b1ff1

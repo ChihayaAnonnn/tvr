@@ -55,7 +55,7 @@ def template(variant="source_inventory", seed=0, gpu_count=0):
 
 def completed_evidence(repo, phase_id="D1", *, state="completed", commit_terminal=True, outputs=None):
     """Use the real immutable lifecycle and phase finalizer, with a CPU fixture worker."""
-    spec = template()
+    spec = template('benchmark_compile' if phase_id == 'D1' else 'pilot-analysis-freeze')
     phase_path = Path(CONTROL) / "phases" / f"{phase_id}.json"
     (repo / phase_path).parent.mkdir(exist_ok=True)
     (repo / phase_path).write_bytes(artifact_json_bytes(dict(phase=phase_id, study=NAME, runs=[spec])))
@@ -111,6 +111,22 @@ def test_authenticate_completed_committed_phase_and_all_output_hashes(pilot_repo
         verify_phase_evidence(pilot_repo, evidence, "D1")
 
 
+@pytest.mark.parametrize('dependency', ['experiment_tracking.py', 'experiment_artifacts.py', 'src/semantic_retrieval/runtime/artifacts.py'])
+def test_qualified_source_rejects_changed_executable_dependencies(pilot_repo, dependency):
+    from semantic_retrieval.runtime.pilot_protocol import _same_q0_source
+    path = pilot_repo/dependency
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('VALUE = 1\n')
+    git(pilot_repo, 'add', '.')
+    git(pilot_repo, 'commit', '-qm', 'qualified source')
+    qualified = git(pilot_repo, 'rev-parse', 'HEAD')
+    path.write_text('VALUE = 2\n')
+    git(pilot_repo, 'add', '.')
+    git(pilot_repo, 'commit', '-qm', 'changed executable')
+    with pytest.raises(ValueError, match='source changed'):
+        _same_q0_source(pilot_repo, qualified, git(pilot_repo, 'rev-parse', 'HEAD'))
+
+
 @pytest.mark.parametrize("defect", ["dirty", "digest", "foreign", "phase", "terminal", "failed", "cancelled"])
 def test_forged_or_incomplete_predecessor_refused(pilot_repo, defect):
     from semantic_retrieval.runtime.pilot_protocol import verify_phase_evidence
@@ -159,3 +175,29 @@ def test_build_phase_refuses_missing_arm_duplicate_seed_and_budget_overrun():
     assert len(phase["runs"]) == 2
     assert all(r["test_authorized"] is False for r in phase["runs"])
     assert all(r["selection_lineage"][-1]["gpu_hours"] == 8 for r in phase["runs"])
+
+
+def test_mechanical_subphases_preserve_all_176_gpu_hours():
+    from semantic_retrieval.runtime.pilot_protocol import phase_contract
+    phases = ('D1','Q0P','Q0','E0','P1a','P1b','P2a','P2b','C0S','C0','V0E','V0S','V0')
+    totals = dict(training=0.,qualification=0.,evaluation=0.)
+    for name in phases:
+        c = phase_contract(name); totals[c['category']] += c['run_gpu_hours']*len(c['runs'])
+    assert totals == dict(training=144.,qualification=8.,evaluation=24.)
+    assert sum(totals.values()) == 176.
+    assert phase_contract('V0E')['requires'] == ('D1','Q0','C0')
+
+
+def test_locked_gate_requires_an_actual_hash_bound_freeze(pilot_repo):
+    from semantic_retrieval.runtime.pilot_protocol import validate_frozen_prerequisite, verify_phase_evidence
+    evidence, _ = completed_evidence(pilot_repo,phase_id='C0',outputs={'provenance/only-ready.json':{'ready':True}})
+    predecessor = verify_phase_evidence(pilot_repo,evidence,'C0')
+    with pytest.raises(ValueError,match='frozen'):
+        validate_frozen_prerequisite(pilot_repo,predecessor)
+
+
+def test_predecessor_cannot_relabel_an_incomplete_scientific_batch(pilot_repo):
+    from semantic_retrieval.runtime.pilot_protocol import verify_phase_evidence
+    evidence, _ = completed_evidence(pilot_repo,phase_id='P1a')
+    with pytest.raises(ValueError,match='registered|batch'):
+        verify_phase_evidence(pilot_repo,evidence,'P1a')
