@@ -133,6 +133,20 @@ def prepare_run(config, *, repo_root, system_config=None):
         refs = {str(r["path"]): r["sha256"] for r in manifest["input_checkpoints"]}
         if refs.get(str(system_config.model.clip_weights)) != system_config.model.clip_sha256:
             raise ValueError("CLIP input is not reserved")
+        if system_config.deployment is not None:
+            deployment = system_config.deployment
+            refs = {
+                str(r["path"]): r["sha256"]
+                for field in ("input_checkpoints", "dataset_splits")
+                for r in manifest[field]
+            }
+            for path, digest in (
+                (deployment.checkpoint_path, deployment.checkpoint_sha256),
+                (deployment.gallery_manifest, deployment.gallery_sha256),
+                (deployment.calibration_path, deployment.calibration_sha256),
+            ):
+                if path is not None and refs.get(str(path)) != digest:
+                    raise ValueError("deployment input is not reserved")
         if system_config.data is not None:
             data = system_config.data
             refs = {str(r["path"]): r["sha256"] for r in manifest["dataset_splits"]}

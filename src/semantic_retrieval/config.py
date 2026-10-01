@@ -169,6 +169,7 @@ class SystemConfig:
     train: TrainConfig
     policy: PolicyConfig
     data: DataConfig | None = None
+    deployment: "DeploymentConfig | None" = None
 
 
 def config_payload(config):
@@ -194,13 +195,15 @@ def effective_manifest_config(config, *, eval_split):
         loss=t["loss_weights"],
         optimizer={k: t[k] for k in ("learning_rate", "weight_decay", "seed", "trainable_prefixes")},
         scheduler={k: t[k] for k in ("scheduler_name", "scheduler_steps")},
-        evaluation=dict(eval_split=eval_split, policy=payload["policy"], data=payload["data"]),
+        evaluation=dict(
+            eval_split=eval_split, policy=payload["policy"], data=payload["data"], deployment=payload["deployment"]
+        ),
     )
 
 
 def load_system_config(path):
     payload = json.loads(path.read_text())
-    if not isinstance(payload, dict) or set(payload) != {"runtime", "model", "train", "policy", "data"}:
+    if not isinstance(payload, dict) or set(payload) != {"runtime", "model", "train", "policy", "data", "deployment"}:
         raise ValueError("system requires explicit runtime/model/train/policy/data")
 
     def construct(cls, values):
@@ -226,10 +229,55 @@ def load_system_config(path):
     p["k_sequence"] = tuple(p["k_sequence"])
     d = payload["data"].copy()
     d["episode_manifest"] = local(d["episode_manifest"])
+    dep = payload["deployment"]
+    if dep is not None:
+        dep = dep.copy()
+        for name in ("checkpoint_path", "gallery_manifest", "calibration_path"):
+            if dep[name] is not None:
+                dep[name] = local(dep[name])
+        dep = construct(DeploymentConfig, dep)
     return SystemConfig(
         construct(RuntimeConfig, rt),
         construct(ModelConfig, m),
         construct(TrainConfig, t),
         construct(PolicyConfig, p),
         construct(DataConfig, d),
+        dep,
     )
+
+
+@dataclass(frozen=True)
+class DeploymentConfig:
+    checkpoint_path: Path
+    checkpoint_sha256: str
+    checkpoint_config_sha256: str
+    gallery_manifest: Path
+    gallery_sha256: str
+    calibration_path: Path | None
+    calibration_sha256: str | None
+    calibration_split_sha256: str
+    mode: str
+
+    def __post_init__(self):
+        if (
+            not isinstance(self.checkpoint_path, Path)
+            or not isinstance(self.gallery_manifest, Path)
+            or self.mode not in {"calibrate", "evaluate"}
+        ):
+            raise ValueError("invalid deployment configuration")
+        for digest in (
+            self.checkpoint_sha256,
+            self.checkpoint_config_sha256,
+            self.gallery_sha256,
+            self.calibration_split_sha256,
+        ):
+            if not re.fullmatch("[0-9a-f]{64}", digest):
+                raise ValueError("invalid deployment hash")
+        if self.mode == "evaluate" and (
+            not isinstance(self.calibration_path, Path)
+            or not isinstance(self.calibration_sha256, str)
+            or not re.fullmatch("[0-9a-f]{64}", self.calibration_sha256)
+        ):
+            raise ValueError("frozen calibration input required")
+        if self.mode == "calibrate" and (self.calibration_path is not None or self.calibration_sha256 is not None):
+            raise ValueError("calibration fit must not consume prior calibration")
