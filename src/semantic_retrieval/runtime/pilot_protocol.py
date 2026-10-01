@@ -36,7 +36,8 @@ _REQUIRES = {
     "P2b": ("D1", "Q0", "E0", "P1a", "P1b", "P2a"),
     "C0S": ("D1", "Q0", "E0", "P1a", "P1b", "P2a", "P2b"),
     "C0": ("P1a", "P1b", "P2a", "P2b", "C0S"),
-    "V0S": ("D1", "Q0", "E0", "C0"), "V0": ("C0", "V0S"),
+    "V0E": ("D1", "Q0", "C0"),
+    "V0S": ("D1", "Q0", "E0", "C0", "V0E"), "V0": ("C0", "V0S"),
 }
 
 
@@ -48,15 +49,16 @@ def phase_contract(phase_id):
     elif phase_id in {"C0S", "V0S"}:
         splits = ("val_development", "val_calibration") if phase_id == "C0S" else ("val_locked",)
         runs = tuple((f"{a}-{sp}", s) for s in (0, 1, 2) for a in ("A0", "A1", "A2", "A3", "A4") for sp in splits)
-        category, hours, dataset, split = "evaluation", (8.0 if phase_id == "C0S" else 12.0) / len(runs), "msrvtt", None
+        category, hours, dataset, split = "evaluation", (8.0 if phase_id == "C0S" else 10.0) / len(runs), "msrvtt", None
     else:
         variant = {"D1": "benchmark_compile", "Q0P": "pilot-q0-prep", "Q0": "pilot-q0-v2",
-                   "E0": "fixed-clip-candidates", "C0": "pilot-analysis-freeze", "V0": "pilot-analysis-locked"}[phase_id]
+                   "E0": "fixed-clip-candidates", "V0E": "fixed-clip-locked-candidates",
+                   "C0": "pilot-analysis-freeze", "V0": "pilot-analysis-locked"}[phase_id]
         runs, dataset = ((variant, 0),), "synthetic" if phase_id in {"Q0P", "Q0"} else "msrvtt"
         category = "qualification" if phase_id == "Q0" else "evaluation"
-        hours = 8.0 if phase_id == "Q0" else (4.0 if phase_id == "E0" else 0.0)
+        hours = 8.0 if phase_id == "Q0" else (4.0 if phase_id == "E0" else (2.0 if phase_id == "V0E" else 0.0))
         split = {"D1": "val", "Q0P": "val", "Q0": "train", "E0": "val_development",
-                 "C0": "val_development", "V0": "val_locked"}[phase_id]
+                 "C0": "val_development", "V0E": "val_locked", "V0": "val_locked"}[phase_id]
     return dict(phase_id=phase_id, requires=_REQUIRES[phase_id], runs=runs, category=category,
                 run_gpu_hours=hours, dataset=dataset, eval_split=split)
 
