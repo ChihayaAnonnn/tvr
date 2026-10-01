@@ -61,7 +61,7 @@ C2 再写 minibatch/DDP、K/panel 调度、A0–A4/P1 与父 checkpoint；C3 再
 
 **Files:** Create `src/semantic_retrieval/data/pilot_catalog.py`, `tests/semantic_retrieval/test_pilot_catalog.py`。
 
-**Interfaces:** 冻结 `CatalogEntry(asset_id, kind, path, sha256, official_video_id, canonical_id, source_ids, caption_group_ids, frame_count, origin_split)`；kind=video/query，origin_split 仅 source_train，query 通过来源 ID 与 video 关联。`load_pilot_catalog(path: Path, *, expected_sha256: str, allowed_root: Path) -> tuple[CatalogEntry, ...]`；`assign_pilot_splits(entries, *, targets) -> SplitAssignment`，返回 asset→split/component、每库官方 ID、余量与数量报告。
+**Interfaces:** 冻结 `CatalogEntry(asset_id, kind, path, sha256, official_video_id, canonical_id, source_ids, caption_group_ids, frame_count, origin_split)`；kind=video/query，origin_split 仅 source_train，query 通过来源 ID 与 video 关联。`load_pilot_catalog(path: Path, *, expected_sha256: str, allowed_root: Path, source_confirmation: dict) -> tuple[CatalogEntry, ...]`；`assign_pilot_splits(entries, *, targets) -> SplitAssignment`，返回 asset→split/component、每库官方 ID、余量与数量报告。
 
 - [ ] 写失败测试：unknown/test/mixed 来源、越界/symlink、伪 SHA/官方 ID 重复或身份冲突拒绝；视频/caption opener spy 在授权前调用数=0；读取 train-only catalog 元数据不扫描目录。
 - [ ] 运行 `python -m pytest -q tests/semantic_retrieval/test_pilot_catalog.py`，确认预期失败。
@@ -142,3 +142,5 @@ C2 再写 minibatch/DDP、K/panel 调度、A0–A4/P1 与父 checkpoint；C3 再
 - [ ] 验证真实编译数量、source/component互斥、GT所属库与test未解码，提交D1结果。输入问题停止并保留证据，不静默重试。
 
 原 Tasks 1–6 的合成验收范围不改变。新 Task 7 的授权来自用户本次明确要求生成独立快照并直接完成，而非先前一次只读核验。
+
+2026-10-01 审查加固：catalog来源确认必须绑定独立Git-tracked study trust anchor；query annotation路径/SHA及allowlist/source-report指纹贯通，视频帧数逐帧解码确认。CPU准备variant不得携带科学模型/优化器配置。数量门失败仍保存结构化来源计数及stop reason。

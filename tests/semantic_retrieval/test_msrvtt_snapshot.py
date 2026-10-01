@@ -35,3 +35,22 @@ def test_missing_or_conflicting_caption_identity_is_not_silently_imported(raw):
 
     with pytest.raises(ValueError):
         training_annotations(raw, {"train"})
+
+
+def test_video_inventory_counts_actual_decoded_frames_not_container_hint(tmp_path):
+    import cv2
+    import numpy as np
+
+    from semantic_retrieval.data.episodes import file_sha256
+    from semantic_retrieval.data.msrvtt_snapshot import inspect_training_video
+
+    path = tmp_path / "frames.avi"
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 5, (16, 16))
+    for i in range(3):
+        writer.write(np.full((16, 16, 3), i * 40, np.uint8))
+    writer.release()
+    assert inspect_training_video(path, expected_sha256=file_sha256(path), image_size=8, max_frames=8) == 3
+    with pytest.raises(ValueError, match="frame count"):
+        inspect_training_video(
+            path, expected_sha256=file_sha256(path), expected_frame_count=1, image_size=8, max_frames=8
+        )

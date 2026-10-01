@@ -145,3 +145,32 @@ def caption_relation_digest(rows):
             digest.update(json.dumps([video, text, count], ensure_ascii=False, separators=(",", ":")).encode())
             digest.update(b"\n")
     return digest.hexdigest()
+
+
+def inspect_training_video(path, *, expected_sha256, expected_frame_count=None, image_size=224, max_frames=8):
+    """Count every decoded source frame, then validate requested uniform samples."""
+    import cv2
+
+    from semantic_retrieval.data.episodes import file_sha256
+    from semantic_retrieval.data.video import decode_video, sample_frame_indices
+
+    if file_sha256(path) != expected_sha256:
+        raise ValueError("training video content changed")
+    capture = cv2.VideoCapture(str(path))
+    count = 0
+    try:
+        if not capture.isOpened():
+            raise ValueError("training video cannot be opened")
+        while True:
+            ok, _ = capture.read()
+            if not ok:
+                break
+            count += 1
+    finally:
+        capture.release()
+    if count < 1 or expected_frame_count is not None and count != expected_frame_count:
+        raise ValueError("decoded source frame count mismatch")
+    _, valid = decode_video(path, sample_frame_indices(count, max_frames), image_size)
+    if not valid.all():
+        raise ValueError("uniform source frames are not all decodable")
+    return count

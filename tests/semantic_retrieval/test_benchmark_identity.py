@@ -80,3 +80,27 @@ def test_query_lineage_leaks_even_when_query_source_video_not_a_candidate(episod
     other = replace(e, split="val_locked", canonical_ids=(), content_sha256=(), source_ids=(), caption_group_id="other")
     with pytest.raises(ValueError, match="query"):
         audit_episode_splits([e, other])
+
+
+def test_configured_reader_binds_label_space_and_checkpoint_digest(episode_manifest, model_config):
+    from semantic_retrieval.config import DataConfig, PolicyConfig, SystemConfig, TrainConfig
+    from semantic_retrieval.data.episodes import file_sha256, read_bound_episodes
+    from semantic_retrieval.runtime.checkpoint import config_sha256
+
+    payload, write, _ = episode_manifest
+    payload = benchmark(payload, write().parent)
+    path = write(payload)
+    legacy = DataConfig(path, file_sha256(path), "g1", "train")
+    with pytest.raises(ValueError, match="scope"):
+        read_bound_episodes(legacy)
+    scoped = replace(legacy, relevance_space="benchmark_annotation", label_protocol=payload["label_protocol"])
+    assert len(read_bound_episodes(scoped)) == 1
+    changed = replace(scoped, label_protocol={**scoped.label_protocol, "protocol_id": "different"})
+    with pytest.raises(ValueError, match="protocol"):
+        read_bound_episodes(changed)
+    train = TrainConfig(
+        0.001, 0.0, 0, "constant", 1, ("matcher.",), dict(coarse=1, match=1, pair=1, exist=0, align=0, group=0)
+    )
+    cfg = SystemConfig(None, model_config, train, PolicyConfig(0.5, 0.5, (1,), 1), scoped)
+    assert config_sha256(cfg) != config_sha256(replace(cfg, data=changed))
+    assert config_sha256(cfg) != config_sha256(replace(cfg, data=legacy))

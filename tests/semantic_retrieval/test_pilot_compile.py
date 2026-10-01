@@ -116,6 +116,14 @@ def test_compile_read_and_joint_split_audit(tmp_path):
             )
         )
     )
+    catalog = [
+        replace(
+            e, path=snapshot, sha256=file_sha256(snapshot), source_report_sha256="b" * 64, allowlist_sha256="c" * 64
+        )
+        if e.kind == "query"
+        else e
+        for e in catalog
+    ]
     label = load_benchmark_labels(
         snapshot, catalog=catalog, expected_sha256=file_sha256(snapshot), protocol_id="fixture"
     )

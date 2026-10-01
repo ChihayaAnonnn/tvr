@@ -10,7 +10,7 @@ import torch
 
 from experiment_artifacts import artifact_json_bytes
 from semantic_retrieval.config import load_system_config
-from semantic_retrieval.data.episodes import file_sha256, read_episodes
+from semantic_retrieval.data.episodes import file_sha256, read_bound_episodes
 from semantic_retrieval.data.gallery import audit_episode_gallery, preprocessing_sha256, read_gallery
 from semantic_retrieval.data.tokenizer import ClipTokenizer
 from semantic_retrieval.evaluation.calibration import CalibrationIdentity, CalibrationState, fit_calibration
@@ -33,6 +33,8 @@ def main(argv=None):
         parser.add_argument("--" + arg)
     args = parser.parse_args(argv)
     cfg = load_system_config(args.config)
+    if cfg.data is not None and cfg.data.relevance_space == "benchmark_annotation":
+        raise ValueError("benchmark v2 evaluation requires the pilot score export and analysis pipeline")
     dep = cfg.deployment
     if dep is None or cfg.data is None or cfg.data.split == "train" or cfg.runtime.eval_split != cfg.data.split:
         raise ValueError("explicit validation deployment configuration required")
@@ -51,9 +53,7 @@ def main(argv=None):
         ):
             if file_sha256(path) != digest:
                 raise ValueError("deployment input changed")
-        episodes = read_episodes(
-            cfg.data.episode_manifest, gallery_version=cfg.data.gallery_version, split=cfg.data.split
-        )
+        episodes = read_bound_episodes(cfg.data)
         gallery = read_gallery(dep.gallery_manifest, gallery_version=cfg.data.gallery_version)
         audit_episode_gallery(episodes, gallery)
         model = SemanticRetrievalModel(cfg.model)

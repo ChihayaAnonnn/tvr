@@ -32,6 +32,13 @@ def fixture(tmp_path, status="design_approved"):
         artifact_path=str(tmp_path / "artifacts" / NAME / "msrvtt" / "baseline" / "run"),
         registry_path=f"experiments/{NAME}/registry.jsonl",
     )
+    manifest["config"] = dict(
+        model={},
+        loss={},
+        optimizer={},
+        scheduler={},
+        evaluation=dict(eval_split="val", qualification_scenario="pilot_prepare:" + "0" * 64),
+    )
     return control / "registry.jsonl", manifest
 
 
@@ -70,3 +77,18 @@ def test_unauthorized_runs_rejected(tmp_path, operation, defect):
         manifest["variant"] = defect
     with pytest.raises(ValueError):
         assert_pilot_authorized(repo_root=tmp_path, registry_path=registry, manifest=manifest, operation=operation)
+
+
+def test_cpu_preparation_identity_cannot_hide_scientific_model(tmp_path):
+    from semantic_retrieval.runtime.pilot_policy import assert_pilot_authorized
+
+    registry, manifest = fixture(tmp_path)
+    manifest["config"] = {
+        "model": {"clip": "train"},
+        "loss": {},
+        "optimizer": {},
+        "scheduler": {},
+        "evaluation": {"eval_split": "val", "qualification_scenario": "pilot_prepare:" + "0" * 64},
+    }
+    with pytest.raises(ValueError, match="preparation"):
+        assert_pilot_authorized(repo_root=tmp_path, registry_path=registry, manifest=manifest, operation="reserve")

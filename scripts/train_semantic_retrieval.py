@@ -15,7 +15,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 from semantic_retrieval.config import load_system_config
 from semantic_retrieval.data.collate import collate_episodes
-from semantic_retrieval.data.episodes import file_sha256, read_episodes
+from semantic_retrieval.data.episodes import file_sha256, read_bound_episodes
 from semantic_retrieval.models.model import SemanticRetrievalModel
 from semantic_retrieval.runtime.artifacts import complete_run, fail_run, prepare_run, publish_metrics, start_run
 from semantic_retrieval.runtime.checkpoint import config_sha256, load_checkpoint, save_checkpoint
@@ -111,9 +111,7 @@ def main(argv=None):
     try:
         if file_sha256(cfg.data.episode_manifest) != cfg.data.episode_sha256:
             raise ValueError("episode content changed")
-        episodes = read_episodes(
-            cfg.data.episode_manifest, gallery_version=cfg.data.gallery_version, split=cfg.data.split
-        )
+        episodes = read_bound_episodes(cfg.data)
         validate_pilot_config(cfg, world_size=world)
         sampler = None
         orders = None

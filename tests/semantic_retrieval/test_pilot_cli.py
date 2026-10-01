@@ -25,7 +25,7 @@ def protected(tmp_path):
 
     repo = tmp_path / "repo"
     repo.mkdir()
-    data = tmp_path / "data"
+    data = repo / "inputs"
     data.mkdir()
     catalog, sha, _ = source_fixture(data)
     prep = dict(
@@ -35,7 +35,10 @@ def protected(tmp_path):
         allowed_root=str(data),
         catalog={"path": str(catalog), "sha256": sha},
         annotation=None,
-        source_confirmation=None,
+        source_confirmation={
+            "path": str(data / "confirmation.json"),
+            "sha256": file_sha256(data / "confirmation.json"),
+        },
         allowlist_csv=None,
         source_annotation=None,
         video_directory=None,
@@ -50,6 +53,21 @@ def protected(tmp_path):
     )
     registry = control / "registry.jsonl"
     registry.touch()
+    git(repo, "init", "-q")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+    git(repo, "add", ".")
+    git(repo, "commit", "-qm", "proof")
+    import yaml
+
+    source = yaml.safe_load(study.read_text())
+    source["protocol_id"] = "fixture"
+    source["source_confirmation"] = {
+        "path": "inputs/confirmation.json",
+        "sha256": file_sha256(data / "confirmation.json"),
+        "commit": git(repo, "rev-parse", "HEAD"),
+    }
+    study.write_text(yaml.safe_dump(source))
     run = dict(
         dataset="msrvtt",
         stage="baseline",
@@ -134,3 +152,17 @@ def test_inventory_publishes_run_local_evidence_without_tracked_edits(protected)
     assert list((runtime.run_dir / "metrics").glob("*.json"))
     assert git(repo, "diff", "--name-only") == ""
     assert json.loads((runtime.run_dir / "status.json").read_text())["state"] == "validating"
+
+
+def test_quantity_failure_keeps_structured_source_counts(tmp_path):
+    from test_pilot_catalog import entries
+
+    from scripts.prepare_semantic_pilot import prepare_assignment
+
+    path = tmp_path / "input-summary.json"
+    with pytest.raises(ValueError, match="quantity"):
+        prepare_assignment(entries(), None, report_path=path)
+    report = json.loads(path.read_text())
+    assert report["ready"] is False and report["stop_reasons"]
+    assert report["source_counts"]["official_video_count"] == 12
+    assert report["source_counts"]["canonical_video_count"] == 12

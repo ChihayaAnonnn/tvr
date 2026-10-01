@@ -36,6 +36,8 @@ class CatalogEntry:
     caption_group_ids: tuple[str, ...]
     frame_count: int | None
     origin_split: str
+    source_report_sha256: str | None = None
+    allowlist_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,7 +61,9 @@ def _safe_path(value, *, base, allowed_root):
     return path.resolve()
 
 
-def load_pilot_catalog(path: Path, *, expected_sha256: str, allowed_root: Path) -> tuple[CatalogEntry, ...]:
+def load_pilot_catalog(
+    path: Path, *, expected_sha256: str, allowed_root: Path, source_confirmation: dict | None = None
+) -> tuple[CatalogEntry, ...]:
     path = Path(path).absolute()
     path = _safe_path(path, base=Path.cwd(), allowed_root=path.parent)
     if file_sha256(path) != expected_sha256:
@@ -90,6 +94,34 @@ def load_pilot_catalog(path: Path, *, expected_sha256: str, allowed_root: Path) 
         or report.get("allowlist_sha256") != payload["allowlist"]["sha256"]
     ):
         raise ValueError("unverified training source identity")
+    if (
+        not isinstance(source_confirmation, dict)
+        or set(source_confirmation) != {"path", "sha256"}
+        or report.get("source_confirmation") != source_confirmation
+    ):
+        raise ValueError("independent source confirmation is required")
+    confirmation_path = Path(source_confirmation["path"])
+    if (
+        not confirmation_path.is_absolute()
+        or confirmation_path.resolve() != confirmation_path
+        or confirmation_path.is_symlink()
+        or file_sha256(confirmation_path) != source_confirmation["sha256"]
+    ):
+        raise ValueError("source confirmation SHA/path mismatch")
+    confirmation = json.loads(confirmation_path.read_text())
+    if (
+        confirmation.get("status", {}).get("local_annotation_matches_published_captions")
+        != "VERIFIED_EXACT_FOR_V2_TRAINING_ALLOWLIST_ONLY"
+    ):
+        raise ValueError("source confirmation lacks independently verified training captions")
+    expected = confirmation.get("training_caption_comparison", {}).get("local_results", {}).get("MSRVTT_v2.json", {})
+    approved = {(r["path"], r["sha256"]) for r in confirmation.get("local_assets", [])}
+    for key in ("source_annotation", "allowlist_source"):
+        ref = report.get(key)
+        if not isinstance(ref, dict) or (ref.get("path"), ref.get("sha256")) not in approved:
+            raise ValueError("source confirmation does not bind annotation/ID source")
+    if report.get("caption_relation_sha256") != expected.get("relation_sha256"):
+        raise ValueError("source confirmation training relation mismatch")
     allowed_ids = allow.get("official_video_ids")
     if (
         not isinstance(allowed_ids, list)
@@ -98,12 +130,14 @@ def load_pilot_catalog(path: Path, *, expected_sha256: str, allowed_root: Path) 
         or not all(isinstance(x, str) and x for x in allowed_ids)
     ):
         raise ValueError("invalid source allowlist")
+    if len(allowed_ids) != expected.get("training_video_count"):
+        raise ValueError("source confirmation/allowlist quantity mismatch")
     entries = []
     video_ids = {}
     asset_ids = set()
     canonical = {}
     for raw in payload["entries"]:
-        if set(raw) != set(CatalogEntry.__dataclass_fields__):
+        if set(raw) != set(CatalogEntry.__dataclass_fields__) - {"source_report_sha256", "allowlist_sha256"}:
             raise ValueError("catalog entry fields mismatch")
         if (
             raw["origin_split"] != "source_train"
@@ -129,7 +163,11 @@ def load_pilot_catalog(path: Path, *, expected_sha256: str, allowed_root: Path) 
         )
         raw["source_ids"] = tuple(sorted(raw["source_ids"]))
         raw["caption_group_ids"] = tuple(sorted(raw["caption_group_ids"]))
-        entry = CatalogEntry(**raw)
+        entry = CatalogEntry(
+            **raw,
+            source_report_sha256=payload["source_report"]["sha256"],
+            allowlist_sha256=payload["allowlist"]["sha256"],
+        )
         if entry.kind == "video":
             if type(entry.frame_count) is not int or entry.frame_count <= 0 or entry.official_video_id in video_ids:
                 raise ValueError("invalid frame count/duplicate official video identity")

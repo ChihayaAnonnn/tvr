@@ -27,11 +27,29 @@ def snapshot(tmp_path, rows=None):
     return path, sha
 
 
-def catalog():
+def catalog(path=None, sha=None):
     items = entries(3)
     return items + (
-        replace(items[0], kind="query", asset_id="q0", frame_count=None),
-        replace(items[0], kind="query", asset_id="q1", frame_count=None),
+        replace(
+            items[0],
+            kind="query",
+            asset_id="q0",
+            frame_count=None,
+            path=path,
+            sha256=sha,
+            source_report_sha256="b" * 64,
+            allowlist_sha256="c" * 64,
+        ),
+        replace(
+            items[0],
+            kind="query",
+            asset_id="q1",
+            frame_count=None,
+            path=path,
+            sha256=sha,
+            source_report_sha256="b" * 64,
+            allowlist_sha256="c" * 64,
+        ),
     )
 
 
@@ -39,7 +57,7 @@ def test_multiple_captions_are_queries_not_multiple_videos(tmp_path):
     from semantic_retrieval.data.benchmark_labels import candidate_presence, load_benchmark_labels
 
     path, sha = snapshot(tmp_path)
-    labels = load_benchmark_labels(path, catalog=catalog(), expected_sha256=sha, protocol_id="fixture")
+    labels = load_benchmark_labels(path, catalog=catalog(path, sha), expected_sha256=sha, protocol_id="fixture")
     assert labels.positives_by_query == {"q0": ("c0",), "q1": ("c0",)}
     assert labels.official_positives_by_query == {"q0": ("0",), "q1": ("0",)}
     assert candidate_presence("q0", ("c0", "c1"), labels) is True
@@ -67,16 +85,32 @@ def test_bad_annotations_never_become_negatives(tmp_path, defect):
     newsha = write(path, data)
     with pytest.raises(ValueError):
         load_benchmark_labels(
-            path, catalog=catalog(), expected_sha256="0" * 64 if defect == "hash" else newsha, protocol_id="fixture"
+            path,
+            catalog=catalog(path, newsha),
+            expected_sha256="0" * 64 if defect == "hash" else newsha,
+            protocol_id="fixture",
         )
 
 
 def test_aliases_merge_exact_content_not_semantic_neighbors(tmp_path):
     from semantic_retrieval.data.benchmark_labels import load_benchmark_labels
 
-    items = list(catalog())
+    items = list(catalog(tmp_path / "snapshot.json", None))
     items[1] = replace(items[1], canonical_id="c0", sha256=items[0].sha256)
     path, sha = snapshot(tmp_path)
+    items = [replace(e, path=path, sha256=sha) if e.kind == "query" else e for e in items]
     labels = load_benchmark_labels(path, catalog=items, expected_sha256=sha, protocol_id="fixture")
     assert labels.official_to_canonical == {"0": "c0", "1": "c0", "2": "c2"}
     assert labels.positives_by_query["q0"] == ("c0",)
+
+
+def test_snapshot_cannot_change_catalog_query_text_source(tmp_path):
+    from semantic_retrieval.data.benchmark_labels import load_benchmark_labels
+
+    path, sha = snapshot(tmp_path)
+    items = list(catalog())
+    for i, e in enumerate(items):
+        if e.kind == "query":
+            items[i] = replace(e, path=tmp_path / "different.json", sha256="9" * 64)
+    with pytest.raises(ValueError, match="catalog"):
+        load_benchmark_labels(path, catalog=items, expected_sha256=sha, protocol_id="fixture")

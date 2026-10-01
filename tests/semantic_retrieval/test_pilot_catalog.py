@@ -19,6 +19,18 @@ def source_fixture(tmp_path):
     caption.write_text('"caption"')
     allowlist = tmp_path / "allow.json"
     allowsha = write(allowlist, {"schema_version": 1, "origin_split": "source_train", "official_video_ids": ["v"]})
+    confirmation = tmp_path / "confirmation.json"
+    source_ref = {"path": str(caption), "sha256": hashlib.sha256(caption.read_bytes()).hexdigest()}
+    confirmation_sha = write(
+        confirmation,
+        {
+            "status": {"local_annotation_matches_published_captions": "VERIFIED_EXACT_FOR_V2_TRAINING_ALLOWLIST_ONLY"},
+            "local_assets": [source_ref],
+            "training_caption_comparison": {
+                "local_results": {"MSRVTT_v2.json": {"training_video_count": 1, "relation_sha256": "a" * 64}}
+            },
+        },
+    )
     report = tmp_path / "source.json"
     reportsha = write(
         report,
@@ -28,6 +40,10 @@ def source_fixture(tmp_path):
             "allowlist_sha256": allowsha,
             "protocol_id": "fixture",
             "source_verified": True,
+            "source_confirmation": {"path": str(confirmation), "sha256": confirmation_sha},
+            "source_annotation": source_ref,
+            "allowlist_source": source_ref,
+            "caption_relation_sha256": "a" * 64,
         },
     )
     rows = [
@@ -73,7 +89,15 @@ def test_catalog_loads_only_bound_assets(tmp_path):
     from semantic_retrieval.data.pilot_catalog import load_pilot_catalog
 
     path, sha, _ = source_fixture(tmp_path)
-    entries = load_pilot_catalog(path, expected_sha256=sha, allowed_root=tmp_path)
+    entries = load_pilot_catalog(
+        path,
+        expected_sha256=sha,
+        allowed_root=tmp_path,
+        source_confirmation={
+            "path": str(tmp_path / "confirmation.json"),
+            "sha256": hashlib.sha256((tmp_path / "confirmation.json").read_bytes()).hexdigest(),
+        },
+    )
     assert [e.asset_id for e in entries] == ["q", "v"]
 
 
@@ -100,7 +124,15 @@ def test_invalid_identity_rejected_before_asset_read(tmp_path, defect):
     (tmp_path / "v.bin").unlink()
     newsha = write(path, payload)
     with pytest.raises(ValueError):
-        load_pilot_catalog(path, expected_sha256=sha if defect == "hash" else newsha, allowed_root=tmp_path)
+        load_pilot_catalog(
+            path,
+            expected_sha256=sha if defect == "hash" else newsha,
+            allowed_root=tmp_path,
+            source_confirmation={
+                "path": str(tmp_path / "confirmation.json"),
+                "sha256": hashlib.sha256((tmp_path / "confirmation.json").read_bytes()).hexdigest(),
+            },
+        )
 
 
 def entries(count=12):
@@ -154,3 +186,11 @@ def test_giant_component_does_not_get_split_to_meet_targets():
                 "locked_components_min": 2,
             },
         )
+
+
+def test_self_signed_source_report_does_not_establish_training_identity(tmp_path):
+    from semantic_retrieval.data.pilot_catalog import load_pilot_catalog
+
+    path, sha, _ = source_fixture(tmp_path)
+    with pytest.raises(ValueError, match="confirmation"):
+        load_pilot_catalog(path, expected_sha256=sha, allowed_root=tmp_path)

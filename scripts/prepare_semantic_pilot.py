@@ -3,20 +3,25 @@
 
 import argparse
 import csv
+import hashlib
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
 
-import cv2
+import yaml
 
 from semantic_retrieval.config import RuntimeConfig
 from semantic_retrieval.data.benchmark_labels import load_benchmark_labels
 from semantic_retrieval.data.episodes import EpisodePreprocessing, audit_episode_splits, file_sha256, read_episodes
-from semantic_retrieval.data.msrvtt_snapshot import caption_relation_digest, training_annotations
+from semantic_retrieval.data.msrvtt_snapshot import (
+    caption_relation_digest,
+    inspect_training_video,
+    training_annotations,
+)
 from semantic_retrieval.data.pilot_catalog import _safe_path, assign_pilot_splits, identity_digest, load_pilot_catalog
 from semantic_retrieval.data.pilot_compile import compile_pilot_manifests, summarize_pilot_inputs
-from semantic_retrieval.data.video import decode_video, sample_frame_indices
 from semantic_retrieval.runtime.artifacts import complete_run, fail_run, prepare_run, publish_metrics, start_run
 from semantic_retrieval.runtime.distributed import configure_fp32
 
@@ -54,13 +59,39 @@ def _bound(context, ref):
     return path
 
 
+def validate_source_confirmation(context, preparation):
+    ref = preparation["source_confirmation"]
+    audit_path = _bound(context, ref)
+    study = yaml.safe_load(context.config.study_path.read_text())
+    anchor = study.get("source_confirmation")
+    if not isinstance(anchor, dict) or set(anchor) != {"path", "sha256", "commit"} or anchor["sha256"] != ref["sha256"]:
+        raise ValueError("source confirmation must match registered study trust anchor")
+    common = Path(
+        subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=context.repo_root, text=True
+        ).strip()
+    ).parent
+    accepted = {context.repo_root / anchor["path"], common / anchor["path"]}
+    if audit_path not in accepted:
+        raise ValueError("source confirmation path differs from registered anchor")
+    for commit in (anchor["commit"], "HEAD"):
+        blob = subprocess.check_output(["git", "show", f"{commit}:{anchor['path']}"], cwd=context.repo_root)
+        if hashlib.sha256(blob).hexdigest() != ref["sha256"]:
+            raise ValueError("source confirmation differs from Git-tracked proof")
+    subprocess.run(
+        ["git", "merge-base", "--is-ancestor", anchor["commit"], "HEAD"],
+        cwd=context.repo_root,
+        check=True,
+        capture_output=True,
+    )
+    if preparation["protocol_id"] != study.get("protocol_id"):
+        raise ValueError("preparation protocol differs from registered study")
+    return audit_path
+
+
 def export_snapshot(context, preparation):
     root = Path(preparation["allowed_root"])
-    audit_path = _bound(context, preparation["source_confirmation"])
-    relative = audit_path.relative_to(context.repo_root)
-    subprocess.run(
-        ["git", "ls-files", "--error-unmatch", str(relative)], cwd=context.repo_root, check=True, capture_output=True
-    )
+    audit_path = validate_source_confirmation(context, preparation)
     audit = json.loads(audit_path.read_text())
     if (
         audit["status"]["local_annotation_matches_published_captions"]
@@ -120,6 +151,7 @@ def export_snapshot(context, preparation):
                 ["git", "rev-parse", "HEAD"], cwd=context.repo_root, text=True
             ).strip(),
             source_annotation=preparation["source_annotation"],
+            allowlist_source=preparation["allowlist_csv"],
             caption_relation_sha256=expected["relation_sha256"],
             privacy=privacy,
         ),
@@ -143,18 +175,16 @@ def export_snapshot(context, preparation):
     pilot_rows = [selected[i][1] for i in sorted(ids)]
     annotation = write_input(directory / "pilot-annotations.json", {**metadata, "annotations": pilot_rows})
     catalog = []
+
+    def inspect_id(i):
+        path = videos[i]
+        return inspect_training_video(path, expected_sha256=reserved[str(path)])
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        frame_counts = dict(zip(sorted(ids), executor.map(inspect_id, sorted(ids))))
     for i in sorted(ids):
         path = videos[i]
-        capture = cv2.VideoCapture(str(path))
-        try:
-            count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT)) if capture.isOpened() else 0
-        finally:
-            capture.release()
-        if count <= 0:
-            raise ValueError(f"video has no valid frame inventory: {i}")
-        _, valid = decode_video(path, sample_frame_indices(count, 8), 224)
-        if not valid.all():
-            raise ValueError(f"training video requested frames are not all decodable: {i}")
+        count = frame_counts[i]
         digest = reserved[str(path)]
         canonical = f"sha256:{digest}"
         common = dict(
@@ -199,6 +229,32 @@ def export_snapshot(context, preparation):
     )
 
 
+def prepare_assignment(catalog, labels, *, report_path):
+    try:
+        assignment = assign_pilot_splits(catalog)
+    except ValueError as exc:
+        videos = [e for e in catalog if e.kind == "video"]
+        write_input(
+            report_path,
+            dict(
+                schema_version=1,
+                ready=False,
+                stop_reasons=[str(exc)],
+                relevance_space="benchmark_annotation",
+                semantic_review_performed=False,
+                source_counts=dict(
+                    official_video_count=len({e.official_video_id for e in videos}),
+                    canonical_video_count=len({e.canonical_id for e in videos}),
+                    query_count=sum(e.kind == "query" for e in catalog),
+                ),
+            ),
+        )
+        raise
+    summary = summarize_pilot_inputs(catalog=catalog, assignment=assignment, labels=labels)
+    write_input(report_path, summary)
+    return assignment, summary
+
+
 def execute_preparation(runtime, preparation, *, repo_root):
     configure_fp32()
     if (
@@ -223,6 +279,7 @@ def execute_preparation(runtime, preparation, *, repo_root):
     required = (
         {"source_confirmation", "allowlist_csv", "source_annotation", "video_directory"} if snapshot else {"catalog"}
     )
+    required.add("source_confirmation")
     if preparation["mode"] == "compile":
         required.add("annotation")
     for key in PREPARATION_KEYS - {"mode", "protocol_id", "relevance_space", "allowed_root", "candidate_orders"}:
@@ -232,6 +289,7 @@ def execute_preparation(runtime, preparation, *, repo_root):
         _bound(context, preparation[key])
     if preparation["candidate_orders"] is not None:
         _bound(context, preparation["candidate_orders"])
+    validate_source_confirmation(context, preparation)
     start_run(context)
     try:
         if snapshot:
@@ -241,6 +299,7 @@ def execute_preparation(runtime, preparation, *, repo_root):
                 Path(preparation["catalog"]["path"]),
                 expected_sha256=preparation["catalog"]["sha256"],
                 allowed_root=Path(preparation["allowed_root"]),
+                source_confirmation=preparation["source_confirmation"],
             )
             refs = {r["path"]: r["sha256"] for r in context.manifest["dataset_splits"]}
             if any(refs.get(str(e.path)) != e.sha256 for e in catalog):
@@ -256,9 +315,14 @@ def execute_preparation(runtime, preparation, *, repo_root):
                     expected_sha256=preparation["annotation"]["sha256"],
                     protocol_id=preparation["protocol_id"],
                 )
-                assignment = assign_pilot_splits(catalog)
-                summary = summarize_pilot_inputs(catalog=catalog, assignment=assignment, labels=label)
-                write_input(context.paths.provenance / "input-summary.json", summary)
+                for entry in catalog:
+                    if entry.kind == "video":
+                        inspect_training_video(
+                            entry.path, expected_sha256=entry.sha256, expected_frame_count=entry.frame_count
+                        )
+                assignment, summary = prepare_assignment(
+                    catalog, label, report_path=context.paths.provenance / "input-summary.json"
+                )
                 label_refs = {}
                 for name, table in [
                     ("relations", label.official_positives_by_query),

@@ -63,6 +63,15 @@ def load_benchmark_labels(snapshot, *, catalog, expected_sha256, protocol_id) ->
         raise ValueError("benchmark snapshot provenance/scope mismatch")
     videos = {e.official_video_id: e.canonical_id for e in catalog if e.kind == "video"}
     queries = {e.asset_id: e for e in catalog if e.kind == "query"}
+    if any(
+        e.path is None
+        or Path(e.path).resolve() != path.resolve()
+        or e.sha256 != expected_sha256
+        or e.source_report_sha256 != payload["source_report_sha256"]
+        or e.allowlist_sha256 != payload["allowlist_sha256"]
+        for e in queries.values()
+    ):
+        raise ValueError("annotation/catalog provenance identity mismatch")
     official = {}
     texts = {}
     captions = {}

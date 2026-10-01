@@ -369,3 +369,12 @@ def assert_episode_scope(episodes, data):
             or (dict(episode.label_protocol) if episode.label_protocol else None) != data.label_protocol
         ):
             raise ValueError("episode/config label scope or protocol mismatch")
+
+
+def read_bound_episodes(data):
+    """Consume scoped configuration rather than silently inferring the label space."""
+    if file_sha256(data.episode_manifest) != data.episode_sha256:
+        raise ValueError("episode content changed")
+    episodes = read_episodes(data.episode_manifest, gallery_version=data.gallery_version, split=data.split)
+    assert_episode_scope(episodes, data)
+    return episodes

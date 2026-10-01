@@ -1,5 +1,6 @@
 """Fail-closed permission boundary for the separately registered benchmark pilot."""
 
+import re
 from pathlib import Path
 
 import yaml
@@ -43,6 +44,17 @@ def assert_pilot_authorized(*, repo_root: Path, registry_path: Path, manifest: d
         }.items()
     ):
         raise ValueError("pilot study is draft or identity is inconsistent")
+    config = manifest.get("config", {})
+    evaluation = config.get("evaluation", {})
+    if (
+        set(config) != {"model", "loss", "optimizer", "scheduler", "evaluation"}
+        or any(config[k] for k in ("model", "loss", "optimizer", "scheduler"))
+        or set(evaluation) != {"eval_split", "qualification_scenario"}
+        or evaluation["eval_split"] != "val"
+        or not isinstance(evaluation["qualification_scenario"], str)
+        or re.fullmatch(r"pilot_prepare:[0-9a-f]{64}", evaluation["qualification_scenario"]) is None
+    ):
+        raise ValueError("pilot preparation identity cannot carry scientific configuration")
     # Scientific gates are intentionally not implemented by C1. YAML booleans
     # cannot turn CPU preparation permission into scientific permission.
     if (

@@ -39,3 +39,7 @@ preparation_variants:
 - source_inventory
 - benchmark_compile
 scientific_gate: not_implemented_fail_closed
+source_confirmation:
+  path: docs/maintenance/2026-10-01-msrvtt-source-confirmation.json
+  sha256: 722eaf027a34e9eebaa04778eae72acde35e57c13d46e9258a6b53fdf66b1ff1
+  commit: 4f6a5c9752dd4f4f4ed674d81ce91864fc6e8054
