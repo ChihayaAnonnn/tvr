@@ -1,0 +1,63 @@
+{
+  "phase": "Q0P-20261001T104445Z",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "env",
+        "PYTHONPATH=/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/src:/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "OMP_NUM_THREADS=1",
+        "MKL_NUM_THREADS=1",
+        "CUDA_VISIBLE_DEVICES=",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "scripts/qualify_semantic_pilot.py",
+        "--mode",
+        "prepare-production",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "eval_split": "val",
+          "qualification_scenario": "pilot_q0_prep_v2"
+        },
+        "loss": {},
+        "model": {},
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "synthetic",
+      "dataset_splits": [],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "single-process",
+        "gpu_count": 0,
+        "gpu_model": "none",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [],
+      "parent_run_ids": [],
+      "scheduled_timestamp_utc": "20261001T104445Z",
+      "seed": 0,
+      "selection_lineage": [
+        {
+          "evidence": {},
+          "gpu_hours": 0.0,
+          "kind": "pilot_phase",
+          "phase_id": "Q0P",
+          "phase_path": "experiments/semantic-answerability-pilot-v1/phases/Q0P.json",
+          "protocol_version": 1
+        }
+      ],
+      "stage": "baseline",
+      "test_authorized": false,
+      "validation_authorized": true,
+      "variant": "pilot-q0-prep"
+    }
+  ],
+  "study": "semantic-answerability-pilot-v1"
+}
