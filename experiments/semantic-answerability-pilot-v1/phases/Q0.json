@@ -1,0 +1,752 @@
+{
+  "phase": "Q0-20261001T104619Z",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "env",
+        "PYTHONPATH=/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/src:/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "OMP_NUM_THREADS=1",
+        "MKL_NUM_THREADS=1",
+        "CUDA_VISIBLE_DEVICES=GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece,GPU-19f58384-1ce3-9658-5a8b-7d79f437289d,GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede,GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nproc_per_node=4",
+        "scripts/qualify_semantic_pilot.py",
+        "--mode",
+        "four-gpu",
+        "--run-dir",
+        "{artifact_run_dir}",
+        "--config",
+        "{artifact_run_dir}/provenance/system-config.json"
+      ],
+      "config": {
+        "evaluation": {
+          "data": {
+            "episode_manifest": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/train.json",
+            "episode_sha256": "e004167bcfe2aa8adadd9e21ef0588567ae0922bbeb26afb5bd1629961513726",
+            "gallery_version": "synthetic-pilot-v2-train",
+            "label_protocol": {
+              "allowlist_sha256": "5b7793feee1cf7b5fcc5969aeb14377310348c26218d0a6df3366d9694c68699",
+              "annotation_sha256": "62dea5de037b400508447e29006584ca309d5970c2d550c5b2ec7719b2895b31",
+              "id_map_sha256": "2abdd21c92024d387395a818d378f984c09fd06229f24eeb5db36aabe0be3011",
+              "protocol_id": "semantic-answerability-pilot-v1:c1-c2-c3-q0-v2",
+              "relation_sha256": "5acde2c21414977460dc8f6658f3902aa51995b0e36ebdcdd4c4480dc5993b40",
+              "source_annotation_sha256": "f9efed32f9e0597a74e061f13ed559971ec7e734c727b6e2732d0d038d54cc80",
+              "source_report_sha256": "5cb13b88c2e2da64acf70ec3d012b0c4900d2b66d7cbee563ac5a26fafe42b85"
+            },
+            "relevance_space": "benchmark_annotation",
+            "split": "train"
+          },
+          "deployment": null,
+          "eval_split": "train",
+          "pilot": {
+            "arm": "P1",
+            "candidate_order_path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/candidate-orders.json",
+            "candidate_order_sha256": "091abd128c0376b664d82fe2cabf6a20a34c0e5b6ab5ad48b7c91fc94a39a6da",
+            "parent_checkpoint_path": null,
+            "parent_checkpoint_sha256": null,
+            "parent_config_path": null,
+            "parent_config_sha256": null,
+            "parent_metadata_sha256": null,
+            "parent_run_id": null,
+            "sampler_seed": 0
+          },
+          "policy": {
+            "k_sequence": [
+              4,
+              8,
+              16,
+              32,
+              64,
+              128
+            ],
+            "max_budget": 128,
+            "pair_threshold": 0.5,
+            "presence_threshold": 0.5
+          },
+          "resume": null
+        },
+        "loss": {
+          "align": 0.0,
+          "coarse": 1.0,
+          "exist": 0.0,
+          "group": 0.0,
+          "match": 1.0,
+          "pair": 1.0
+        },
+        "model": {
+          "alignment": null,
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/arrays/random-pilot-clip.npz",
+          "coarse_dim": 256,
+          "dim": 512,
+          "grouping": null,
+          "max_frames": 8,
+          "num_heads": 8,
+          "num_layers": 0,
+          "pilot_arm": "P1"
+        },
+        "optimizer": {
+          "learning_rate": 0.0001,
+          "seed": 0,
+          "trainable_prefixes": [
+            "coarse.",
+            "matcher.text_projection.",
+            "matcher.frame_projection.",
+            "matcher.wti.",
+            "matcher.a_raw",
+            "matcher.b",
+            "matcher.dustbin",
+            "matcher.mlp."
+          ],
+          "weight_decay": 0.01
+        },
+        "scheduler": {
+          "checkpoint_interval": 20,
+          "scheduler_name": "constant",
+          "scheduler_steps": 120
+        }
+      },
+      "dataset": "synthetic",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c000.avi",
+          "sha256": "967bee1924703a3c9b0adc67ded919abc0ab3c77f12373f2d7eb0e6c5f34d38c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c001.avi",
+          "sha256": "31e3094c57ba0b3df9bed59f8326d0135ce0f3f2807dbbe5cc09de254d0fc803"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c002.avi",
+          "sha256": "615eed54bf7e3c3173d8a68a4ca538cf148e484eb3b15ca06d9e58c2a4c7a2e3"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c003.avi",
+          "sha256": "b7616f9a9bbe9fabf1c98a79ea4caa0fe6bdcba6116acd272b02901477bbc00e"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c004.avi",
+          "sha256": "c397bcf0ad7a3c51b041432ae3a700480d45b288d8a339aae25c7a89980442ab"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c005.avi",
+          "sha256": "178e03690e4abe12ff003a2511a723160335970e5ac5d86a60d26a91e1165bd4"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c006.avi",
+          "sha256": "ef3a4dbcb592a049ef480a987e658688c7b24dcd79509eb5f9a0e5547eddb459"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c007.avi",
+          "sha256": "224dcbbe1bba6bd815144cdabd82e4ea0b377df15fa17ec42740ac9031046886"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c008.avi",
+          "sha256": "b0eb7c5564e1308a19ffd101b8502a2f6d468b76693f587e955ce5acbd4ba63d"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c009.avi",
+          "sha256": "bfecc538cd9a4ef7cfa6e99babcaa1a2601660d26f9cbf834c31493277b6ac4d"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c010.avi",
+          "sha256": "40f27b0aa768478a188c9e18e43712a936c2f76588c2406c47f76551df942a0a"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c011.avi",
+          "sha256": "158183cc810fc7afad9191182ba08c5510fd558b795c24bbb5ca65d3bca98d2c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c012.avi",
+          "sha256": "492e5e0c645d9a6cc8af033d928333893591536638be51b7d0381681fac7b605"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c013.avi",
+          "sha256": "bc59a1b0330a9a07f34d3c1be50f4c8156b8c7f69ec37fc39e0b4be7a52b90ad"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c014.avi",
+          "sha256": "d63748a1f14ab9aea595e5aee9d2c05c604859ab5aed6d3c279df824127b5a6e"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c015.avi",
+          "sha256": "bc4b0079c4c2b4bec5dc0e307421ac5cd0fe91c9897257f272eed2b70d0e801c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c016.avi",
+          "sha256": "6c962f96048cb329894154420ceff425853416bfa0ca4924bea6f34c622cae00"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c017.avi",
+          "sha256": "ef5ea2cd9ee5789eb23a49c27a33f8578fe5f1da51882d0c060671ff4d3a1852"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c018.avi",
+          "sha256": "c1f445f85de09f482053c68bf9f82a23ffe7eea40f397e6638d07e9c46e60f34"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c019.avi",
+          "sha256": "12835ec3ff50de995e0a8c6c7a29865c173df6147aef7fe229d80c5c51d7ee62"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c020.avi",
+          "sha256": "416c273a5b0e448ac4111c1ad48ddcb82eda622b7b024030cdefe9bfca741d09"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c021.avi",
+          "sha256": "1391f485b4aa5911377206e18e64216cff5cdcc4b160e91633242df168bcdc3e"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c022.avi",
+          "sha256": "c15d2d6a8c3a648845c6271a645c2d3a2a1e9b22264147fb8f41aad04a96a105"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c023.avi",
+          "sha256": "679e44c070ed568d5dfcb1ec6ef4fcf83e6f51ce93d44bd969f7ad544f06fe6b"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c024.avi",
+          "sha256": "08088c9fed43a668b567d844e7298981b298e897aabcd9b6e4c3461008d6bac9"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c025.avi",
+          "sha256": "ed49c39c95911379090f1542fc13bddc6e8a8104e6dd178d4d26bad8afa8c67a"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c026.avi",
+          "sha256": "3f2ba92ee69eb85f7a53f8ffda2c20b922630094c68bc8419b6d1f63c36ed18c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c027.avi",
+          "sha256": "6677b8e92b61924a8a8ffbc7218ebed21badc594d47ee0039cad609931d01169"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c028.avi",
+          "sha256": "b590a373f76ac444f03c47e9abb153293edbee15df177704549bee07fcd1bffd"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c029.avi",
+          "sha256": "058646d404b9022f20b548d68450aace93d9f45eb4504445818302579c8098a4"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c030.avi",
+          "sha256": "5d4a6d732e563304c77e2cbc5b0a6e1da8a5731a8e4bc62aeee64df7ca8d3464"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c031.avi",
+          "sha256": "d681c8510c8713787fb68991266a6648c0591717c58a8a3285241a2f39d37fda"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c032.avi",
+          "sha256": "a38dfa7c40a319a9758f543a4ce59869a521414082cd7ecd6606d522181cd897"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c033.avi",
+          "sha256": "990f1134c1001fe1296cda0648bb200b0fefc30cec229cb32b4f3bec4d0ea2f6"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c034.avi",
+          "sha256": "ec864cab4e2617f1dd6048e9fd32590aa0b536c2582123b95871361d13a4967c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c035.avi",
+          "sha256": "20cb150255353367d621acbc0607ae2f47ab1510e942a71d2e01b3542bd77689"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c036.avi",
+          "sha256": "58ef474ad816b7ad980809be2c17995de4f463bde0a26312fec79445adf3623b"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c037.avi",
+          "sha256": "4d766260660f1aabae834768708aa2c7e946ac335b0ca1e2afbec0e4af1bbe2b"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c038.avi",
+          "sha256": "fe803941fc8a43d972bb6a53a355b905b655fc681337c508e6c632d988c578fa"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c039.avi",
+          "sha256": "5a7b8e968ca8ed67fdb437ba88514e3731bf47aa167a232e6520f5a313f2e91a"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c040.avi",
+          "sha256": "bff9bc5638a8a9833e599d6e6f010cc5d3f49c53076c2d00faad6e95f407bd9a"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c041.avi",
+          "sha256": "210b1695cd3127c63a4104227d80d3bfb183c99945c06bc770c5ee0d4ddd2ff8"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c042.avi",
+          "sha256": "70097f46dc328847d00236ae7dd8ba0caa5ce2c993eb93769b27887d8cb63f59"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c043.avi",
+          "sha256": "1274aab89fcc1068ea41c745f71e530b7de28510995e452e4b02b10d27ac5ec6"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c044.avi",
+          "sha256": "143235f28d786d0124d0ea376677347f201851ad0a07e16f30ce42ba39363d3c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c045.avi",
+          "sha256": "27cc72ede2e14fce28ea97e7549d48245cc66b66cc9191b1ab6ffde22a7f714a"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c046.avi",
+          "sha256": "ff8c8b23f029f1e370c8db1678670d459f6d5f70e6c46060661cbb901ec49d0b"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c047.avi",
+          "sha256": "2616dd012b7d571074f9a3052266f75dd06a70833efe3bc89d80100661497880"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c048.avi",
+          "sha256": "0040541851640385753856252f945f5ec05c9d19d3f5343636d7f2b99fae6bad"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c049.avi",
+          "sha256": "122687c2f404819acb1e2049d27c5257d34e5dcc1ac7f93c265e0f798f6109ba"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c050.avi",
+          "sha256": "783ec871dc242b765d1bfdba588291672d1dc8383a70f38207a76037ae4177c1"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c051.avi",
+          "sha256": "60e083e85404e0f3fd9949482344fd900a0c434576fddf6e3223d32facd22931"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c052.avi",
+          "sha256": "6db1bf187fb236001766154a80bfabd9207a34ca8d9db47187af0a41ca62fc6c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c053.avi",
+          "sha256": "22b1c6c33216e98b029d51337b653cc4ccc155bd1510452d43fe2bfa5801be09"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c054.avi",
+          "sha256": "0502914d2ec55e13651c36c2aca1d3c4c7fe6048bd3b49e201659b7466f25082"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c055.avi",
+          "sha256": "93411baa4dde062bc45bc7ca680deacef497d956e0a2b95ddd5ee134b88f1036"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c056.avi",
+          "sha256": "4fa8e98e897fa91a41741253667c66db8ea6c583ad79039eb9dc11bb2be53f45"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c057.avi",
+          "sha256": "3cffdf09c19762f940c1cc50c3a7a16729e80d3d1e52cd83591569f602a05bf6"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c058.avi",
+          "sha256": "b68d09f928db35a637fc0e73af2a9e68ebaf3c4fad97f8bf5cd30cf305557c12"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c059.avi",
+          "sha256": "1bc5d96e5bf33139bb7aecd532d1c08de91086f0c54da7f4845dea91ed1a7b8d"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c060.avi",
+          "sha256": "f9878d1502070ab757bd63ff03c603ec8b41bee806220bda180c896ca6da1a18"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c061.avi",
+          "sha256": "80a72641644eee261383ff594357ec46d80d31744b64966c071157baccf2602f"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c062.avi",
+          "sha256": "000779ea6340f6381fe7d7d44f0de2a7a76bd0c15c35f3af9f00330944f360fe"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c063.avi",
+          "sha256": "c01f8617f1919845ae3cec5a5250bc97c85d463f63c070155ee2d19bae5f26b4"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c064.avi",
+          "sha256": "9e83e632e06a192959d7eee8157f73851d236c4b2b5799a06e0201c7cd8bf3e2"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c065.avi",
+          "sha256": "e2db4a8796afd80772091c21c753daa17d9acce6b39cb5e710411eaae35eae9a"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c066.avi",
+          "sha256": "1eb59c9a68498e51fd6f55ef630c5a3ba908193818f2c95fd982586f84daf0c8"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c067.avi",
+          "sha256": "2434b6f96d2d1b7f8bfb7d997c7b4c245d7d70a0661e004ca97884aea3df8c19"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c068.avi",
+          "sha256": "24ad2c4928fb78e5007e1c710ba848b1cb3038a2a8736f2875cdba152e09fb6c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c069.avi",
+          "sha256": "d89f0efaec72df6c16a79d20057ebdf428510814eb042d91dd299553be242e7b"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c070.avi",
+          "sha256": "18548bc1758c62988ceb77f505352dfd09d0ac5a67e41ae9efd041efae2e9c60"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c071.avi",
+          "sha256": "ce1569375e5e8fd8e988cdafdd1975ee9bbc43f8b6c1b390d69de13fc6745748"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c072.avi",
+          "sha256": "2fe4cc6ec18a9fd346e7da3d3daf426c8b36aa4803e51d254aa08621d41ba37c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c073.avi",
+          "sha256": "e730fcf1d8e2503febde925961663eae7f93d164f166de5c6dd108b9399d81f1"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c074.avi",
+          "sha256": "6bf0af3b53d60aed089eb8ebdea94fe8017ea49a8ade79f5787962d4ac59c861"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c075.avi",
+          "sha256": "9fa5dd21773ad66eaa9e0bb1050b36399627f35849e4b1ce4d247e722f78161f"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c076.avi",
+          "sha256": "de8cd5b2580c7c5bd14a888669543e4e6e9d7bac593f813174a22e04149f2cfd"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c077.avi",
+          "sha256": "0217f9c9a542b8faf297db82cb540ffd8ef95acd634ecb0d1b388473e1810732"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c078.avi",
+          "sha256": "a4fcad2167faa6381f18a162c6095af22d00220c8a9169d3a5ead874236107ee"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c079.avi",
+          "sha256": "2eaf1c6288e8d4cee5ada1cce0ebf807850fca93b845137d6aa696c544b3b24b"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c080.avi",
+          "sha256": "12e461acb90a88b875a86ef050b830029c05f1b2b48a702edb29478f74d47af7"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c081.avi",
+          "sha256": "5a1f621895d9242d1e9ea31c6fa0693a15dc88ea64c0c92981d0b4a592487b1a"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c082.avi",
+          "sha256": "6abb8d6541fd1964209e77083a637c6489051cc0ff385f522dce905a2b7ada86"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c083.avi",
+          "sha256": "f70fb83c76b4e2415d9b048d9153eccf8c61d973137c0d9d0aee392f472bc73b"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c084.avi",
+          "sha256": "01cba73a68641f63b335424efed7be3d565dea1d9e57f9bf6a1d0b0fe3a2a0fa"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c085.avi",
+          "sha256": "68100e22bc591c21d15c9bfa0a63a0614e69bcadfe793b115311c2d6c0882ade"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c086.avi",
+          "sha256": "f26a1848c931a7a7a0cc72f44a0ff0f25b94e24299151ba243afbb333e0237f3"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c087.avi",
+          "sha256": "8ce4ade986a54e47308c2c0dd627c5d966cd115f3357bb3b1badc2e6a6e104f7"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c088.avi",
+          "sha256": "cc7d4daca3f35681dd38748846d27fe4bed29de3b0530dfffa52fb476b356ae8"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c089.avi",
+          "sha256": "43898765f30b296cf7c54699401651530e12063672deeffdd3c0ffba66aeb170"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c090.avi",
+          "sha256": "8d547420fcfebeedeff81d82da2471e81a89ad8483a0be7be5cdd8fe80ba933a"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c091.avi",
+          "sha256": "5d6a054bab51959bb964495d6d42f4bef5bbe7788631470900a9fc6ebbeb45e8"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c092.avi",
+          "sha256": "f33af416de8f49b658d60c3959a9652990eec7fe0a1284ea50d8c80c284d845f"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c093.avi",
+          "sha256": "e0de0fbe2374d1e5f6104f7f12f4260d2712c5da7a05af6a6581a89a52e10f70"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c094.avi",
+          "sha256": "93efb3ca34d01078cd2653a1b929f739838dc2a4eb690b60a8026cd1e912b7fe"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c095.avi",
+          "sha256": "fb54b9ef627fbdef855dc6db873502a7e2c7614a39d4d7a1c94eb76141a527e8"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c096.avi",
+          "sha256": "86b9fd930d211ebf79c20aa1427104a1995a7cc5cd8b6007febfc4d67a356010"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c097.avi",
+          "sha256": "198d7008f85758fa5c19a28b1e7ba44d3848c5a1038ec9b21115487f7342f4a6"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c098.avi",
+          "sha256": "c704e9bb7872b02ba5bc3418625dfa6e626dc5d753443c62bdf1c673ccfe012d"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c099.avi",
+          "sha256": "bc7b90d4f82feeaff486d8a593039d96977b166e99810eb403b5a5f9e54fafcd"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c100.avi",
+          "sha256": "053bee83a80e9246c8ef03523f3fc2d86e4cd9a60d7f22c3b995f3262dc6124b"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c101.avi",
+          "sha256": "c5db924e26ab47b20b8cf83b3a014243048e71de94df3c43f83864a611aafde4"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c102.avi",
+          "sha256": "ef1758fe59dca577c6618a9d8ec54c786ad2cd5e23e604419f3d4e67f464d707"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c103.avi",
+          "sha256": "10e7f11709f05fc927f7dfa82e9e283b28c929884a3799fc6e58196a81aa77b3"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c104.avi",
+          "sha256": "2c530ad49800b5fc76075e5905fb0cad5b12945d32909c3c36d99019fb60e698"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c105.avi",
+          "sha256": "3592da1c2da07bc1c9cd83dce92a02ed423447d04d6a31ac57ce5150eb28e812"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c106.avi",
+          "sha256": "05e4142bb51ede6deb22da4033948c39753b22eb77b05cea70de06a0fd17b680"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c107.avi",
+          "sha256": "334013eb192ae34aed613b60e8ad35bdb4904cd3a68c17db1cd654a98fb8a612"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c108.avi",
+          "sha256": "f70128e4ea4f40451cc05d26364a0aea134c64f091c6fa2cd26cf283fd5636f4"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c109.avi",
+          "sha256": "38b2027a72886ef0b8e3bd91da2d1c3b19933a2526ebe4dc54d2650de083b529"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c110.avi",
+          "sha256": "75612d846c76bfbb1fdedeefbc50be5eaf1c16088df854a75c649848e0c6ee0e"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c111.avi",
+          "sha256": "6eb50fa99e334db72db6c684fb97f6368415f7815f09da00c117011623677de7"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c112.avi",
+          "sha256": "e658660798a86a1c02f0d3b432171165cade07b73cbcacd55bb972493e21f349"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c113.avi",
+          "sha256": "0c3c4f6912e6dfe3b5fb248f9c68d6f027bfd119bc253113c25d58707abe8591"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c114.avi",
+          "sha256": "458742be5df95a092f2c0d6e2ce8f92546f57c663e20f71a3cf68512d52d0848"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c115.avi",
+          "sha256": "7dba09df734e2ec74302b50008db878cb0b3c42d67847bdca268cbd21e59ea4d"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c116.avi",
+          "sha256": "fee81a64c9fb71b6bf43260d49743e4a56ffd6d6a182f1d1050db655de5ad8fc"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c117.avi",
+          "sha256": "64523883375e90c6f0bc283c4b6b0c9faad8d210548b8341f1af3379863aa936"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c118.avi",
+          "sha256": "b2a0ebfd386385b1344643493fd1557284b77bdd000402242755229b388e81ce"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c119.avi",
+          "sha256": "cf7479763b507596f8b7207f0bcfa37b11c3010f3070fa0100df7b4fa4d2a47e"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c120.avi",
+          "sha256": "ca89f972a3953898ba0036ca069b4687db354bf24038afa43f759587079c5646"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c121.avi",
+          "sha256": "ba9ec677b249da497b6f9d1e851a22553d8ae3f2bd95d9d6973d87a4efadac6d"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c122.avi",
+          "sha256": "cd98202d5365736ecd9c5c2be7670a962548848b1486613fa5a5e618631c91de"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c123.avi",
+          "sha256": "1b86eee4cd4dbf3d3fcab49d784bb784cbf2ce06a42a1ece7e3875a5fa34a14d"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c124.avi",
+          "sha256": "9de74975abe3f94d902a72dece9de46c999dead47f3e13e684f3b836f99eaf16"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c125.avi",
+          "sha256": "37a2098218e47657923c19864a7576e6901eafe4597bdf328ddb46fd6855a008"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c126.avi",
+          "sha256": "1dfac85809448bf2e73e60eb24ae0559d59767c7bdd8a4a828a372725a453337"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c127.avi",
+          "sha256": "bacba98e728d1b479dda1158ba93b1d1b043558afb81c879ed6a54d7909d5d85"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/synthetic-c128.avi",
+          "sha256": "874805145c62a84b8894d7277b0ac39bc7b3a5d379223d0138eee67a40fda1ab"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/relations.json",
+          "sha256": "5acde2c21414977460dc8f6658f3902aa51995b0e36ebdcdd4c4480dc5993b40"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/id_map.json",
+          "sha256": "2abdd21c92024d387395a818d378f984c09fd06229f24eeb5db36aabe0be3011"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/annotation.json",
+          "sha256": "62dea5de037b400508447e29006584ca309d5970c2d550c5b2ec7719b2895b31"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/source_report.json",
+          "sha256": "5cb13b88c2e2da64acf70ec3d012b0c4900d2b66d7cbee563ac5a26fafe42b85"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/allowlist.json",
+          "sha256": "5b7793feee1cf7b5fcc5969aeb14377310348c26218d0a6df3366d9694c68699"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/source_annotation.json",
+          "sha256": "f9efed32f9e0597a74e061f13ed559971ec7e734c727b6e2732d0d038d54cc80"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/train.json",
+          "sha256": "e004167bcfe2aa8adadd9e21ef0588567ae0922bbeb26afb5bd1629961513726"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/train-gallery.json",
+          "sha256": "885301942399ae3a9c6d5090564893939c73c086740b0f96029dc92cd1f2d079"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/val_calibration.json",
+          "sha256": "24d6ece104255128f8eac7df28ba8532182b88b07b40a2f2d25ca1b57ba45c33"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/val_calibration-gallery.json",
+          "sha256": "3f3df7f0bb56d3141c7ee7cd5ab0da8416be48ddaef0b43f3eaab5c19f85c421"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/val_locked.json",
+          "sha256": "dc33efa150cae1d8480a94391174b22ac4b9f7189ca46335db03cf5959f6a727"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/val_locked-gallery.json",
+          "sha256": "75980a56bab9f8ea9501f964b6d3a61ee2b060b91e366272e9d4824c4a5df1dd"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/synthetic-pilot-v2/candidate-orders.json",
+          "sha256": "091abd128c0376b664d82fe2cabf6a20a34c0e5b6ab5ad48b7c91fc94a39a6da"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/provenance/pilot-system-template.json",
+          "sha256": "97269fabdb33dde0eef49f372b6da897af0c4bfd21650790ebb3ade67cdf680c"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-4",
+        "gpu_count": 4,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/arrays/random-pilot-clip.npz",
+          "sha256": "4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8"
+        }
+      ],
+      "parent_run_ids": [
+        "msrvtt-baseline-benchmark_compile-seed000-20261001T100810Z-bbaa8ea7fa8a",
+        "synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d"
+      ],
+      "scheduled_timestamp_utc": "20261001T104619Z",
+      "seed": 0,
+      "selection_lineage": [
+        {
+          "evidence": {
+            "D1": {
+              "commit": "8fe109aef6107eb87834470fd3e3a20cb4bd7f54",
+              "path": "experiments/semantic-answerability-pilot-v1/summaries/D1.json",
+              "sha256": "da72a55769459e9acc33c4f0d5d2a4a65439fcb2473e7975938155a9a8253a11"
+            },
+            "Q0P": {
+              "commit": "4e3d4013b9ae33ca53a29a024f4b55aebea9e74a",
+              "path": "experiments/semantic-answerability-pilot-v1/summaries/Q0P-20261001T104445Z.json",
+              "sha256": "56d70f3330eb3eea41f43f00cf24866cfb85e2216128b0d69a71aad745ae086e"
+            }
+          },
+          "gpu_hours": 8.0,
+          "kind": "pilot_phase",
+          "phase_id": "Q0",
+          "phase_path": "experiments/semantic-answerability-pilot-v1/phases/Q0.json",
+          "protocol_version": 1
+        }
+      ],
+      "stage": "baseline",
+      "test_authorized": false,
+      "validation_authorized": true,
+      "variant": "pilot-q0-v2"
+    }
+  ],
+  "study": "semantic-answerability-pilot-v1"
+}
