@@ -3,7 +3,7 @@
 本页描述 B 阶段代码合同。CPU 回归 333 项通过；正式 ViT-B/32 容量的合成四卡复验通过：0、2、3、4 卡，15 项链路检查通过，连续训练与断点恢复的参数/优化器差值均为 0，见[验收报告](../../experiments/contextual-risk-v2/summaries/rebuilt-code-q0-four-gpu-retest-20261001.md)。真实训练/校准/阈值选择仍须另有获批 study 和 Scheme A 预留；现有失败 study 不因软件资格通过而恢复授权。test 保持 sealed。
 
 研究实验设计见 [官方标签下的候选存在、检索风险与有限扩检计划](../superpowers/specs/2026-10-01-semantic-retrieval-experiment-design.md)。
-2026-10-01 按用户指令将主实验修订为官方标签自动构造，人工语义审核改为可选扩展。下文首先描述当前 B 代码；新增标签范围合同见单独的待实现小节。合成四卡软件资格已通过，正式标签适配器和科学实验编排尚未实施。
+2026-10-01 按用户指令将主实验修订为官方标签自动构造，人工语义审核改为可选扩展。下文描述 B 基础系统及已接通的 C1–C4 官方标签 pilot。B 的历史四卡验收不能替代新增链路的 Q0；新 Q0 需单独归档通过后才能启动科学 GPU 实验。
 
 ## 端到端链路
 
@@ -32,7 +32,7 @@ flowchart LR
 
 - `runtime`：Scheme A study/registry/run 路径、run ID、manifest SHA-256、source Git SHA、eval split。
 - `model`：`clip` 的全部容量与显式 `fixture` 标志、本地 `clip_weights/clip_sha256`、`dim/num_layers/num_heads/max_frames/coarse_dim`，及默认关闭的 `grouping/alignment`。生产 CLIP 只支持已迁移的 ViT-B/32 容量；小容量仅测试。
-- `train`：学习率、weight decay、seed、scheduler 名与步数、trainable prefixes、`checkpoint_interval`，以及 `coarse/match/pair/exist/align/group` 六个显式权重。CLI 的有限训练循环以 `scheduler_steps` 为循环次数，每次消费预留 episode batch；全 unknown 批次不增加 optimizer step。不包含数据挖掘或隐式采样配置。
+- `train`：学习率、weight decay、seed、scheduler 名与步数、trainable prefixes、`checkpoint_interval`，以及 `coarse/match/pair/exist/align/group` 六个显式权重。CLI 以 `scheduler_steps` 为循环次数；普通路径消费预留 episode batch，pilot 路径逐步构造动态 minibatch。全 unknown 批次不增加 optimizer step。可选 `train.pilot` 显式绑定实验臂、采样 seed、固定 CLIP 排序和 P1 父 checkpoint。
 - `policy`：冻结的 pair/presence 阈值、严格递增 `k_sequence`、`max_budget`。
 - `data`：`episode_manifest/episode_sha256/gallery_version/split`。
 - `deployment`：训练时为 null；校准/评估显式提供 checkpoint 路径、文件 SHA、训练配置 SHA、gallery manifest 路径/SHA、calibration split SHA，以及 `mode=calibrate/evaluate`。evaluate 必须另提供校准文件路径/SHA；calibrate 的校准输入为 null。
@@ -65,7 +65,7 @@ checkpoint v2 增加 `progress.next_iteration` 和最后一批 metrics，与 opt
 
 旧 run 必须先经控制面收束为 failed/cancelled，且 terminal registry 已提交。新 run ID 和目录必须不同，manifest 的 `parent_run_ids` 引用旧 ID；`input_checkpoints` 绑定 `.pt` 和 `.json`，`dataset_splits` 绑定受 Git 跟踪的审核报告。`selection_lineage` 必须有 `kind=training_resume`、`parent_run_id`、`approved=true`、非空 `reason`、仓库相对的 `report_path` 和 `report_sha256`，与 resume 配置一致。程序校验该授权声明与证据，不代替真人审批，不自动创建重试或修改旧运行。
 
-checkpoint v1 仍可由底层训练/model-only loader 加载，但缺少循环位置，CLI 不将其猜成精确续训。当前入口每 rank 消费固定 batch，next_iteration 已覆盖其数据位置；未来 C2 的动态 minibatch/候选调度须扩展相应采样状态，并另做恢复验证。P1→A1–A4 是另设分支的初始化，不能用完整 resume 偷换其优化器/训练阶段。
+checkpoint v1 仍可由底层训练/model-only loader 加载，但缺少循环位置，CLI 不将其猜成精确续训。普通入口每 rank 消费固定 batch；pilot 每次全局采样 16 个不同查询，四个 rank 各取 4 个，构造 K 与 present/absent 面板。checkpoint 同时保存 sampler 的 RNG、顺序、游标和面板调度状态；恢复校验这些身份并从 next_iteration 继续。P1→A1–A4 是另设分支的初始化，不能用完整 resume 偷换其优化器/训练阶段。
 
 ## Episode JSON
 
@@ -80,15 +80,15 @@ provenance 必须声明非空 `source`、SHA-256 与布尔 `reviewed`，known �
 
 `audit_episode_splits` 分别拒绝 canonical、same-source、caption group 跨 split 泄漏。数据 adapter 必须对联合 split 执行该审核；单文件加载不自动发现其他文件的泄漏。
 
-## 官方标签实验合同修订（待实现）
+## 官方标签实验合同
 
-[C1 计划](../superpowers/plans/2026-10-01-semantic-pilot-c1-data-audit.md)拟新增 Episode v2，明确 `relevance_space=benchmark_annotation` 与官方协议、annotation、关系/ID 映射及来源报告 SHA。官方 caption-video 关系直接提供训练与评价真值，不需逐条人工确认；非配对关系只在该 benchmark 范围下记负例，不代表语义不相关。缺失/异常关系不能转为负例。
+[C1 计划](../superpowers/plans/2026-10-01-semantic-pilot-c1-data-audit.md)已实现 Episode v2，明确 `relevance_space=benchmark_annotation` 与官方协议、annotation、关系/ID 映射及来源报告 SHA。官方 caption-video 关系直接提供训练与评价真值，不需逐条人工确认；非配对关系只在该 benchmark 范围下记负例，不代表语义不相关。缺失/异常关系不能转为负例。
 
 候选存在事件为“当前 canonical 候选含至少一个标注正例”。自然查询的标注正例在所属库内；离线受控移除正例只得到候选缺失，不得到真实语义全库无答案。同视频多个 caption 是多个查询，不是跨视频多答案。官方 video ID 排序与 canonical 集合/预算分别评价，alias 不制造额外正例。
 
 v2 不通过填写 `reviewed=true` 兼容 v1；当前 v1 的 known/全库 no 审核要求继续有效。标签空间和协议身份须贯穿配置、checkpoint、校准与指标，不允许 benchmark 状态与未来 `reviewed_semantic` 状态混用。查询来源组件也须纳入跨分区审计。跨库校准还需显式 fit/target gallery 身份，自然/受控候选分布分别绑定。
 
-以上是设计要求，当前 loader、配置和校准代码尚未实现该分支；不能直接将官方标签交给 v1 入口运行。主实验不包含真实语义无答案率或跨视频语义多正例成功声明，相关人工审核另立可选协议。
+Episode v2、配置身份和 pilot 校准消费者已接通，官方标签由独立 v2 入口消费。主实验不包含真实语义无答案率或跨视频语义多正例成功声明，相关人工审核另立可选协议。
 
 ## Gallery JSON
 
@@ -113,4 +113,8 @@ OT 使用双侧 dustbin 的平衡增广 log-Sinkhorn，明确 epsilon/dustbin co
 `source_inventory` 的 snapshot模式按已核验9k allowlist筛选编码记录后仅解码训练caption，绑定审计报告与视频哈希；
 `benchmark_compile` 按来源组件生成四分区、每视频稳定caption、Episode v2与独立官方关系/ID映射。
 v2显式 benchmark_annotation，v1语义审核合同保持不变。C1排序库存只验数据合同；科学候选须在E0用固定CLIP重新绑定。
-C2/C3/C4完成情况以实施计划和验收报告为准，尚未启动科学训练，test保持sealed。
+真实 D1 已归档：训练 7000、开发 500、校准 500、锁定验证 1000，全部来自官方训练 9k 的独立快照；test caption 未解码。见[真实数据报告](../superpowers/reports/2026-10-01-semantic-pilot-c1-real-data.md)。
+
+新增链路为 `D1 → Q0P/Q0 → E0 → P1a/P1b/P2a/P2b → C0S → C0 → V0E → V0S → V0`。E0 用固定 CLIP 生成科学候选；18 个训练 run 覆盖三 seed 的 A0/P1/A1–A4。C0S 导出开发/校准分数，C0 冻结阈值和扩检策略后，V0E 才生成锁定候选，V0S 测量真实扩检和 alias/顺序不变性，V0 进行锁定分析。
+
+C3 输出官方/去重 Recall、风险–覆盖曲线、存在概率校准、预算与扩检指标、配对 bootstrap、消融及敏感性图。自然/受控轨分别校准，共用受控开发集选择的动作阈值；所有 PASS gate 从已提交归档重算。命令与预留顺序见[编排指南](semantic-pilot-orchestration.md)，分析合同见[分析指南](semantic-pilot-analysis.md)。新增 Q0 四卡验收和科学训练尚未执行；test 保持 sealed。
