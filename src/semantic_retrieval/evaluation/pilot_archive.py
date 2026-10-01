@@ -18,6 +18,16 @@ def _phase(repository, reference, phase):
 
 def _reserved(context, reference):
     path = Path(reference["path"])
+    if not path.is_absolute():
+        # Git summary identity stays relative; only reserved-file lookup is absolute.
+        if (
+            len(path.parts) < 3
+            or path.parts[0] != "experiments"
+            or ".." in path.parts
+            or path.as_posix() != reference["path"]
+        ):
+            raise ValueError("archive reference path is not canonical CONTROL-relative")
+        path = Path(context.repo_root) / path
     if not path.is_absolute() or path.is_symlink() or path.resolve(strict=True) != path or not path.is_file():
         raise ValueError("archive reference path is not canonical")
     if (

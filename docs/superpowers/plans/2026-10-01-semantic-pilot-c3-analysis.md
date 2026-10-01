@@ -97,3 +97,14 @@ RED regression and guard, the fresh focused producer/archive/math suite →
 The final narrow guard compares all bundle label/preprocessing/policy/gallery
 identities against authenticated score fragments. Actual scientific qualification,
 full asset inference, budgets and performance remain unexecuted in this CPU scope.
+
+C3/C4 boundary follow-up: committed summary references intentionally use relative
+Git CONTROL paths while reserved file maps use absolute paths. `_reserved` now
+resolves canonical experiments-relative paths under `repo_root` solely for hash
+lookup, preserving the original full relative/commit reference for `_phase`.
+Traversal and noncanonical paths remain rejected. The new local regression was
+observed RED then GREEN; archive scope: **7 passed**. C4's real committed-manager
+boundary regression `test_c3_consumer_uses_real_committed_c4_summary_and_output_contract`
+was run against this C3 module and C4's actual phase/lifecycle implementation:
+**1 passed**, 5.02s; no phase authentication mock. That regression remains in C4's
+owned test file and covers its `run_dir` result alias along with this fix.

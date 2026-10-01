@@ -141,3 +141,17 @@ def test_archive_rejects_substituted_global_protocol(archived_fragment):
     bundle["label_protocol"] = {"protocol_id": "substituted"}
     with pytest.raises(ValueError, match="global"):
         archive.authenticate_score_fragments(context, bundle)
+
+
+def test_reserved_accepts_relative_control_summary_without_rewriting_git_reference(tmp_path, monkeypatch):
+    summary = tmp_path / "experiments/semantic-answerability-pilot-v1/summaries/C0S.json"
+    summary.parent.mkdir(parents=True)
+    summary.write_text("{}")
+    reference = dict(path=summary.relative_to(tmp_path).as_posix(), sha256=file_sha256(summary), commit="a" * 40)
+    original = dict(reference)
+    context = SimpleNamespace(repo_root=tmp_path)
+    monkeypatch.setattr(archive, "context_input_references", lambda _: {str(summary): reference["sha256"]})
+    assert archive._reserved(context, reference) == summary
+    assert reference == original
+    with pytest.raises(ValueError, match="canonical"):
+        archive._reserved(context, dict(reference, path="../outside-summary.json"))
