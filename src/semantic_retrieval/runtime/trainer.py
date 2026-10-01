@@ -7,6 +7,7 @@ import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
+from semantic_retrieval.models.grouping import group_loss
 from semantic_retrieval.models.pair_matcher import validate_offsets, validate_pairs
 from semantic_retrieval.objectives.retrieval import LOSS_NAMES, compute_objective
 from semantic_retrieval.runtime.checkpoint import assert_running, restore_rng
@@ -117,7 +118,29 @@ class Trainer:
         self.model.train()
         self.optimizer.zero_grad(set_to_none=True)
         # forward is the same named matching pipeline, including when wrapped by DDP.
-        f, p, presence, q, v = self.model(batch.inputs, batch.pair_indices, batch.query_offsets)
+        gp = batch.targets.group_pairs
+        weight = self.context.system_config.train.loss_weights["group"]
+        config = self.raw.config.grouping
+        if weight > 0:
+            if config is None or gp is None or batch.group_provenance is None or len(batch.group_provenance) != len(gp):
+                raise ValueError("group supervision requires configured annotation provenance")
+            known = batch.targets.group_labels >= 0
+            if any(
+                d not in config.annotation_provenance_sha256
+                for d, k in zip(batch.group_provenance, known.tolist())
+                if k
+            ):
+                raise ValueError("group provenance is not authorized")
+            if (
+                (gp >= len(batch.pair_indices)).any()
+                or (gp[:, 0] == gp[:, 1]).any()
+                or not (batch.pair_indices[gp[:, 0], 0] == batch.pair_indices[gp[:, 1], 0]).all()
+            ):
+                raise ValueError("equivalence pairs must belong to the same query")
+        f, p, presence, q, v, group_logits = self.model(
+            batch.inputs, batch.pair_indices, batch.query_offsets, group_pairs=gp if weight > 0 else None
+        )
+        auxiliary = {"group": group_loss(group_logits, batch.targets.group_labels)} if group_logits is not None else {}
         global_v, relations = global_coarse_relations(batch, v)
         terms = compute_objective(
             q @ global_v.T,
@@ -128,7 +151,10 @@ class Trainer:
             batch.query_offsets,
             weights=self.context.system_config.train.loss_weights,
             coarse_relevance=relations,
+            auxiliary_losses=auxiliary,
         )
+        if group_logits is not None:
+            terms["valid_group_count"] = (batch.targets.group_labels >= 0).sum()
         weights = self.context.system_config.train.loss_weights
         counts = torch.stack([terms["valid_" + k + "_count"] for k in LOSS_NAMES]).to(q.device)
         global_counts = counts.clone()

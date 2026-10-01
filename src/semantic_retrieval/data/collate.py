@@ -44,6 +44,7 @@ def collate_episodes(episodes):
     offsets = [0]
     group_pairs = []
     group_labels = []
+    group_provenance = []
     for q, e in enumerate(episodes):
         row_pair = {}
         for canonical, label in zip(e.canonical_ids, e.relevance):
@@ -54,6 +55,7 @@ def collate_episodes(episodes):
         for a, b, label in e.query_conditioned_group_labels:
             group_pairs.append((row_pair[a], row_pair[b]))
             group_labels.append(label)
+            group_provenance.append(e.annotation_provenance["sha256"])
     targets = Targets(
         labels,
         torch.tensor([e.answer_in_candidates for e in episodes]),
@@ -67,4 +69,5 @@ def collate_episodes(episodes):
         ids,
         torch.tensor(pairs, dtype=torch.long).reshape(-1, 2),
         torch.tensor(offsets, dtype=torch.long),
+        tuple(group_provenance) if group_provenance else None,
     )

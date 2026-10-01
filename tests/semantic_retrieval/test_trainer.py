@@ -22,7 +22,7 @@ def train_batch(inputs):
 
 
 @pytest.fixture
-def training_context(tmp_path, model_config):
+def training_context(tmp_path, model_config, *, only_group=False):
     from semantic_retrieval.config import PolicyConfig, SystemConfig, TrainConfig, effective_manifest_config
     from semantic_retrieval.runtime.artifacts import prepare_run, start_run
 
@@ -35,11 +35,32 @@ def training_context(tmp_path, model_config):
         ("temporal.", "coarse.", "matcher.", "answerability."),
         dict(coarse=1.0, match=1.0, pair=1.0, exist=1.0, align=0.0, group=0.0),
     )
+    if model_config.grouping is not None:
+        train = replace(
+            train,
+            loss_weights={**train.loss_weights, "group": 1.0},
+            trainable_prefixes=train.trainable_prefixes + ("grouping.",),
+        )
+    if only_group:
+        train = replace(train, loss_weights={k: float(k == "group") for k in train.loss_weights})
     stub = SystemConfig(None, model_config, train, PolicyConfig(0.7, 0.6, (2, 4), 4))
     refs = [dict(path=str(model_config.clip_weights), sha256=model_config.clip_sha256)]
     repo, rt = reservation.__wrapped__(
         tmp_path,
-        SimpleNamespace(param=dict(config=effective_manifest_config(stub, eval_split="val"), input_checkpoints=refs)),
+        SimpleNamespace(
+            param=dict(
+                config=effective_manifest_config(stub, eval_split="val"),
+                input_checkpoints=refs,
+                dataset_splits=[
+                    dict(
+                        path=str(model_config.grouping.validation_report),
+                        sha256=model_config.grouping.validation_report_sha256,
+                    )
+                ]
+                if model_config.grouping is not None
+                else [],
+            )
+        ),
     )
     cfg = replace(stub, runtime=rt)
     commit_reservation(repo, rt)

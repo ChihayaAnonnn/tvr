@@ -5,6 +5,7 @@ from torch import nn
 from semantic_retrieval.models.answerability import AnswerabilityHead
 from semantic_retrieval.models.clip import ClipBackbone
 from semantic_retrieval.models.coarse import CoarseProjector
+from semantic_retrieval.models.grouping import EquivalencePredictor
 from semantic_retrieval.models.pair_matcher import PairMatcher
 from semantic_retrieval.models.temporal import TemporalEncoder
 from semantic_retrieval.models.weights import load_clip_state
@@ -21,6 +22,7 @@ class SemanticRetrievalModel(nn.Module):
         self.coarse = CoarseProjector(config.dim, config.coarse_dim)
         self.matcher = PairMatcher(config.dim)
         self.answerability = AnswerabilityHead(self.matcher.feature_dim)
+        self.grouping = EquivalencePredictor(self.matcher.feature_dim) if config.grouping is not None else None
 
     def encode_query(self, inputs):
         tokens, pooled = self.clip.encode_text(inputs.input_ids, inputs.text_mask)
@@ -51,8 +53,13 @@ class SemanticRetrievalModel(nn.Module):
     def score_presence(self, pair_scores, query_offsets):
         return self.answerability(pair_scores, query_offsets)
 
-    def forward(self, inputs, pair_indices, query_offsets):
+    def forward(self, inputs, pair_indices, query_offsets, *, group_pairs=None, return_alignment=False):
         features = self.encode(inputs)
-        pairs = self.score_pairs(features, pair_indices)
+        pairs = self.score_pairs(features, pair_indices, return_alignment=return_alignment)
         q, v = self.coarse_embeddings(features)
-        return features, pairs, self.score_presence(pairs, query_offsets), q, v
+        group_logits = (
+            self.grouping(pairs.features[group_pairs[:, 0]], pairs.features[group_pairs[:, 1]])
+            if self.grouping is not None and group_pairs is not None
+            else None
+        )
+        return features, pairs, self.score_presence(pairs, query_offsets), q, v, group_logits

@@ -57,6 +57,7 @@ class ModelConfig:
     num_heads: int
     max_frames: int
     coarse_dim: int
+    grouping: "GroupingConfig | None" = None
 
     def __post_init__(self):
         if not isinstance(self.clip, ClipConfig) or not isinstance(self.clip_weights, Path):
@@ -223,6 +224,11 @@ def load_system_config(path):
     m = payload["model"].copy()
     m["clip"] = construct(ClipConfig, m["clip"])
     m["clip_weights"] = local(m["clip_weights"])
+    if m["grouping"] is not None:
+        group = m["grouping"].copy()
+        group["validation_report"] = local(group["validation_report"])
+        group["annotation_provenance_sha256"] = tuple(group["annotation_provenance_sha256"])
+        m["grouping"] = construct(GroupingConfig, group)
     t = payload["train"].copy()
     t["trainable_prefixes"] = tuple(t["trainable_prefixes"])
     p = payload["policy"].copy()
@@ -281,3 +287,24 @@ class DeploymentConfig:
             raise ValueError("frozen calibration input required")
         if self.mode == "calibrate" and (self.calibration_path is not None or self.calibration_sha256 is not None):
             raise ValueError("calibration fit must not consume prior calibration")
+
+
+@dataclass(frozen=True)
+class GroupingConfig:
+    threshold: float
+    validation_report: Path
+    validation_report_sha256: str
+    annotation_provenance_sha256: tuple[str, ...]
+
+    def __post_init__(self):
+        import math
+
+        if (
+            not math.isfinite(self.threshold)
+            or not 0 <= self.threshold <= 1
+            or not isinstance(self.validation_report, Path)
+            or not re.fullmatch("[0-9a-f]{64}", self.validation_report_sha256)
+            or not self.annotation_provenance_sha256
+            or not all(re.fullmatch("[0-9a-f]{64}", x) for x in self.annotation_provenance_sha256)
+        ):
+            raise ValueError("explicit grouping validation and annotation provenance required")

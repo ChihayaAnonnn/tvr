@@ -133,6 +133,11 @@ def prepare_run(config, *, repo_root, system_config=None):
         refs = {str(r["path"]): r["sha256"] for r in manifest["input_checkpoints"]}
         if refs.get(str(system_config.model.clip_weights)) != system_config.model.clip_sha256:
             raise ValueError("CLIP input is not reserved")
+        if system_config.model.grouping is not None:
+            group = system_config.model.grouping
+            refs = {str(r["path"]): r["sha256"] for r in manifest["dataset_splits"]}
+            if refs.get(str(group.validation_report)) != group.validation_report_sha256:
+                raise ValueError("grouping validation report is not reserved")
         if system_config.deployment is not None:
             deployment = system_config.deployment
             refs = {

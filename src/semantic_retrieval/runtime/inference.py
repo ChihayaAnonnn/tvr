@@ -7,6 +7,7 @@ import torch
 
 from experiment_artifacts import artifact_json_bytes
 from semantic_retrieval.evaluation.episodes import EpisodePrediction
+from semantic_retrieval.models.grouping import ValidatedGrouper
 from semantic_retrieval.retrieval.policy import RetrievalPolicy
 from semantic_retrieval.retrieval.semantic_set import SemanticSet
 from semantic_retrieval.runtime.checkpoint import model_sha256
@@ -27,6 +28,7 @@ class RetrievalService:
         self.content_sha256 = dict(content_sha256)
         self.last_prediction = None
         self._verify()
+        self.grouper = ValidatedGrouper(model.grouping, model.config.grouping) if model.grouping is not None else None
         if set(self.content_sha256) != set(index.ids):
             raise ValueError("content inventory must cover the canonical gallery")
 
@@ -110,6 +112,7 @@ class RetrievalService:
                 ordered,
                 PairScores(torch.logit(probabilities.clamp(1e-7, 1 - 1e-7)), p.features, p.dustbin_mass),
                 support_threshold=self.policy.config.pair_threshold,
+                group_predictor=self.grouper,
             )
             remaining = budget - used
             # No additional canonical candidates remain after covering this library.
