@@ -9,3 +9,5 @@
 - 输出 run-local `provenance/dual-resume.json`、`dual-gpu-preflight.json`、`hardware.json`、checkpoint/NPY及日志。每个rank独立检查；失败保留证据，不自动重试。
 
 `study.yaml`冻结作用域、GPU UUID、配置/命令和Q0P父摘要，`phases/preflight.json`绑定完整输入。执行前先 `reserve-phase` 并提交整批reserved记录，从干净源码运行sealed argv。worker只到validating；关闭所有writer后再终态/finalize-phase并提交摘要。预算≤2 GPUh，控制器墙钟上限3600秒。既有四卡预留位于另一工作树，不修改它。
+
+实际首轮：数值检查通过，但因临时监控脚本故障、启动器退出码未捕获，整体已归档failed。完整事故与数值见[预检报告](../../docs/superpowers/reports/2026-10-01-dual-gpu-preflight.md)。正式控制器 `scripts/run_dual_gpu_preflight.py` 已修复并验证；不得对原phase/run再次执行，新的复验必须先获得用户审查与授权。
