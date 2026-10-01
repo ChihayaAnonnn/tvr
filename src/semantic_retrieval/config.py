@@ -58,6 +58,7 @@ class ModelConfig:
     max_frames: int
     coarse_dim: int
     grouping: "GroupingConfig | None" = None
+    alignment: "AlignmentConfig | None" = None
 
     def __post_init__(self):
         if not isinstance(self.clip, ClipConfig) or not isinstance(self.clip_weights, Path):
@@ -229,6 +230,8 @@ def load_system_config(path):
         group["validation_report"] = local(group["validation_report"])
         group["annotation_provenance_sha256"] = tuple(group["annotation_provenance_sha256"])
         m["grouping"] = construct(GroupingConfig, group)
+    if m["alignment"] is not None:
+        m["alignment"] = construct(AlignmentConfig, m["alignment"])
     t = payload["train"].copy()
     t["trainable_prefixes"] = tuple(t["trainable_prefixes"])
     p = payload["policy"].copy()
@@ -308,3 +311,30 @@ class GroupingConfig:
             or not all(re.fullmatch("[0-9a-f]{64}", x) for x in self.annotation_provenance_sha256)
         ):
             raise ValueError("explicit grouping validation and annotation provenance required")
+
+
+@dataclass(frozen=True)
+class AlignmentConfig:
+    epsilon: float
+    dustbin_cost: float
+    max_iterations: int
+    tolerance: float
+    warmup_steps: int
+
+    def __post_init__(self):
+        import math
+
+        if (
+            any(
+                not isinstance(x, (int, float)) or not math.isfinite(x)
+                for x in (self.epsilon, self.dustbin_cost, self.tolerance)
+            )
+            or self.epsilon <= 0
+            or self.dustbin_cost < 0
+            or not 0 < self.tolerance < 1
+            or type(self.max_iterations) is not int
+            or self.max_iterations <= 0
+            or type(self.warmup_steps) is not int
+            or self.warmup_steps < 0
+        ):
+            raise ValueError("invalid explicit alignment solver configuration")

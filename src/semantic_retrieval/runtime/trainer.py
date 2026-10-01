@@ -9,6 +9,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 from semantic_retrieval.models.grouping import group_loss
 from semantic_retrieval.models.pair_matcher import validate_offsets, validate_pairs
+from semantic_retrieval.objectives.alignment import alignment_loss, dustbin_ot_target
 from semantic_retrieval.objectives.retrieval import LOSS_NAMES, compute_objective
 from semantic_retrieval.runtime.checkpoint import assert_running, restore_rng
 from semantic_retrieval.runtime.distributed import gather_with_grad
@@ -137,10 +138,29 @@ class Trainer:
                 or not (batch.pair_indices[gp[:, 0], 0] == batch.pair_indices[gp[:, 1], 0]).all()
             ):
                 raise ValueError("equivalence pairs must belong to the same query")
+        align_config = self.raw.config.alignment
+        align_weight = self.context.system_config.train.loss_weights["align"]
+        if align_weight > 0 and align_config is None:
+            raise ValueError("alignment weight requires explicit configuration")
+        align_enabled = align_weight > 0 and self.step >= align_config.warmup_steps
         f, p, presence, q, v, group_logits = self.model(
-            batch.inputs, batch.pair_indices, batch.query_offsets, group_pairs=gp if weight > 0 else None
+            batch.inputs,
+            batch.pair_indices,
+            batch.query_offsets,
+            group_pairs=gp if weight > 0 else None,
+            return_alignment=align_enabled,
         )
         auxiliary = {"group": group_loss(group_logits, batch.targets.group_labels)} if group_logits is not None else {}
+        align_count = 0
+        if align_enabled:
+            qi, vi = batch.pair_indices.unbind(1)
+            positive = batch.targets.relevance[qi, vi] == 1
+            if positive.any():
+                tm = f.text_mask[qi[positive]]
+                fm = f.frame_mask[vi[positive]]
+                target = dustbin_ot_target(p.alignment_similarity[positive], tm, fm, config=align_config)
+                auxiliary["align"] = alignment_loss(p.attention[positive], target, tm)
+                align_count = int(tm.sum())
         global_v, relations = global_coarse_relations(batch, v)
         terms = compute_objective(
             q @ global_v.T,
@@ -153,6 +173,7 @@ class Trainer:
             coarse_relevance=relations,
             auxiliary_losses=auxiliary,
         )
+        terms["valid_align_count"] = torch.tensor(align_count, device=q.device)
         if group_logits is not None:
             terms["valid_group_count"] = (batch.targets.group_labels >= 0).sum()
         weights = self.context.system_config.train.loss_weights

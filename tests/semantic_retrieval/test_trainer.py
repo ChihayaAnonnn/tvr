@@ -22,7 +22,7 @@ def train_batch(inputs):
 
 
 @pytest.fixture
-def training_context(tmp_path, model_config, *, only_group=False):
+def training_context(tmp_path, model_config, *, only_group=False, only_align=False):
     from semantic_retrieval.config import PolicyConfig, SystemConfig, TrainConfig, effective_manifest_config
     from semantic_retrieval.runtime.artifacts import prepare_run, start_run
 
@@ -43,6 +43,8 @@ def training_context(tmp_path, model_config, *, only_group=False):
         )
     if only_group:
         train = replace(train, loss_weights={k: float(k == "group") for k in train.loss_weights})
+    if only_align:
+        train = replace(train, loss_weights={k: float(k == "align") for k in train.loss_weights})
     stub = SystemConfig(None, model_config, train, PolicyConfig(0.7, 0.6, (2, 4), 4))
     refs = [dict(path=str(model_config.clip_weights), sha256=model_config.clip_sha256)]
     repo, rt = reservation.__wrapped__(
