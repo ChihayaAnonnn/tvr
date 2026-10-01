@@ -18,10 +18,22 @@ def test_explicit_fp32_initialization():
     assert not torch.backends.cudnn.allow_tf32
 
 
-def test_generated_raw_fixture_and_full_chain(tmp_path):
+@pytest.mark.parametrize("saturated", [False, True])
+def test_generated_raw_fixture_and_full_chain(tmp_path, monkeypatch, saturated):
     from semantic_retrieval.config import effective_manifest_config
     from semantic_retrieval.runtime.artifacts import complete_run, prepare_run, start_run
     from semantic_retrieval.runtime.gpu_qualification import build_fixture_inputs, qualify_chain
+
+    if saturated:
+        from semantic_retrieval.runtime import gpu_qualification
+        real_fit = gpu_qualification.fit_calibration
+
+        def fit_with_saturation(*args, **kwargs):
+            fitted = real_fit(*args, **kwargs)
+            return replace(fitted, pair_temperature=1.0, presence_temperature=1.0,
+                           pair_bias=10000.0, presence_bias=10000.0)
+
+        monkeypatch.setattr(gpu_qualification, "fit_calibration", fit_with_saturation)
 
     repo, rt = reservation.__wrapped__(tmp_path, SimpleNamespace(param="success"))
     commit_reservation(repo, rt)

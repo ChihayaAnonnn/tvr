@@ -1751,6 +1751,8 @@ def _transition_run_status_locked(
         raise ValueError("exit_code must be an integer or null")
     if next_state in _TERMINAL_STATES and exit_code is None:
         raise ValueError("terminal transitions require an exit_code")
+    if next_state not in _TERMINAL_STATES and exit_code is not None:
+        raise ValueError("non-terminal transitions require a null exit_code")
     worker_pid, host = _validate_worker_identity(worker_pid, host)
     manifest, digest = _load_run_manifest(paths)
     if current.get("manifest_sha256") != digest:

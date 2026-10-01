@@ -1019,6 +1019,22 @@ def test_transition_allows_only_forward_lifecycle_and_terminal_runs_are_immutabl
     assert audit_records[-1]["output_hashes"] == {"metrics/selected_validation.json": "a" * 64}
 
 
+@pytest.mark.parametrize("expected,next_state,exit_code", [("reserved", "running", 0), ("running", "validating", 1)])
+def test_nonterminal_exit_code_rejected_before_any_status_or_audit_write(tmp_path, expected, next_state, exit_code):
+    run_id = _manifest()["run_id"]
+    paths = make_run_paths(tmp_path, "contextual-risk-v2", run_id)
+    reserve_run_directory(paths, _manifest(artifact_path=str(paths.root)))
+    if expected == "running":
+        transition_run_status(paths, "reserved", "running")
+    before_status = paths.status.read_bytes()
+    audit = paths.provenance / "audit.jsonl"
+    before_audit = audit.read_bytes()
+    with pytest.raises(ValueError, match="non-terminal"):
+        transition_run_status(paths, expected, next_state, exit_code=exit_code)
+    assert paths.status.read_bytes() == before_status
+    assert audit.read_bytes() == before_audit
+
+
 def test_committed_reservation_rejects_run_local_manifest_mismatch(tmp_path):
     repo_root = tmp_path / "repo"
     repo_root.mkdir()

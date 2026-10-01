@@ -252,6 +252,7 @@ def qualify_chain(context, cfg, *, device):
                   resume_optimizer_max_abs_delta=max(_all(moment_delta)),
                   rng_restored=1, rank_consistent=1, config_mismatch_rejected=1, checks_passed=10)
     if rank == 0:
+        write_json(context.paths.provenance / "training-qualification.json", report)
         corrupt = context.paths.checkpoints / "planned-corrupt-copy.pt"
         shutil.copyfile(path, corrupt)
         shutil.copyfile(path.with_suffix(".json"), corrupt.with_suffix(".json"))
@@ -289,15 +290,23 @@ def _deployment(context, cfg, model, device):
     calibration = fit_calibration(pairs.logits, batch.targets.relevance[batch.pair_indices[:, 0], batch.pair_indices[:, 1]],
                                   presence, batch.targets.candidate_presence, split="val_calibration", identity=identity)
     write_json(context.paths.provenance / "calibration.json", asdict(calibration))
+    references = []
     for name, value in (("calibration_pair_logits", pairs.logits), ("calibration_presence_logits", presence)):
-        context.array_store.write(name, value.cpu().numpy())
+        references.append(context.array_store.write(name, value.cpu().numpy()).as_dict())
+    write_json(context.paths.provenance / "calibration-array-references.json", dict(array_references=references))
     cache = FeatureCache(context)
     hashes = dict(zip(cal_episodes[0].canonical_ids, cal_episodes[0].content_sha256))
     for j, canonical in enumerate(batch.canonical_ids):
         cache.write(canonical, VideoFeatures(video.frame_tokens[j:j+1], video.pooled_video[j:j+1], video.frame_mask[j:j+1]),
                     identity=ident, content_sha256=hashes[canonical])
     index = CanonicalIndex(batch.canonical_ids, embeddings, ident)
-    service = RetrievalService(model, index, cache, calibration, cfg.policy, content_sha256=hashes)
+    # A fitted sigmoid may round to exactly one in FP32; threshold=1 alone
+    # does not force the expansion branch. Use an explicitly separate control
+    # fixture whose probabilities remain below the threshold for finite logits.
+    control = replace(calibration, pair_temperature=torch.finfo(torch.float32).max, pair_bias=-20.0,
+                      presence_temperature=torch.finfo(torch.float32).max, presence_bias=-20.0)
+    write_json(context.paths.provenance / "expansion-control-calibration.json", asdict(control))
+    service = RetrievalService(model, index, cache, control, cfg.policy, content_sha256=hashes)
     query = QueryInputs(batch.inputs.input_ids[:1], batch.inputs.text_mask[:1])
     decision = service.retrieve(query, budget=3)
     if decision.action != "abstain" or service.last_prediction.budget_used != 3 or service.last_prediction.attempted_k != (1, 2, 3):
@@ -310,6 +319,8 @@ def _deployment(context, cfg, model, device):
     returning = RetrievalService(model, index, cache, return_calibration, return_policy, content_sha256=hashes)
     if set(returning.retrieve(query, budget=3).answer_ids) != set(batch.canonical_ids):
         raise ValueError("positive return path failed")
+    # Locked evaluation always uses the actual fitted calibration.
+    service = RetrievalService(model, index, cache, calibration, cfg.policy, content_sha256=hashes)
     locked = qualification_episodes(context, cfg, "val_locked")
     locked_batch = _move(collate_episodes(locked), device)
     predictions = []
@@ -320,4 +331,5 @@ def _deployment(context, cfg, model, device):
     if evaluated["episode_count"] != 2 or evaluated["false_accept"]["denominator"] != 1:
         raise ValueError("locked evaluation denominator differs")
     write_json(context.paths.provenance / "locked-metrics.json", evaluated)
-    return dict(expansion_budget_used=3, calibration_fitted=1, locked_evaluated=1, zero_budget_terminated=1, return_set_checked=1)
+    return dict(expansion_budget_used=3, calibration_fitted=1, locked_evaluated=1, zero_budget_terminated=1,
+                return_set_checked=1, expansion_uses_control_fixture=True)
