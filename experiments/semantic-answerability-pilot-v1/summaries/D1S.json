@@ -1,0 +1,30 @@
+{
+  "phase": "D1S",
+  "phase_path": "experiments/semantic-answerability-pilot-v1/phases/D1S.json",
+  "runs": [
+    {
+      "manifest_sha256": "166f30b6ecc172d100a8d8ead5240924ec2460f9ba5b9782b9e5feaa77a10018",
+      "output_hashes": {
+        "command.sh": "8a6f1247559f46438c154ba7154164895c24b6266f577787854e881243578c87",
+        "logs/worker-exit-code.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "logs/worker.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "metrics/val_eval_000.json": "28316fae77d320955e00d4e50e9b550db559eda31719ee0c2a1e35fd1a9e0774",
+        "provenance/preparation-config.json": "7d92eb0068a2fcde036d196c422c5303c70fa2f726b3a8e212c643126544e3bd",
+        "provenance/preparation-result.json": "bc7fc07a8233447970b008f5ba704d8b2ef06343f1555baed25e892e3663a69e",
+        "provenance/train-only/allowlist.json": "290dd79ea91b8ba08900fadba9ca3d991977906c5f8f552c16baa46561908a7c",
+        "provenance/train-only/catalog.json": "454927f3075d57c3c20427c97d50fc61d6219a6c76458ee44bbe041b24fbf297",
+        "provenance/train-only/pilot-annotations.json": "2b617b4469f9c07565c671600cb35fdfde75e32bee94994d5378f4f35670698a",
+        "provenance/train-only/source-report.json": "01cf8035806838713397e467121543899764fe8106262ab62ec3c375ab357281",
+        "provenance/train-only/training-captions.json": "4a8a8b1c92b173b104914937a0681ab305dc7f2ef293f9f6e0ebd1ccb472797a",
+        "provenance/train-only/training-records.json": "123cc65b0fe10cae2794fbabc6e7f0242a66411fdac5e5265d9e78a2728f09e6"
+      },
+      "run_id": "msrvtt-baseline-source_inventory-seed000-20261001T095959Z-5add32a296d9",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "semantic-answerability-pilot-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
