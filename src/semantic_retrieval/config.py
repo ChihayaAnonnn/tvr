@@ -97,3 +97,139 @@ class PolicyConfig:
             or self.max_budget < self.k_sequence[-1]
         ):
             raise ValueError("invalid K sequence or budget")
+
+
+@dataclass(frozen=True)
+class TrainConfig:
+    learning_rate: float
+    weight_decay: float
+    seed: int
+    scheduler_name: str
+    scheduler_steps: int
+    trainable_prefixes: tuple[str, ...]
+    loss_weights: dict[str, float]
+
+    def __post_init__(self):
+        import math
+
+        from semantic_retrieval.objectives.retrieval import LOSS_NAMES
+
+        if (
+            any(
+                not isinstance(x, (int, float)) or not math.isfinite(x) for x in (self.learning_rate, self.weight_decay)
+            )
+            or self.learning_rate <= 0
+            or self.weight_decay < 0
+            or type(self.seed) is not int
+            or self.seed < 0
+        ):
+            raise ValueError("invalid optimizer configuration")
+        if (
+            self.scheduler_name not in {"linear", "constant"}
+            or type(self.scheduler_steps) is not int
+            or self.scheduler_steps <= 0
+        ):
+            raise ValueError("explicit scheduler required")
+        if (
+            not isinstance(self.trainable_prefixes, tuple)
+            or not self.trainable_prefixes
+            or len(set(self.trainable_prefixes)) != len(self.trainable_prefixes)
+            or not all(isinstance(x, str) and x for x in self.trainable_prefixes)
+        ):
+            raise ValueError("invalid trainable prefixes")
+        if (
+            set(self.loss_weights) != set(LOSS_NAMES)
+            or any(not isinstance(w, (int, float)) or not math.isfinite(w) or w < 0 for w in self.loss_weights.values())
+            or not any(self.loss_weights.values())
+        ):
+            raise ValueError("all objective weights must be explicit")
+
+
+@dataclass(frozen=True)
+class DataConfig:
+    episode_manifest: Path
+    episode_sha256: str
+    gallery_version: str
+    split: str
+
+    def __post_init__(self):
+        if (
+            not isinstance(self.episode_manifest, Path)
+            or not re.fullmatch("[0-9a-f]{64}", self.episode_sha256)
+            or not self.gallery_version
+            or self.split not in {"train", "val", "val_development", "val_calibration", "val_locked"}
+        ):
+            raise ValueError("invalid or sealed data configuration")
+
+
+@dataclass(frozen=True)
+class SystemConfig:
+    runtime: RuntimeConfig
+    model: ModelConfig
+    train: TrainConfig
+    policy: PolicyConfig
+    data: DataConfig | None = None
+
+
+def config_payload(config):
+    from dataclasses import asdict
+
+    def normalize(x):
+        if isinstance(x, Path):
+            return str(x)
+        if isinstance(x, dict):
+            return {k: normalize(v) for k, v in x.items()}
+        if isinstance(x, (tuple, list)):
+            return [normalize(v) for v in x]
+        return x
+
+    return normalize(asdict(config))
+
+
+def effective_manifest_config(config, *, eval_split):
+    payload = config_payload(config)
+    t = payload["train"]
+    return dict(
+        model=payload["model"],
+        loss=t["loss_weights"],
+        optimizer={k: t[k] for k in ("learning_rate", "weight_decay", "seed", "trainable_prefixes")},
+        scheduler={k: t[k] for k in ("scheduler_name", "scheduler_steps")},
+        evaluation=dict(eval_split=eval_split, policy=payload["policy"], data=payload["data"]),
+    )
+
+
+def load_system_config(path):
+    payload = json.loads(path.read_text())
+    if not isinstance(payload, dict) or set(payload) != {"runtime", "model", "train", "policy", "data"}:
+        raise ValueError("system requires explicit runtime/model/train/policy/data")
+
+    def construct(cls, values):
+        if not isinstance(values, dict) or set(values) != {f.name for f in fields(cls)}:
+            raise ValueError(f"invalid {cls.__name__} fields")
+        return cls(**values)
+
+    def local(raw):
+        if not isinstance(raw, str) or not raw:
+            raise ValueError("explicit path required")
+        p = Path(raw)
+        return (p if p.is_absolute() else path.parent / p).resolve()
+
+    rt = payload["runtime"].copy()
+    for name in ("study_path", "registry_path", "run_dir"):
+        rt[name] = local(rt[name])
+    m = payload["model"].copy()
+    m["clip"] = construct(ClipConfig, m["clip"])
+    m["clip_weights"] = local(m["clip_weights"])
+    t = payload["train"].copy()
+    t["trainable_prefixes"] = tuple(t["trainable_prefixes"])
+    p = payload["policy"].copy()
+    p["k_sequence"] = tuple(p["k_sequence"])
+    d = payload["data"].copy()
+    d["episode_manifest"] = local(d["episode_manifest"])
+    return SystemConfig(
+        construct(RuntimeConfig, rt),
+        construct(ModelConfig, m),
+        construct(TrainConfig, t),
+        construct(PolicyConfig, p),
+        construct(DataConfig, d),
+    )

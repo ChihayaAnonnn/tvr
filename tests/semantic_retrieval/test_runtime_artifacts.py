@@ -61,6 +61,8 @@ def reservation(tmp_path, request):
         array_references=[],
         command=["python", "fixture.py", "--run-id", "{run_id}"],
     )
+    if isinstance(getattr(request, "param", None), dict):
+        run.update(request.param)
     phase.write_text(json.dumps(dict(phase="cpu", study="fixture-study", runs=[run])))
     git(repo, "init", "-q")
     git(repo, "config", "user.email", "test@example.com")

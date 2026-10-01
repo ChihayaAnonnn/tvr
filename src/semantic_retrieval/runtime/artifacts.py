@@ -25,7 +25,7 @@ from experiment_artifacts import (
     verify_committed_reservation,
 )
 from experiment_tracking import atomic_write_json
-from semantic_retrieval.config import RuntimeConfig
+from semantic_retrieval.config import RuntimeConfig, effective_manifest_config
 
 
 @dataclass
@@ -36,6 +36,7 @@ class RunContext:
     config: RuntimeConfig
     repo_root: Path
     sequence: int = 0
+    system_config: object | None = None
 
 
 def _hash_input(repository, reference):
@@ -56,7 +57,7 @@ def _hash_input(repository, reference):
         os.close(descriptor)
 
 
-def prepare_run(config, *, repo_root):
+def prepare_run(config, *, repo_root, system_config=None):
     repository = Path(repo_root).resolve()
     root = config.run_dir
     if not root.is_absolute() or root.resolve(strict=True) != root:
@@ -124,15 +125,29 @@ def prepare_run(config, *, repo_root):
         raise ValueError("manifest does not authorize test evaluation")
     if config.eval_split != "test" and not manifest["validation_authorized"]:
         raise ValueError("manifest does not authorize validation")
-    # Stage A has no scientific model consumer: reject unconsumed settings rather than pretending to bind them.
-    for category, values in manifest["config"].items():
-        if category != "evaluation" and values:
-            raise ValueError(f"effective config has no stage-A consumer: {category}")
-    evaluation = manifest["config"]["evaluation"]
-    if set(evaluation) - {"eval_split", "qualification_scenario"}:
-        raise ValueError("effective config has unsupported evaluation fields")
-    if evaluation.get("eval_split") != config.eval_split:
-        raise ValueError("effective config eval_split mismatch")
+    if system_config is not None:
+        if system_config.runtime != config or manifest["config"] != effective_manifest_config(
+            system_config, eval_split=config.eval_split
+        ):
+            raise ValueError("effective system config mismatch")
+        refs = {str(r["path"]): r["sha256"] for r in manifest["input_checkpoints"]}
+        if refs.get(str(system_config.model.clip_weights)) != system_config.model.clip_sha256:
+            raise ValueError("CLIP input is not reserved")
+        if system_config.data is not None:
+            data = system_config.data
+            refs = {str(r["path"]): r["sha256"] for r in manifest["dataset_splits"]}
+            if refs.get(str(data.episode_manifest)) != data.episode_sha256:
+                raise ValueError("episode input is not reserved")
+    else:
+        # Stage A has no scientific model consumer: reject unconsumed settings rather than pretending to bind them.
+        for category, values in manifest["config"].items():
+            if category != "evaluation" and values:
+                raise ValueError(f"effective config has no stage-A consumer: {category}")
+        evaluation = manifest["config"]["evaluation"]
+        if set(evaluation) - {"eval_split", "qualification_scenario"}:
+            raise ValueError("effective config has unsupported evaluation fields")
+        if evaluation.get("eval_split") != config.eval_split:
+            raise ValueError("effective config eval_split mismatch")
     if torch.is_autocast_enabled() or torch.is_autocast_cpu_enabled():
         raise ValueError("runtime precision must be FP32 without ambient autocast")
     if torch.get_float32_matmul_precision() != "highest":
@@ -157,11 +172,13 @@ def prepare_run(config, *, repo_root):
         for reference in manifest[field]:
             if _hash_input(repository, reference) != reference["sha256"]:
                 raise ValueError(f"input {field} SHA-256 mismatch")
-    return RunContext(paths, manifest, ArtifactArrayStore(paths.arrays), config, repository)
+    return RunContext(
+        paths, manifest, ArtifactArrayStore(paths.arrays), config, repository, system_config=system_config
+    )
 
 
 def start_run(context):
-    fresh = prepare_run(context.config, repo_root=context.repo_root)
+    fresh = prepare_run(context.config, repo_root=context.repo_root, system_config=context.system_config)
     if (
         fresh.paths != context.paths
         or fresh.manifest != context.manifest

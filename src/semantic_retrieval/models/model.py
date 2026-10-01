@@ -50,3 +50,9 @@ class SemanticRetrievalModel(nn.Module):
 
     def score_presence(self, pair_scores, query_offsets):
         return self.answerability(pair_scores, query_offsets)
+
+    def forward(self, inputs, pair_indices, query_offsets):
+        features = self.encode(inputs)
+        pairs = self.score_pairs(features, pair_indices)
+        q, v = self.coarse_embeddings(features)
+        return features, pairs, self.score_presence(pairs, query_offsets), q, v
