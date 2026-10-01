@@ -3,8 +3,10 @@
 import json
 import random
 import shutil
+import subprocess
 import time
 from dataclasses import asdict, replace
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -12,7 +14,7 @@ import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
-from experiment_artifacts import artifact_json_bytes
+from experiment_artifacts import artifact_json_bytes, make_run_paths, manifest_sha256, parse_registry_text, validate_manifest
 from semantic_retrieval.config import DataConfig, ModelConfig, PolicyConfig, SystemConfig, TrainConfig, config_payload
 from semantic_retrieval.data.collate import collate_episodes
 from semantic_retrieval.data.episodes import file_sha256, read_episodes
@@ -153,6 +155,78 @@ def validate_qualification_template(cfg, path, expected_sha256):
     actual.pop("runtime")
     if actual != expected:
         raise ValueError("qualification config differs from complete core-chain template")
+
+
+def validate_qualification_parents(repository, manifest):
+    """Allow one prep parent and an explicitly reviewed, manually sealed predecessor.
+
+    This checks read-only evidence; it never repairs or resumes invalid runtime state.
+    The CLI separately validates the first parent's completed input inventory.
+    """
+    from semantic_retrieval.runtime.artifacts import _hash_input
+    import hashlib
+
+    parents = manifest["parent_run_ids"]
+    if len(parents) not in (1, 2) or len(set(parents)) != len(parents):
+        raise ValueError("qualification requires one prep and at most one distinct reviewed predecessor")
+    if len(parents) == 1:
+        return
+    predecessor = parents[1]
+    entries = [e for e in manifest["selection_lineage"] if isinstance(e, dict)
+               and e.get("kind") == "software_qualification_retry" and e.get("parent_run_id") == predecessor]
+    if (manifest["dataset"] != "synthetic" or manifest["test_authorized"]
+        or len(entries) != 1 or entries[0].get("approved") is not True
+        or not isinstance(entries[0].get("reason"), str) or not entries[0]["reason"].strip()):
+        raise ValueError("qualification retry requires explicit approved software-only review lineage")
+
+    def committed_document(relative, expected):
+        path = repository / str(relative)
+        if path.is_absolute() and path.is_relative_to(repository) and path.resolve() == path:
+            relative = path.relative_to(repository).as_posix()
+            result = subprocess.run(["git", "show", f"HEAD:{relative}"], cwd=repository, capture_output=True)
+            if (result.returncode == 0 and hashlib.sha256(result.stdout).hexdigest() == expected
+                and _hash_input(repository, dict(path=str(path))) == expected):
+                return json.loads(result.stdout)
+        raise ValueError("qualification retry review/evidence must match committed hashes")
+
+    review = committed_document(entries[0].get("report_path"), entries[0].get("report_sha256"))
+    if (review.get("run_id") != predecessor or review.get("approved") is not True
+        or review.get("software_only") is not True or review.get("observed_worker_exit_code") != 1
+        or review.get("runtime_status_preserved") is not True):
+        raise ValueError("qualification retry review is not an approved manual failure seal")
+    evidence = committed_document(review.get("forensic_path"), review.get("forensic_sha256"))
+    root = Path(manifest["artifact_path"])
+    paths = make_run_paths(root.parents[3], manifest["study"], predecessor)
+    if (evidence.get("run_id") != predecessor or evidence.get("artifact_path") != str(paths.root)
+        or evidence.get("observed_worker_exit_code") != 1 or evidence.get("archive_status_valid") is not False):
+        raise ValueError("qualification retry forensic identity differs")
+    files = evidence.get("file_sha256", {})
+    lock_files = {".lock", "status.json.lock", "provenance/audit.jsonl.lock"}
+    actual = {p.relative_to(paths.root).as_posix() for p in paths.root.rglob("*")
+              if p.is_file() and p.relative_to(paths.root).as_posix() not in lock_files}
+    if not files or set(files) != actual or not {"manifest.json", "status.json", "provenance/audit.jsonl"} <= set(files):
+        raise ValueError("qualification predecessor inventory is incomplete or changed")
+    for relative, digest in files.items():
+        path = paths.root / relative
+        if (not path.is_relative_to(paths.root) or path.resolve() != path
+            or _hash_input(repository, dict(path=str(path))) != digest):
+            raise ValueError("qualification predecessor evidence hash differs")
+    previous = validate_manifest(json.loads(paths.manifest.read_text()))
+    digest = manifest_sha256(previous)
+    if (previous["dataset"] != "synthetic" or previous["test_authorized"]
+        or previous["run_id"] != predecessor or previous["artifact_path"] != str(paths.root)
+        or review.get("manifest_sha256") != digest or evidence.get("manifest_sha256") != digest
+        or evidence.get("source_sha") != previous["git_sha"]):
+        raise ValueError("qualification predecessor manifest identity differs")
+    status = json.loads(paths.status.read_text())
+    if status.get("state") != "validating" or status.get("exit_code") != 1:
+        raise ValueError("manual seal is restricted to the reviewed validating/exit-code incident")
+    records = subprocess.run(["git", "show", f"HEAD:{manifest['registry_path']}"], cwd=repository,
+                             check=True, capture_output=True, text=True).stdout
+    records = [r for r in parse_registry_text(records) if r["run_id"] == predecessor]
+    if (not records or records[-1]["event"] != "correction" or records[-1]["state"] != "failed"
+        or records[-1]["manifest_sha256"] != digest or records[-1]["test_authorized"]):
+        raise ValueError("qualification predecessor requires committed same-run failed correction")
 
 
 def qualify_chain(context, cfg, *, device):

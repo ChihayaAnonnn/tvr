@@ -47,6 +47,15 @@ manifest 的既有 `parent_run_ids` 必须链接 predecessor，`selection_lineag
 source SHA 改变时也必须新预留 run。路径/哈希/审计无法验证时停止并请求人工处理，绝不静默重试
 或覆盖既有目录。
 
+2026-10-01 重建四卡首次验收的已提交 `validating/exit_code=1` 事故，经本会话人工授权，
+采用同 run 的 `correction(state=failed)` 封存控制面；原无效 status/audit 保持原字节，
+不是正常 `finalize-phase` 或自动恢复。人工封存报告见
+[manual seal](../../experiments/contextual-risk-v2/incidents/2026-10-01-rebuilt-q0-manual-seal.json)。
+新合成四卡验收仅允许将该失败运行作为第二个 parent；入口校验已提交的审批、更正、
+forensic inventory 和全部原文件哈希，第一个 parent 仍必须是已完成的合成输入准备。
+控制器产生的 `.lock`、`status.json.lock`、`provenance/audit.jsonl.lock` 不属于内容证据。
+此例外不修复旧状态、不读取其 checkpoint，也不适用于科学训练或其他归档事故。
+
 新 phase 必须用 `scheduled_timestamp_utc` 显式表示 run ID 中预定的 UTC 身份时间；
 `timestamp_utc` 只为旧 phase 和已存证据保留的兼容别名。若没有预定启动时间，应在
 预留时间生成当时 UTC 值，不得用计划文档的创建时间冒充实际执行时间。

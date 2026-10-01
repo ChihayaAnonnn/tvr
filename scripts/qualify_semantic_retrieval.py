@@ -20,7 +20,8 @@ from semantic_retrieval.config import RuntimeConfig, load_system_config
 from semantic_retrieval.runtime.artifacts import complete_run, fail_run, prepare_run, publish_metrics, start_run
 from semantic_retrieval.runtime.distributed import configure_fp32
 from semantic_retrieval.runtime.gpu_qualification import (
-    GALLERY, build_fixture_inputs, qualify_chain, require_four_gpu, validate_qualification_template, write_json,
+    GALLERY, build_fixture_inputs, qualify_chain, require_four_gpu, validate_qualification_parents,
+    validate_qualification_template, write_json,
 )
 
 
@@ -94,8 +95,7 @@ def main(argv=None):
                 raise ValueError("qualification requires bound production capacity and synthetic inputs")
             context = prepare_run(rt, repo_root=repo, system_config=cfg)
             # Every input must come from this completed, archived synthetic preparation.
-            if len(manifest["parent_run_ids"]) != 1:
-                raise ValueError("qualification requires one archived input-preparation parent")
+            validate_qualification_parents(repo, manifest)
             from experiment_artifacts import load_validated_run_lifecycle, make_run_paths
             parent = make_run_paths(args.run_dir.parents[3], manifest["study"], manifest["parent_run_ids"][0])
             pm, ps, _ = load_validated_run_lifecycle(parent)

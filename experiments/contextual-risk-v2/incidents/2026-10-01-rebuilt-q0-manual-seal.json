@@ -1,0 +1,27 @@
+{
+  "approval_source": "Current conversation: user requested 进行四卡复验 after reviewing the first-attempt incident and being asked to approve manual archive treatment plus a new run.",
+  "approved": true,
+  "audit_sha256": "9d3620f981c7f93ea01e365a97093bc1fa8afa320d0772867b0172c33dbfca30",
+  "control_plane_state": "failed",
+  "correction_supersedes_sha256": "9391766d3d873a5b8561abe9ff61838cd71f661d49e4a5e174bce932b2798271",
+  "forensic_path": "experiments/contextual-risk-v2/incidents/2026-10-01-rebuilt-q0-first-attempt-forensic.json",
+  "forensic_sha256": "2762e4dd19828f0e4b5ddd321d2a40b8ef5e4309657f921308a25681c53f73b0",
+  "ignored_controller_lock_files": [
+    ".lock",
+    "provenance/audit.jsonl.lock",
+    "status.json.lock"
+  ],
+  "manifest_sha256": "36c362b687c86fadf00d08e7e1b2a7a040cc56db250f5b28437271d76f39e806",
+  "normal_finalize_phase_used": false,
+  "observed_worker_exit_code": 1,
+  "retry_reason": "FP32 saturation invalidated the branch-test assumption; fixed controlled expansion checks and pre-write nonterminal exit-code validation. User authorized a distinct four-GPU successor on physical GPUs 0,2,3,4.",
+  "run_id": "synthetic-baseline-rebuilt-prod-e2e-seed713-20261001T064151Z-4426f97b5a7f",
+  "runtime_status_preserved": true,
+  "runtime_status_valid": false,
+  "scope": "Manual same-run control-plane correction only; original invalid runtime status and committed audit remain immutable forensic evidence. No recovery, no checkpoint reuse, no scientific/test authorization.",
+  "software_only": true,
+  "source_sha": "4426f97b5a7f1446ae7ee541544fd89385eb3dfe",
+  "status_sha256": "d3ca0b4cd574574f843168669df8a86f9a80d61c31827e3863bade1e430497bc",
+  "verified_file_count": 127,
+  "verify_run_result": "rejected: non-terminal run status requires a null exit_code"
+}
