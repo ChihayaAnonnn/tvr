@@ -44,25 +44,26 @@ def assert_pilot_authorized(*, repo_root: Path, registry_path: Path, manifest: d
         }.items()
     ):
         raise ValueError("pilot study is draft or identity is inconsistent")
-    config = manifest.get("config", {})
-    evaluation = config.get("evaluation", {})
+    if manifest["test_authorized"] is not False or manifest["stage"] != "baseline":
+        raise ValueError("pilot requires sealed test and its registered stage")
     if (
-        set(config) != {"model", "loss", "optimizer", "scheduler", "evaluation"}
-        or any(config[k] for k in ("model", "loss", "optimizer", "scheduler"))
-        or set(evaluation) != {"eval_split", "qualification_scenario"}
-        or evaluation["eval_split"] != "val"
-        or not isinstance(evaluation["qualification_scenario"], str)
-        or re.fullmatch(r"pilot_prepare:[0-9a-f]{64}", evaluation["qualification_scenario"]) is None
+        manifest["dataset"] == "msrvtt"
+        and manifest["variant"] in {"source_inventory", "benchmark_compile"}
+        and type(manifest["environment"]["gpu_count"]) is int
+        and manifest["environment"]["gpu_count"] == 0
     ):
-        raise ValueError("pilot preparation identity cannot carry scientific configuration")
-    # Scientific gates are intentionally not implemented by C1. YAML booleans
-    # cannot turn CPU preparation permission into scientific permission.
-    if (
-        manifest["dataset"] != "msrvtt"
-        or manifest["stage"] != "baseline"
-        or manifest["variant"] not in {"source_inventory", "benchmark_compile"}
-        or type(manifest["environment"]["gpu_count"]) is not int
-        or manifest["environment"]["gpu_count"] != 0
-        or manifest["test_authorized"] is not False
-    ):
-        raise ValueError("pilot authorizes only sealed-test CPU data preparation")
+        config = manifest.get("config", {})
+        evaluation = config.get("evaluation", {})
+        if (
+            set(config) != {"model", "loss", "optimizer", "scheduler", "evaluation"}
+            or any(config[k] for k in ("model", "loss", "optimizer", "scheduler"))
+            or set(evaluation) != {"eval_split", "qualification_scenario"}
+            or evaluation["eval_split"] != "val"
+            or not isinstance(evaluation["qualification_scenario"], str)
+            or re.fullmatch(r"pilot_prepare:[0-9a-f]{64}", evaluation["qualification_scenario"]) is None
+        ):
+            raise ValueError("pilot preparation identity cannot carry scientific configuration")
+        return
+    from .pilot_protocol import assert_phase_authorized
+
+    assert_phase_authorized(repository, manifest, operation)
