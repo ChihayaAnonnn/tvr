@@ -22,3 +22,11 @@
 其中 `00-north-star.md`（当前研究命题与证伪判据）、`01-evidence-ledger.md`（可信数字及其
 SOLID/CAVEATED/RETRACTED 标记）、`02-dead-ends.md`（已证伪方向，不得重提）为强制前置阅读，
 `07-protocol-constraints.md` 汇总了本文件之外仍然生效的常设约束。
+
+## 新 benchmark pilot 路径合同
+
+`experiments/semantic-answerability-pilot-v1/` 为独立控制面，
+`artifacts/semantic-answerability-pilot-v1/<dataset>/<stage>/<run-id>/` 为数据面。
+计划、预留或启动本 pilot 前还须读取其 study.yaml 与 registry.jsonl。
+上述规则 1–8 同样适用；新路径不复活旧 study，不授权 test。
+C1 仅授权 CPU 来源/编译；科学 GPU 仍由新增链路四卡资格与明确 gate 拒绝守卫控制。

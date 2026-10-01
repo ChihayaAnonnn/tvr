@@ -23,6 +23,8 @@ from typing import Mapping, Sequence
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+if str(PROJECT_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from experiment_artifacts import (  # noqa: E402
     RunPaths,
@@ -367,6 +369,9 @@ def reserve_phase(args: argparse.Namespace) -> dict[str, object]:
         )
         for spec in phase["runs"]  # type: ignore[union-attr]
     ]
+    from semantic_retrieval.runtime.pilot_policy import assert_pilot_authorized
+    for manifest in manifests:
+        assert_pilot_authorized(repo_root=repo, registry_path=registry, manifest=manifest, operation="reserve")
     run_ids = [str(manifest["run_id"]) for manifest in manifests]
     if len(run_ids) != len(set(run_ids)):
         raise ValueError("phase contains duplicate run identities")

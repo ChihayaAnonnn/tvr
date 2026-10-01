@@ -1,0 +1,41 @@
+study: semantic-answerability-pilot-v1
+protocol_version: 1
+status: design_approved
+scientific_authorized: false
+stage0_passed: false
+control_plane: experiments/semantic-answerability-pilot-v1
+data_plane: artifacts/semantic-answerability-pilot-v1
+registry: experiments/semantic-answerability-pilot-v1/registry.jsonl
+design:
+  path: docs/superpowers/specs/2026-10-01-semantic-retrieval-experiment-design.md
+  sha256: ef5f89d79c279c73e86c3dd1e98cb0fbe30a6c66bf2a004fc01db678ead8ed05
+  commit: 4f6a5c9752dd4f4f4ed674d81ce91864fc6e8054
+authorization: user_request_2026-10-01_complete_C1_C2_C3_C4_and_real_train_only_snapshot
+relevance_space: benchmark_annotation
+protocol_id: clip4clip-msrvtt-9k-train-pilot-v1
+test_authorized: false
+split_targets:
+  train_min: 6500
+  val_locked: 1000
+  val_calibration: 500
+  val_development: 500
+  canonical_min: 129
+  locked_components_min: 800
+budget_gpu_hours:
+  total: 176
+  training: 144
+  qualification: 8
+  evaluation: 24
+physical_indices:
+- 0
+- 2
+- 3
+- 4
+seeds:
+- 0
+- 1
+- 2
+preparation_variants:
+- source_inventory
+- benchmark_compile
+scientific_gate: not_implemented_fail_closed

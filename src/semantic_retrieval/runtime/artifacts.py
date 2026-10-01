@@ -180,6 +180,8 @@ def prepare_run(config, *, repo_root, system_config=None):
         )
         if (common.parent / manifest["artifact_locator"]).resolve() != root:
             raise ValueError("artifact locator differs from run path")
+    from .pilot_policy import assert_pilot_authorized
+    assert_pilot_authorized(repo_root=repository, registry_path=registry, manifest=manifest, operation="start")
     verify_committed_reservation(repository, manifest["registry_path"], manifest)
     sealed = shlex.split(paths.command.read_text())
     if not sealed:
