@@ -32,3 +32,5 @@ __pycache__/
 # 以 . 开头的文件/目录一律忽略；仅对 .gitignore 本身做反忽略，否则该文件无法被提交
 .*
 !.gitignore
+
+/experiments/semantic-answerability-pilot-v1/registry.jsonl.lock

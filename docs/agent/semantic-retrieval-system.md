@@ -106,3 +106,11 @@ v2 不通过填写 `reviewed=true` 兼容 v1；当前 v1 的 known/全库 no 审
 语义等价预测消费 query-conditioned pair feature，训练需要独立等价标注 provenance；推理需要冻结的 validation 报告/hash 与阈值。complete-link 不沿非传递链过度合并；等价预测不构成冲突或存在标签。默认 canonical-only，不自动澄清。
 
 OT 使用双侧 dustbin 的平衡增广 log-Sinkhorn，明确 epsilon/dustbin cost/max iterations/tolerance/warm-up；不收敛报错。teacher detach，仅可靠正例做弱对齐，负例由 pair/existence 监督。默认 alignment=null、align/group 权重为 0。两个扩展均未获得真实数据上的效果结论或生产启用授权。
+
+## 官方标签 pilot 数据接入
+
+独立控制面 `experiments/semantic-answerability-pilot-v1/`，当前数据入口 `scripts/prepare_semantic_pilot.py` 通过已提交 CPU reservation工作。
+`source_inventory` 的 snapshot模式按已核验9k allowlist筛选编码记录后仅解码训练caption，绑定审计报告与视频哈希；
+`benchmark_compile` 按来源组件生成四分区、每视频稳定caption、Episode v2与独立官方关系/ID映射。
+v2显式 benchmark_annotation，v1语义审核合同保持不变。C1排序库存只验数据合同；科学候选须在E0用固定CLIP重新绑定。
+C2/C3/C4完成情况以实施计划和验收报告为准，尚未启动科学训练，test保持sealed。

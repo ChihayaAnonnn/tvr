@@ -10,7 +10,7 @@
 
 **Spec:** [修订后的实验设计](../specs/2026-10-01-semantic-retrieval-experiment-design.md)，重点为第 3、4、9、10 节。
 
-状态：2026-10-01 按用户指令同步设计修订，待实施；全部任务未执行。本计划不生成真实 run、读取真实视频/caption 或启动 GPU。
+状态：2026-10-01 用户要求直接完成 C1–C4；Tasks 1–6 在隔离分支实施中。合成验收与新增 Task 7 的真实 D1 准备分开，不启动科学 GPU。
 
 ## Global Constraints
 
@@ -128,3 +128,17 @@ C2 再写 minibatch/DDP、K/panel 调度、A0–A4/P1 与父 checkpoint；C3 再
 - Task 5 的 query 来源、组件/ID 映射与 Task 2/3 同源；v1 语义审核不放松，v2 官方标签不伪造人审。
 - 尚无真实输入 SHA、CLIP 权重、run ID 或 GPU 资格，不虚构。真实 D1 仍须源码/路径合同提交、输入证明及整批 reserved 提交。
 - 本次仅同步修订计划，不执行上述 checkbox，不重复要求用户批准已经指示的设计方向。
+
+## Task 7: 已授权的受控导出与真实 D1 编译
+
+**Files:** `scripts/prepare_semantic_pilot.py`, `src/semantic_retrieval/data/msrvtt_snapshot.py`, new pilot phases/summaries.
+**Interface:** preparation mode snapshot (source_inventory), inventory (source_inventory), compile (benchmark_compile); manifest evaluation qualification_scenario is `pilot_prepare:` + canonical preparation SHA. No arbitrary output path.
+
+- [ ] 先编写并运行 allowlist-first 隐私守卫测试，排除记录的 caption decoder 调用为零；再实现严格字节选择器。
+- [ ] 提交用户新授权范围、源码、路径合同及快照配置；读取 ID-only CSV，哈希 9000 个允许训练视频及来源报告，不解析 test caption。
+- [ ] 将原始 v2、9k ID-only CSV、已提交核验报告、9000 视频全部绑定 phase 输入；reserve-phase 后提交整批 reserved，再从干净源码启动 CPU snapshot worker。
+- [ ] 导出180000条训练 caption和每视频最小稳定 caption ID的一条 pilot annotation；原视频哈希去重，核验实际帧数及8个均匀帧可解码；输出 train-only allowlist/source report/catalog。
+- [ ] worker终态后提交 terminal batch/摘要。另建 compile phase绑定快照和视频，以6500/500/500/1000与129/800数量门划分；输出 v2 episodes/gallery、独立关系/映射及hash。
+- [ ] 验证真实编译数量、source/component互斥、GT所属库与test未解码，提交D1结果。输入问题停止并保留证据，不静默重试。
+
+原 Tasks 1–6 的合成验收范围不改变。新 Task 7 的授权来自用户本次明确要求生成独立快照并直接完成，而非先前一次只读核验。

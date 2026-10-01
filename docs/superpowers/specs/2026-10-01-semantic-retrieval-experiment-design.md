@@ -51,6 +51,8 @@ flowchart TD
 
 只使用有可验证 allowlist、来源报告和 SHA 的 MSRVTT **train-only** annotation/video snapshot。身份审计检查来源与文件完整性，不要求逐条确认视频语义。若只能找到含 test 的混合注释文件，先报告缺失训练来源资产，不读取混合文件 caption 后再筛掉 test。本设计不假设真实资产已齐备，也不虚构输入 SHA。
 
+2026-10-01 用户要求直接完成 C1–C4 并生成 train-only 快照，授权一次受控导出：仅使用已核验并绑定 SHA 的 MSRVTT_v2.json / train.9k.csv，先按 9000 训练 ID 选择原始字节记录，再解码训练 caption，校验已提交来源报告中的训练关系指纹，测试 caption 始终保持编码字节。导出由独立已预留 CPU run 执行，产物固定为 train-only 文件；后续训练/评估 worker 禁止读取混合源。这项导出授权不来自此前只读核验授权，也不授权 test 或科学训练。
+
 官方 video ID 与 canonical 内容 ID 分开保留。精确内容重复可作为 alias 合并，`R_c(q)` 为 `R_b(q)` 经版本化 ID 映射得到的 canonical 正例集合；不得按语义相似扩充。canonical pair 标签以是否属于 `R_c` 为准，避免同内容 alias 正负矛盾。官方排序指标使用所有官方 video ID 的展开排名，canonical 集合/预算指标使用去重 ID，二者分别标注，不混用。
 
 ### 3.2 确定性分区与数量门
