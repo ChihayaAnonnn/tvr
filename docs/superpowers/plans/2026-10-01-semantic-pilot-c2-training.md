@@ -12,3 +12,9 @@ Implement in isolated `codex/semantic-pilot-c2`; no assets, GPU runs, reservatio
 6. Verify meaningful sampler uniqueness/balance/restore/RNG isolation, panel labels/order, parameter counts, gradients, parent strictness and real dynamic CLI consumption. Run targeted tests, the semantic suite, and Ruff; report any wider suite environment limits to coordinator.
 
 Integration contract: C1 supplies benchmark v2 Episodes with full candidate inventory and `label_protocol` mapping; an additional bound JSON mapping query ID to fixed CLIP canonical ranking is consumed by C2. C4 validates parent reservation and terminal evidence and freezes all input hashes. Public model field `pilot_arm` and optional train field `pilot` carry these identities into manifest config.
+
+## Implementation status (2026-10-01)
+
+All six implementation tasks are complete. Commit `5c8ae5d` integrates dynamic sampling, explicit candidate panels, A0/P1/A1–A4, distributed objective accounting and exact sampler/checkpoint restoration. C1 actual v2 data are archived, and C4 factories now bind the E0 scientific orders and completed P1 parents instead of manual configuration copying.
+
+Software regression covers sampler uniqueness/balance/restoration, arm gradient boundaries, optimizer and rank state, and protected CLI integration. Actual new four-CUDA-rank Q0 remains a separate acceptance gate; no scientific training run has started. See the C1–C4 integration report for final combined test evidence and current resource limitations.
