@@ -116,9 +116,26 @@ def test_compile_read_and_joint_split_audit(tmp_path):
             )
         )
     )
+    projected = tmp_path / "training-records.json"
+    projected.write_text(
+        json.dumps(
+            dict(
+                sentences=[
+                    dict(video_id=r["official_video_id"], sen_id=r["caption_id"], caption=r["query_text"]) for r in rows
+                ]
+            )
+        )
+    )
     catalog = [
         replace(
-            e, path=snapshot, sha256=file_sha256(snapshot), source_report_sha256="b" * 64, allowlist_sha256="c" * 64
+            e,
+            path=snapshot,
+            sha256=file_sha256(snapshot),
+            source_report_sha256="b" * 64,
+            allowlist_sha256="c" * 64,
+            source_annotation_sha256="a" * 64,
+            training_records_path=projected,
+            training_records_sha256=file_sha256(projected),
         )
         if e.kind == "query"
         else e

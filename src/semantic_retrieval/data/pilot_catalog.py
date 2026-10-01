@@ -1,5 +1,6 @@
 """Bound training-source assets and component-wise deterministic pilot partitions."""
 
+import csv
 import hashlib
 import json
 from dataclasses import dataclass
@@ -38,6 +39,9 @@ class CatalogEntry:
     origin_split: str
     source_report_sha256: str | None = None
     allowlist_sha256: str | None = None
+    source_annotation_sha256: str | None = None
+    training_records_path: Path | None = None
+    training_records_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -130,14 +134,50 @@ def load_pilot_catalog(
         or not all(isinstance(x, str) and x for x in allowed_ids)
     ):
         raise ValueError("invalid source allowlist")
+    trusted_csv = Path(report["allowlist_source"]["path"])
+    if (
+        not trusted_csv.is_absolute()
+        or trusted_csv.resolve() != trusted_csv
+        or trusted_csv.is_symlink()
+        or file_sha256(trusted_csv) != report["allowlist_source"]["sha256"]
+    ):
+        raise ValueError("trusted training allowlist source SHA/path mismatch")
+    with trusted_csv.open(newline="") as stream:
+        reader = csv.DictReader(stream)
+        if reader.fieldnames != ["video_id"]:
+            raise ValueError("trusted allowlist must contain only official video IDs")
+        trusted_ids = [r["video_id"] for r in reader]
+    if len(set(trusted_ids)) != len(trusted_ids) or set(allowed_ids) != set(trusted_ids):
+        raise ValueError("exported allowlist differs from independently confirmed training IDs")
     if len(allowed_ids) != expected.get("training_video_count"):
         raise ValueError("source confirmation/allowlist quantity mismatch")
+    from .msrvtt_snapshot import caption_relation_digest, training_annotations
+
+    records_ref = report.get("training_records")
+    if not isinstance(records_ref, dict) or set(records_ref) != {"path", "sha256"}:
+        raise ValueError("independently verified caption projection is required")
+    records_path = _safe_path(records_ref["path"], base=path.parent, allowed_root=path.parent)
+    if file_sha256(records_path) != records_ref["sha256"]:
+        raise ValueError("training caption projection SHA mismatch")
+    training_rows, privacy = training_annotations(records_path.read_bytes(), set(trusted_ids))
+    if (
+        privacy["excluded_records"] != 0
+        or {r["official_video_id"] for r in training_rows} != set(trusted_ids)
+        or caption_relation_digest(training_rows) != expected["relation_sha256"]
+    ):
+        raise ValueError("caption projection differs from independently confirmed training relationships")
     entries = []
     video_ids = {}
     asset_ids = set()
     canonical = {}
     for raw in payload["entries"]:
-        if set(raw) != set(CatalogEntry.__dataclass_fields__) - {"source_report_sha256", "allowlist_sha256"}:
+        if set(raw) != set(CatalogEntry.__dataclass_fields__) - {
+            "source_report_sha256",
+            "allowlist_sha256",
+            "source_annotation_sha256",
+            "training_records_path",
+            "training_records_sha256",
+        }:
             raise ValueError("catalog entry fields mismatch")
         if (
             raw["origin_split"] != "source_train"
@@ -167,6 +207,9 @@ def load_pilot_catalog(
             **raw,
             source_report_sha256=payload["source_report"]["sha256"],
             allowlist_sha256=payload["allowlist"]["sha256"],
+            source_annotation_sha256=report["source_annotation"]["sha256"],
+            training_records_path=records_path,
+            training_records_sha256=records_ref["sha256"],
         )
         if entry.kind == "video":
             if type(entry.frame_count) is not int or entry.frame_count <= 0 or entry.official_video_id in video_ids:

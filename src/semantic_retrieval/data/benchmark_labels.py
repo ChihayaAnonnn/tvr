@@ -69,9 +69,25 @@ def load_benchmark_labels(snapshot, *, catalog, expected_sha256, protocol_id) ->
         or e.sha256 != expected_sha256
         or e.source_report_sha256 != payload["source_report_sha256"]
         or e.allowlist_sha256 != payload["allowlist_sha256"]
+        or e.source_annotation_sha256 != payload["source_annotation_sha256"]
         for e in queries.values()
     ):
         raise ValueError("annotation/catalog provenance identity mismatch")
+    from .msrvtt_snapshot import training_annotations
+
+    projections = {}
+    for entry in queries.values():
+        if entry.training_records_path is None or not _digest(entry.training_records_sha256):
+            raise ValueError("catalog lacks independently verified training caption projection")
+        if entry.training_records_path not in projections:
+            if file_sha256(entry.training_records_path) != entry.training_records_sha256:
+                raise ValueError("catalog training caption projection changed")
+            rows, privacy = training_annotations(Path(entry.training_records_path).read_bytes(), set(videos))
+            if privacy["excluded_records"]:
+                raise ValueError("catalog caption projection contains excluded IDs")
+            projections[entry.training_records_path] = {
+                (r["official_video_id"], r["caption_id"], r["query_text"]) for r in rows
+            }
     official = {}
     texts = {}
     captions = {}
@@ -85,6 +101,10 @@ def load_benchmark_labels(snapshot, *, catalog, expected_sha256, protocol_id) ->
             or queries[row["query_id"]].official_video_id != row["official_video_id"]
         ):
             raise ValueError("missing/invalid official relationship")
+        if (row["official_video_id"], row["caption_id"], row["query_text"]) not in projections[
+            queries[row["query_id"]].training_records_path
+        ]:
+            raise ValueError("snapshot caption differs from independently verified catalog projection")
         q = row["query_id"]
         value = (row["official_video_id"], row["query_text"], row["caption_id"])
         if q in official:

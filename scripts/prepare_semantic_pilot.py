@@ -138,6 +138,16 @@ def export_snapshot(context, preparation):
         directory / "allowlist.json",
         dict(schema_version=1, origin_split="source_train", official_video_ids=sorted(ids)),
     )
+    records = write_input(
+        directory / "training-records.json",
+        dict(
+            schema_version=1,
+            origin_split="source_train",
+            sentences=[
+                dict(video_id=r["official_video_id"], sen_id=r["caption_id"], caption=r["query_text"]) for r in rows
+            ],
+        ),
+    )
     report = write_input(
         directory / "source-report.json",
         dict(
@@ -145,6 +155,7 @@ def export_snapshot(context, preparation):
             origin_split="source_train",
             protocol_id=preparation["protocol_id"],
             source_verified=True,
+            training_records=records,
             allowlist_sha256=allow["sha256"],
             source_confirmation=preparation["source_confirmation"],
             source_confirmation_commit=subprocess.check_output(
@@ -224,7 +235,7 @@ def export_snapshot(context, preparation):
         query_count=len(pilot_rows),
         decoded_excluded_caption_count=0,
         inputs=dict(
-            catalog=catalog_ref, annotation=annotation, allowlist=allow, source_report=report, full_snapshot=full
+            catalog=catalog_ref, annotation=annotation, allowlist=allow, source_report=report, full_snapshot=full, training_records=records
         ),
     )
 
@@ -295,6 +306,12 @@ def execute_preparation(runtime, preparation, *, repo_root):
         if snapshot:
             result = export_snapshot(context, preparation)
         else:
+            catalog_meta = json.loads(Path(preparation["catalog"]["path"]).read_text())
+            for key in ("allowlist", "source_report"):
+                _bound(context, catalog_meta[key])
+            report_meta = json.loads(Path(catalog_meta["source_report"]["path"]).read_text())
+            for key in ("training_records", "allowlist_source"):
+                _bound(context, report_meta[key])
             catalog = load_pilot_catalog(
                 Path(preparation["catalog"]["path"]),
                 expected_sha256=preparation["catalog"]["sha256"],

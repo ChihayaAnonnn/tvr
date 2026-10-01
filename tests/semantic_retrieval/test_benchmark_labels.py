@@ -29,6 +29,12 @@ def snapshot(tmp_path, rows=None):
 
 def catalog(path=None, sha=None):
     items = entries(3)
+    record_path = None
+    record_sha = None
+    if path is not None:
+        record_path = path.parent / "training-records.json"
+        rows = [dict(video_id="0", sen_id="0", caption="hello"), dict(video_id="0", sen_id="1", caption="other")]
+        record_sha = write(record_path, dict(sentences=rows))
     return items + (
         replace(
             items[0],
@@ -39,6 +45,9 @@ def catalog(path=None, sha=None):
             sha256=sha,
             source_report_sha256="b" * 64,
             allowlist_sha256="c" * 64,
+            source_annotation_sha256="a" * 64,
+            training_records_path=record_path,
+            training_records_sha256=record_sha,
         ),
         replace(
             items[0],
@@ -49,6 +58,9 @@ def catalog(path=None, sha=None):
             sha256=sha,
             source_report_sha256="b" * 64,
             allowlist_sha256="c" * 64,
+            source_annotation_sha256="a" * 64,
+            training_records_path=record_path,
+            training_records_sha256=record_sha,
         ),
     )
 
@@ -114,3 +126,14 @@ def test_snapshot_cannot_change_catalog_query_text_source(tmp_path):
             items[i] = replace(e, path=tmp_path / "different.json", sha256="9" * 64)
     with pytest.raises(ValueError, match="catalog"):
         load_benchmark_labels(path, catalog=items, expected_sha256=sha, protocol_id="fixture")
+
+
+def test_source_annotation_identity_cannot_be_changed_in_snapshot(tmp_path):
+    from semantic_retrieval.data.benchmark_labels import load_benchmark_labels
+
+    path, sha = snapshot(tmp_path)
+    data = json.loads(path.read_text())
+    data["source_annotation_sha256"] = "9" * 64
+    sha = write(path, data)
+    with pytest.raises(ValueError, match="catalog"):
+        load_benchmark_labels(path, catalog=catalog(path, sha), expected_sha256=sha, protocol_id="fixture")

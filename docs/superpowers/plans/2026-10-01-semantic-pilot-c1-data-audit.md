@@ -144,3 +144,5 @@ C2 再写 minibatch/DDP、K/panel 调度、A0–A4/P1 与父 checkpoint；C3 再
 原 Tasks 1–6 的合成验收范围不改变。新 Task 7 的授权来自用户本次明确要求生成独立快照并直接完成，而非先前一次只读核验。
 
 2026-10-01 审查加固：catalog来源确认必须绑定独立Git-tracked study trust anchor；query annotation路径/SHA及allowlist/source-report指纹贯通，视频帧数逐帧解码确认。CPU准备variant不得携带科学模型/优化器配置。数量门失败仍保存结构化来源计数及stop reason。
+
+来源审查补充：独立审计CSV与导出allowlist必须逐ID相同，而非只比数量；导出另存train-only caption projection，catalog重算其完整训练关系指纹并与独立核验报告比对。选中annotation的caption/ID必须属于该已核验projection，source_annotation SHA透传到标签协议。compile/inventory将projection、原ID-only CSV和全部来源元数据绑定为输入，仍不解码混合源或test caption。

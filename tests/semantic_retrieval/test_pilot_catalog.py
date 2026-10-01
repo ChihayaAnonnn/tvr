@@ -19,15 +19,21 @@ def source_fixture(tmp_path):
     caption.write_text('"caption"')
     allowlist = tmp_path / "allow.json"
     allowsha = write(allowlist, {"schema_version": 1, "origin_split": "source_train", "official_video_ids": ["v"]})
+    trusted_ids = tmp_path / "source-ids.csv"
+    trusted_ids.write_text("video_id\nv\n")
+    trusted_ref = {"path": str(trusted_ids), "sha256": hashlib.sha256(trusted_ids.read_bytes()).hexdigest()}
+    records = tmp_path / "training-records.json"
+    records_sha = write(records, {"sentences": [{"video_id": "v", "caption": "caption", "sen_id": "0"}]})
+    relation_sha = hashlib.sha256(b'["v","caption",1]\n').hexdigest()
     confirmation = tmp_path / "confirmation.json"
     source_ref = {"path": str(caption), "sha256": hashlib.sha256(caption.read_bytes()).hexdigest()}
     confirmation_sha = write(
         confirmation,
         {
             "status": {"local_annotation_matches_published_captions": "VERIFIED_EXACT_FOR_V2_TRAINING_ALLOWLIST_ONLY"},
-            "local_assets": [source_ref],
+            "local_assets": [source_ref, trusted_ref],
             "training_caption_comparison": {
-                "local_results": {"MSRVTT_v2.json": {"training_video_count": 1, "relation_sha256": "a" * 64}}
+                "local_results": {"MSRVTT_v2.json": {"training_video_count": 1, "relation_sha256": relation_sha}}
             },
         },
     )
@@ -42,8 +48,9 @@ def source_fixture(tmp_path):
             "source_verified": True,
             "source_confirmation": {"path": str(confirmation), "sha256": confirmation_sha},
             "source_annotation": source_ref,
-            "allowlist_source": source_ref,
-            "caption_relation_sha256": "a" * 64,
+            "allowlist_source": trusted_ref,
+            "caption_relation_sha256": relation_sha,
+            "training_records": {"path": str(records), "sha256": records_sha},
         },
     )
     rows = [
@@ -194,3 +201,56 @@ def test_self_signed_source_report_does_not_establish_training_identity(tmp_path
     path, sha, _ = source_fixture(tmp_path)
     with pytest.raises(ValueError, match="confirmation"):
         load_pilot_catalog(path, expected_sha256=sha, allowed_root=tmp_path)
+
+
+def test_equal_sized_allowlist_cannot_replace_trusted_training_ids(tmp_path):
+    from semantic_retrieval.data.pilot_catalog import load_pilot_catalog
+
+    path, sha, payload = source_fixture(tmp_path)
+    allow_path = tmp_path / "allow.json"
+    new_allow = write(
+        allow_path, dict(schema_version=1, origin_split="source_train", official_video_ids=["sealed-video"])
+    )
+    report_path = tmp_path / "source.json"
+    report = json.loads(report_path.read_text())
+    report["allowlist_sha256"] = new_allow
+    payload["allowlist"]["sha256"] = new_allow
+    payload["source_report"]["sha256"] = write(report_path, report)
+    for row in payload["entries"]:
+        row["official_video_id"] = "sealed-video"
+    sha = write(path, payload)
+    confirmation = tmp_path / "confirmation.json"
+    with pytest.raises(ValueError, match="allowlist"):
+        load_pilot_catalog(
+            path,
+            expected_sha256=sha,
+            allowed_root=tmp_path,
+            source_confirmation={
+                "path": str(confirmation),
+                "sha256": hashlib.sha256(confirmation.read_bytes()).hexdigest(),
+            },
+        )
+
+
+def test_self_signed_caption_projection_must_match_independent_training_digest(tmp_path):
+    from semantic_retrieval.data.pilot_catalog import load_pilot_catalog
+
+    path, sha, payload = source_fixture(tmp_path)
+    projected = tmp_path / "training-records.json"
+    projected_sha = write(projected, {"sentences": [{"video_id": "v", "caption": "forged text", "sen_id": "0"}]})
+    report_path = tmp_path / "source.json"
+    report = json.loads(report_path.read_text())
+    report["training_records"] = {"path": str(projected), "sha256": projected_sha}
+    payload["source_report"]["sha256"] = write(report_path, report)
+    sha = write(path, payload)
+    confirmation = tmp_path / "confirmation.json"
+    with pytest.raises(ValueError, match="caption"):
+        load_pilot_catalog(
+            path,
+            expected_sha256=sha,
+            allowed_root=tmp_path,
+            source_confirmation={
+                "path": str(confirmation),
+                "sha256": hashlib.sha256(confirmation.read_bytes()).hexdigest(),
+            },
+        )
