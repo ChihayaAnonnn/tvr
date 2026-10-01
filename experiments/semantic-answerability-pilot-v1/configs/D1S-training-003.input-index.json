@@ -1,0 +1,3606 @@
+{
+  "files": [
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3428.mp4",
+      "sha256": "94496a829b30aff6304ce046947fcfdfb71c5ddd49f2088d9372d1860be21973"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3429.mp4",
+      "sha256": "5eb8a213b4f737dd661fa54ee52685a3b2a93eb809a6301674d80b36f0dac38e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video343.mp4",
+      "sha256": "9e96a4de51e530f9859088f9524e87b9cd54e9a870dc884b3afc16ad3651bb60"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3430.mp4",
+      "sha256": "a51f922eecd67560154187ab5d969266ab90ac1a18745999288be518d14584c6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3431.mp4",
+      "sha256": "22a70de8cf8937ae82b6593c12e27ec294376fa27ffe79bd7947f146e0dd5964"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3432.mp4",
+      "sha256": "c29420827fd3bb2eb504127467042f8d93bb7867ef51596893c6b39ef34d9636"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3433.mp4",
+      "sha256": "997086ea6c9dc5df2b8dd2addba13c4696aed20c516e62f0f4d3edac107da736"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3434.mp4",
+      "sha256": "bb68f22a812926f9ac2db5b96f7bff2cb4b1c7918b3b057220af99c5340689c7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3435.mp4",
+      "sha256": "444622ee975d2b30fca6e5acd57f2a70dc0b9d5e04407edbf77ab0ec027f965b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3436.mp4",
+      "sha256": "5ba1e925d453562f414f827e1489c33ea499642ba9e95a28a247b394e1f68c31"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3437.mp4",
+      "sha256": "fdc9e396c7cd9665cb222ee32ce32f9a87e167d9b505fa6c5fb5dfa2b39a87be"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3438.mp4",
+      "sha256": "8d086cb399d1dfc938cef995428e9ea2de3c3622cd683a5ac54f670b689fd698"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3439.mp4",
+      "sha256": "2bda00134312da11b722bc98608147a18eb450d00a9fb43c9f8eeb0e43228626"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video344.mp4",
+      "sha256": "729085aebd6423f58f8ebc7d946e701b7e779255a40f9c5ab8b85924cebc478b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3440.mp4",
+      "sha256": "7cbe097268554b223017d0addef87fed90c53f2ec88d11453bd04c131c0da2ac"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3441.mp4",
+      "sha256": "ec25b9e769ee5024a793884e1a96fbe8aa834878acd477458f3b5db4345d94a9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3442.mp4",
+      "sha256": "a686366390cc99109e9bad46ff09b4c7b65cd15cd62c08466512cb0bd97ab38c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3443.mp4",
+      "sha256": "fd06b01e6752bf48cc7178d9927db120f21d0efb063d967690f4c30ad51080d5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3444.mp4",
+      "sha256": "cbcae64e946c9416c6fcb596ea1e61b631fdb0868bbbd58c1fd6c497d6cf4124"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3445.mp4",
+      "sha256": "b8dd37e5161d11452ef93a336868996caa93db9eeb465a8992c899e0bea9d3d9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3446.mp4",
+      "sha256": "c35d47f62da242ffef9ac52a971ae313ef5e4ac73cb55cedfa436f6b971bbb4f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3447.mp4",
+      "sha256": "1729c0b32bee28dddea5af96d31095b3dbc771c933d618923618cd860b089b39"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3448.mp4",
+      "sha256": "9dbd2970c4747d6d97c0a2d923466df9986199f7cdd64cc29ba4ab34e1bfc669"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3449.mp4",
+      "sha256": "c5aa10e19ab42e91e9614a2e49579cb271706da5375dd681b26f5991429000fa"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video345.mp4",
+      "sha256": "900b09871f5fe73a43c18497b3be5b27752e3c1223c1e86ef88988cebffba1bc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3450.mp4",
+      "sha256": "623a9c33a5a5bf6111628594590f44f8109084518f923b63d0ec99ed5fece373"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3451.mp4",
+      "sha256": "e69abdab12a81e6afa173cf04d50dd815f52b1122f5bd14260c4f330c862980b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3452.mp4",
+      "sha256": "0bc94c9902d6d4f8954dd5e62845d1d0a5c875ef1123e11bcc21ef82405087b5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3453.mp4",
+      "sha256": "3edf6f6286615915a5de5f396dff75fbc4daa9d3106af64862b604df2b9eefb7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3454.mp4",
+      "sha256": "22f12404e0ebee7f5f6f972484e1b7bc3545791368421c9a5b7a523b2ddead52"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3455.mp4",
+      "sha256": "10c4e7a3defe8995af15b00bbe29ff43d80fb6bff46666a2b8cb0c827b2cadcd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3456.mp4",
+      "sha256": "361228d08f6ef21acad1a7b06ec62057c5a5990d351cd91c1ddcbc2c75132efc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3457.mp4",
+      "sha256": "948637b65dbbafc21e3a88e79a07a1e5e4681f088f600b56f18ac422a50b7383"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3458.mp4",
+      "sha256": "63092f6797e38be14c8344cf5c150e8f1dc9ddff03b0255255afc0ca98a9ac54"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3459.mp4",
+      "sha256": "a6766193162dd623cf731621f5841baf94c665524838a86f11b0d4714d8b9960"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video346.mp4",
+      "sha256": "bc6b5c219df8e2588fc5280122424af4184f2bbe1e7e8d168f1a1944cec9328b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3460.mp4",
+      "sha256": "9f4b33a18c06e07928a30ef7001e89b6d0962cc5d16be96b1faa7aa80989c6b5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3461.mp4",
+      "sha256": "575756194277622e580ea4a2cb0bcc2f0b4c151d3b10b8dfc580347c00ec57a9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3462.mp4",
+      "sha256": "571d922b98bc49c9e7a05643f972c9e2474a224d8733ccfcffe0a861d46dcba0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3463.mp4",
+      "sha256": "ad133ceaaf5b345e96a6dd793474de46f85addfa0a379fdd8c5f040b7569d158"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3464.mp4",
+      "sha256": "eeab63c1f60f85d4fc7996a3418aef6bfdd10273b4eb43c3ae95e3eb31402991"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3465.mp4",
+      "sha256": "55230786294ae15c7f8fc4ba4bbd78ce064c365e8f2bf7fdc783e8396c092ca6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3466.mp4",
+      "sha256": "ca60ecfa8f7078862aed54a98154192ca3d5b666b7f11d58e3bf78b1c5406304"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3467.mp4",
+      "sha256": "d8e320130703b7e92c291cc03123c2306bc70847dced67e9b783e176bb1fa1e4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3468.mp4",
+      "sha256": "43e4bc71bf9f521266dfa2d976984d48a4c1db6a5cd6a6015de01e24a181494e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3469.mp4",
+      "sha256": "696b152e7a10b71311f3ca363e1efb81fe51425b296fd19fd7f5a845ba3d7ada"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video347.mp4",
+      "sha256": "6bd538d61852518a2a2ed67c6a1f20439fcbdbdb605849e5ae061e987e52de7a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3470.mp4",
+      "sha256": "416f0a661ff7267a6ba0ce86d1e2e33db8b27acf40ecfc43aaf6d029846a53ce"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3471.mp4",
+      "sha256": "874c15bc8b8ddc2ba89307d81054c2710ad4491609161e8c71e7d3f0fa494e4f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3472.mp4",
+      "sha256": "a41673e2f1c21c997e55ecf4f7e964c8d414cc1ae06c208c7f27df8c0b877262"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3473.mp4",
+      "sha256": "f30bfc0935f497a86963ffd2963f73a7dce6a10879eecc3a3392894437c73b26"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3474.mp4",
+      "sha256": "d7ac4762e8b2242f64b4e7f9d61655e92c371a4b7a617fc292838aa73c81f5e2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3475.mp4",
+      "sha256": "5cf5a0ceffa75773aa2a2672a8dfe7d13964e8fb6ff19d23779634602280f7ac"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3476.mp4",
+      "sha256": "ee1fbc14b6791a854359b644bdcf6433a10eb739068b58bb666c041f8e85c332"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3477.mp4",
+      "sha256": "60e7f1e7fd33d7c7317a9869576cabb6fe1d5039485ec88619402c647fa68b59"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3478.mp4",
+      "sha256": "717ab7acd775bddaebaa78245f043abc7cffc8f9d95a671078bb8672d67d2591"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3479.mp4",
+      "sha256": "9c3cd9b52f7a81ca72a7f9861cf19889f7d5840f104e5b1562fe3a73d66a3b94"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video348.mp4",
+      "sha256": "e6389965e910584962a77b26ebc1f9c365c68c17944affc4aeeb1a011a878f2d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3480.mp4",
+      "sha256": "58d2e24daecbcc1872376b4573d276a59b2ea232d02973da660ef9e92ca9befc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3481.mp4",
+      "sha256": "1102dc167f426d63ce727c5f5c8d993a04fa2662617ea21541deb69c50d3e903"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3482.mp4",
+      "sha256": "3a7051a1aea4f569e01567614857b6a24cd09c63fefbe637ba7db654f56e2c8e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3483.mp4",
+      "sha256": "559bbd98be6721c0e462dcfef9d791caaddd399645a0eba6b7a10f72b294cb13"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3484.mp4",
+      "sha256": "6d66aa7d0166ee079a7806b019b4111cd8f2f7839b7686d125cb01af2af10851"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3485.mp4",
+      "sha256": "f7516e8de38fed23565fc83da83f0c7a6cf0938e9fe18afb5264215f860f4973"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3486.mp4",
+      "sha256": "ade944c0f8940f8a78e686fdf40596f205f5ae39db8f21e883eb261ca3e63245"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3487.mp4",
+      "sha256": "775715ef480fddadaceeb5e2b6398532741d001a32de4fe21a471ea53fe8ae51"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3488.mp4",
+      "sha256": "009214db5707d6716ebecaf6a13ef82e0750182d6ce4128b79a39c4b4fda0177"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3489.mp4",
+      "sha256": "2871b28e615d0d2d45277ac9721cb34c478b2bf4ccfe88e6a45d6584d340eca8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video349.mp4",
+      "sha256": "0bcc2676a3b924962dacc0394226e3aca3700ffb0aa7086a069927890803d0d6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3490.mp4",
+      "sha256": "4635b35490ba40459e79cbdd3c27590ba01e5cdf2a6ba13b4d3a11317da9a873"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3491.mp4",
+      "sha256": "aeb55af742b639e12a56440c88c4a88f4b8ebe3d209e43b31cd669eab2af5b2d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3492.mp4",
+      "sha256": "234e908235855adc70f96a76f911c987d0dd1dd6488be3d06adbad6b24a287ab"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3493.mp4",
+      "sha256": "5cdc57e32b2fddfb1d36ed2a0d008b148584a291151fc54554968d81217170f0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3494.mp4",
+      "sha256": "c20b01e358b1820cbeec2c8a95bb4fe30b10862bbe843c3cfed85727dfe24d7d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3495.mp4",
+      "sha256": "2cc80fa05a2255da62ec3f6855b06dcea08990d8b9eaf133e2b64af4603fbee4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3496.mp4",
+      "sha256": "f828952f7f3b919bb411f40e0c513e45f05ff6d042680e695da73c8874d02c90"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3497.mp4",
+      "sha256": "41b641b6f5e31d8fb78a2db81ef64fa1bb589ce7565a21411ad24e71ab7a8fd9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3498.mp4",
+      "sha256": "4b48d240eeaed39c21d7b714fecc611d2a742e94ea4174d84de9697b94a086c4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3499.mp4",
+      "sha256": "bc4d507789ed0a50d487e031a3a7a443e085cc872830bf5ea1079e29008edef7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video35.mp4",
+      "sha256": "a7b62409e2603821f4b2dc90ffc8496549687200815ba320ef66954cbbe28643"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video350.mp4",
+      "sha256": "31651f2442e1f84efe047761492ad06a4a240ca2b98042630a0fac3152bb7db6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3500.mp4",
+      "sha256": "9bc7a5bac98c3854e86c061d2889044f749fc78e695d4a219ae9d1ff898c3b82"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3501.mp4",
+      "sha256": "7d9170a84ff3aec4fb7a3b712f2e4ff537f47adf26a378af1f053377f383b024"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3502.mp4",
+      "sha256": "3e3edf44cf2e75b3cfd42ab2ef41baff889e253dfd5f5a0e3500869b02587f06"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3503.mp4",
+      "sha256": "f0410d881d277c5bc8d8f0c2d3200da2b6aabdec04e9f91e3c28f7009ca74add"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3504.mp4",
+      "sha256": "c23e1daa68ddb190f09bb0032d499d3197aead3df9e5dbc4faa46cadbae5bfa8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3505.mp4",
+      "sha256": "c1e4cbb9127720c6e3e914a523e9e296d043ee27a1aecb61951ea58a0bf8816d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3506.mp4",
+      "sha256": "2455341ed6ec9138fd5749f91ada533ceda1a8dad253b0e3f64f66a012c0db60"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3507.mp4",
+      "sha256": "044f91a5285310be4a34d6315da62646ab9072bbe538d54daefee92c201ab97e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3508.mp4",
+      "sha256": "8ba852987e5b0f77ada15a0636ba419cb0ad2af3551d1ed08beb7b65aa32a65a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3509.mp4",
+      "sha256": "896afb4624f6f57af106ba17c16b90489f8b5e3a383f18836f10a5c156627005"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video351.mp4",
+      "sha256": "7cf205f4950227c94dedf9e44a7c1163eb636a1027982c144bba8e19fdf79620"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3510.mp4",
+      "sha256": "163bbff33406a6761b5c46c060d6c6e1515b2a1278515fe9b7c7558d73499cec"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3511.mp4",
+      "sha256": "9c17f7a7c3a7d1a32bda34268e6a8c7963aba84165a20f624cb355e9dacb1843"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3512.mp4",
+      "sha256": "e2ed13d758e482ac546f57c2673bf7165efec3816386346e2a4c4177cee7a88d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3513.mp4",
+      "sha256": "2725bf8d112848403ec24930d0c6a9f2b9d8eb35aac3bc9abd3e50e61fa30b2e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3514.mp4",
+      "sha256": "6aef51aa30ed1ca35b833752cc52aa3e19aba4847c209980694b389e60ffcb94"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3515.mp4",
+      "sha256": "8fc974ce91d8b2586b6b4c97cfbe49323657bc0285ef3cc93e3f6631a3d59245"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3516.mp4",
+      "sha256": "1909b259b6481444b6d177b78c860451d40a1996ff4be85dda5dd906559e9a97"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3517.mp4",
+      "sha256": "e08f41c7d20e852759f4aab5223a512ffc79279fd7e064e9a076c1eab8884031"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3518.mp4",
+      "sha256": "2dd708192aa2f1a07d2a29879cf3f9ef64b1aae0095afa00983b6ba63c65fd23"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3519.mp4",
+      "sha256": "23b3c58557890a4d6a349df315697a1a4d12ab2900f91ff1407c40d1360bbf0b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video352.mp4",
+      "sha256": "78e0a590441d86216cd8d6a55181c5379cb93ec2dd7981ef31611adf853cd0c8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3520.mp4",
+      "sha256": "db803beaf19c85c607d50edb1963dc69b8fe34cc1ba3f0a152ddca448cf35aa9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3521.mp4",
+      "sha256": "51eb0ac6c695b7cdce8d8e8997b142fa95cdad05b85f71415c9858aa5f209bd9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3522.mp4",
+      "sha256": "13559142bf2b605f501ca65c86f97a2f80f511a9507e753701bafad1cefd368e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3523.mp4",
+      "sha256": "1926a9f3b8af91d99889f136b7fba62b08e85ac3f2ae68334421cd182fc93c39"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3524.mp4",
+      "sha256": "922bca32f9e0b76da24e7df088f6955ce597bed37e144863a74c2b5512464265"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3525.mp4",
+      "sha256": "77e46d577c3d9ceba908c7b8d10ec54757889d9bc8d915e8186a40eaf5ea9b55"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3526.mp4",
+      "sha256": "161c0ad495c39842146cc29fd08919fdef06e9924a7a4ebd38953f4e54073439"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3527.mp4",
+      "sha256": "bfe749bdb1a7d9affbda7fff967e1c7f18cb9664612368d7289f90a2b625aee7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3528.mp4",
+      "sha256": "9b1022f0818626d44ec0a064d25e9ac73b7163bb1101c8b7c10ff76ca9131b82"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3529.mp4",
+      "sha256": "9d7b95c04447855c2976dc4dc5e1fef9f1a952319061c5e1a40c91cd96705c36"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video353.mp4",
+      "sha256": "84737262e16793969d5d8c1d5570b59eaf3027643e57aaadfa649b0374f83271"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3530.mp4",
+      "sha256": "9cad13df4bf3004f0b46f10f35d6c4c0b3f2f41d7b56f7a36bce46a27d58e764"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3531.mp4",
+      "sha256": "9d5b432004d6ce219cff67b99fd4c1ac25397c3d7f720d7c50eb1acec383247f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3532.mp4",
+      "sha256": "cd0c892c3e8c875bd1a1ef05fcbaf5ac3fbb5b26297ca0d13e71d67ae173921f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3533.mp4",
+      "sha256": "de4548bfaee59148af0da260db32e0b936ba075a50ef1363768f0e4f6aa39eab"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3534.mp4",
+      "sha256": "a1944d359bf6ba299b9076e1acd789ee8fd57b33e3605676adcfb4695ffdba40"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3535.mp4",
+      "sha256": "1dfcffcc97d9e8e04dd8c7db444df54872def6c9437af548d1102ea1bc644c43"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3536.mp4",
+      "sha256": "fcf30af8d2a7333d34856365e4065289c20a16d2f28dc9cb334b5da0c811210e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3537.mp4",
+      "sha256": "a3a2112fe91d3893ebdef27f31041c29a69c18e31f8cd3236f83b682f7876ed9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3538.mp4",
+      "sha256": "80742ff2796b6b98e86979ccc6dd7738d271fdcc1e61f827aede7a0e38abb861"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3539.mp4",
+      "sha256": "c30f896e14a0287dfa3bf49380f5f6806764b84121ad2f501103bc3147401a09"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video354.mp4",
+      "sha256": "4c7931caa392e52a171433c1725e68e5ec19c1ff88289923cc990debd17ee163"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3540.mp4",
+      "sha256": "e3f1011ecd2e5028310036378bc0e4ace82947581d355179e210c8ad9b1d9936"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3541.mp4",
+      "sha256": "abe4817f28b6735e9a32a9871c2faf433ad15d933e351768c33243224f99e086"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3542.mp4",
+      "sha256": "584d07d25320a65aced976e00ea7bba63524fa3bb967c31a9e3092cf75f10849"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3543.mp4",
+      "sha256": "fbae46c41300011f85d04f4206f323e458a12a18dac0d3e178c57073fd9a1c84"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3544.mp4",
+      "sha256": "6870e8ff63431931da37000adfea1370ae80eb6a0af20cb032420b6d2f32fe27"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3545.mp4",
+      "sha256": "add23875f01493033069e2acea07240caa70540ddb645e074aceb93a9f695b50"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3546.mp4",
+      "sha256": "6bc7580e157ba36dfeaec19fca25ea43d1b8d1c8a8864946b4f36b69b77f1f78"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3547.mp4",
+      "sha256": "edcd4d28025cfe85cb5f61cfd5d2d9f63eefa9e22a0c017a4cad217559567f7a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3548.mp4",
+      "sha256": "b417dea2cfcbb3acfdc36df7dceb288fe47842bbbfe04146f341fda3e9ab208f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3549.mp4",
+      "sha256": "be4de772ad0b50a011741388547a63e889f538aa239f4f0e97b97ac14043f354"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video355.mp4",
+      "sha256": "9ddd428ec6b00bca6f41b04bd31255cf0e424681add2ae334df6df903758f04d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3550.mp4",
+      "sha256": "1c57ff2f04e5bffe60afa6303b454e17bc14ba6432699fb997548c95499788ab"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3551.mp4",
+      "sha256": "a11199f49b63979c5ca00b1aa50109193bc7374bef41cada023935214ae94f39"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3552.mp4",
+      "sha256": "dde47e53cc6f0ed1ad4281694bae09d8725a407715c2414f9e6ce6eacd8f00bf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3553.mp4",
+      "sha256": "3f8995f19821e18e4a0195e28fb870a3429e309d2908af5536061e3d9319999d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3554.mp4",
+      "sha256": "f07cde6def9854559dac9eabcc1ed6a391cde5f672d643c88d06ada71598bc6d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3555.mp4",
+      "sha256": "4248a2f06c73a9c50c877149abf20462c302ce0da151635fd376d450413be600"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3556.mp4",
+      "sha256": "0ecea903c31b24e993890c7427263fb10780775f89815392d097f15081f86e85"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3557.mp4",
+      "sha256": "4f295d51f1dc5ada73f2ab64f550e8f9b4b6c715e30489e5a48344c32bb44801"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3558.mp4",
+      "sha256": "eee15b534536d4f1b291c5baca35ad10acea2a4e25b5e8734eabc9962d1abafb"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3559.mp4",
+      "sha256": "e02d11cbf7d53935e8bdcc42e340784d7ad897c74040b8e9936849e28ad0ebaf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video356.mp4",
+      "sha256": "e17e4224910e0ac612ef63e13f74021b57bc8869286f540c125d662368b1122c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3560.mp4",
+      "sha256": "8b28a9cc1de58d47e13316a69d7f0847af353400f390c9cdeb6410d71b419e6c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3561.mp4",
+      "sha256": "d50282513b010c47419ea7cfe51f5114c72619adccc59b85a87eb7e66d276811"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3562.mp4",
+      "sha256": "618a04bd8b5163749c021427709de518030f09797aee98d6c07ea8d7b0387e48"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3563.mp4",
+      "sha256": "9d6402c00ef842e8cf7889906549bd023a7994d263b61205d386f7155b35f3f7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3564.mp4",
+      "sha256": "87913232b120becbf77e9526741287e4faa04b94be3fcddb8739d385d1c84520"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3565.mp4",
+      "sha256": "94c761606a3a0c3d30360c0ed5e46f62701a3541cd26c6529cc8f73e55809aa3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3566.mp4",
+      "sha256": "ea4e29d37fb8f458f98601affe8836d5a028c15e9a8850bf2cf19305abbca314"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3567.mp4",
+      "sha256": "e650df02ef2033687798e4018c6763b1484eeca8b4d6461d64a0a680b75c72b6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3568.mp4",
+      "sha256": "79cda5fd390fe60bade78d16af2b5954e67143ae57a5ac05db1a6f120f83352c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3569.mp4",
+      "sha256": "7c7753d2a667c510628f374f2fb553a4fff610e736c2b1e86409216aeda3fc79"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video357.mp4",
+      "sha256": "33d2788016e8ab838c50e5bcedbd42f20d9b2841dc5861b049d0eee09e65df2f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3570.mp4",
+      "sha256": "902e4c5a6cd1049044497d3d3b2372367f7766f6c648633d56e435187cad6dc6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3571.mp4",
+      "sha256": "9cea994b971de5bea6b5becc9f26f1ef555cfa23a5b5885a7ae97edcbf3fbe78"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3572.mp4",
+      "sha256": "67c6b26c06ac5922f3343f1d5a18ec2867abd6fd2a23f5eb5939830528ce2f70"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3573.mp4",
+      "sha256": "9bb30db6d0d101831d3cf5f26e90a443f4b59d502c4875af3b7e0913f556e156"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3574.mp4",
+      "sha256": "02b27aeb573264508f38b2f22546fa9c1ae2c368c287b67ca89d98cdc641c9be"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3575.mp4",
+      "sha256": "a66a8b6c163c3e98fe165b136ed264bdbd3e46efd56f703ccd31e1ab3572f106"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3576.mp4",
+      "sha256": "0c241c4327d3e9f0161b8f983d4406271bae2fa12b132e35184c6140555da6e8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3577.mp4",
+      "sha256": "940ab21611c7b750051dc8b13bf9e117b409e2da2763de9a610762af81120e7a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3578.mp4",
+      "sha256": "67278fff29ec5776a46403df60b87f7af99b9cc0b890e0f52a52da502ce9270c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3579.mp4",
+      "sha256": "d9eb34536f47c93d2ca66d76a41a49722bb4f01045f63d0cd66fed2afb51f3de"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video358.mp4",
+      "sha256": "0d325a55b32d613ae49242a7cb2b6b6c288744370f8dcb75ac8d4b14b6c8725b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3580.mp4",
+      "sha256": "467aa93bcee300f222d54139e97323d22c59c903f89385d1f0ef27634aca7d9d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3581.mp4",
+      "sha256": "54572e2ae6831050cfa8ebf0bd93b06b1d02bfdc762769e1f92e242cfdc3d726"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3582.mp4",
+      "sha256": "96f0ab94081939dc9da5ad501eff87233ffd4cd5c1eff25681041159ec8f7b0d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3583.mp4",
+      "sha256": "2b17a80208b1a21692e0517c350b2f9f9c2ddb1ffe716cf2113adcb32e9ad1b6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3584.mp4",
+      "sha256": "97cb1af21e0c7b5b0575b675dc5b08cc7a676cfd0d10d824bdf27fc0f5f8fd16"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3585.mp4",
+      "sha256": "6385d03e806165b3cbe42ce584c043a34a848c401fbd580555f9755e263fd43c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3586.mp4",
+      "sha256": "e1afe56afcfa9b16a2fbb01a322909867a86806a25924fadf6ecbf0bdddc3f11"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3587.mp4",
+      "sha256": "814b35c0bee491c3f0c5b85d739286281f8a29faa3f33122b0d04a57f860ef34"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3588.mp4",
+      "sha256": "75523a1dc591b12fb9a422073b6bd40caf90c88c7940d94ed263566a910ec356"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3589.mp4",
+      "sha256": "51c82ecde2c5f71b476d48aee58b31e7c22aac34284c8df308bcd078ec8aba9e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video359.mp4",
+      "sha256": "91f53a46fb6faea50e2db26d1d3f39f741438fd8f117ce4f81bbda8ca5841494"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3590.mp4",
+      "sha256": "0acd1d9c9f627ad77795e2a0411f934cbe1057a810fe5b17b08ad59fdcf21a78"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3591.mp4",
+      "sha256": "5d2053d6d3532517e61d0eb7e7f9e3ec14d5b1de6160e27755170e3715871e98"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3592.mp4",
+      "sha256": "514a7c9568f1874107ffb6595546348f2ef2a05e1c6ff1e54003cd9c5b590915"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3593.mp4",
+      "sha256": "3f416a10011370ce8966bb4ea198dc2a0ce80a10d9e08b7f190ac4b0a9fae84d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3594.mp4",
+      "sha256": "399bd2f92102b34c6532c5076b82df443e44c5dc6e9100ea9781ddb86722bb1b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3595.mp4",
+      "sha256": "de59de85900a6017bb40fc277c8837fd895c74d66ea77df32f026bad603b1936"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3596.mp4",
+      "sha256": "49cad801f581978f2689f3bb6926a6a320af824b17d9098fed2cef9b3e8b2fe4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3597.mp4",
+      "sha256": "bb87b9667a295e7c5aaa43aecd54c25ed30a8f9e5a6bd83885be1901ab4eff33"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3598.mp4",
+      "sha256": "868bccde2f60d2cee40ec3cceb347544a4dc77a752ebb92eabc40f431324caa0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3599.mp4",
+      "sha256": "8f48ee611b1862a546747bbeb8292124885fb9513b4b3f842d894a2016c9b114"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video36.mp4",
+      "sha256": "18fbea71845cb2a564dda85f791fb665e5524c6b96afd878c07625a1e640ebcf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video360.mp4",
+      "sha256": "05a7312bec7cbfa87633b407d866a2076b3a61c6d53032efe433135b3401236b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3600.mp4",
+      "sha256": "13074c0ff4e5f86c7fbbae4c9a70ae3f423e7ad139a15343e0216f968cfa68e4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3601.mp4",
+      "sha256": "20d624d5b296018640f92f6454656a990d865471fc3e8b9d7dfca6e44e70676e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3602.mp4",
+      "sha256": "a07096e6eab51b32d2a7dfd284f783d4ea2188777e56e682901de2f8903c17af"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3603.mp4",
+      "sha256": "abf961e61f7188fb7d747b779560e1ecc0e26c46d93977c92db1f53df7f343cc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3604.mp4",
+      "sha256": "907fa84cfdd852384fd662385afb99ae9f48aaa39d65107a5c6b4ff56d80370a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3605.mp4",
+      "sha256": "71de75d79bca3692e81122625f7b3d875e71123b78b5e9bc0b3ef4e3cd604d1b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3606.mp4",
+      "sha256": "e307d8c7f4b22c552b1618a0e90af533bbc2f668d28075f338c0c0c8d8317b07"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3607.mp4",
+      "sha256": "c6f711db523ced4c77709e85cf8313cb297851fd794fe8a3c467e706f7b17f34"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3608.mp4",
+      "sha256": "704cc3943b5d802d93afddf468cd1335fa52d6e246a63d223ae24aa165bb69b9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3609.mp4",
+      "sha256": "bf45635d4be5cd2b7431e839624b87b7ed1a740d3d2f7707c7e852ed9277f6c0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video361.mp4",
+      "sha256": "0a6f94f709ad20384bbdad122ce0f527f3a4f135cdf3aad41cd500a4c69b44d7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3610.mp4",
+      "sha256": "4f60ba3c45befc8699e805b6b79aab4c8695fb8523c8a9e26fc7e7803a279d1f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3611.mp4",
+      "sha256": "acf06b7b147e95c85ec0958c8cdc0f67bbe18e0b12d633bf15381ccd008a0560"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3612.mp4",
+      "sha256": "0548a4ba70f35aba2cf405a9056888820f704592f580964c8679c5caec23c4b9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3613.mp4",
+      "sha256": "ae30da1c9c3f0ebcf3b364fde5efb8c68f64e07ada3162dfa1d5fc0860950976"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3614.mp4",
+      "sha256": "10ada590ea3735c847f6c9957be0b6076e292bbeff382f763f008a0dde45819a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3615.mp4",
+      "sha256": "088c1f56470e31503a9f7ea5c6a74a6c35b202b0cc75b8321f38eb1290343e10"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3616.mp4",
+      "sha256": "57db1ab17d13f56f10427589cabf72d5fd78d57b2aef3af127d6dc788769a61e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3617.mp4",
+      "sha256": "274710d0ddcbc5f24f3583b1b3d42e0cca6357937ec7eae65b70819e80d28503"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3618.mp4",
+      "sha256": "b4ca03ef9c85bfab2f57a048f12b884db3f157e94edd0b968e175e61bf83c3ef"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3619.mp4",
+      "sha256": "e5201bb9d51d9c2f3c6dc555dca3c25bb8656baba57b3af186dfdda6a8afd8de"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video362.mp4",
+      "sha256": "12e1acddbd168d859ace644a7896f2a225e6fca54eb790cf3fcad9d7e59f721a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3620.mp4",
+      "sha256": "f636212d64d4dc97b253ada7f27b8ec3bf81ec34e1fc2557ba01ff0306ec68dd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3621.mp4",
+      "sha256": "0e1a750b56295ae9c1ebd622751448ffaedc6e92bfe0991b9f1772a730fce9ff"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3622.mp4",
+      "sha256": "b9c061342a98d568479062876b3f3690cb20ad549966e35dfd2cdf7f40b10743"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3623.mp4",
+      "sha256": "41d2cbf121442b3a63c99a44cb36cb6a2922feabd4251291dc872af9c84adde4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3624.mp4",
+      "sha256": "328dde4c6d0de16508a180d883080370b39083bec0422677dce5ad1f5f44f7e0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3625.mp4",
+      "sha256": "91558bddca317132f995019ddffb8e0b9fc8aeee8543905eed205426b8b8ee38"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3626.mp4",
+      "sha256": "0fb63b45d76a05a0d9aa874c70889ab7021917f9cc288e0893fa1bff8ee918a9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3627.mp4",
+      "sha256": "a4911be17e2e640dd708772a52d159e4a54e122eb41fa56b032b7b44b66105b2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3628.mp4",
+      "sha256": "9c5f7b250bc6befcff9d3700c22946c3382d3da96437ff3778120766e703c976"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3629.mp4",
+      "sha256": "df5080ff9dc609f5587b716c045318849adef487bd3f4f7fd5940e38b05d5fb7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video363.mp4",
+      "sha256": "575ab5e42e9bd0c93ddc9cf337bc5196daede0fe0623b680003ccfc2bad5437c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3630.mp4",
+      "sha256": "cb872a0baf7e91b84641c1c338434fbe7faf984b9e98ce523ddb6b54437daa75"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3631.mp4",
+      "sha256": "af5bbffe1e3326be235119d47cab9e0c60aa5cbea79452dcef6b77c15855247c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3632.mp4",
+      "sha256": "f051df0c097c5ff2f04dede1e6e495c7279cb259c7272d79794959e42f64af20"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3633.mp4",
+      "sha256": "c50212c7ec610d6521898582d171d7f4017f4399ec3047b433f69cc7a9d61f84"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3634.mp4",
+      "sha256": "afbb9ddb354b5d9324dbbe3c74ebcaec5d393ef8b897dd2875ead9694d07acc9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3635.mp4",
+      "sha256": "f041ff6ff03e65ea42f07aee9a4362bf4715070c5c04aa905561e4b24c95b8ce"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3636.mp4",
+      "sha256": "28ab9784b8ec047121a3ef8632270c89fbc4950217b56c0386390dbca0ba591e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3637.mp4",
+      "sha256": "d2702b979ca2ba58ae87f54bed1a782642b8f9cf2ffb59a6f5a07aa2f3600411"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3638.mp4",
+      "sha256": "5a17018569962e737f3fdfa1b2ba524d80422b4ce93ab35682332bbf97baaddf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3639.mp4",
+      "sha256": "76520c2663f1e39482587a2e3db8741a17fefeab6311436481770681a75803ef"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video364.mp4",
+      "sha256": "cabb02df46b9c49594375ba06345e0de6a26dfa335f0f9b6cdafce86b8b06ff0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3640.mp4",
+      "sha256": "2f8accc4bc4995fe28eb9bd553c253627ab856696632fb9cfa097442bd952eeb"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3641.mp4",
+      "sha256": "44b720e8a60aa7594ca25f60b6fa3ff27b70fd5e00a0d2e554641f5a0457eb93"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3642.mp4",
+      "sha256": "425207fc6e13544afd29d0acb57635c83b78192ade82e21a911f8076a3a7dd86"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3643.mp4",
+      "sha256": "fe0984f0fa821ae634bf632a81158f1895acf3f0cd6ab9b2d9d802cee2fd3b7d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3644.mp4",
+      "sha256": "b1e2b6b9fcd51f58d39fe1c72302d8ad91ff13a847768d4591835acd6ed60ce2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3645.mp4",
+      "sha256": "afb402c90ece5c03085589b8a64a01088d8b0007cd016bbfe8bc6b4fdcbf78cb"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3646.mp4",
+      "sha256": "7d35c3cd4499a454ff3d659a123701fa15697357fbe96205310c5d5f94edd5ce"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3647.mp4",
+      "sha256": "ef620a3627c62e84f4af39849eeba2686e7c06718b464464c1d11fc898ff45c0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3648.mp4",
+      "sha256": "3d8329c36b52d037f54451891e336323427036b6a414bc9153f8378007869eef"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3649.mp4",
+      "sha256": "09923a028c6d683d660d1e5444df10201825960400ac38b101e22e4e2a2545b6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video365.mp4",
+      "sha256": "f2e398a871ff659d877b013c4d9028c941e7c9d1a0a40f3db72cc00d70da3dfc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3650.mp4",
+      "sha256": "9ab2f6ad87574155cf620938101522959b9c2dc31b148aad11e3f9aaad8c02b8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3651.mp4",
+      "sha256": "c327dd1af113f2857875cabf36f902c711b3aff3a3f94fc8f4bd09fb46e13dc5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3652.mp4",
+      "sha256": "1a7734d8436a35d4bd517aaa725cc97fc1ea2baed0de62d1e395d68f1e31fcd1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3653.mp4",
+      "sha256": "0869f28c7d8927103abbfad1a499de7b935da631c6ec9ad636ce85c88a88e0e3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3654.mp4",
+      "sha256": "d91a09d3adc913140e143d6f90285c315b3295a08b2e0a1090b69bb02ba187cf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3655.mp4",
+      "sha256": "0dbb69771c9d6c12dd5ddf9c7698174cd81fe2a2f418d15825425b1bb1e5b3a2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3656.mp4",
+      "sha256": "934da2e28c104e2d69f2cd987a214fd8f73cc70d0192fb5e8e884e296bfb50fc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3657.mp4",
+      "sha256": "f1fbeb51f6be0e09b95924d9a8ab6937808b4387ba96bba049ee82ae1419bab0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3658.mp4",
+      "sha256": "19ebfa31c5ffe3cc9a55fc8626a7ba03c77ca7008c52e15829179b4c658d7d93"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3659.mp4",
+      "sha256": "5c1723b2649be9f719beb766ac9ab79ec0aa96c738abe0dde8e430500874472c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video366.mp4",
+      "sha256": "837a36752b0fccc39087809508bb78da75950c0546bd22aec50a57a5c36f910d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3660.mp4",
+      "sha256": "f609d45fa11cca97866a8a45b0ac549bf9f13889cc81392a13d50b93baafe8f8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3661.mp4",
+      "sha256": "5b19f5d77482119847aef0558203a4a61748706bf4907773c5c466d1192b110b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3662.mp4",
+      "sha256": "2e3fe23135ecd873d9bbec1e509d0973eb042ab4a45142c59bb5cb24cfce160f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3663.mp4",
+      "sha256": "bcd3078719e34089049e13020cf8a60b1eee0c66b91c3e999ab57268980bd67b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3664.mp4",
+      "sha256": "d8685cc1b59b126324ad2adcd539de8aa30281be677682c5537e769b45943f64"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3665.mp4",
+      "sha256": "bf3bf34fd15215445c9d2182494cfc377f1878d70726eabf363d365eaccf8681"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3666.mp4",
+      "sha256": "77630e01969d71e4ea3a37c8a1f80d6266b2e1c643ee5a3a0a17bb3705c2d1e8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3667.mp4",
+      "sha256": "0f8946f3e6e0bac8782d78c6499cc2c300428600b1121f0506805872e2f1f90d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3668.mp4",
+      "sha256": "9e1bb87dd5bb70572d608806a4b17c0ba01d55f3b0093ec7666ee9b5e9bfe834"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3669.mp4",
+      "sha256": "6745cbe25b22a3ef74e62994a92fd2cc7fa842f72da336973e8c75058073982a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video367.mp4",
+      "sha256": "03caef5b2b8cc4e038a8fbdb4ee3ab565cac3c992ba371e0b5ac1f80fbbfb5ce"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3670.mp4",
+      "sha256": "3421b073284bf37b38e41ccd063b6ccddbcec9ce799ec8a0759d078c2442fc41"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3671.mp4",
+      "sha256": "d79fa960987843751aac4ae0f5759b0830d94490297e99baba1aab4fc3a000b9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3672.mp4",
+      "sha256": "f9d08c5528e3dd437672bb69d1236812173fce88b21fdf46afe6729d7c30b089"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3673.mp4",
+      "sha256": "f1c2712e774bd2d6c0516bc93aa1f3c61be2b4799586d13e16046cc3b5673782"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3674.mp4",
+      "sha256": "84ee61e9a4cd4371e7053b043f74d1b9ea214f236d8e2398d321fea52f96df64"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3675.mp4",
+      "sha256": "5e9790cf5bd3fc1f0885ca949f6a58ee708e58a2db8538db9fcce105f6f55511"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3676.mp4",
+      "sha256": "53a8587f6bf8043817fd481b1421de02184fcc829eded62c48abaf9b9cdf26b5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3677.mp4",
+      "sha256": "1a9d3125682eebb4d5b59392337d7f0a14e4ccc82b418e6397a41cd862b3c51d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3678.mp4",
+      "sha256": "c8826c592511e7d8478a6cfda74a3b2f58f7122a40b5de2354efd014f6abe3eb"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3679.mp4",
+      "sha256": "2180e7a849ee856f890df4d208d65634d3b98e66fdd03c6961d2ba520b64fd38"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video368.mp4",
+      "sha256": "b094a5bbd5a8b40249d1b9a7aeea92e32065d7a01d9e6f4d03b465fce8a5c4fc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3680.mp4",
+      "sha256": "8c7656689b8280a5e90080534d1317ec77103ab1f379774fc25aa85b005671c9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3681.mp4",
+      "sha256": "281b2e0ae16a9a1b91237ebfd5591ae5e445655f47ed7066a8d28deeb65f466a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3682.mp4",
+      "sha256": "b3ead8411f01fc8da571a5063b0b68c0c33a2bdc01995dd4e0689db0daf9bef0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3683.mp4",
+      "sha256": "6cfe38d548aa0d08406f8216e55f9ea4a677b0f20965114afee9041b932c9632"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3684.mp4",
+      "sha256": "6129e3a75d4d6dfde8d91907e769312679e7f835e28432d6d55e503e6a09d330"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3685.mp4",
+      "sha256": "8dcc8bf74fbce9e2884ed1583e49c746219ceed6a18d599b66be81bcff4c130e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3686.mp4",
+      "sha256": "5ec05fbba7540d0b7666eaf60e3fae66f6766c635884865da3a11eb0100630ed"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3687.mp4",
+      "sha256": "c47431b39c1c9238e27d7ca8a037c85528c1c6d0970f22e13e4a3e2c9e66c633"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3688.mp4",
+      "sha256": "a9d09a25b16f5e848c8ae52964ad48cb8a3b12d1c5380d398523f046adffd6e0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3689.mp4",
+      "sha256": "00bcd81145a3f9471019f6aef057c276cd16c9c9e27f590f89ceec9f3023a0b9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video369.mp4",
+      "sha256": "f189650b3143c25fa2c15c94fd8245c9b8164b932d59e0ac2e5061c366959c7e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3690.mp4",
+      "sha256": "183833500ee0b484fded9c8e80dce0ae614530aab08989a382d0710d18fe0e18"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3691.mp4",
+      "sha256": "1503646ee71121936729f32fa5e48ae995c9f9163cd716f90089bc437209eb02"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3692.mp4",
+      "sha256": "1c26334bea8d0ebb691f67df72b46e67a9c57f75d07f30e2b02657c40f8729d2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3693.mp4",
+      "sha256": "6334111263e4d40fe3343533cef4217f6f0d278a0197f899b7c5c1c00a90a1f6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3694.mp4",
+      "sha256": "ab6cc3b94c3b98785782ea4afb8a90d5a08139535903968a4cca748c4078697c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3695.mp4",
+      "sha256": "eb21e61e63ee53a61418202d303d09c0f091fa5a8971064c0db7d68dba2eeeb0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3696.mp4",
+      "sha256": "05bf45af7b7d641e3849f6d1f62afc3ca9f0d4934fb9550457bbff7ea25ca228"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3697.mp4",
+      "sha256": "6b6c394ad6fcf5357f40b0ec933266cfd35928c2a7d8a293d5b78bb3692c151a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3698.mp4",
+      "sha256": "2f11fc993bf90f5bf768d95fa36337ef361e13869b8410057a9b31ccd59ec431"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3699.mp4",
+      "sha256": "45442d27cdcc7b0da2e99a5549a2e452c49e92b3fe5ed0daadeb834e890b45dd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video37.mp4",
+      "sha256": "72a953c7e61e784b5c35190f0a1e60826fe3f6f590913c30b181caf711ee9050"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video370.mp4",
+      "sha256": "43defe574313640a18f053355626b3a5b167e9af52eb9288ff23b7bc85d42cfe"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3700.mp4",
+      "sha256": "eb8354c741c87f090c31605e83a99e28b97f12a90e7f52335f372588ba805060"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3701.mp4",
+      "sha256": "b84d64a4056b20f7239088733669d203b24d76bf2add1d2605d189ff8cdbff11"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3702.mp4",
+      "sha256": "bb09a6bfdaeb54f9055d3a0302b869f3ad7110b974d51168b87ee26040b27c7b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3703.mp4",
+      "sha256": "aa62b147ead48ec402a50319bcfa403f17f55cd59cd681ccf2d7f86ef50571d5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3704.mp4",
+      "sha256": "cefc26a0a6230ad87b4831e7aa3203edc0b4791150a79df509deacb601d1533c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3705.mp4",
+      "sha256": "8c322f40f1c6df7eca7b3c8a7f0fab198099c641ed4a52ad36f4b32c19a83662"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3706.mp4",
+      "sha256": "4770842946c29f11bd3d8fd8baf8203d9c7165355a7a289f01c12c025747c29b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3707.mp4",
+      "sha256": "b237b27482788f06914eb60d2df9e92dba5accaace1eb8cd28060f46c4e8ce83"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3708.mp4",
+      "sha256": "5042cfe80ef8bb5dc94e2cc6888bb8373e30f611c4630f354ea46c3877bdddd2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3709.mp4",
+      "sha256": "47986eebe3dac07a3d895febb72c5fc6d79beaa772e175bf257c333387b05314"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video371.mp4",
+      "sha256": "683b6305d8b43dbe9babcf43f2e70b6bd32bf228d4814e893837829049258907"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3710.mp4",
+      "sha256": "e9e68ea3192a6c234a92c992a88a1e4c9b51e6e77e9b041e5764d4485de4021d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3711.mp4",
+      "sha256": "00185aa88bc05b5edb2c610b08903d0477668fe0439c7d19e5d6ff2b3934dd09"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3712.mp4",
+      "sha256": "3244471d2252218b8a888791cb3ee50211463c4bcb9669c2dd1434c342ed0e06"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3713.mp4",
+      "sha256": "93d9aad69bef91a6a89fc3361c11c250c41c6f5dcc61649fcfe21f55b91d3b38"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3714.mp4",
+      "sha256": "21329ea07ce330150b20d5cd8672ae2db430804f63aeb82d2c7892a4abd58cc6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3715.mp4",
+      "sha256": "69f972d4569780c9ee58b7e6bc433a973cdec55ae11c38c5b554eeb2b66e577e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3716.mp4",
+      "sha256": "fc09f3784956e1618a11484a2438bf72ff9f9892554f89b9c9d0a0378b3a6b03"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3717.mp4",
+      "sha256": "3b143ea127fb24e3e930eaa954a97ea589804eb6642b2e8195644a99cda40b78"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3718.mp4",
+      "sha256": "3a774c7cb7521806c4ce3838669d1e3b0484be13815508f989a902a4647106a6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3719.mp4",
+      "sha256": "0fbeeca768821fce9084a51666c1b8a343deec63128d4dad9d69264dbd636ec8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video372.mp4",
+      "sha256": "b89fe73f1046253a1e90f5748ed9ffdb49c8903694bffccd4e58c0c77ce62ae4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3720.mp4",
+      "sha256": "4388559a807e15cbf4b1a2500fd3c838932ace0e95bf3334ece8af5cb1e15900"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3721.mp4",
+      "sha256": "9d9fd5b0978711c3cde721a4db63ea0d637281e78ac7d5ca24f79b4d1779276e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3722.mp4",
+      "sha256": "f90d5a3cd5fd5423564d9d2630e131798d496cd862a3f539b574bd3681837161"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3723.mp4",
+      "sha256": "aac727ad985117455aa702150d2e6d629198d9633a0ba3338e53f63abb58ce80"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3724.mp4",
+      "sha256": "568d8afac4c189d7a69963c5c66f3b0412c8523a7178d7d19764b40941419ede"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3725.mp4",
+      "sha256": "9fd5f2d6760b74d182f72fcfaf1f028100fe1f0942e960f07dde2acd82d8b8ec"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3726.mp4",
+      "sha256": "1c601c8116363bf80c2dc6f95951279586cdbeff9d02b61b03c98b701f26cfc8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3727.mp4",
+      "sha256": "1a38ad41438783e4e4dff2c93e006410611d773197808a6dd40669ae16b3f4dc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3728.mp4",
+      "sha256": "260589417151f5755508843569533de1894eb3b0fd0822fc46aa67aa82a9d6c1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3729.mp4",
+      "sha256": "5f69ad92a0b07d354b501766c717503d7a19e0cb5b4131875334b67456f15c1e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video373.mp4",
+      "sha256": "6cbf79301e020a36fccef5ab6d7326946f3adf5513498948ccca1b3931668ebe"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3730.mp4",
+      "sha256": "6b3503c84ba421fc3d8a3c2f764ef471906d1519b1143807349ad34bfe14d282"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3731.mp4",
+      "sha256": "0a99ac67625d3b07a7557e3ce95b2a6f932274b8ce2fb9e826c04298fb0a9aa2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3732.mp4",
+      "sha256": "cf9ac988a7d6b9eae6950329209a27e801db02b3e63a36dfb4d4ad39290e94c1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3733.mp4",
+      "sha256": "0bf8282e67965eb04d1a71c6c5b8c4813459985ec31927fd6368b651c2fddd5b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3734.mp4",
+      "sha256": "d44069a5ad330a6047998c2233da357661256b6af47af6ebf32a62f2a33c4784"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3735.mp4",
+      "sha256": "c128db818187c6dc4d845a13ec57c96c3af19ab4c5d26b629e1282e2bb1ced1d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3736.mp4",
+      "sha256": "26c1460cfa22a27c1dc995b49af94f78845bb408732f86739c1a51784e237040"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3737.mp4",
+      "sha256": "e93ba940c83c8d0c5a6f4f286388f97a5bc1b36587c2d8768a0d3b727b529fa7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3738.mp4",
+      "sha256": "a675201bb3d9dae19fc62296b71c4dc47cbb9753dce6994963841114eec6059c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3739.mp4",
+      "sha256": "314bf10c87363c6bb2aafc8c41f96e209377305c52dca5164c33a73526c67098"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video374.mp4",
+      "sha256": "c44511d9b51d6cc39f3dcf9b8c55772afab54b30386bbbdd7ef02d61616dd5c0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3740.mp4",
+      "sha256": "da2d02ed7a471b4f3bb9c394a8e244eace757c326d3460e45068d29706d09e91"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3741.mp4",
+      "sha256": "01d11cf8d14d193bcea85901c89fec744bfc55e124a754808bc5d57973a5e153"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3742.mp4",
+      "sha256": "f6d959344363b13c8b8554bd43637650f0a3c1b275f9d97e4ee0e0fce69e24c1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3743.mp4",
+      "sha256": "1c28f21db7d1ba135ba34fa5b99bbe4c978d31dce8b34d250b647ea4e91a038a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3744.mp4",
+      "sha256": "52dbd40c18caf0826d72ec05e0bd3843c83ba12de2172044399577f1ccbb2886"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3745.mp4",
+      "sha256": "07f2f9c6c4a82fef89feb10d3aabbe6734d5f4c76ebad4bc40b808a893a4f8d9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3746.mp4",
+      "sha256": "910fbcc0d0d62bd101df0ccbafaed64439448d7e7dfef711fc701536bfad18df"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3747.mp4",
+      "sha256": "9f6c68d0982dff9c8d71a228ed7d1263b209fc02f79e69f232d608d0df62e312"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3748.mp4",
+      "sha256": "ca69e4cec7d740a9ef3625eefa1e3f01c63c96003a76457b8cddcdf3cb40f4ce"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3749.mp4",
+      "sha256": "e1922af14b98a10fcf9fb138b4120450dbca7ef5c191173c202cea5a116b08d4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video375.mp4",
+      "sha256": "74f8a7ad0ddec8087e1e482f3bc95f18cb0bb3b0f4f48cb6b1820d3d9d8f22f5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3750.mp4",
+      "sha256": "4d233bd221d13ef945aaf70172bde717ef125a3ac4df9e4c5ec761d682c0faf2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3751.mp4",
+      "sha256": "fb37b3d79ed683314ce8490d1c1f5d1931c0521f986dc89934baac6c7e1aa074"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3752.mp4",
+      "sha256": "4938a7e5f675f7dab0d0155294b3034bdff34d0a6d2bfd0ecefe50578ab5c308"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3753.mp4",
+      "sha256": "d6b182c85b62b02bc18ebe8c715522e52e26140d0d3d656854c7581fc7ba44c3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3754.mp4",
+      "sha256": "03f6d2067b768c2a4f9b4d734c2572851f28ded7c766c50de1a0ea6727754d72"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3755.mp4",
+      "sha256": "d5f7651afd59148b126c9940d80d28f220fc515639c705edeb517196364d9270"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3756.mp4",
+      "sha256": "19ad8a47eb2198206df1c4cf2da576e659db927e022a58aee9e2a3ac73d4d99a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3757.mp4",
+      "sha256": "cbfea32dafab7df69d0a272318457360e7cfa543086fbe202aef86a00842b2ab"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3758.mp4",
+      "sha256": "d51ae731f6ae5c23633c2a826cb9fdd6be4c844d5f1cd170af395c090f0efb48"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3759.mp4",
+      "sha256": "40cee52c66947658c6ebd6bc50bbb106f27e3869d8a02eeff77993e1c750b3db"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video376.mp4",
+      "sha256": "0736c0cf2bf3fed60d916a842f87271a653309a4bf613c31c4f8c0a8345223b1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3760.mp4",
+      "sha256": "043120827ca3da6332eeacc010fa02f8afe8f6634711435eee0d40c131ec2d95"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3761.mp4",
+      "sha256": "0c03bad67adb96afff4f3b4ee5ad13bbe3c5a1c93c7612b04d9e0f1470922107"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3762.mp4",
+      "sha256": "8d1ceef8f47ca089aa22c0ddd1eba19057104eeced6ff98f3f16d0942e093c07"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3763.mp4",
+      "sha256": "68d5d1bdd2cd638a282c556d532d47859ae12cbea0b85fbe488b9750916f4571"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3764.mp4",
+      "sha256": "396d8bfbdea35fc93e0e06e974e35ac91dad5b45e7e410011abbeab7cee8b991"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3765.mp4",
+      "sha256": "35317ccf26ec98cebd28f64f5276d197cc9d4947221f37272b882f7a4d1ca2c3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3766.mp4",
+      "sha256": "bb03a966979ca06e4db382023940aa38867b2dbdeebdb3454502a7508980b926"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3767.mp4",
+      "sha256": "34c080c0171d09f251e14f190146bccbed3c65ac01b77332ae6981c543780d45"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3768.mp4",
+      "sha256": "ea06bbd2d974b8728c59bb93c9f3d26ceffc13bb65d88617f8467839fd3a4294"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3769.mp4",
+      "sha256": "dad65f4b25d7eaac2152824731ce0a96b6e441343ff800b692b7f1f2ae1ee186"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video377.mp4",
+      "sha256": "508984682e2878209c61ac4e29c53377f36422d18e1653d4f9ef62813464942a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3770.mp4",
+      "sha256": "955409960e711e29887e2c9e3f8103c7170e36c7f987eeebe9f720471b886462"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3771.mp4",
+      "sha256": "ecd5ff9b51a2508e7225ee24957ebc9090c7824b4efc9c0f908922d7ac34f777"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3772.mp4",
+      "sha256": "2f3296ef1b56e783ca2ab4b665764b9009c8682ed6ebb287d84b1d93800a93eb"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3773.mp4",
+      "sha256": "a68743ed352665871b2f564f592557a2564dfdf6241dfecf0ff66c7847678db5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3774.mp4",
+      "sha256": "cc22ec46ffa13952191f73d71189a4752f476bb777219e82bc467eb508945d19"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3775.mp4",
+      "sha256": "38224e6e7856c9520d385b4628eb59b6c5b124d29fb5311ed8bedf8c2ff850d8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3776.mp4",
+      "sha256": "a27aaa1b3d237016ae7c760e6081c111d51b87f1ebda02b4a7e4d27b49fb711f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3777.mp4",
+      "sha256": "5e9a356ae55c2a40098df8e5b8f024eca73c2aa45aa2c5a36294ab59c977d92d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3778.mp4",
+      "sha256": "4089cb08460e17cc121a903ae72e63f989d2fd31337f7c46ea2286a0f55b6db7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3779.mp4",
+      "sha256": "e6910b94ac8b757adb952e5b9310b25f2963dd944c850d822fe0340ec81e02de"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video378.mp4",
+      "sha256": "4a4502d3b23c3c13b695e1b23c5e2601b32b713919fcd192e814eb4ac7175785"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3780.mp4",
+      "sha256": "496be88c3e54c7053faddea519cac8ea477051412f4d0d9466e01682cc0c052c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3781.mp4",
+      "sha256": "6b448d48d14a1b01f0a6f55a1035e09e96e7d344d5dc8392ae341e393f3036f6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3782.mp4",
+      "sha256": "387faa0789e907fd8f203bd88601deaefd4e4a3d17f22ee0dc5e98428e8892a6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3783.mp4",
+      "sha256": "9440cdac7dd67b8a0fc2bc4818aeaece8482c0f97629c03c3dc938c596c471b8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3784.mp4",
+      "sha256": "55a85f14fc1ecb1fe40c5d0b9ede36f216f57163a1868b69d9d9a2d5e033f0e8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3785.mp4",
+      "sha256": "8c633a6d7187b42914da63debbde3eb2ea660d12748944f261c3a460673e9b26"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3786.mp4",
+      "sha256": "34aee0477e265dffd04cbb4d9983ceaf321a8599c1e3fe0c43f5e8e71be56159"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3787.mp4",
+      "sha256": "4b6f7ea819da0d622bac359180cf74084ca6ffbe70492c35a3db6334376860d4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3788.mp4",
+      "sha256": "6b28ec46103695dd3c0ed72b0ceff17f6f8a669393437e6b31626af933196259"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3789.mp4",
+      "sha256": "ccf86766ce45e3faa07d056ccdcbd83f622e594ff2a70a6160ddffbacddafc17"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video379.mp4",
+      "sha256": "ba4a078c64c61dd1229ddb03435cc5d2754809ec8250d879de16ecaf00564422"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3790.mp4",
+      "sha256": "35f661a35466c64366e55d168d2868f717171272f05cac0b243882c217c8657f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3791.mp4",
+      "sha256": "463b500422a1c69730f50ee428aa0aaaff06a93e3502f57a11bc6b117f5f578f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3792.mp4",
+      "sha256": "de20d579db964d796a8722b4b38620581912f33518cf3c5409deb2066328cc54"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3793.mp4",
+      "sha256": "82d545874b072e130d21223da99c4179514a119f84d35a3a5a6932d46e6b0148"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3794.mp4",
+      "sha256": "08576cb50ff9b893ac7d66b831f348af00ab4e20f2cc6f93034095b752382c92"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3795.mp4",
+      "sha256": "310f06288c5613e7a59368aaad1c355aea431c63679294d2ee6ff96b197e8b56"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3796.mp4",
+      "sha256": "758031d1ce997f4afec91cba23739c5e73f284c9ea37c3ea266894428f81d58f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3797.mp4",
+      "sha256": "b8276f9fcdf4ebc0a1506ef2d17e2045a16534d211f762f9f62e8580d9c9aa91"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3798.mp4",
+      "sha256": "750e8675a612eb29de6be38d22020907e6f9717e1aba3998a3585de55267779b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3799.mp4",
+      "sha256": "bb0c2c07aa40594147556310a5bd2ab7a918fc1f357ce9dbab6292eaeefe6e29"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video38.mp4",
+      "sha256": "766cf16e9af2f4f7d71a35a575548541e612ec0f86031747680709f9e17b1ee2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video380.mp4",
+      "sha256": "ef88d45ab75b831c066c663c5bdcf74e71166b7a569ccf5a71a815299dcde887"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3800.mp4",
+      "sha256": "f7f2d111ddb8fed3cf89711497bd1710d39f9e4048fc523b7f88c29752f7f7cf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3801.mp4",
+      "sha256": "aa75dcb1898b080aa677465cccc4af9ea101b91f138ace4204d72dcb2ecdd199"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3802.mp4",
+      "sha256": "ec5d8f515b846a6bbee7c074d94ede51d2761f88a38a21f90d3fbe9b7b3e3482"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3803.mp4",
+      "sha256": "5a213e88b8484bd1d59a3891ce19c76fe6c10ebd94131a6af9128b85eabed143"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3804.mp4",
+      "sha256": "0a71ccfb0c8341767b6ed50fe13e92eab05c2ecda9e5b6ae2902316ed5602e4f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3805.mp4",
+      "sha256": "df4d16ebea0a08c4fefaed4524d13b64eb4c4281ef60ca5ddab7796f2d474f18"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3806.mp4",
+      "sha256": "34933061890fd3e80e35744c7656adcae9d6da52858a18c19d4dd707a396ae4b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3807.mp4",
+      "sha256": "21957bf76bb8c9dc9f88a053c3c8fbe02e7a326f9b43a9e76f56caf751f228b5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3808.mp4",
+      "sha256": "f21c77da38178a16d8346cf4611ab175480959ab400e32f4a44fdf56adf21a67"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3809.mp4",
+      "sha256": "fe171504560f131c49dc9d78935a2e7e21f546b1f190c5d5ad144fdcc56c3fa5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video381.mp4",
+      "sha256": "d67b913cd54eadade049609e819e71191bdbbfde12dad1dceee7198835fb72c8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3810.mp4",
+      "sha256": "7ace9ae3c294a8a9796f3fe0f7c3b26650dedc7fa58ebdf500186f49467e4cf1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3811.mp4",
+      "sha256": "8aa32c5d3770a332bab7f2357b2da9a2c754b37037d31e5a067923fbd0277004"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3812.mp4",
+      "sha256": "32d190957d54ccd44f1953d430b721f05ae0ab00b99e2acad359062276a6e4c7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3813.mp4",
+      "sha256": "ad65647c574548da0ae6c117d66f23602d9ec6db269de046e6a79043ba267937"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3814.mp4",
+      "sha256": "514a32f194d6b12b53701837bf7b5866e915ed2b1268396c65fc98c349c8de18"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3815.mp4",
+      "sha256": "d7a9f1eaa6363cf4612fc67544161b25af4552a8d85fe81c184004d10311d9e9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3816.mp4",
+      "sha256": "151274ca1808cecab3d450cc10890205b2ac31dd61c8047eb6fa292b5f357c3a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3817.mp4",
+      "sha256": "15e778ccffd2db2ca1de96896a1a2703418407e6a106682352db3345146bef3e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3818.mp4",
+      "sha256": "ec5d28c43d4c3ccafa7ac4f1b71f83b9c776a920e1dd4efb705dbcb0b469ae4f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3819.mp4",
+      "sha256": "ab460f171895365382a7759c8657ee43c75284ed860964311f27a9d5f57859e2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video382.mp4",
+      "sha256": "c6ee62ad01cb8f0eb9c3b74a8bb4de203aa7c54635c90efa5a3b8eb5bd0b197c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3820.mp4",
+      "sha256": "2e0308ebecddf719f877b10c07dfc65761edca128c163b857bf2e53adad38324"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3821.mp4",
+      "sha256": "601128344f9402f8953beacb6693d990a2a17c2eef216388646331c0504393e3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3822.mp4",
+      "sha256": "85806bcf1e63390ea0d3d90b8bacd005b6eece4683bed15f1db952dd49d0dfe7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3823.mp4",
+      "sha256": "257258f91d91eb942b9353187860dfe880d7dc344f75c7ebd6f941862e19a9ad"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3824.mp4",
+      "sha256": "94a599c4b568490a1eb09bc87bc10bd2a1df3ee19d7ba9c3693310d9b447db0e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3825.mp4",
+      "sha256": "438276f1d15915a37fcc605fe4fc22085e4dd3135d9931b1d1ab765f9543388f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3826.mp4",
+      "sha256": "a62f3b3285e44cc207485009dd0abf4a244035e1b5a975c1ea0043c5a3e2a9e3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3827.mp4",
+      "sha256": "1f2756b1dce02ba70366de7b41fd0ca8b4a1b321f73159bfdc5c6a090039a1a7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3828.mp4",
+      "sha256": "f6f33d7787b0dde933615ee1077e9ff7bd4fdd0960dadaa54532a32c30fd3594"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3829.mp4",
+      "sha256": "12b52214609e0250d1477eb74c08d9b8ac937600da7ec0d8e442d5ae98643adb"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video383.mp4",
+      "sha256": "b929ef21c2fc23668390421d0593c8880541431e1f586c37a6020aac6c95124c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3830.mp4",
+      "sha256": "8fa83bd78e26ca42f01a0f980f0ddd50381a8c0050c070336ec7ed41f5f0bb8b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3831.mp4",
+      "sha256": "3c5639daba1e4301e8c4918b193e64bae2c5a0b6c9cb0dfda11f3ecbc78c9151"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3832.mp4",
+      "sha256": "7b6ff068690f09db715fefae98d7ecaa1ccea7e0cbe89c4a36954941c0581ae9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3833.mp4",
+      "sha256": "3f689724b5d068a992c1cf91594dc594ee41c23afd723c30dead45d211388946"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3834.mp4",
+      "sha256": "ae428b46c132945931eac7f3def69530d0835d00430bdccabadbf438dc6563aa"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3835.mp4",
+      "sha256": "c79e6d6ce0da9205dfc6f08f5ab8ef6acff1b07e0723099f270d26f25131675c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3836.mp4",
+      "sha256": "5b0e0b39a3bdd459bdf70917c01d8cba9db39e23ca7c94eb144730eaf31e1825"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3837.mp4",
+      "sha256": "9beb9203dc2f3fe6136ef7c424d82aa78d8c6bd68867d3db7c3b199a8492a5d1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3838.mp4",
+      "sha256": "a3283e0375d5ab81134177590ae04e0731388bfab62a8ff25b116ce4c2f793e4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3839.mp4",
+      "sha256": "f22f8e5282b953aabcfc9eebba80dd9ecf3bcf77ed7dafb21145ed38213b292e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video384.mp4",
+      "sha256": "8a217cdcbfca775cf7519c5c6bdc6ef7f5738693d794cca5065080fd07b5ac57"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3840.mp4",
+      "sha256": "e48931e765c79ff44a24300065651ea9395576f73bc526a5994bd516bb32ab6b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3841.mp4",
+      "sha256": "f9c6dc7b836c2aa709c77357b013ea16360c6cff590305382618e0f5e8ef342f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3842.mp4",
+      "sha256": "53412735942067b4aa6f951af5932336888d5f274e24b8da01f3eef54212aa2a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3843.mp4",
+      "sha256": "6dac3de902f897d52b88d1546413788c9699276cdd6cbcaf758f5a8119eab4b0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3844.mp4",
+      "sha256": "e30ea472047fafabb9e119588cdb1be0bc18835872b7e271733c9afbdcea0fcf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3845.mp4",
+      "sha256": "3c1f5a985876125eea9c3ca05185da0753dd8b12841aa15e663fc4ca8b3de5ed"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3846.mp4",
+      "sha256": "20d4c2965aa2dbb7ad91022490630b362b5799f7d04c32f12f0c3d6d114d6636"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3847.mp4",
+      "sha256": "98985956ea0e9958da9cd55a19bd2b5b4359a91dedcb322b8769336740e184f9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3848.mp4",
+      "sha256": "c8cff430106712728050121ba69f80823da8b102bcdad03c7ec227d168fe6652"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3849.mp4",
+      "sha256": "cd1604e4c5f86adcf9f05c00e38a116efef47be508c768e1455582dcd8539b41"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video385.mp4",
+      "sha256": "d7848bb454f2244184fcb7c86442ef64d09f992974e6f90eecb21fc5990773a6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3850.mp4",
+      "sha256": "d2d16aecf01b05524592c7a924058a9555fbab9c0d918a8ca0acde0286b5d92e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3851.mp4",
+      "sha256": "7ffdde58bb95872cc53a5cf752837fd3897879b069f111af97b6b970c1234fcf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3852.mp4",
+      "sha256": "a4dc2eab1834209e78d8eedc0b41933521d110b78c3004f1f5209882175d2e6c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3853.mp4",
+      "sha256": "3b7e57b13ef9a10f995ef94d412d1289e4e28511c5c825935dd13bb8e07f473e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3854.mp4",
+      "sha256": "8d71c83157ded90c64817386c66e0e91c1090206d703c222f36ab5c42b50a783"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3855.mp4",
+      "sha256": "fd4445d9481df71d128213a15b876ebff689417655a44a3a35de7d528bc91f31"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3856.mp4",
+      "sha256": "4ac00d04caffacae56b87742047449ecad2bf431c79b826c744d93a71048a2fd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3857.mp4",
+      "sha256": "31489c00737123fae8128d71c349b52dd9e4e61d8aceed5a2e3aef9e0023e849"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3858.mp4",
+      "sha256": "2c1a90dfdd87d89df3de79dde2debf03f18adde7f99dccc6a5f5c95e1f065af6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3859.mp4",
+      "sha256": "c996783ed49bf692301f59730b99b3f1584846d2fa51a9866e6e745338155e76"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video386.mp4",
+      "sha256": "ad64e25e5cb347d7f56ecb135fcb8fa75b8ebe5ba034e00006f4a124b8ba02c4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3860.mp4",
+      "sha256": "58a192c7ba3283b703d42961b1aa63afef44eba53dc9b433f74fec620fa32c91"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3861.mp4",
+      "sha256": "d5f3c4839b34e776db8c50efedeba49f77a29ea2264a17d8597e5cbfce4db07f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3862.mp4",
+      "sha256": "5d3a92bb59d57cbfcfb470cb09e3b0edb5fc49a8072c2ab70de6bfe4c3e03e5d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3863.mp4",
+      "sha256": "c2d2f0e98de1fa5e96b8486bf8600e72e9f047aec3aa2e318fbabfcc85858537"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3864.mp4",
+      "sha256": "85f8608e87d40fe5b0be39b81c3994a9db1fa65714924b9d4162374f1bd5ef82"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3865.mp4",
+      "sha256": "eeaff145c27b3103e7b681e540f75080f4678c46a4e8e4209dbe2122d6195bce"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3866.mp4",
+      "sha256": "7812bb1b1f3022d8a5f5ee5d13fece361e337db1fbaf4ebc80952a98688a9add"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3867.mp4",
+      "sha256": "2070fe87d9d5c9c4a11100d9fd596554be39a75f395e23c55c342272982ae34d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3868.mp4",
+      "sha256": "aec05e1becc647f3d8b3d2a104e5dd8bc3538476933289504e69dce1d08a11ea"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3869.mp4",
+      "sha256": "9be138131ec249babcb51beaeec2412ccbe1a9b64118d6be11839fd2675ceced"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video387.mp4",
+      "sha256": "376a1dc691a4c63fd072bb649dbe49ad1bbd0e297ce0daf711ccfa27e2436208"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3870.mp4",
+      "sha256": "801ed64de1b177d050a6acc523abfc103cd2d371cd4331f18dfaf540215837a4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3871.mp4",
+      "sha256": "184ebabb967652a4e060dda073e2a198c69658fc94af76bcb54204e356cd0767"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3872.mp4",
+      "sha256": "7268f6472e78b7ffacd35d8853be29e5cca33b9684657d8caf4ec3226b85ac31"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3873.mp4",
+      "sha256": "a37ff3ffb1245ad0f530103ef9ae585e9ebc8bcb52895e29e880e3a2d77987bd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3874.mp4",
+      "sha256": "9a4075e09f496123b951b15e826535c173adfb982ec7a7a70ab19cd8a652e42b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3875.mp4",
+      "sha256": "abf9fe8af32e22a60cc5c96d6cf556cbb20f1902f24bcf3bcc2adf93040c9d36"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3876.mp4",
+      "sha256": "e83c1bb2ae566d1ee71356b617cbae94dc8b75bf51a76cd0247eb224602e2a40"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3877.mp4",
+      "sha256": "751908fd4f59bb7fbd9de681a6611244e194dde642e90c1fac1697e4a2e27535"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3878.mp4",
+      "sha256": "886c51a32467a4fd9e6b43b1c2362f97f6860af2373a4f604f09f92cc9498a5f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3879.mp4",
+      "sha256": "555519c6a7bcc1fec3da80118298798e64c30ad2929381c0fdfaebd353396c5d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video388.mp4",
+      "sha256": "7518d5106cee5102cff5eccc6b9dec48e7a6029d75fba538325d978b07551a5b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3880.mp4",
+      "sha256": "2fabcfe2c6c715f1876dfc15272274df0ec2f5e468af858d6dac445d66349298"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3881.mp4",
+      "sha256": "7b19224960c36ca9dcc9fdaa6d3b6a8f447559f0fa8b903232658baed734eb87"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3882.mp4",
+      "sha256": "a9743f32eae43577fda61476fa6443c9b5dda5de56c52094892bc53874b98c93"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3883.mp4",
+      "sha256": "be0d804756e8927b53a38f3beaba0ab02233e2021a4bd43c50e3a0570f7416c9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3884.mp4",
+      "sha256": "71d701b1f545d48e0b8d246bd749db8a7d77f071f4e4e7326a521b83921f649a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3885.mp4",
+      "sha256": "48f0aac38b40a4f2015df9d9670da0dc0a893141b95dbc1ea6482b26e1a9b7a1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3886.mp4",
+      "sha256": "3035027035a391c84fab1bea2af05aaf0887db1b7b1c555b334ff495e4374abd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3887.mp4",
+      "sha256": "67334b8aff19a02022aa945279c1f421111ac2abb3f12d04aad7c4081da6a064"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3888.mp4",
+      "sha256": "c65aad8f782407e873f5234f556e845e057023e639c1120062bbe2aa1c11b788"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3889.mp4",
+      "sha256": "23095bb274f305baadabe50ad54ce9eeacc5b5aa4f4f42cbc1929d2ce6ceaa19"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video389.mp4",
+      "sha256": "86673c8fd70a92b8b63c06d23fe716e6167de23534d8aa8c47c0b08fd6db15ba"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3890.mp4",
+      "sha256": "97567d5b3c9fecdb3862aac4a25d96568291ec07c302931599656cfdff51a835"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3891.mp4",
+      "sha256": "eb1b0e61bf9633c6cf4893af9eaff0033667326839cb502d992f3d29a1247f7e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3892.mp4",
+      "sha256": "eafb86a4df87374756adc108e88750bfda6f7512e94cb2a72bc003035f7b6d4e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3893.mp4",
+      "sha256": "5ba6d5c53fbe1d165fc46c9a129486485098984394c272d54490d9d4ab746b7b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3894.mp4",
+      "sha256": "3ac3963806ef36fc883b3471b7e49bf9b60bbc1ade971188cccaef8bd4d388ea"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3895.mp4",
+      "sha256": "def14a29200ec88b3b755322385e2698ea819ddb48edb6ea9dfe5da87949cfbe"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3896.mp4",
+      "sha256": "7a13a301e3010b725e26142f3c43978fff4a961acabff9f39c868ce44653be78"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3897.mp4",
+      "sha256": "722a032d8b669ce8fae69ed21120df4ebc90ba9b63ac0ca4c86e5277b100fb27"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3898.mp4",
+      "sha256": "99305088e60c4712961f446b055803f2d32ee0b48d9288f8b140f568976e1761"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3899.mp4",
+      "sha256": "127acc81d1f18db41e650d787ccfadbeb9e9c30a79a0b464669d0dca3f66aa16"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video39.mp4",
+      "sha256": "b9605f5c25237d793dae5e63bae12b8d7ce0425c17457faf86ed6eaa54415bce"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video390.mp4",
+      "sha256": "37300171815a642262b2f2861013d145fb08a4a628e1f1bb5803d22b717eb76b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3900.mp4",
+      "sha256": "682b1474910cdcfb619f3532782ed43b052523cfbf49ccd7558da8b5a42995bc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3901.mp4",
+      "sha256": "75a4d524508bc480e44511eea5520f0b1d1bc6974dfe3d72b6f6dd6134bbc607"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3902.mp4",
+      "sha256": "0ed29f97249ab469f0b5c54e78c38a3dbd45c0c85cfab64a5353497a24a0ee36"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3903.mp4",
+      "sha256": "7dd2ac07f022b1b88c155dbfed6970e9f3f687544d07b72ad78a2b1eae5b8c9b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3904.mp4",
+      "sha256": "75874173b6282e0a98c78d7381242cc17436b65d184fe578ea182643378fbf29"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3905.mp4",
+      "sha256": "bac57d5dd441f0168f591a1e5b381e560e2941ad369727f6cad1558ae7ff6167"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3906.mp4",
+      "sha256": "e45de84626692faaafb44413e35e32354be9d7e03765c43682224b83cc8e9889"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3907.mp4",
+      "sha256": "a5d4480a822512e56ae991a21bd84376f696e9e9a813ac520b15a3239a99a9b3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3908.mp4",
+      "sha256": "08cb207e18a4aae11d046fafd75281b04ba19481342953a41b2db403f457df8b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3909.mp4",
+      "sha256": "8fc30eeb73962036600f448c071d8aaf74b1f69e112b5a90cf05dd9d4f68ddfa"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video391.mp4",
+      "sha256": "929a514b3fd18a9e8c23834b1892eaf93034b6af75276d7693921337739de6ef"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3910.mp4",
+      "sha256": "9e36a9529e6c9e4b080a4800ef3d6b43cdb7c95f4ff93051f578f39cd93144bc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3911.mp4",
+      "sha256": "aa6c3d82541a9603f4d855900ef495588a849b49b54a416cea731144cd270926"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3912.mp4",
+      "sha256": "e4256af2f87e6f50e0692ed230efdcf24e220b21876a4b52dbb19eb7705b8688"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3913.mp4",
+      "sha256": "92e7b3ecef9b492980a11aef63a88482d9d8c978c48da12336f2fa621b68ef7e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3914.mp4",
+      "sha256": "4a12eb129b121adbc0898b65de8236d9b51c088184b2101d3e47726425ec0be4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3915.mp4",
+      "sha256": "5aad423d939fa37e6a12b754056bbf5cb4fcc65beac24d809d468f090dea408d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3916.mp4",
+      "sha256": "eb2d92fbfe58888968bca7f0f76b4ef1c89c6bf54b551e9f16319e875a299cfa"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3917.mp4",
+      "sha256": "6b6b57004d3909afe599bf375a81ad019e1c5f793c9c8c60bc089b6094ebd3fd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3918.mp4",
+      "sha256": "30916ba29695f1b735e1c019455a7ea87ba34841a9f4b56c28795b1b4bbd635b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3919.mp4",
+      "sha256": "dd9d357a4a2ab25e8afa3718d8d8c48dea8e608740afd2d8bcdcd1b5b61fe152"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video392.mp4",
+      "sha256": "3b97b0df3e13814fe7bd4f632e32a5e34a6c902b16988ff1284ab978da69c459"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3920.mp4",
+      "sha256": "9cd61c53821d9dbeb7e97efefddf826e86dedc1cba0807b68560db6ec38a08ba"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3921.mp4",
+      "sha256": "ef40c47a342e453a4ce227364bed4c68e07ce57ce4cbd52fd935710e3680194b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3922.mp4",
+      "sha256": "35b86ebf9993924a80051cbbf70da8dbd8a433ea94c5ec95c813c6e6a604914f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3923.mp4",
+      "sha256": "a6bbfb650d4e72d6c72d8873558fdba03f26acabccd44daff9636e1cd70f48b7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3924.mp4",
+      "sha256": "87e7ef08b5635286b792da38344b89cbeea7610cf6b851d1c8fab3c416921ccd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3925.mp4",
+      "sha256": "54931e8aebdd3148394c40b7ec42dad3d865ed4031b7c97e6eb513545e34d530"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3926.mp4",
+      "sha256": "cf77ff920dac7c0be62411ce1949402317e41550ce5aecf64d4f6ac67ab53eb1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3927.mp4",
+      "sha256": "c62b1110776bdf6474cb972f96e5c55325a1957a761b9bce18c8832e03d682d3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3928.mp4",
+      "sha256": "d811307a9ca2fbb972fb71ba91f3ff22d54aac6456d1f68052b8e2801ceea31c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3929.mp4",
+      "sha256": "68a3125e8b6d82e9eaf623cbf20d8c398a90ebffb2c7604e178c9eeab78cefc3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video393.mp4",
+      "sha256": "219907b3014a703d0c5766442888e4526570d4cdb950eeeec8e4af3de00c4123"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3930.mp4",
+      "sha256": "8a474a7feeeea87b522e51663bc3b8d9f921778e1396fc9094cf6266f28912fc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3931.mp4",
+      "sha256": "33f79540dc8705aaa7c912176bc757fe23d255cb464f3e3517c5eaa7bae3d332"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3932.mp4",
+      "sha256": "72e37b9f16e1dd96b265da7739d6834564474ebd4033ba7789cfb42e0f7cc765"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3933.mp4",
+      "sha256": "cc39f786bf69b388ef00475c9dfe3e37b4fde0488a6a642d7ac0cad09abc3d4c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3934.mp4",
+      "sha256": "d25eb2c6cb19af6ec622a2e4fae2a889cd2566e65aa9ba6a3f228d5035596e23"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3935.mp4",
+      "sha256": "48c14caed65012e3f23c4a919a857b63adf56808506c30335c0d58745bce682a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3936.mp4",
+      "sha256": "cf4dc539422565b3cdcd2a5293fd5d0d3f9ef6c0d7ede314856b990cbdbe5ebf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3937.mp4",
+      "sha256": "1bea0a8fe76de03691e0b61d69295dadf224e290f2e0ee8a247ee1daacffb0dd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3938.mp4",
+      "sha256": "14886ddc6fcd6bb8dfe8f154702b4d3f2c32ead71a458a372b07a42750255409"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3939.mp4",
+      "sha256": "31e09881207e1050094ee41d4245e1d6058ade59d3fce18babeae265320738fe"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video394.mp4",
+      "sha256": "7e30c495b0dc75067b02b76674fa24aeaa0ad72e3d9af2e40eed47b02d02483b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3940.mp4",
+      "sha256": "ad7bc2f47e3f4f9e30ae64d531e44a6b08d4628709bd5adf4395eb267c6ae376"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3941.mp4",
+      "sha256": "3ee71252facbeb276f625da06658730ee45302803b69418a9b9315322bf0d4b7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3942.mp4",
+      "sha256": "1238a89ae2ee9aa409dee6cda2867c7d31c27386ed1d699a74bfc03eaf03eb4d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3943.mp4",
+      "sha256": "b302e2078fe25492f7568565dceb5a5af2930a5ecc86ae5da547db9b7268fbe5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3944.mp4",
+      "sha256": "cdcada0a4e3e063e6c781084e227c8c04e283e31386a9ac3d2b46f521dfde9eb"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3945.mp4",
+      "sha256": "ef82db620e6696b43e5885db5ce7925906b510ebd7d051a9120c908e4b85823d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3946.mp4",
+      "sha256": "d31da417a121c43273172103ccb43cf2e9f579a4210d5371bcfd77dc3ff6531c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3947.mp4",
+      "sha256": "5dfd67d4ac30dcdeba3c1b64c4e206b67944eadd96d941bb63da43bc26c5b7a6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3948.mp4",
+      "sha256": "40804af87c89d550c9756ddce2a5645a6cefb8b47b39dc20447e15d190c11861"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3949.mp4",
+      "sha256": "f83fb7fd43bd2a0c3d6fad37606d7c4eaeb68d38e5bf5e0e70fe3e8e0bd1ac56"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video395.mp4",
+      "sha256": "2e8f9737e538aadf23098133777fc225b7f1fc68196bfd9bb23b7ed885fe61cf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3950.mp4",
+      "sha256": "84a252fe0dbea8a8865c05b798014ca8b20b278b1d2faf048c12deaad84b8ecd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3951.mp4",
+      "sha256": "e7c176e9734aaf44c622b93a33f2a80304fb7b01b04972b0e204e77296b66d70"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3952.mp4",
+      "sha256": "88e4e227a01157e13d6701ba89f350593fe2345d1481e1a3a7719785baa4a1f1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3953.mp4",
+      "sha256": "5c5484d506dedaee9835b51cd04e0db7f35582e4568b850e368e58af33183e71"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3954.mp4",
+      "sha256": "bddf632d11d27d02c002553ba0b71b31ea3d0b255f2567638b8c4bc6a5c9e088"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3955.mp4",
+      "sha256": "042b7f238247fb918705e15598b4a1b1c2870cf49aa7a6135b72b352adcf984d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3956.mp4",
+      "sha256": "40b53cb6fee64e296544af0747806ed922c1d944630a8fab97dc1592d7d1a6fa"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3957.mp4",
+      "sha256": "9e70ce961280c4b4c928f63f1de8455019e2d8ff05c5109e0c267959015063e2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3958.mp4",
+      "sha256": "80158e984a573407864f2b10a268027f453fd4f5db0aa83633a24afc4330047a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3959.mp4",
+      "sha256": "124c219c2fda9077c204676c2fa5ba7bdbaa5c0b6911f8b443d9c02cf312aaa1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video396.mp4",
+      "sha256": "2ea04302b0c38e5b294684f2a8d8fd70654b963a6cd91ae816fcba63e79c35fd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3960.mp4",
+      "sha256": "78a7997e4faa1fa7f36158db0b48a8b1e6276233b1ccfeaa9465ccc8a2b7cf80"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3961.mp4",
+      "sha256": "b984ed7c2fc30991e2ceb2065f1265cd8f96a3fe684c0ec4ef339c7ce9fc21a5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3962.mp4",
+      "sha256": "38b634e68efac0511a509be43a36f1fdecc268cfbaf7db78699b9c0a6080b9ab"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3963.mp4",
+      "sha256": "126523266038770862408d2bc2107c5484e1dc3d72d8c1a4e0bf1caf38aa3d73"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3964.mp4",
+      "sha256": "9ab7881b06f8cab8cb391f9db0aabbed45374228d584392234c82e89eead50c6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3965.mp4",
+      "sha256": "5e09eb8219470414f9d5b3226c605a2f8a1804d45f22b2d59b2f303ab993777f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3966.mp4",
+      "sha256": "20f9b6931f2b58e391a965e658c6a2e4c919dbb8fbac630c850858a4e17c12f2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3967.mp4",
+      "sha256": "03abfe41b09f0c39491087603136a063efda15460367feb6c7fc53ee7f5f4ffa"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3968.mp4",
+      "sha256": "9be1d0c0fab1544fb8003374fd62ae8c3b2b67bbf4748b1036ab4641a61fa6c5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3969.mp4",
+      "sha256": "4e5a65c2769f0b2a56d12b6b2bac51b9728002881b520305a220cab41690fcca"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video397.mp4",
+      "sha256": "f1316ef6c00176fb13ff578a96b9c09f6dd5fca5319115fe9f53fea8ccb06cbd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3970.mp4",
+      "sha256": "e4b64403af199eaaac56831d40025e448bf161deb6285790b6ba253ea63957db"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3971.mp4",
+      "sha256": "7d5de0871b152e020746885e2c6f29912f3945965dcd641385f5df51f130840b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3972.mp4",
+      "sha256": "ae7b955dd8a5ce2278d21f6b40cdbf33b7f6353b84d47ab60ddb716d050755bc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3973.mp4",
+      "sha256": "6f674dfaf0e8c9eeb4db7502461b03145d4e851368b737729aa31fe70733dc58"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3974.mp4",
+      "sha256": "2c19ba7eb5350739c73863ad3e937d3c4f750d87daed2effbaff25b4fd4f71a8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3975.mp4",
+      "sha256": "b38f27455ebf4b421dea31e799213f2c5551dd04c060bb01a0ae8b57e2605d64"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3976.mp4",
+      "sha256": "f41f5939a9729250b64d39c4b1d7e68891dfc7e1be8feac527a94f785e7372a4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3977.mp4",
+      "sha256": "03ea21657aa7054362551585d1d70f4e73802b17f134970bf9c586f357a2f4c9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3978.mp4",
+      "sha256": "51fdcbb7cf0ba7f247aff815d7aff35ed498ccb1c3834e11bd65a4080b980a50"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3979.mp4",
+      "sha256": "3cb1a24c5b2951115af029ceb582c0bd759ea9606261d4acc8e800aaaebc7cca"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video398.mp4",
+      "sha256": "4ca97c641296e5480b06e0ee7cb33508c7b53f297a00c80629cbd466b4ae8246"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3980.mp4",
+      "sha256": "8eceebba47e8e46e926ec850215bcb7a21649686dcc7aa4a50ae41d673a989b6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3981.mp4",
+      "sha256": "877f1b357433d99de325f787abb7fe61cca38a3938e003d8cdd34007a45a1c96"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3982.mp4",
+      "sha256": "ff60af717994d64379a1f25b4fc9f4e4885e70380a1c4f11c32693058b9b7125"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3983.mp4",
+      "sha256": "8edf92a10e751e9960f9fb34d845a3be58813a350aec76d0533efee60b77371a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3984.mp4",
+      "sha256": "9ee29121d42907206b08acad78023d29171b99afedf6b441211d27e3b68d8a82"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3985.mp4",
+      "sha256": "32d95a8e28c0cc19336d53b32083dcf0e127c07974e120800441a10b64fe5428"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3986.mp4",
+      "sha256": "29313c9156de58779f9d66d8129810cd40ae7044bc3fc82749a48f50d957e80e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3987.mp4",
+      "sha256": "874a7dc87e99124394c08792ab0abd52c3d77c3490912cf6cb044ace449b3991"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3988.mp4",
+      "sha256": "aaf0cb5467c7097c498f0db3a555a9170d01a242f87b859decb94a08577e54a3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3989.mp4",
+      "sha256": "129269eea760927b7a86cea3bc529e1ff14f0ece0dd786115f6c8e66d18405de"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video399.mp4",
+      "sha256": "95667654d111101c69a4c7f54959a116416f088c994e5cf32ece13a3071aa077"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3990.mp4",
+      "sha256": "96513f705b4417f509be4c375ad92edd04975fb83886aefa061ee7460ea93b19"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3991.mp4",
+      "sha256": "aaf04e80dda1ceb079f0819e4b4c460ea8d6b6692d7566a30222b8fd1834206b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3992.mp4",
+      "sha256": "995ed24ef330b22a89a50d9c3a877039c16413966d8358a762b7f4faaacc3cc8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3993.mp4",
+      "sha256": "3c8c9014f5289f9a98c8d35448b49e97726b2b879522f6c6b4dd233aebb26621"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3994.mp4",
+      "sha256": "36fbd1ee39497c7b18a92550889e68a978a80ad1cf36edc2cadb4c49df57db25"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3995.mp4",
+      "sha256": "592b08742e277fe4973e2bbcad4c4eac2971e8d9acfb0068fb24fbd627a13384"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3996.mp4",
+      "sha256": "520033f9e5835bf4fa715547143acc0e916cc8af10c919c4cbe49bd72d85f0a0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3997.mp4",
+      "sha256": "c09f6f5abdf0d9da8ffc07b3a8727d5826fb93a58cdca1ca77b926fc27b399fe"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3998.mp4",
+      "sha256": "cd82960f1241eadb3188da56e8817ea5c03176b260345f121d1756e39388abb6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video3999.mp4",
+      "sha256": "ef4c40d55e70817e2fab9690dea2710ca6ea1ea66225037d3e31d007a969a702"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4.mp4",
+      "sha256": "cdade322d11458fe2d9df847982d79808e6dd8c8366a098a7f32dd7f901f1599"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video40.mp4",
+      "sha256": "219233f686802e3cdc8cd7b6a9fd543b1f30bd9257a11bbf37857c1e20b51ba9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video400.mp4",
+      "sha256": "6e55056ec03bbf60f2dc9965f8daf4e218564d911fdab51c6dcc5ced8a35966b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4000.mp4",
+      "sha256": "50f11344ba2d30379b5c8798c0889507d3056d9acc41696e84c8442bcb79690a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4001.mp4",
+      "sha256": "a34ac3dca779585cd053c022356d0b5d13438e7106731080c784ed2ab6962b8f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4002.mp4",
+      "sha256": "925a402e35fd0ca236abfbe33e4cf7c494402af6617e59051a8d2e8da735b8cb"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4003.mp4",
+      "sha256": "5374ae2e7c9b2f4096586e05ab04a01e11eaafb0fee3269b427802ea96f8d39a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4004.mp4",
+      "sha256": "ea78267049ebd098a5dfc8eab3dd3e84fbfb9eee1cdcd92aee432b77d26a9775"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4005.mp4",
+      "sha256": "0782831c800007e5dca5afa042b36ae8cc7ced195492f4ceb6418bedb083d8b8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4006.mp4",
+      "sha256": "c1866c4d300d13b91923848f1145a85003afd135ecd70933850c2c35d87b229f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4007.mp4",
+      "sha256": "3f35ffedc590bb9e078741c205edff3782a64aebe05a1d263858a27160d145ca"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4008.mp4",
+      "sha256": "a4f406eb8678c7b6f9c008f45feffa6e823e347026ee7392632dd06c300855e3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4009.mp4",
+      "sha256": "6daf5c472d58aef1e88a14e1f0b04d3fffb8ab7ca25aa95786cb8c8ffe087e92"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video401.mp4",
+      "sha256": "6c781f5ce7fe204eb6476174c61abcc018bf035e51ce5cd2e180bedcdce42dc1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4010.mp4",
+      "sha256": "200d200a6a8d5d6e5145f8d8b7ac650064b34ab33023339fb08456e3b41d9215"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4011.mp4",
+      "sha256": "70f0ab9cfda2aaddadfe64f146fed99e7b8fbfe05fa8bdd83bc4eb56c6ee4c27"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4012.mp4",
+      "sha256": "47988d4f7d7a6fa1ce5eca1f6030039b31d70623996ea40f6eab671f7aba52ef"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4013.mp4",
+      "sha256": "1614012a27d9f5df0db9fbf389c33c8892fe5bc0dfaaf8a083d81c7849b342cd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4014.mp4",
+      "sha256": "33171a715a5e746f8939ed7479617d3d3fdf903e7dc909d6ef38258d8b1dd0af"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4015.mp4",
+      "sha256": "2d8b638d4a71b9bb5a081a2a909f46178656d074fbf816757f5e1cbc83855eb3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4016.mp4",
+      "sha256": "7ed92010530ef64776957e67f51cc6ec13c8591eca2e8db5db5a413d85aea4c0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4017.mp4",
+      "sha256": "bf834a1edb4bd69586d74532d3117c88baff519eb2fbfb852c95b338d06dbcf9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4018.mp4",
+      "sha256": "df03b637bc0a2ce64c71fc78b37a770afe1c7a0582a221b8659a67f19cd4ce34"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4019.mp4",
+      "sha256": "dd1d60561d401dfaefeae3a282983e0a5528dc67f52a913e0573bd00501c0371"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video402.mp4",
+      "sha256": "ce8d8a7cd8be195a92733749573b7cd314d0c2bd768d5b274e94833157e24c82"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4020.mp4",
+      "sha256": "139ca35d815091d43cf724a19dc35cde0e026f6338a81ff570c58f28552c5649"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4021.mp4",
+      "sha256": "610339e8e747814fbc3e1bceb8d78afddb966303f0764933429df2f98b0a5080"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4022.mp4",
+      "sha256": "f866ab0486e5c58f1dc4e96aff6c958d12e13dc88b3caff121d95f4f0ae50924"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4023.mp4",
+      "sha256": "53b3206c3c7f41b7a1a51bbc95b500c2207005e328b466d656cd40647a9b3114"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4024.mp4",
+      "sha256": "e34f8c9d7ed8b3a0bb8035f587b24a4f470069aeccb5cc4edb878954a1e09c09"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4025.mp4",
+      "sha256": "6c9bea7dea619f595f8a5b988bc3f53c959c846a88d77124061f160ac0fb20a5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4026.mp4",
+      "sha256": "7400f8c32f08189a77b3fe6efb438433c9da2cf55abf9df39ec379f3d25b3b14"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4027.mp4",
+      "sha256": "aa42fc2f893dd11e64894aedad98f8cf11ca7dea20dbd393b4f01e65b4ec8a85"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4028.mp4",
+      "sha256": "1028865a095472f6ddc91539c96b5e35fb0296c44b54a84ad6155195092fe613"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4029.mp4",
+      "sha256": "f0628e3f39382ccd34d591b7c843e48985a553253c0183037e456fa609b0abb5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video403.mp4",
+      "sha256": "9984c27b27a286e80f527d468ef8d2fd42adc23508da1abc7f1fe949e0daad8c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4030.mp4",
+      "sha256": "5038626c1d6ad69b313d12ef4a0551c78320e32f1e019b081ebc929f10d9905b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4031.mp4",
+      "sha256": "d4f05dabc91426e9b65d8905057bb906072025d81af1f1fd80791fdd126446cb"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4032.mp4",
+      "sha256": "53408a880c6ca2cc6382e39fc4f6d8c041dcf4ad91c903b0fe19a305ce0c70f5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4033.mp4",
+      "sha256": "b9e7533cc8dd46f7628b74f9c316c1ec4b115e9e5de93575addb55bdbda50055"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4034.mp4",
+      "sha256": "a320abf55c7db57fb5aff6d1fd76cb8d7a11ccf16c2df9ad798de2e48b5ee63a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4035.mp4",
+      "sha256": "26d2bdd936db79dc9e223e10619f4bd1c89c62a6a3c4285c720e96f2bb6e8f56"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4036.mp4",
+      "sha256": "6e3c36701d7715487b1a7bebc0e9cd81e0cef001ee1287e3cac7681e3feb4471"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4037.mp4",
+      "sha256": "9fa89135577650ba2043f6c3c8c72cae0b8f2d77be3b77d2126f55c64e7ad53b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4038.mp4",
+      "sha256": "865de4c21e6ac1e6d12054105565dd0acb449c548c3fb5d6d12775d768e59d41"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4039.mp4",
+      "sha256": "2dc8f49bcb105bc4614acc5fa836022e75a72bbb1a30eb9c2de6b5441541e1c8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video404.mp4",
+      "sha256": "178437f69862b8dc85d4319eaff21ba5ef81b1c933314723fb12a13a639eaabe"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4040.mp4",
+      "sha256": "400217d476aae46e5a2425c1780f3b4ed472f62eea124bf52c3b40508c69fa36"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4041.mp4",
+      "sha256": "bc4fac677900df856ba6970d1e8eb66587d8771a6660bce898cd1b540caf591f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4042.mp4",
+      "sha256": "da79c7ff35fdc624b0485617c44c306fe6045bcf705f4a62bad441069d7c5a1b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4043.mp4",
+      "sha256": "f29ae750bd3d2dd187a67d5191ac9a9fd33c21b6b5ac4c66e195f778133d9397"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4044.mp4",
+      "sha256": "1f2cd1669222fc10b377f79d016b1f8d48e837ba02d7c7444770ffafa0f51b62"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4045.mp4",
+      "sha256": "9a3a278c83351d6c4b3c518e504fc4e823da20e900f00fa2bb8e4ac7dbe522d2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4046.mp4",
+      "sha256": "4d7967396594409dd94277572cb1544e221627f0fa284875599dc030492aa786"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4047.mp4",
+      "sha256": "7c98a3853d4d301d024890ccb0af3b0de97c9291add9b0846a285bed3101700d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4048.mp4",
+      "sha256": "646fdd413db0b744d72c85963547cd7216e6417331b88a2ee6cfe642e58c324d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4049.mp4",
+      "sha256": "60c79d2a3232751b66525a63cce5cb2debd1ed8b30c079b30dfbb43a302dbc7a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video405.mp4",
+      "sha256": "cbd47ab21dd04338676d3718aa539faaa26185839c56c06c2c3c7c1380f572f4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4050.mp4",
+      "sha256": "b17b2fc21979fafbfe28063d180f4010808d53e74c60a9afecc0d5e82d0617b3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4051.mp4",
+      "sha256": "68a06ff2b0c5c3d49ac1b25ae35d3b17a1141bc3393433ea1e8bcaeb122b72c6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4052.mp4",
+      "sha256": "b8548ed877b050b372daacdf19af0690c40f87eddf7e5a2e5ae7123f416fdd30"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4053.mp4",
+      "sha256": "cbcfd6466aacbc35a71af3c902d4e16f1e2649b6da361b1dafb7d0e5c3673eaf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4054.mp4",
+      "sha256": "2d6fd7e8cb21cb4e19a24d4b3a4ef50dd3975888fa4a731ad59b91b3f495a971"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4055.mp4",
+      "sha256": "ec6c9cddfe3e0f09191d0a2a12d023bdcca154bf3ab1383e03b76b8978cfaf10"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4056.mp4",
+      "sha256": "afd9217d9a864cdfba01509cd2975bb0b1e276fa28accce947830a616825c9f8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4057.mp4",
+      "sha256": "8cd78adad8dbc0737569912b5f5c800d9d3e43117e8cf263ba00dd0f217e29b9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4058.mp4",
+      "sha256": "60f69a0ec6a144662d7426593c90cfc9186dbc3312453fe317dec8d0629bacce"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4059.mp4",
+      "sha256": "22e941405b06465e83170e9ed91ed95c0c2ac6db65847e9b19c2a2119b29da08"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video406.mp4",
+      "sha256": "453c1d4c48ab717ef5b5ac53f237bb5a8d9edf4fac600ba73f2da00754e13b91"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4060.mp4",
+      "sha256": "9760b5075133ab9e557d6da0b45467f0ebece66ddb9370aca891a31981b792f7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4061.mp4",
+      "sha256": "01035f05f25e5a61555e52129d398da3afdfdade59e1d58a4cb8297f810cee4c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4062.mp4",
+      "sha256": "c4d27acca24f9103134a5832378de89bf5c723f2162956c2274a3a798804e8a7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4063.mp4",
+      "sha256": "7cbb02f7734b57badd4afb4cad8396322d5ebcd9a6ec449e2632121cd1ab3c0f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4064.mp4",
+      "sha256": "5d69ed376a2c267588ad7de82b137b81388c0df64becbe9ab57fe9d851771dc7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4065.mp4",
+      "sha256": "50bcb32fa6f07e0a189a5652a40284d39f29dd8e72845382521f522a1e11414c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4066.mp4",
+      "sha256": "13ddfa13b6d1d886f9ffcfb4e2a53fa8c2e0b3236f7aa281f337c5683ca9ce1a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4067.mp4",
+      "sha256": "e9d01829784e077289ad2be7949dfb30effefe813113235f400a5e04e34d0c6d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4068.mp4",
+      "sha256": "06b74a6e8afa37c8b0d2073ef4ef110c7929ab7591ffd34ffb9a8b48685ae6ba"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4069.mp4",
+      "sha256": "a6d2811184bb98a3310184e7e80c45542641d9d4b590fdb011939542ba099e19"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video407.mp4",
+      "sha256": "fcee017f5f768f0f239837e0f8d7ecef1e9ce91ecf69dcf35f3c5ef75133eeb4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4070.mp4",
+      "sha256": "979b556dcd19c9d537c27a969357e93fc6ab62ba4525b76cd735e4dfa5d73730"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4071.mp4",
+      "sha256": "7d1d63750e09e544a0486012e5d2f0eaf7d8a47772b2d61dc67d4052f5f91e13"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4072.mp4",
+      "sha256": "4cf90d0883fafd13f55591138a8a499ab1e1a89386fbe27d381fb7c9347d3b37"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4073.mp4",
+      "sha256": "b1e8f470c200c3767183e4af95bf64ecd5ebce8036ee031ee0649e5bf1ea9a18"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4074.mp4",
+      "sha256": "751a56638ca371d52fc810959ce0de79c02e424f5b98ed3544af9ab51f2ee7db"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4075.mp4",
+      "sha256": "8a06cc06df06c71a764c16c441f4bfacc64427e867f58234d5aa20cb081cddc1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4076.mp4",
+      "sha256": "f804bfa6059bb27abadb08d1fb3e9e7da6d4f425226316e32485d6cad23fb495"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4077.mp4",
+      "sha256": "7bd9431bac773022fb8f1fad6ead63076d42b7248fdf26c0622aff0d980e7a57"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4078.mp4",
+      "sha256": "af69e3bf9cfd8bb845e5449c5353b3ce3856bccb31571d756c2377bb15f8c105"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4079.mp4",
+      "sha256": "5ab8163f64c37bb4c74e955095b398b0aa167ae49c201eb8179735c276b5b1ff"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video408.mp4",
+      "sha256": "5b31838329c885856f11f7d2970ad1461c8f0656e5974158b98d3c40f6146c93"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4080.mp4",
+      "sha256": "2ae3da2bcf5ea435a65f955917be714932fcd62573197976ba53654d75c71987"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4081.mp4",
+      "sha256": "459b0704422da83e61129b6ee895011fa41f880de7633a7782745b5f1c740b69"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4082.mp4",
+      "sha256": "8b31f6ab11da221d35fffa55bfc81315b971b290f991be5ac30b0bad6e5579d0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4083.mp4",
+      "sha256": "d05b509782d52ae75f3b84fad4f4cdfd0572055b74b4c6e0c5a73f67331fcec6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4084.mp4",
+      "sha256": "205adf76fbb95ca230dc6404786027352a6eb937105a911e7cc50f3efa6e01cd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4085.mp4",
+      "sha256": "e0a2ea4a7fc9b0c8b1d2a2d9cf896ef67e7486ecb0b5cac1abac8603742ee321"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4086.mp4",
+      "sha256": "46ca09fd630f86d25ebd6ccba3b22ae37af91f47c306e965aed3018e0c0ef80b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4087.mp4",
+      "sha256": "9d988d7d6638e4136ec0649640b6969dac21dc9f0545ee6c51270d0a8c582984"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4088.mp4",
+      "sha256": "a51b8a9417c1d062948ea0ad273561ce564f487f5764a8b29514003240cf04af"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4089.mp4",
+      "sha256": "db707ccaa2e47df2311b8e19073fd4bf53055dc6744393a9828e62ee72677c3b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video409.mp4",
+      "sha256": "9e9854ede72c91ee9be2c3568dd8a6c6d44aa93928faafb27180d2b2cdea39a4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4090.mp4",
+      "sha256": "26dad6c3ac63c830b1ac2f374465111b7320edd6e9517bc89d145fc35660ca5d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4091.mp4",
+      "sha256": "b98dae1d6fb9f2afb598590ac4fa05a37abbd6791abfb0057c7d3533c7a5a303"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4092.mp4",
+      "sha256": "047b968e028aa18fe5acf01bb3376ab4089f70b76c85e800b468f6982e764208"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4093.mp4",
+      "sha256": "f83610f7bb71b58f99cd8f9ea8db717190e439f88e53c90afed90e77ca6115ea"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4094.mp4",
+      "sha256": "666aeaa2a49bc4834ab93ae34982448300554966b85b30d4dac975de84d226bc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4095.mp4",
+      "sha256": "9187497407ee334ba7ad96848a84e439ed308fcc6d07f22eab9f71e663b883d2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4096.mp4",
+      "sha256": "ccbe77ebd4c160f6185c417654e242e4f2ec449f78d69d9c4bad57a5df95b639"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4097.mp4",
+      "sha256": "17f4cf37a4ccffbd9c40eda610c0b0fd82175543f217f561b8d8152b492f7f61"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4098.mp4",
+      "sha256": "b8790d5fcaba5ade5495cbea628ef5797bc9c732fde8edc50d43cfe8391975cd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4099.mp4",
+      "sha256": "dc56553e8d85d446a1af3b4015a71d1da5c3cd033decb68907d72041c5921414"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video41.mp4",
+      "sha256": "894ee61468d6aba9f412410cd7dd6bfece21b3cfa673ed41a90c68578863a0fc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video410.mp4",
+      "sha256": "f1defafe363bca12097551deab1acd7407bb0a68ff1e2287a6fe1eee4a6d3a0e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4100.mp4",
+      "sha256": "40c2495453fada0bd9cd128118d698470f1f5be2a81b9439e0be80099fc79d03"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4101.mp4",
+      "sha256": "5e9e31f4aadbb3cff0775ef55529804edf423485b94e85b70dd3dca49ca5f00c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4102.mp4",
+      "sha256": "cca13321c55a66f3475aeb929e4ace1f47a17540a97f28cfdc5fc5f10ba923f6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4103.mp4",
+      "sha256": "f2575b4ca102c2b0acfa4d73d28ee6e0ab0a32af1c46ff682ac074e210572110"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4104.mp4",
+      "sha256": "c3972e6d2b215fa93b398ed5ee4c922618f565897fc5c8e516f2dfa1bc1def70"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4105.mp4",
+      "sha256": "b6ee905ce2fce647123da86ee24e4803f6a3c6a7d3dd4d7beb80a7773a775453"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4106.mp4",
+      "sha256": "b93e8670480ce15fb6054fcb92fab66fd896bfea8652fe589aec24e3b4c13630"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4107.mp4",
+      "sha256": "fa816d1c6b814a2abaa042fbcdd9fc4c65a34bba87219b298ad52005db73949b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4108.mp4",
+      "sha256": "f12738e8ea118247653620ee0816dd172b77816fc1d118ca1b28f653fc98d9ec"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4109.mp4",
+      "sha256": "e3a655039da4a55a694247ac7497dab8e4eabf0fb03a2e2d06246d81bdcf8c98"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video411.mp4",
+      "sha256": "1a061e88882c3f6d2a53ea182b64721f9727e769884c8c8f402535920555c1ed"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4110.mp4",
+      "sha256": "c55438a2e949a73d44cf1a1139b7de2fe0561d8a9ae17490a178092a2f0592d2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4111.mp4",
+      "sha256": "b21c53d60b34278bc86e4fc7db5a69ea585988ada5d945ad28e8ad0f6a2ff4df"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4112.mp4",
+      "sha256": "e4ebc3183f8d8f13a2491152c45ed08da0a7de46c9c0bceabe7802f5b24a4ac5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4113.mp4",
+      "sha256": "c7e5366ea1131b58c7ba726b5eff226223cb10d8a2a23438c1f3bb4df8a0847c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4114.mp4",
+      "sha256": "8751b778786faecd699e9f98670c7ffd669d54fab16628f3d5da671af164916a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4115.mp4",
+      "sha256": "739be39681d07d2be84520e8d710da818e23e7b03b2194dfee907ccac1a4bbaa"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4116.mp4",
+      "sha256": "bea25ca74a2ee707f925304b2bdce3cd5fbee219180cc043dc5abb6470dc536a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4117.mp4",
+      "sha256": "86d79eaab1cddf75d08f8c98102649b2b912f9dbe9b4924af2638bda55825754"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4118.mp4",
+      "sha256": "3ee410c408335059d8abea989bda7df24cdae0e8fcd00870eec6f155163c3708"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4119.mp4",
+      "sha256": "69d4298d72b11987684951d8a67b5f4eb4429c7c7ac608fbc9b067f23226fa9c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video412.mp4",
+      "sha256": "1038a51d87a7f16900262ab59dc2fb4785591b7bda8b95273a4fd376c6fdd06c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4120.mp4",
+      "sha256": "0a1d32a93aa4fd5cc52a2130af069a68c0a7d6910bca29446645e1321b81f34e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4121.mp4",
+      "sha256": "86460b800464c671d9254d4ff848a882b3c4db01eb9d546548e2c6a78d6100b3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4122.mp4",
+      "sha256": "e94e39a1919586da70f2b35e527c654f8d5cb555d734cc5256e349af3c7e8c00"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4123.mp4",
+      "sha256": "ad7aed4a737c4b33d5861c69179c089d409e7cc4a275e06ba866709c23c475b6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4124.mp4",
+      "sha256": "8af9cf35631f36a21a58700be8e9cd2ef752d0246cbd91d60d15ccee8b6fd4b5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4125.mp4",
+      "sha256": "7fede9fbdb69cf55f93a3c78c11794cdd12cda4850531d73702cd6fcd900f0b8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4126.mp4",
+      "sha256": "0decf9bfca98ddd6e2d6c9e9381031eeeef11b635286d67ffde42c9c0764eaf2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4127.mp4",
+      "sha256": "8dce88182ae103772a7c5b911d5cdd1d727f201f5eeaf615c5e40e9af8f1c4df"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4128.mp4",
+      "sha256": "ae4c7d2cf824ac8b91b9e5c5c4f16422183fc02e5185ea1c06576916eef6903f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4129.mp4",
+      "sha256": "0a963f264f7195963b49eb21f01813954f2f70ee8dbbcc3a6b98057d527b9fa4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video413.mp4",
+      "sha256": "0fa35ca628cde38a259c7bd2b9dd0cdeb4d4ec0fb7544142320768a13ee850b8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4130.mp4",
+      "sha256": "b3222ab8dd7b28106dc1c4334876825c847621a2cecc3cc1b39cfe2305336467"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4131.mp4",
+      "sha256": "2953d5590fe6b45674b8fec7e8e148e47b434225d28477514bdb7db4d4b9ba59"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4132.mp4",
+      "sha256": "2e81aff379cc438b404d9af45d41902fae80d956cc737eebe7b79024cca964b6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4133.mp4",
+      "sha256": "dcc472723f2916f55e0e481d6f690ee059d9932ac1474cf14bfca9f69822ce31"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4134.mp4",
+      "sha256": "fcc016315c15988e31222dc77aa5037ce0458b27cd478bc5529f11ae4bc6edf0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4135.mp4",
+      "sha256": "0cab043a6a99c4b36c699cc34646058e06653ad71ad1bb72cedec3a6e1c7178b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4136.mp4",
+      "sha256": "64e410b12161edae8ae7c73ac873ea2093263ded168cd86d1e29b3cea85bdfae"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4137.mp4",
+      "sha256": "a25f41b0a878c04648b04f56eb8f7e825d33232d4de70eed33e1445ade15fc4f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4138.mp4",
+      "sha256": "91ffe5839535e204ce0f4862f812aac9101e3f7b802f20eded42792b9de42cbb"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4139.mp4",
+      "sha256": "b7d25f484a998894c7767f2149624b2d3871b02dc2d36105668c29998b99bb76"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video414.mp4",
+      "sha256": "ad95ce91a3fa17b35a83d74300f55912d3355cbf752970279559054b9926bb72"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4140.mp4",
+      "sha256": "bdbf6ed20b1c90334ffb06805063c8ad52524a96c8a8eea1efb8b5b99468f6a0"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4141.mp4",
+      "sha256": "c6b73f899f4cd90d39122a810e76af0a40abe3514128ab85ebcf21f37f55e1ce"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4142.mp4",
+      "sha256": "242a8755b246b5a637fa34998b6c96b041ea3308e204efbd7016fd60b1e3d45f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4143.mp4",
+      "sha256": "a5eedeafec5bbf6cdc9de6b34b71301df6763d4baada002ab2d5787931305764"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4144.mp4",
+      "sha256": "821291f35d0d6c783c031a9f655ac91e248957f96db76908c99db16f02fd1124"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4145.mp4",
+      "sha256": "651983fddf85f08598294749abe3e327d6424518844cbb90ed24437a3c57de86"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4146.mp4",
+      "sha256": "2ef3944e40746aaa4c2fb2e73341252dcd2b041afbeab2a56f23df30eeb37d35"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4147.mp4",
+      "sha256": "b5c90ccc35d812553333d3654db2976b728b4af7a68093cc8c54737c426afa48"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4148.mp4",
+      "sha256": "5ea36b76e8dfcc60e6e074039ffdf62b543055ab076945f0b1bc07df1d3dfa57"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4149.mp4",
+      "sha256": "ead8e410d27e5bd780719b7a473dc34fd886d958597e1bc6b82b2d522f9b1742"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video415.mp4",
+      "sha256": "4e9fc5bb81c5267cb923abca27a093e142ccf4fa6305a9b80e1e9d1ad996f104"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4150.mp4",
+      "sha256": "d9827faa4543213eb97356ef12b1802347f2fb8a623eccab1fc2e3aabdc9311f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4151.mp4",
+      "sha256": "e1c50e60d257d236e48ea9c655b8fb78c0e673c47b608abc62fb9d0bdf56ff9c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4152.mp4",
+      "sha256": "9225cf3320e323b3a185b4024e19fd1a06130809f6634cf120e2a9f0fa12bfaa"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4153.mp4",
+      "sha256": "929b4e18d2d7089e79c050898213a3504564634a8372c71f416005c93b596a6a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4154.mp4",
+      "sha256": "a7d99e30afa32d716f3768792856037e1c7052709248e6d2bb74c8610cc98931"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4155.mp4",
+      "sha256": "2c22d8f96851a62577b34bad121ba41be426979579feb996bd92c3a50fd34086"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4156.mp4",
+      "sha256": "be9d72e5cbe5adc75cfe57f62b77200a2c9d72a304d9ecce99cc6c7ca5f9f279"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4157.mp4",
+      "sha256": "ca8ad594a1724255b5ab731394d80ed0a62eb60dd983cd5e36e67b2317abb05a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4158.mp4",
+      "sha256": "972916b89ca9bca44e4efc44ab333cbb87a1b40b3c80816d39066c0b0cdb80cd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4159.mp4",
+      "sha256": "b36d1b581b2b2edf17acdc645d6128ae4b90fec3e1fb52499868e9bb164b71b3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video416.mp4",
+      "sha256": "f60046cffd0f885415b6612b38ba7ebd29ef678fb91b9f48ba1de5a1f4bef2b1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4160.mp4",
+      "sha256": "631d9dc4174806cd4250de43dd8faf68e1a7b81351069bd77ae133b40dfb8fa4"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4161.mp4",
+      "sha256": "3058bd397d727ac186e7b5c2f494cd020f26f91f21639553d06440a43a6cf75f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4162.mp4",
+      "sha256": "031cfb073d6d2240804c733b52dfb3a0c467ed82186f7fd12f8d377c8313f76b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4163.mp4",
+      "sha256": "9f786438388cdb12eea91239623cae9ee341055118753e4c1341ae51f012a7ca"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4164.mp4",
+      "sha256": "cba2f76d7545009c68797cb6e752570efe59f4bef199b4e782be3805f25fff3c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4165.mp4",
+      "sha256": "3f2774030c717aa603114bab3f93d6843bb89ca98f0b51e8246b92729653bcb3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4166.mp4",
+      "sha256": "a124069813e157f21f31260c7ec3fd302941c26cccb77a29d6332541fc9c7d73"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4167.mp4",
+      "sha256": "c04b0e2c32bae7200320bee4815a491392eebf3906a99edf58a5841da771ac06"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4168.mp4",
+      "sha256": "e5402245e99ce830048249fb8f525dc49283d050043b4b575daa10ec713f6482"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4169.mp4",
+      "sha256": "58777dfad4b898b3b156c235c1f9c56bbcdc75b941412850705c05d8fcc2c1c9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video417.mp4",
+      "sha256": "680e11504e3310625e9792a04c7a22b5f72b7131dd8c3a27bb84d09190ddbe4c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4170.mp4",
+      "sha256": "0f24977e79d579c6f362479e1e5aa479253c19463f18e88898abe5cc7d43d1c2"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4171.mp4",
+      "sha256": "ab6cd5b83ddcb311a04cf01dfde63c6c606eed4c3332c6fd1a9aa3575bde3fa8"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4172.mp4",
+      "sha256": "63cfbce97cc99d35d3f664b57ebe5ad30ca4f704202d5218831c62dc91102416"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4173.mp4",
+      "sha256": "9fe5464fc2bc622e3dd43866263185fc11fdba618110f53501d0daea843286bd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4174.mp4",
+      "sha256": "89ae400c20d67912ac1f09d316d31582e0ef648e218eb7b5d120cb586a523bec"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4175.mp4",
+      "sha256": "4a2035bd7f2b1491dde89a867c34ab003d27a152682d0de4c495294f8110b7be"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4176.mp4",
+      "sha256": "2c596e7d3f36a6cf8ffa083463c8e697a17ee2add5a918672dcf415435e28931"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4177.mp4",
+      "sha256": "9231008e3eaf18a89b647c25dbe068012d6f85f3cc3702e2252651ef7c7d1bab"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4178.mp4",
+      "sha256": "24db442d67bef073e0312ed65536aec2da85626b43bb8b253ef98869ae3b1cb7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4179.mp4",
+      "sha256": "4b24155ef6044ed9e574e226518cc88e1552e22fe18050c6d372e5784d907e52"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video418.mp4",
+      "sha256": "f4977a0634fcdef276b65be84a0f81bf9b8cee4e7f66a8b376ff6f4c904b6408"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4180.mp4",
+      "sha256": "daff6cfdc4c9916ff8bc147706d94998094423c9bf841e9fbd904cc83bf21abf"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4181.mp4",
+      "sha256": "d201d696c7c1d95145821148938a2d3cdbafd9aa9c70c5e7be8bcc5afd416e72"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4182.mp4",
+      "sha256": "599e7d1535d1d551af120e52365fee2d933add31d517dd37406afcf62ca21936"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4183.mp4",
+      "sha256": "b3811974570d7095da4fcc8dd0b56c7c0f73f0c4ae842df715801a16a29cf95b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4184.mp4",
+      "sha256": "e60bc74571b951f86ef66f25281e9ec6de2fbce562d6e5b9747bdaa6595f18b7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4185.mp4",
+      "sha256": "d70fabc8d2394bc335a9fa68f97bb542e384f35d8319ed06c46e4ad6f48f1b51"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4186.mp4",
+      "sha256": "5e857922dce3aaff46270de2c7343d7d998936ff5497e28915f0aded51e305f5"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4187.mp4",
+      "sha256": "bf0b8d1400d608dc0490b8662eeae34d777c27da61452fc5692f3d5fd0123f70"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4188.mp4",
+      "sha256": "97c201fa2bf8e4b1a6dd965b071a4214a32639ed9eb864a29fe1c9c4d77350f7"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4189.mp4",
+      "sha256": "2d23105c534d6c3f263c66f3868630eb8c9bb25fae4aec2e4f68363c536bde72"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video419.mp4",
+      "sha256": "ed70f63f7fecbc7d5bc7b7393c2f0364fbb18c7346e5065a2b03bf8dc2dd8fe1"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4190.mp4",
+      "sha256": "a34e1902fcd0a3bf3f4ee3cd738d0b3204ecd8863f65f3fae2965806f8fb7f04"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4191.mp4",
+      "sha256": "1e0f86e7ed8b39d53d18750f3af118f8be091ff97d0c50091924f68a385fe741"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4192.mp4",
+      "sha256": "1d97b076a1b56ae0bfa369155e70bc4a4bf3e0005aceaa1bd8653e207387e211"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4193.mp4",
+      "sha256": "831d523db97c322a7576461cb6be3520946cf405eb7aa870c5bb662756fa0b7d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4194.mp4",
+      "sha256": "2ca6579e9eb2787690e3101e7b9a74560ab0bd446d92ee8e5e3b0eda4c471596"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4195.mp4",
+      "sha256": "88040d20485ccb48f3aa7ba544a4a19c37aaeb9c2d745ba2ccb3c83faaad1650"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4196.mp4",
+      "sha256": "ae595cc5933980e5c73ad872c58f11f59881690075e13856cd4d572b6e34d702"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4197.mp4",
+      "sha256": "49a809824b90f607bd60d962ca59259b4be235acc53744eec67e71290f964d61"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4198.mp4",
+      "sha256": "677b5f6a9189391c5640f10390466332b45f6c293b93109deb48a9ff36d83547"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4199.mp4",
+      "sha256": "8cd4246e3492f09293b8dafd54f3c8e133f1578c624bc86650297f2a723c0f79"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video42.mp4",
+      "sha256": "a54d356f431423273e5fb0ca53a6991f7729da9c193c449b9ab473967be73eac"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video420.mp4",
+      "sha256": "1141f3101f7f0fabf1dce4cbded5073742125611e2edd5c2f048dc5ed099ae6d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4200.mp4",
+      "sha256": "838600e5bc1edcab7ce0993cdf28e79d9fe2dc3405fe3bc8d8547b8a03657073"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4201.mp4",
+      "sha256": "bc0e03e18ee515e1a414c8ad63b0e4e9979550fe8949b35d2d9e8073c23cb68c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4202.mp4",
+      "sha256": "612e195dc7ad88de615f3cb9b2c07a1cb21fa23501546bbd12cccd4ce818c592"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4203.mp4",
+      "sha256": "5e933af767a1279efe75dbee7ad94ef232cccc8a9f55bcc68ffe5e680163b568"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4204.mp4",
+      "sha256": "7a48730b83c01734c0b7784beff5946527fc3999b327a174779ef750b15ae12b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4205.mp4",
+      "sha256": "106857cab0fb1436e9d4815c0a49c103d04045207e62c490d2d81c8895d08cc6"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4206.mp4",
+      "sha256": "92d80c94fb6aa858f9c26aa63af3d6f9d5b2190708b4627b8053ccaa7c0e188d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4207.mp4",
+      "sha256": "476c2bfc2750214f462c16119bbbd5ebb69a544eeba92f691549c80479883c88"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4208.mp4",
+      "sha256": "a8bf114c70f699e0215ff1349f2e68cf2ae3e48eca2a1d1d97bad8e1c484179c"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4209.mp4",
+      "sha256": "f598fcd14ebac01de439e195ddb48935b248b753321032e960eaebccef20663d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video421.mp4",
+      "sha256": "ebc0b0e4241bd292e586681274fabd88a0e47bcabe1845ca7d97f0c9e2bcfc58"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4210.mp4",
+      "sha256": "5f0c0db3828802106b57b59ea7f3b1fa08873855e096120bfc7cf209248ba878"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4211.mp4",
+      "sha256": "7e36f11ea264fcf6a6ac6d39aa4ad6f159ea2ca76f99b50605a602ea8b754794"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4212.mp4",
+      "sha256": "6276008b4d34268a563e8e9b4c146c4dffa4faa15cd5f3cbab12407c1bc00393"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4213.mp4",
+      "sha256": "cc33464b7a5d843b9c72044831196183a4824c3110356445295b4d5a75332a36"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4214.mp4",
+      "sha256": "84a857f2ad20bbeea6216d54939b91cc3bf7201ebbd509ca0e13b2eb0f37ac36"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4215.mp4",
+      "sha256": "e2b11df16093a0d1c172341b8374fb4cf30d8dbe105a374d3fdcd673f6618256"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4216.mp4",
+      "sha256": "beddd8ad289630cab180f2e94525fd64b0102d0b342b64cac5894b8d27d46c58"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4217.mp4",
+      "sha256": "436a1d84fbce97a33cc5810f52db3b869e36e1a99ed3b5bb1c976d6a5a36c62d"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4218.mp4",
+      "sha256": "2ca218d8186bd6240507ee95b998d1e4be5c239c01d1a64eb23d89e7b08f9d85"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4219.mp4",
+      "sha256": "7bf82282534b888b3c7cac025c482590c72eda3d60eaa54e08a62e34fd96f22f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video422.mp4",
+      "sha256": "4887b93ccecb5a34fd1c906d2eef63c55f94c892a0c8018ea9aa601c4f3c707b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4220.mp4",
+      "sha256": "56f519a5b2d367159edbbe8ff81792bf8b5ad59e5f6b1fd357a4df7d79cb7522"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4221.mp4",
+      "sha256": "7f27033280de53e1c0743c16ed0d8efc6229aff87435ad2435c2095f808b409e"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4222.mp4",
+      "sha256": "e2c094dd90ad12211f80590f4706f6adba1ecd0c3538d806489568cf2bd87aab"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4223.mp4",
+      "sha256": "8883651d9ec63836c6aa4677c93d91b0db619094f042d059ff08526b503068fc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4224.mp4",
+      "sha256": "1aaa873fafbab95b4062d46ed5aefa109d554c4ad4d2345f7a9626abcf7b0388"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4225.mp4",
+      "sha256": "b1b01ad07d4cacac8df9696a5987f2934334d86052add9b12b4c30e2818f37f9"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4226.mp4",
+      "sha256": "23929811ad98091d410e29e6ee7ca348c3c5618ed23f1eb3966ae4055e750e87"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4227.mp4",
+      "sha256": "25e62441dcd25968980e467868e1d7b6d400b9fda17dbb12e5c0dd3d0c707885"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4228.mp4",
+      "sha256": "a4c0b876618a27aff7e89aedf8bb8f2abbe2b1d338f71a5e24b62d969c88ecdc"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4229.mp4",
+      "sha256": "d75b56bd92c509a0aec33fb3502cff551ac6653e7eea2a1dca97f198921fccbd"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video423.mp4",
+      "sha256": "a8241361d127d07fb184893fc8a500790dd14c4430e5fa26ed32ab63779b2560"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4230.mp4",
+      "sha256": "3969b7cc6ab332ac2dffcb2839f6670fc1de74da23cdd447a383963b23d1f5ec"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4231.mp4",
+      "sha256": "4359bf3c0ccdd2228b8c1deb290cc24e5d98cfe35e9c6b1d294114fa1b00af2b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4232.mp4",
+      "sha256": "41fef7e793e490faef1a3d4eaa349f405aa855d0457fc5e30ec23061ae87753f"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4233.mp4",
+      "sha256": "2ecfb4ddf8ccec88b64507d8ba96e9bf2ce410a424bef5e698e78ead62b5258a"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4234.mp4",
+      "sha256": "93d624486a94a1766269b730bb5a51eceef96637a7b75d1d66d4e578b9ee08d3"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4235.mp4",
+      "sha256": "3fada75761ea9d5204c33e9ec345581315a2fcb810b710b4a2da74e526a14c28"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4236.mp4",
+      "sha256": "348e8842f4a9e74cdcb521ae94d1449266a9bf8de8ed094d0ffa8293aa78957b"
+    },
+    {
+      "path": "/data2/hxj/data/MSRVTT/videos/all/video4237.mp4",
+      "sha256": "b6dfdabf01c8915451a6178b2e554cf564d9146b2eff22179faaadfb4ee31833"
+    }
+  ],
+  "kind": "file_sha256_index",
+  "schema_version": 1
+}

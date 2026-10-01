@@ -27,6 +27,7 @@ from experiment_artifacts import (
 )
 from experiment_tracking import atomic_write_json
 from semantic_retrieval.config import RuntimeConfig, effective_manifest_config
+from semantic_retrieval.runtime.input_bindings import manifest_input_references
 
 
 @dataclass
@@ -38,6 +39,7 @@ class RunContext:
     repo_root: Path
     sequence: int = 0
     system_config: object | None = None
+    input_references: dict[str, str] | None = None
 
 
 def _hash_input(repository, reference):
@@ -225,6 +227,7 @@ def prepare_run(config, *, repo_root, system_config=None):
         if (common.parent / manifest["artifact_locator"]).resolve() != root:
             raise ValueError("artifact locator differs from run path")
     from .pilot_policy import assert_pilot_authorized
+
     assert_pilot_authorized(repo_root=repository, registry_path=registry, manifest=manifest, operation="start")
     verify_committed_reservation(repository, manifest["registry_path"], manifest)
     sealed = shlex.split(paths.command.read_text())
@@ -298,15 +301,21 @@ def prepare_run(config, *, repo_root, system_config=None):
     )
     if environment != manifest["environment"]:
         raise ValueError("runtime environment or precision mismatch")
-    for field in ("input_checkpoints", "dataset_splits"):
-        for reference in manifest[field]:
-            if _hash_input(repository, reference) != reference["sha256"]:
-                raise ValueError(f"input {field} SHA-256 mismatch")
+    references = manifest_input_references(repository, manifest)
+    for name, digest in references.items():
+        if _hash_input(repository, {"path": name, "sha256": digest}) != digest:
+            raise ValueError("input SHA-256 mismatch")
     if system_config is not None:
         _validate_resume(repository, manifest, system_config)
         _validate_pilot(repository, manifest, system_config)
     return RunContext(
-        paths, manifest, ArtifactArrayStore(paths.arrays), config, repository, system_config=system_config
+        paths,
+        manifest,
+        ArtifactArrayStore(paths.arrays),
+        config,
+        repository,
+        system_config=system_config,
+        input_references=references,
     )
 
 

@@ -91,3 +91,9 @@ Stage 0 的 CPU E2E 与四卡 smoke 均通过且登记后，才可以申请后�
 管理器 reserve 与 worker prepare 双重检查新 study；当前仅允许 CPU
 source_inventory / benchmark_compile，不授权科学 GPU 或 test。
 先提交源码/协议，再预留并提交整批 reserved，最后启动；终态与失败规则完全继承 Scheme A。
+
+真实库超过 manifest 容量时，`dataset_splits` 可以绑定以 `.input-index.json` 结尾的
+输入索引。索引严格为 `{schema_version:1,kind:"file_sha256_index",files:[{path,sha256},...]}`，
+每片小于 1 MiB；路径须为绝对规范路径，不允许嵌套索引或重复身份。worker 先核验索引
+SHA，再逐一核验全部子文件 SHA，消费方复用同一个已认证的输入映射。索引不削弱逐文件
+绑定，不能只校验索引而跳过原视频。`write_input_indices` 默认每片最多 900 个引用。

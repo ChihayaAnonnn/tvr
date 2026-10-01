@@ -24,6 +24,7 @@ from semantic_retrieval.data.pilot_catalog import _safe_path, assign_pilot_split
 from semantic_retrieval.data.pilot_compile import compile_pilot_manifests, summarize_pilot_inputs
 from semantic_retrieval.runtime.artifacts import complete_run, fail_run, prepare_run, publish_metrics, start_run
 from semantic_retrieval.runtime.distributed import configure_fp32
+from semantic_retrieval.runtime.input_bindings import context_input_references
 
 PREPARATION_KEYS = {
     "mode",
@@ -50,7 +51,7 @@ def write_input(path, value):
 def _bound(context, ref):
     if not isinstance(ref, dict) or set(ref) != {"path", "sha256"}:
         raise ValueError("input reference must have exact path/SHA")
-    refs = {str(r["path"]): r["sha256"] for r in context.manifest["dataset_splits"]}
+    refs = context_input_references(context)
     if refs.get(ref["path"]) != ref["sha256"]:
         raise ValueError("preparation input is not reserved")
     path = Path(ref["path"])
@@ -121,7 +122,7 @@ def export_snapshot(context, preparation):
     videos = {
         i: _safe_path(Path(preparation["video_directory"]) / f"{i}.mp4", base=root, allowed_root=root) for i in ids
     }
-    reserved = {r["path"]: r["sha256"] for r in context.manifest["dataset_splits"]}
+    reserved = context_input_references(context)
     if any(str(p) not in reserved for p in videos.values()):
         raise ValueError("every training video must be a reserved input")
     # Only here, after identity and membership checks, decode selected captions.
@@ -235,7 +236,12 @@ def export_snapshot(context, preparation):
         query_count=len(pilot_rows),
         decoded_excluded_caption_count=0,
         inputs=dict(
-            catalog=catalog_ref, annotation=annotation, allowlist=allow, source_report=report, full_snapshot=full, training_records=records
+            catalog=catalog_ref,
+            annotation=annotation,
+            allowlist=allow,
+            source_report=report,
+            full_snapshot=full,
+            training_records=records,
         ),
     )
 
@@ -318,7 +324,7 @@ def execute_preparation(runtime, preparation, *, repo_root):
                 allowed_root=Path(preparation["allowed_root"]),
                 source_confirmation=preparation["source_confirmation"],
             )
-            refs = {r["path"]: r["sha256"] for r in context.manifest["dataset_splits"]}
+            refs = context_input_references(context)
             if any(refs.get(str(e.path)) != e.sha256 for e in catalog):
                 raise ValueError("catalog assets must all be reserved")
             result = dict(

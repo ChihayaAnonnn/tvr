@@ -20,7 +20,7 @@ def git(repo, *args):
 
 
 @pytest.fixture
-def protected(tmp_path):
+def protected(tmp_path, request):
     from scripts import manage_experiment_run as manager
 
     repo = tmp_path / "repo"
@@ -68,6 +68,11 @@ def protected(tmp_path):
         "commit": git(repo, "rev-parse", "HEAD"),
     }
     study.write_text(yaml.safe_dump(source))
+    input_refs = [{"path": str(p), "sha256": file_sha256(p)} for p in data.iterdir()]
+    if getattr(request, "param", False):
+        index = data / "fixture.input-index.json"
+        index.write_text(json.dumps({"schema_version": 1, "kind": "file_sha256_index", "files": input_refs}))
+        input_refs = [{"path": str(index), "sha256": file_sha256(index)}]
     run = dict(
         dataset="msrvtt",
         stage="baseline",
@@ -84,7 +89,7 @@ def protected(tmp_path):
             distributed_topology="single-process",
         ),
         input_checkpoints=[],
-        dataset_splits=[{"path": str(p), "sha256": file_sha256(p)} for p in data.iterdir()],
+        dataset_splits=input_refs,
         config=dict(
             model={},
             loss={},
@@ -166,3 +171,35 @@ def test_quantity_failure_keeps_structured_source_counts(tmp_path):
     assert report["ready"] is False and report["stop_reasons"]
     assert report["source_counts"]["official_video_count"] == 12
     assert report["source_counts"]["canonical_video_count"] == 12
+
+
+@pytest.mark.parametrize("protected", [True], indirect=True)
+def test_indexed_inventory_keeps_reserved_child_hash_checks(protected):
+    from scripts.prepare_semantic_pilot import execute_preparation
+
+    repo, runtime, prep = protected
+    git(repo, "add", str(runtime.registry_path.relative_to(repo)))
+    git(repo, "commit", "-qm", "reserved")
+    result = execute_preparation(runtime, prep, repo_root=repo)
+    assert result["official_video_count"] == 1
+    assert json.loads((runtime.run_dir / "status.json").read_text())["state"] == "validating"
+
+
+@pytest.mark.parametrize("protected", [True], indirect=True)
+def test_indexed_child_mutation_rejected_before_start(protected):
+    from semantic_retrieval.runtime.artifacts import prepare_run
+
+    repo, runtime, prep = protected
+    git(repo, "add", str(runtime.registry_path.relative_to(repo)))
+    git(repo, "commit", "-qm", "reserved")
+    path = Path(prep["catalog"]["path"])
+    path.write_text(path.read_text() + " ")
+    git(repo, "add", str(path.relative_to(repo)))
+    git(repo, "commit", "-qm", "changed input")
+    # Ignore tracked-source guard only to isolate the indexed byte check.
+    from unittest.mock import patch
+
+    with patch("semantic_retrieval.runtime.artifacts.verify_committed_reservation"):
+        with pytest.raises(ValueError, match="input SHA-256 mismatch"):
+            prepare_run(runtime, repo_root=repo)
+    assert json.loads((runtime.run_dir / "status.json").read_text())["state"] == "reserved"
