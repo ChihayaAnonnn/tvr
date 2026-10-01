@@ -1,0 +1,36 @@
+{
+  "phase": "D1",
+  "phase_path": "experiments/semantic-answerability-pilot-v1/phases/D1.json",
+  "runs": [
+    {
+      "manifest_sha256": "f3d3adeb1c997d9153c9a3db1e365698436f4b25f5ea6d3882c4853d0907647c",
+      "output_hashes": {
+        "command.sh": "6ed13137c2a434703fb12dd73e30f9d48a36aaa32ccf178393fd69ed2a839479",
+        "logs/worker-exit-code.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "logs/worker.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "metrics/val_eval_000.json": "4609fb11d862f9b9ea450e0412399e58cdd332986359e738ec28395ffb7c0bb0",
+        "provenance/id_map.json": "8c00d8fbf65edb4b65076d3800f5554b0eb718434d560443ca461d5ecd60e552",
+        "provenance/input-summary.json": "c8359cc64782af21f9744165ad715533816e996fa53cf7e076439ed71ff6641d",
+        "provenance/preparation-config.json": "594012b730c694fcc122ec707445ed42c67281f6e1480bd80723ec25bfdb915d",
+        "provenance/preparation-result.json": "44647ce56ffc2f8f3700a705d9dbd17a5b6f5a3388cd1d2c106a90efa32df787",
+        "provenance/relations.json": "0b39a0d5720417c2c7db7c33e318bc3e8f77f80d4d6cecd3b171c69aee2f87a3",
+        "provenance/split-assignment.json": "4d4ca5a29c9a9edf910ab3fe76be85df85721faa16d5762764d0d74f3681f53c",
+        "provenance/train-episodes.json": "57790ac4b784a48e19857f9124399e61330e8c24ef2da8500bce2731768b6b4d",
+        "provenance/train-gallery.json": "99ff56c1e591e4f1f84abb1ab6c2abebbe48391b5ebc5efb28ab622d5e0987a3",
+        "provenance/val_calibration-episodes.json": "e072e7ba1b56519abcbaafd17fc6487e96e787ba1a622867bf42a5a276d63435",
+        "provenance/val_calibration-gallery.json": "0ba4c6d0892af89c07169c242e53dda4266cba7f1d951eba5d5d56314c98791e",
+        "provenance/val_development-episodes.json": "c57c313e56c1df15d5e6473fe8f3ced6a15e85ff5b3fc279d585f5ffc7ca4c05",
+        "provenance/val_development-gallery.json": "44f0e3f6a2d0a9246e66bd20ed999fa51382ae1f6c5eec668e3ffa3465fb11b7",
+        "provenance/val_locked-episodes.json": "3a7420fee0f3b9a9a35cc94daab327f45a0fb99ee140a4e79917cf706deac81f",
+        "provenance/val_locked-gallery.json": "d7b5cfc617dab9b7c6308f6044295c6503d259153303ef30131d6bfd2f57ed16"
+      },
+      "run_id": "msrvtt-baseline-benchmark_compile-seed000-20261001T100810Z-bbaa8ea7fa8a",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "semantic-answerability-pilot-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
