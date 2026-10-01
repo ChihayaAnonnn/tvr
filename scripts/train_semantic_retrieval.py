@@ -17,10 +17,12 @@ from semantic_retrieval.data.episodes import file_sha256, read_episodes
 from semantic_retrieval.models.model import SemanticRetrievalModel
 from semantic_retrieval.runtime.artifacts import complete_run, fail_run, prepare_run, publish_metrics, start_run
 from semantic_retrieval.runtime.checkpoint import config_sha256, load_checkpoint, save_checkpoint
+from semantic_retrieval.runtime.distributed import configure_fp32
 from semantic_retrieval.runtime.trainer import Trainer, build_optimizer
 
 
 def main(argv=None):
+    configure_fp32()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--run-id")

@@ -20,11 +20,13 @@ from semantic_retrieval.retrieval.cache import FeatureCache
 from semantic_retrieval.retrieval.index import CanonicalIndex, IndexIdentity
 from semantic_retrieval.runtime.artifacts import complete_run, fail_run, prepare_run, publish_metrics, start_run
 from semantic_retrieval.runtime.checkpoint import load_model_checkpoint, model_sha256
+from semantic_retrieval.runtime.distributed import configure_fp32
 from semantic_retrieval.runtime.inference import RetrievalService, policy_sha256
 from semantic_retrieval.types import EncodedFeatures, QueryInputs, VideoFeatures
 
 
 def main(argv=None):
+    configure_fp32()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, type=Path)
     for arg in ("run-id", "manifest-sha256", "source-sha"):

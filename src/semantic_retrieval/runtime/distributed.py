@@ -5,6 +5,13 @@ import torch.distributed as dist
 from torch.distributed.nn.functional import all_gather
 
 
+def configure_fp32():
+    """Establish the precision required by the protected runtime before binding."""
+    torch.set_float32_matmul_precision("highest")
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+
+
 def _distributed(values):
     if not dist.is_available() or not dist.is_initialized():
         return False

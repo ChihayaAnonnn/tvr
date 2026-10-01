@@ -1,5 +1,20 @@
 # Frozen protocol for the reliable retrieval / contextual-risk-v2 campaign.
 study: contextual-risk-v2
+rebuilt_code_qualification:
+  scope: synthetic_software_only
+  authorization: user_request_2026-10-01_four_gpu_end_to_end_code_acceptance
+  entrypoint: scripts/qualify_semantic_retrieval.py
+  test_authorized: false
+  max_gpu_hours: 8
+  physical_indices: [0, 2, 3, 4]
+  gpu_uuids:
+    - GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece
+    - GPU-19f58384-1ce3-9658-5a8b-7d79f437289d
+    - GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede
+    - GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a
+  model: production_capacity_random_initialization_vit_b32
+  scientific_study_reactivation: forbidden
+  note: "GPU4 is idle on fresh inspection; retain frozen 0,2,3,4 topology and its 2-4 NVLink pair."
 protocol_version: 1
 control_plane: experiments/contextual-risk-v2
 data_plane: artifacts/contextual-risk-v2

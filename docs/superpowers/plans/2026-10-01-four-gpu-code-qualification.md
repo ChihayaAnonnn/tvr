@@ -1,0 +1,11 @@
+# 四卡重建代码验收
+
+本次授权范围是合成数据上的软件验收，沿用 Scheme A 的控制面与数据面；不恢复 contextual-risk-v2 科学研究，不授权 MSRVTT/MSVD test，不启动论文实验。选择物理卡 0、2、3、4（A800 80GB，2↔4 NVLink）；启动前重新检查占用。
+
+1. 补齐独立资格入口与 CPU 回归测试。CPU 预备 worker 在已预留目录生成随机初始化的正式 ViT-B/32 权重、合成原始视频和 train/calibration/locked episodes。GPU manifest 绑定这些输入的全部哈希、正式模型配置和源码。
+2. 四 rank NCCL 验收：原始视频解码/tokenizer→CLIP→temporal/coarse/matcher/answerability→loss/backward/optimizer。验证已知样本计数、梯度有限且非零、参数跨 rank 一致、unknown 批次不更新；checkpoint 保存与加载、各 rank Python/NumPy/CPU/CUDA RNG、连续两步与恢复后下一步一致；仅在验证集校准；部署缓存/index/预算扩展/拒答/结果评估；损坏副本与错误配置拒绝。正式权重容量，合成随机权重，无科学效果解释。
+3. 先 CPU 窄测及完整相关回归、独立代码审阅并本地集成；再依次提交 prep phase、reserved 批次、运行、terminal 与摘要；GPU phase 同样操作。worker 期间不编辑受跟踪文件。预期故障只对独立副本测试，成功验收 run 内加载 checkpoint，不制造失败 run 或绕过人工重试授权。意外失败保留并停止，不自动另起 GPU run。
+
+验收上限 8 GPU 小时。报告记录源码/输入/manifest 哈希、UUID/rank 对应关系、耗时和峰值显存。PASS 只证明覆盖的代码链路；不证明正式预训练权重效果、完整数据集 minibatch 调度、科学 gate 或分组/OT 可选实验有效。真实已终态失败任务的跨 run CLI 恢复继续要求人工审批，本次不伪造该审批。
+
+Review focus: reserved 输入与合成来源约束、GPU/world/rank/precision 绑定、DDP 局部全 unknown 的 reducer 行为、checkpoint rank RNG 和精确比较、校准/锁定集与 test 封存、输出仅位于 canonical run、意外失败保留与无静默重试。
