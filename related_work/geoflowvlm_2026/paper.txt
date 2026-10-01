@@ -1,0 +1,1772 @@
+                                        GeoFlowVLM: Geometry-Aware Joint Uncertainty for
+                                               Frozen Vision-Language Embeddings
+
+
+                                                Mayank Nautiyal1,2 , Li Ju1,2 , Andreas Hellander1 , Ekta Vats1 , Prashant Singh1,2
+                                                  1
+                                                    Department of Information Technology, Uppsala University, Uppsala, Sweden
+                                                               2
+                                                                 SciLifeLab, Uppsala University, Uppsala, Sweden
+
+
+
+                                                                                        Abstract
+                                                    Standard dual-encoder vision-language models that map images and text to deter-
+                                                    ministic points on a shared unit hypersphere through ℓ2 normalization typically
+arXiv:2605.13352v2 [cs.LG] 1 Aug 2026
+
+
+
+
+                                                    expose neither aleatoric uncertainty (cross-modal ambiguity) nor epistemic un-
+                                                    certainty (lack of training-distribution support). Existing post-hoc methods either
+                                                    recover at most one of the two uncertainty components, or ignore the hyperspherical
+                                                    geometry of these models’ embeddings. We propose GeoFlowVLM as a post-hoc
+                                                    adapter that learns the joint distribution of paired ℓ2 -normalised dual-encoder VLM
+                                                    embeddings on the product hypersphere Sd−1 × Sd−1 via Riemannian flow match-
+                                                    ing with a single masked velocity field. A consistency result shows that, in the
+                                                    population limit, the trained network exposes the joint flow and both cross-modal
+                                                    conditional flows as valid Riemannian flow-matching velocity fields on their re-
+                                                    spective domains. We derive two quantities from this single model: a conditional
+                                                    retrieval entropy that quantifies aleatoric ambiguity with a decision-theoretic inter-
+                                                    pretation via a Fano-type bound, and a marginal-typicality epistemic score justified
+                                                    by an exact chain-rule decomposition of the joint NLL. This decomposition isolates
+                                                    a cross-modal pointwise-mutual-information term that is structurally discrimina-
+                                                    tive rather than epistemic, and is empirically the only consistently uninformative
+                                                    standalone component. Empirically, the entropy tracks Recall@1 with near-ideal
+                                                    monotonic calibration across three retrieval benchmarks in both directions, and the
+                                                    marginal-typicality sum yields consistently calibrated selective accuracy across
+                                                    four zero-shot classification benchmarks.
+
+
+                                        1    Introduction
+                                        Dual-encoder vision-language models (VLMs) such as CLIP [1] and SigLIP [2] project images and
+                                        text to a shared unit hypersphere via ℓ2 -normalisation, reducing cross-modal compatibility to cosine
+                                        similarity. This deterministic point representation is effective for retrieval and zero-shot transfer,
+                                        but provides no estimate of prediction uncertainty, neither the aleatoric ambiguity arising from the
+                                        intrinsically one-to-many nature of vision-language correspondence [3], nor the epistemic uncertainty
+                                        on queries falling outside the regions of embedding space seen during training. Quantifying both
+                                        kinds of uncertainty without retraining the underlying encoder is the central challenge of post-hoc
+                                        uncertainty quantification (UQ) over frozen vision-language embeddings.
+                                        Existing post-hoc UQ methods (Table 1) split along two axes: the type of uncertainty captured, and
+                                        whether the method respects the hyperspherical geometry of these embeddings. Aleatoric methods
+                                        attach a distribution to each modality. Of these, ProbVLM [4], GroVE [5], and BayesVLM [6] all
+                                        operate in ambient Euclidean space and do not account for the ℓ2 -normalisation constraint that defines
+                                        the considered VLM representation space; AsymVLM [7] respect the sphere, but only for the text
+                                        modality. Density-based epistemic methods over frozen encoders are scarcer: MC Dropout [8] ignores
+                                        embedding geometry, while REPVLM [9] learns a density per modality on the sphere but provides
+                                        no aleatoric estimate. ProbVLM is the only method that exposes both kinds of uncertainty, yet it
+
+                                        Preprint.
+does so heuristically: its epistemic estimate is MC Dropout over its adapter, measuring uncertainty of
+the adapter rather than the backbone, and its generalised Gaussian model misses the hyperspherical
+structure. The proposed GeoFlowVLM addresses the gap in the bottom-right cell of Table 1: a
+post-hoc method exposing aleatoric and density-based epistemic readouts from a single coupled
+density while respecting the hyperspherical geometry of these models’ embeddings.
+
+Table 1: Post-hoc UQ for frozen VLMs. Rows: geometry awareness. Columns: uncertainty
+type(s) exposed. The geometry-aware × both cell represents a gap that GeoFlowVLM addresses.
+†
+  ProbVLM’s epistemic estimate is MC Dropout over its adapter, not the backbone density.
+
+                                     Aleatoric           Epistemic              Both
+          Geometry-agnostic      GroVE, BayesVLM       MC Dropout           ProbVLM†
+          Geometry-aware            AsymVLM             REPVLM          GeoFlowVLM (ours)
+
+
+Contributions. (i) GeoFlowVLM: a post-hoc probabilistic adapter trained via Riemannian flow
+matching with a single masked velocity field on the product hypersphere Sd−1 × Sd−1 , yielding joint,
+marginal, and cross-modal conditional densities without encoder retraining. An ablation against an
+otherwise-identical Euclidean variant establishes hyperspherical geometry as structurally necessary.
+(ii) A conditional-posterior-entropy aleatoric estimator: GeoFlowVLM’s cross-modal conditional
+density, evaluated and normalised over the retrieval gallery, defines a per-query categorical posterior
+whose entropy quantifies retrieval ambiguity and, via Fano’s inequality, certifies a lower bound on
+MAP Bayes risk. Empirically it tracks retrieval difficulty with near-monotonic calibration across three
+benchmarks in both directions, outperforming all baselines in image-to-text retrieval and matching
+the strongest directional baseline in text-to-image retrieval.
+(iii) A chain-rule decomposition of the joint NLL into per-modality marginal typicality and cross-
+modal pointwise mutual information (PMI). PMI is structurally discriminative rather than epistemic
+while marginal typicality is the reliable epistemic component. This explains the effectiveness of
+per-modality methods such as REPVLM and frames jointly trained marginals as a coherent extension.
+Outline We review related work (Sec. 2), develop GeoFlowVLM and the consistency theorem
+(Sec. 3), develop the aleatoric and epistemic readouts and the family decomposition (Sec. 4), report
+experiments (Sec. 5) and ablations (Sec. 5.2), and conclude (Sec. 6).
+
+
+2   Related Work
+
+GeoFlowVLM draws on four bodies of work: post-hoc probabilistic adapters for frozen VLMs,
+Riemannian generative modelling, the geometric structure of normalised VLM embeddings, and
+density-based epistemic scoring.
+Post-hoc UQ for frozen VLMs. The post-hoc baselines surveyed in Sec. 1 differ mainly in the
+form of distribution they attach to a frozen encoder. ProbVLM [4] trains lightweight heteroscedastic-
+Gaussian adapters per modality and reads out epistemic uncertainty via MC Dropout over those
+same adapters; GroVE [5] couples the two modalities through a shared latent variable with Gaussian-
+process mappings; BayesVLM [6] obtains a Gaussian over embeddings via a last-layer Laplace
+approximation; AsymVLM [7] replaces the ambient-Gaussian assumption with directional (vMF /
+power-spherical) distributions but treats each modality in isolation; REPVLM [9] fits a Riemannian-
+flow density per modality on the sphere and uses its log-likelihood as an epistemic score; and MC
+Dropout [8] reduces uncertainty to forward-pass variance. Training-time probabilistic VLMs such
+as PCME [3], PCME++ [10], and ProLIP [11] introduce stochastic embeddings during pre-training
+and are therefore outside the frozen-encoder regime we adopt; they form a natural “ceiling” for what
+post-hoc methods can hope to recover, and we treat them as out-of-scope rather than as baselines.
+Aleatoric/epistemic decomposition over frozen encoders. The classical predictive-uncertainty
+decomposition into aleatoric and epistemic components [12, 13] relies on a posterior over model
+parameters, which is unavailable when the encoder is frozen. In the frozen-encoder regime, the
+standard surrogate is density-based: aleatoric ambiguity is summarised by the entropy of a predictive
+posterior, and epistemic support by typicality under a learned density [9]. We adopt this surrogate
+
+
+                                                  2
+explicitly: throughout, “epistemic score” refers to a typicality-based density readout, not a Bayesian-
+posterior variance, and we flag the distinction at the points it matters (Sec. 4.2).
+Generative modelling on Riemannian manifolds. Continuous-time generative models have been
+extended from Euclidean space to general Riemannian manifolds. Riemannian continuous normalis-
+ing flows [14] and score-based models [15] rely on costly heat-kernel approximations or simulation;
+flow matching [16] sidesteps this by regressing onto analytic conditional vector fields, extended to
+Riemannian geometries with closed-form geodesic targets by Chen and Lipman [17]. Minibatch
+optimal transport coupling further straightens trajectories [18]; concurrently, Lee et al. [19] show
+that spherical flow matching outperforms Euclidean baselines for natural image generation. In our
+setting, the closest precedent is REPVLM [9], which fits a Riemannian flow density to a single VLM
+modality at a time. GeoFlowVLM departs from this line by learning a coupled density on the product
+hypersphere with a masked velocity field, so that conditional posteriors, marginals, and the joint
+likelihood are all read out from one trained model (Theorem 1).
+Geometry of VLM embeddings. Contrastive training projects VLM embeddings onto the unit
+hypersphere via ℓ2 -normalisation, and recent analyses split by whether they study the embeddings
+before or after this projection. Unnormalised-space works characterise the raw encoder outputs: Levi
+et al. [20] reveal a double-ellipsoid structure in pre-normalisation CLIP, Betser et al. [21] use whitened
+embeddings as a likelihood surrogate for paired images and captions, and Draganov et al. [22] argue
+that embedding norms carry self-supervised signal. Normalised-space works operate directly on the
+sphere: Liang et al. [23] document a persistent modality gap, complementing alignment–uniformity
+analyses of contrastive representations [24].
+Density-based out-of-distribution detection. Our density-based epistemic UQ estimate connects to
+likelihood-based OOD scoring; the core observation that raw likelihood is coarse and that typicality
+refinements improve discrimination directly motivates the family parameterisation in Sec. 4.2.
+
+3   Joint Density on the Product Hypersphere
+Problem setup. Let X denote the image space and Y the space of text captions, with I ∈ X and
+T ∈ Y denoting an image-text pair. Given any contrastive VLM with image encoder fI : X → Rd
+and text encoder fT : Y → Rd producing ℓ2 -normalised embeddings (e.g., CLIP [1], SigLIP [2],
+EVA-CLIP [25]), the pair (I, T ) maps to paired unit-normalised embeddings (eI , eT ) on the unit
+hypersphere Sd−1 . We learn a probabilistic model pϕ (eI , eT ) of their joint distribution that respects
+this geometry, from which both aleatoric and epistemic uncertainty are then derived in Sec. 4 without
+retraining fI or fT . We build on Riemannian flow matching [17], which on simple manifolds such as
+the sphere regresses onto a closed-form geodesic-tangent target and trains simulation-free; sampling
+integrates the learned ODE numerically, with periodic projection onto the manifold to prevent drift.
+
+Joint formulation. We model concatenated pairs z = [eI ; eT ] ∈ M = Sd−1 × Sd−1 as i.i.d.
+samples from a single joint distribution p(z) on the product manifold M, resulting in the model
+GeoFlowVLM (Geodesic Flow Matching for Vision-Language Models). The key design choice is
+to expose joint generation, T → I, and I → T inference through a single velocity field vtϕ (zt , m)
+conditioned on a block-structured binary mask m ∈ {0, 1}2d : mk = 1 marks dimensions transported
+by the flow, mk = 0 marks dimensions held at their observed values with the corresponding stream’s
+time fixed to 0. The three masks mT →I = [1d ; 0d ], mI→T = [0d ; 1d ], and mjoint = [1d ; 1d ]
+select the three modes; this design enables the conditional posteriors and joint density required for
+uncertainty quantification (Sec. 4) to be read off a single trained model.
+
+Training objective. We use geodesic interpolation on each sphere factor as the conditional prob-
+ability path from a noise sample z0 ∼ p0 to a data sample z1 ∼ p(z), where p0 is the uniform
+distribution on M (see Appendix C.3), and pair source-target samples within each minibatch via
+entropic optimal transport on the geodesic-distance cost [18, 26] to straighten trajectories. The mask
+restricts supervision to the generated dimensions, giving the masked CFM objective,
+                                              h                                    2 i
+              LGeoFlowVLM (ϕ) = Et,z0 ,z1 ,m m ⊙ vtϕ (zt , m) − vt (zt | z1 ) g ,                  (1)
+                                                                                       zt
+
+
+where vt (zt | z1 ) is the closed-form geodesic-tangent target on M, gzt is the product metric (which
+on each sphere factor restricts to the round metric, so ∥ · ∥gzt reduces to the Euclidean norm on
+
+
+                                                    3
+tangent vectors at zt ), and conditioned dimensions remain fixed at z1 throughout. The closed-form
+interpolant, target velocity, per-mask time scheduling, and network architecture are deferred to
+Appendices C.3 and B. We sample masks under a curriculum distribution p(m) assigning positive
+probability to all three modes; the schedule is given in Appendix C.
+
+Per-mask time scheduling. Times are sampled per stream: under mjoint both streams share a
+single t ∼ U[0, 1]; under mI→T the text stream receives t ∼ U[0, 1] while the image stream is
+fixed at t = 0; under mT →I the roles are reversed. The conditional reduction in Theorem 1 is
+driven by the mask zeroing the loss on conditioned dimensions and the interpolant pinning those
+dimensions to z1 , so the population-limit identity does not depend on the specific time assigned to the
+conditioned stream. We adopt the fixed-t=0 convention on conditioned streams for two operational
+reasons: the network sees a clean conditioner at every flow time, matching how it is used at inference;
+and the training and inference evaluation regimes coincide (tcond =0, generated stream’s t varying),
+simplifying generalisation arguments under finite samples and finite capacity.
+
+                                                                                          ϕ
+Sampling. Generation in any of the three modes integrates the Riemannian ODE dz   dt = vt (zt , m)
+                                                                                    t
+
+from t = 0 to t = 1, projecting intermediate states onto M after each step. Marginals are obtained
+by sampling from the joint and discarding the unwanted modality; classifier-free guidance is also
+available and detailed in Appendix B.1.
+
+3.1   Consistency of Masked Riemannian Conditional Flow Matching (CFM)
+
+Although the masked velocity field is trained as a single object, each conditional mask reduces it, in
+the population limit, to a valid Riemannian conditional flow on the corresponding marginal sphere.
+Theorem 1 (Masked CFM recovers consistent Riemannian velocity fields). Assume the joint data
+distribution p admits a bounded density on M = Sd−1 × Sd−1 , that the per-mask time schedule holds
+as described in Sec. 3, and that the hypothesis class is sufficiently expressive to attain the population
+minimum of LGeoFlowVLM . Then any minimiser ϕ⋆ satisfies:
+                   ⋆
+1. (Joint flow.) vtϕ (z, mjoint ) is the marginal Riemannian CFM velocity transporting p0 to p1 on
+   M, almost everywhere in (t, z).
+2. (Conditional flows.) For any e∗I in the support of the image marginal, the second-block component
+         ⋆
+   of vtϕ (·, mI→T ) is the marginal Riemannian CFM velocity transporting p0 to p(· | e∗I ) on Sd−1 ,
+   almost everywhere in (t, eT ). The symmetric statement holds for mT →I .
+
+Proof sketch. Restricted to mask mI→T , the loss decouples: the image block vanishes because
+the image stream is held fixed at t = 0, and the text block reduces to the standard Riemannian
+CFM objective on Sd−1 with eI as auxiliary input. The conditional CFM identity [16, 17] then
+characterises the unique pointwise minimiser as the marginal velocity transporting p0 to p(· | eI ).
+The joint case follows analogously. Full proof in Appendix C.4.                                 □
+Remark 1 (Velocity-field uniqueness). The minimiser ϕ⋆ need not be unique as a parameter vector,
+but the induced velocity fields are: the marginal CFM velocity is the unique pointwise minimiser
+of each reduced objective. Distinct parameter vectors achieving the population minimum therefore
+induce the same velocity fields almost everywhere.
+Remark 2 (Parameter coherence across masks). The masking scheme induces a multi-task objective
+in which each mask defines an independent CFM target. The theorem states that at the joint population
+minimum, each task is simultaneously at its own individual population minimum—there is no trade-
+off between masks at the population level. A single ϕ⋆ therefore realises the joint flow and both
+cross-modal conditional flows without any auxiliary consistency loss enforcing agreement between
+them; this follows directly from the mask-conditioned loss decoupling in the proof.
+Remark 3 (Scope). The theorem is a population-limit result; finite-sample, discretisation, and
+approximation errors are open theoretical directions, with step-count and probe-count ablations
+(Appendix D) serving as empirical proxies.
+
+Practical consequences. Two direct practical consequences follow. All three log-densities are
+evaluable on the same trained model via reverse-time integration under the corresponding mask. The
+
+
+                                                   4
+per-modality marginals follow via Bayes’ identity,
+                         log pϕ (eI ) = log pϕ (eI , eT ) − log pϕ (eT | eI ),                         (2)
+and symmetrically for eT ; this coherence enables the uncertainty decomposition in Sec. 4.2.
+
+4     Uncertainty Quantification from the Joint Density
+The trained joint density of Sec. 3 delivers two uncertainty estimates from a single model: a
+conditional retrieval entropy that captures aleatoric ambiguity (Sec. 4.1), and a marginal-typicality
+epistemic score motivated by an exact chain-rule decomposition of the joint NLL that isolates a
+structurally discriminative cross-modal term (Sec. 4.2).
+
+4.1   Aleatoric Uncertainty: Retrieval Entropy
+
+Cross-modal retrieval is intrinsically one-to-many: a given image is compatible with many semanti-
+cally valid captions and a caption with many plausible images. Aleatoric uncertainty in this setting is
+the irreducible variability of valid targets given the input, representing the variability that no amount
+of additional training data can remove [12]. The conditional posterior pϕ (eT | eI ) exposed by the
+joint flow (Theorem 1) is the model’s learned distribution over valid targets given the query; its
+Shannon entropy is therefore our aleatoric score. Mismatch between pϕ and the true conditional,
+arising e.g. from sparse coverage or distribution shift, would manifest as miscalibration of this score,
+and is scored separately via the typicality readout of Sec. 4.2.
+In retrieval, we estimate this entropy through the gallery itself. Posterior samples drawn from the
+conditional flow are kernel-aggregated to a softmax distribution π = (π1 , . . . , πN ) over the N gallery
+items, and we report its Shannon entropy as the aleatoric score,
+                                                 XN
+                                       H = −         πj log πj .                                       (3)
+                                                  j=1
+
+ A symmetric construction with pϕ (eI | eT ) yields the score for image-to-text retrieval. Low H
+corresponds to a sharply constrained query (posterior mass on few candidates); high H to one
+consistent with many plausible matches. We note that H is the Shannon entropy of a discrete
+distribution π obtained by vMF kernel-density aggregation of M posterior samples over the N -
+item gallery, not the differential entropy of the continuous posterior pϕ (eT | eI ) itself; calibration
+accordingly depends on κ, M , and N , whose effects we analyse in Appendix C.5 and Sec. D.
+
+Bayes-risk interpretation. The score (3) has a decision-theoretic interpretation. Treating the
+gallery as a finite classification problem: true item X ∈ [N ], query eI as observation, and π as
+the per-query posterior P (X | eI ); the MAP predictor ŷ = arg maxj πj incurs 0/1 Bayes risk
+r = 1 − maxj πj . Applying Fano’s inequality [27] to this per-query classification problem gives,
+                                  H(π) ≤ H2 (r) + r log(N − 1),                                        (4)
+where H2 is binary entropy. The function f (r) = H2 (r) + r log(N − 1) is strictly increasing on
+[0, (N − 1)/N ], so the bound is invertible: a query with H(π) ≥ c satisfies r ≥ f −1 (c), yielding a
+rigorous lower bound on MAP Bayes risk from entropy alone. The bound achieves equality when the
+non-mode mass is spread uniformly, i.e. πj = r/(N − 1) for all j ̸= ŷ; for other posterior shapes,
+and for large galleries where log(N − 1) dominates, the bound is conservative. Consequently, H
+should be read as a monotone proxy for posterior risk—it certifies a lower bound on r but does not
+estimate r precisely. We stress that r is Bayes risk under π, which is a kernel-density approximation
+to pϕ on the gallery rather than the true data conditional; whether H tracks true retrieval difficulty is
+an empirical question addressed in Sec. 5.
+
+4.2   Density-Based Epistemic Scores
+
+In the post-hoc setting we consider, the encoder is frozen and there is no Bayesian posterior over its
+parameters; the natural surrogate is typicality under the learned density, following standard practice for
+likelihood-based OOD scoring [9]. We use “epistemic score” in this density-based sense throughout
+and do not claim a Bayesian decomposition of total uncertainty.
+
+
+                                                    5
+Decomposition into typicality and cross-modal matching. The chain rule applied to the joint
+log-density gives an exact decomposition that separates two categorically different signals:
+                                                                 
+               − log pϕ (eI , eT ) = − log pϕ (eI ) − log pϕ (eT ) − PMIϕ (eI , eT ),        (5)
+                                     |            {z              } |     {z       }
+                                               epistemic typicality     cross-modal matching
+
+where PMIϕ (eI , eT ) := log[pϕ (eI , eT )/(pϕ (eI ) pϕ (eT ))] is the pointwise mutual information
+under the learned joint. The first term measures how typical each embedding is under the learned
+per-modality distributions: low typicality signals that the model has poor coverage of that region,
+which is the standard density-based epistemic proxy. The second term is the log-likelihood ratio
+between the joint and the product of marginals: it measures the cross-modal compatibility of a
+specific image-text pair, and is structurally discriminative rather than epistemic. The distinction is
+most concrete in zero-shot classification: PMIϕ there measures image–class compatibility rather than
+distributional coverage—it is confidence-like, not epistemic—and is detrimental as a standalone score
+on every benchmark (Sec. 5.2). We consequently use the marginal typicality sum as the epistemic
+score and validate this choice empirically in Sec. 5.2,
+                             uep (eI , eT ) = − log pϕ (eI ) − log pϕ (eT ).                           (6)
+
+Estimation via the joint flow. Both marginals in Eq. (6) are obtained from the same trained model
+without additional parameters or retraining. Using Eq. (2),
+                       − log pϕ (eI ) = − log pϕ (eI , eT ) + log pϕ (eT | eI ),                       (7)
+and symmetrically for − log pϕ (eT ). Computing uep therefore requires three probability flow ODE
+solves on the same model: one joint and two conditional, each via reverse-time integration of the
+manifold change-of-variables identity with a tangent-projected Hutchinson trace estimator. These are
+numerical approximations whose quality depends on solver step count and probe count; we study
+their sensitivity in Appendix D; Appendix C.6 provides the algorithm and an unbiasedness lemma.
+
+5     Experiments
+We evaluate GeoFlowVLM as a post-hoc probabilistic layer operating entirely in embedding space
+without modifying the underlying encoder. The experiments in the main text are instantiated on a
+frozen OpenCLIP ViT-H/14 (laion2b_s32b_b79k) [1, 28] backbone, one of the strongest publicly
+available hyperspherical dual-encoder VLMs; we additionally evaluate on SigLIP (ViT-L-16-SigLIP-
+384) [2] in Appendix D to probe backbone generality; evaluating at larger scales and on EVA-CLIP is
+left to future work. Following the ALIGN paradigm [29], which demonstrated that large-scale noisy
+web supervision can produce strong vision-language representations, we train all models once on
+the Conceptual Captions dataset (CC-1M; 1M image–text pairs) with no task-specific fine-tuning,
+then evaluate zero-shot on seven held-out benchmarks spanning three retrieval datasets (both retrieval
+directions) and four zero-shot classification datasets, covering in-distribution, fine-grained, and
+viewpoint-shifted domains. Full details of the optimisation, architecture, and training curriculum are
+provided in the supplementary material (Sec. C). We probe two complementary uncertainty readouts
+from the single trained model:
+(Q1) Does GeoFlowVLM’s retrieval entropy, derived from the conditional posteriors pϕ (eT | eI )
+and pϕ (eI | eT ), reliably predict query difficulty in both retrieval directions across unseen datasets?
+(Q2) Does the marginal typicality sum uep = − log pϕ (eI ) − log pϕ (eT ) serve as a reliable density-
+based epistemic score, yielding monotonically increasing selective accuracy as coverage decreases
+across unseen datasets?
+
+5.1   Retrieval Entropy as Aleatoric Uncertainty (Q1)
+
+Q1 probes whether the retrieval entropy H defined in Sec. 4.1, computed from GeoFlowVLM’s
+conditional posteriors, is a calibrated estimator of cross-modal aleatoric ambiguity that tracks retrieval
+difficulty symmetrically in both directions.
+Evaluation setup. Following Upadhyay et al. [4], queries are ranked by H and partitioned into
+ten equal-frequency bins, with Recall@1 computed within each bin. A calibrated score produces a
+
+
+                                                     6
+monotone decrease from low to high entropy bins, summarised by Spearman ρ and R2 of a linear
+fit to bin-wise error. We compare with ProbVLM [4], AsymVLM-PSD and AsymVLM-vMF [7],
+and GroVE [5], all trained on CC1M and evaluated zero-shot on MS-COCO, Flickr, and CUB-200.
+Dataset and baseline details are available in Appendices A.1 and A.2.
+                                              COCO                                        Flickr                                  CUB
+                             80
+                                                                      80                                       1.6
+                             70
+                                                                      70                                       1.4
+
+
+                Text Image
+                             60                                                                                1.2
+                                                                      60
+                   R@1
+                             50                                                                                1.0
+                                                                      50                                       0.8
+                             40
+                                                                      40                                       0.6
+                             30                                                                                0.4
+                                                                      30
+                                  1   3        5      7       9            1      3         5      7     9           1   3        5      7     9
+                                                                      90
+                             80
+                                                                      80                                         4
+                             70
+                Image Text
+
+
+
+
+                                                                      70
+                                                                                                                 3
+                   R@1
+
+
+
+
+                             60                                       60
+                             50                                       50                                         2
+                             40                                       40
+                                                                                                                 1
+                                  1   3        5      7       9            1      3         5      7     9           1   3        5      7     9
+                                          Uncertainty bin                             Uncertainty bin                        Uncertainty bin
+                                       GeoFlowVLM                 GroVE          ProbVLM                AsymVLM-vMF           AsymVLM-PSD
+
+
+Figure 1: Aleatoric uncertainty calibration. R@1 across uncertainty bins ordered from low to high
+uncertainty for T2I (top) and I2T (bottom); curves averaged over 5 random-seed runs with shaded ±1
+standard deviation. GeoFlowVLM shows a stronger and more consistent monotonic decrease than all
+baselines across both retrieval directions and all datasets.
+
+Table 2: Aleatoric uncertainty calibration. Spearman S (↓) and R2 (↑) between predicted aleatoric
+uncertainty and Recall@1, averaged over 5 independent runs. Ideal: S = −1, R2 = 1. Bold: best;
+underline: second-best.
+                                                                   Flickr                              MS-COCO                          CUB
+                              Method                         S↓                R2 ↑                S↓          R2 ↑             S↓             R2 ↑
+
+                              ProbVLM                       +0.924             0.818            +0.717        0.621          +0.538            0.327
+            Image→Text
+
+
+
+
+                              AsymVLMPSD                    −0.148             0.235            −0.350        0.123          −0.073            0.000
+                              AsymVLMvMF                    −0.148             0.235            −0.350        0.123          −0.073            0.000
+                              GroVE                         −0.106             0.046            −0.105        0.025          −0.043            0.061
+                              GeoFlowVLM                    −0.993             0.879            −0.981        0.882          −0.723            0.576
+
+                              ProbVLM                     +1.000               0.949            +0.891        0.828          +0.636            0.335
+            Text→Image
+
+
+
+
+                              AsymVLMPSD                  −0.952               0.759            −1.000        0.916          −0.867            0.612
+                              AsymVLMvMF                  −1.000               0.950            −1.000        0.926          −0.729            0.612
+                              GroVE                       −0.132               0.036            +0.448        0.247          +0.152            0.026
+                              GeoFlowVLM                  −1.000               0.963            −0.993        0.895          −0.898            0.767
+
+
+Results. Table 2 and Figure 1 show that GeoFlowVLM achieves negative monotonicity across all
+datasets and both directions, with the best ρ and R2 in I2T and on Flickr30k and CUB-200 in T2I; on
+MS-COCO T2I, AsymVLM-vMF’s vMF prior yields higher R2 (0.926 vs. 0.895). ProbVLM’s ρ is
+strongly positive in I2T, indicating its uncertainty rises on correctly retrieved queries; AsymVLM
+and GroVE show unstable trends in some cases, with R2 collapsing on CUB-200. The bin-wise
+curves confirm a monotone decrease for GeoFlowVLM while baselines plateau, oscillate, or invert.
+These results indicate that the conditional posterior entropy is a calibrated and direction-symmetric
+estimator of cross-modal aleatoric uncertainty that transfers from web-caption training to fine-grained
+OOD retrieval.
+
+5.2   Likelihood-Based Epistemic Uncertainty (Q2)
+
+Density-based epistemic uncertainty reflects the absence of support for a test sample under the joint
+distribution learned during training. As GeoFlowVLM is trained on CC1M and evaluated zero-
+shot downstream, samples with different visual statistics or label spaces are likely to lie in weakly
+supported regions of pϕ , motivating uep as an epistemic signal. We note that this is a typicality-based
+notion of epistemic uncertainty; we do not estimate a posterior over model parameters.
+
+
+                                                                                        7
+Evaluation setup. Following the protocol of REPVLM [9], samples are ranked by their epistemic
+score in ascending order and filtered at coverage levels c ∈ {100%, 90%, . . . , 10%}, retaining
+the fraction c of least uncertain samples at each level. A useful epistemic score should yield
+monotonically increasing accuracy as coverage decreases, since rejecting high-uncertainty samples
+should preferentially remove misclassified examples. All methods are trained on CC1M and evaluated
+zero-shot on ImageNet-1K [30], Food-101 [31], CIFAR-100 [32], and ObjectNet [33] using 10,000
+samples per dataset. We focus on density-based epistemic scores, which measure typicality under a
+learned distribution, and compare against REPVLM [9], which scores negative log-density on the
+hyperspherical embedding manifold, and ProbVLM [4], which estimates uncertainty through MC
+dropout over its probabilistic adapter. BayesVLM [6] obtains a Gaussian covariance over embeddings
+via last-layer Laplace approximation; because it does not expose a pointwise log-density score for
+individual test embeddings, it does not admit the typicality-based evaluation protocol used here and
+is not included. Confidence-based proxies such as maximum cosine similarity over class prompts
+measure prediction sharpness rather than distributional support and address a different question; we
+leave such comparisons to future work.
+Component analysis. We validate the chain-rule decomposition in Eq. (5) by evaluating each term as
+a standalone epistemic score across the four datasets (Figure 2 and Table 3). Both marginal-typicality
+terms produce strong signals: text typicality − log pϕ (eT ) leads on three of four benchmarks while
+image typicality − log pϕ (eI ) leads on Food-101, with small absolute differences in all but one case.
+The exception is ObjectNet, where viewpoint shift moves image embeddings away from the training
+support and image typicality drops sharply (0.600 vs. 0.691 for text). The PMI term is, by a clear
+margin, the weakest signal on every benchmark, and is the only term whose selective-prediction
+curves trend downward (Figure 2)—it preferentially rejects correct predictions, consistent with
+its structurally discriminative rather than epistemic status (Sec. 4.2). Because the two marginals
+individually carry the epistemic signal but neither uniformly dominates, we use their sum uep for
+all benchmark comparisons below; the sum also enhances robustness against the modality-specific
+failure mode evident on ObjectNet.
+
+                    0.80
+                                    ImageNet-1K                                   Food-101                                    CIFAR-100                                 ObjectNet
+                                                                                                            0.900
+                                                                0.96                                                                                      0.8
+                    0.75                                                                                    0.875
+     Accuracy
+
+
+
+
+                                                                0.94                                        0.850                                         0.7
+                    0.70
+                                                                                                            0.825
+                                                                0.92                                                                                      0.6
+                    0.65                                                                                    0.800
+                                                                0.90                                        0.775
+                    0.60                                                                                                                                  0.5
+                                                                0.88                                        0.750
+                             0         30       60         90            0        30          60       90             0        30           60       90         0        30       60        90
+                                  Rejected Fraction (%)                      Rejected Fraction (%)                        Rejected Fraction (%)                     Rejected Fraction (%)
+                                                                               −log p(eI )           −log p(eT )                    −PMI(eI , eT )
+
+
+
+Figure 2: Epistemic component analysis. Selective prediction accuracy vs. rejected fraction. Each
+curve uses one term from Eq. (5) as a standalone epistemic score.
+
+Results. Since no single component dominates uniformly across datasets (Table 3), we use the
+marginal typicality sum uep = − log pϕ (eI ) − log pϕ (eT ) as the epistemic score for all benchmark
+comparisons. Figure 3 shows that GeoFlowVLM produces a consistent monotone increase in accuracy
+with rejected fraction across all four datasets. Performance is numerically comparable to REPVLM
+across most benchmarks with neither method dominating uniformly. We do not claim a numerical
+advantage over REPVLM on this task: the epistemic contribution of GeoFlowVLM is primarily
+analytical. The chain-rule decomposition (Eq. 5) explains why marginal typicality is the correct
+epistemic signal and why PMI is not—providing principled grounding for the per-modality scoring
+
+                                   ImageNet-1K                  97
+                                                                                 Food-101                                    CIFAR-100                                  ObjectNet
+                    80                                                                                       94
+     Accuracy (%)
+
+
+
+
+                                                                96                                           92                                           80
+                    78
+                                                                                                             90
+                                                                95
+                    76                                                                                       88                                           75
+                                                                94
+                    74                                                                                       86                                           70
+                                                                93
+                         0           30        60         90         0           30          60       90          0           30           60        90        0        30        60        90
+                                 Rejected Fraction (%)                       Rejected Fraction (%)                        Rejected Fraction (%)                     Rejected Fraction (%)
+                                                                             GeoFlowVLM                    REPVLM                       ProbVLM
+
+Figure 3: Epistemic uncertainty: selective prediction. Accuracy vs. rejected fraction on four
+zero-shot classification benchmarks.
+
+
+                                                                                                       8
+approach that REPVLM uses empirically. Concretely, marginals derived from the jointly trained
+model are coherent by construction (via Eq. 2), whereas REPVLM trains two independent flows
+whose individual densities carry no cross-modal consistency guarantee; the same joint model delivers
+aleatoric uncertainty without additional training or parameters. ObjectNet provides a case where this
+structural difference matters empirically: under SigLIP’s more isotropic embeddings, GeoFlowVLM
+maintains a stronger advantage over REPVLM on ObjectNet specifically (Appendix D). Viewpoint-
+shifted images may not appear atypical under an image marginal trained in isolation—SigLIP’s
+flatter geometry suppresses that signal—but their departure from typical training-time image–text co-
+occurrences remains detectable via the jointly trained marginal, which inherits cross-modal structure
+that a per-modality flow cannot encode.
+
+ Table 3: Epistemic component analysis: Area under the selective accuracy curve (AUSAC ↑).
+              Component                           CIFAR-100     ImageNet   Food-101   ObjectNet
+              − log pϕ (eI ) [image typicality]     0.788        0.678      0.854       0.600
+              − log pϕ (eT ) [text typicality]      0.809        0.686      0.847       0.691
+              −PMIϕ (eI , eT ) [cross-modal]        0.736        0.611      0.819       0.536
+
+
+Ablations. We ablate four design choices (full results in Appendix D). (i) A Euclidean baseline
+identical to GeoFlowVLM in architecture, training data, and optimisation, but operating in Rd ×
+Rd without sphere projection or geodesic interpolation—underperforms GeoFlowVLM on both
+aleatoric and epistemic metrics across all datasets, confirming hyperspherical geometry is necessary
+(Appendix D.1). (ii) Aleatoric calibration recovers sharply at λ ≥ 1 and plateaus; we use λ = 3
+(Appendix D.4). (iii) Reliable uncertainty estimates do not require many integration steps or probes:
+quality is stable across N ∈ {10, . . . , 50} ODE steps (Appendix D.2) and nprobe ∈ {1, . . . , 5}
+Hutchinson probes (Appendix D.3); we adopt N = 50 and nprobe = 1 as conservative defaults,
+although the ablations show that N as low as 10 is sufficient at no measurable cost in estimation
+quality. (iv) SigLIP (ViT-L-16-SigLIP-384) probes a qualitatively different embedding geometry: its
+sigmoid loss scores pairs independently without CLIP’s cross-pair softmax denominator, producing
+more isotropic distributions on Sd−1 . The architecture is otherwise unchanged (d = 1024): aleatoric
+calibration transfers consistently, while epistemic discrimination degrades on ImageNet-1K for
+density-based methods but not ProbVLM, attributed to flatter learned density and weaker typicality-
+based OOD contrast under more uniform embeddings (Appendix D.5).
+
+6   Conclusions, Limitations, Discussion and Broader Impact
+GeoFlowVLM demonstrates that a geometry-aware joint density model over frozen hyperspherical
+VLM embeddings trained once on large-scale data and applied zero-shot—suffices to recover both
+aleatoric and epistemic uncertainty across diverse downstream tasks, addressing a gap left by methods
+that do not account for the underlying hyperspherical geometry or treat modalities independently.
+The joint distribution on the product hypersphere is strictly richer than any per-modality model: its
+conditional posteriors expose cross-modal aleatoric ambiguity inaccessible to per-modality flows,
+while the chain-rule decomposition of the joint NLL identifies marginal typicality as the right
+epistemic signal, explains why PMI is not, and accounts for the empirical effectiveness of approaches
+such as REPVLM. We hope this work encourages joint embedding modelling as a general strategy
+for richer probabilistic reasoning over vision-language representations.
+As a post-hoc generative adapter, GeoFlowVLM requires one-time training on large-scale data
+(unlike training-free approaches such as BayesVLM [6]) and three ODE solves per query for uep ;
+both uncertainty estimates depend on kernel bandwidth, step count, and proxy-corpus match, and
+calibration is bounded by encoder quality. The epistemic scores are density-based rather than
+Bayesian—measuring typicality under the learned joint, not parameter-posterior variance—and the
+consistency theorem (Theorem 1) is a population-limit result; quantitative finite-sample bounds remain
+open. SigLIP experiments (Appendix D) confirm aleatoric calibration transfers across backbones and
+GeoFlowVLM outperforms REPVLM on three of four epistemic benchmarks; degradation of both
+density-based methods on ImageNet-1K (while ProbVLM is unaffected) may be attributed to SigLIP’s
+sigmoid objective producing more isotropic embeddings [2, 24], which flatten the learned density
+and weaken typicality-based OOD contrast. As the method operates over frozen embeddings without
+generating new content, direct misuse risk is limited; improved VLM uncertainty quantification has
+clear value in safety-critical applications such as medical retrieval and autonomous systems.
+
+
+                                                            9
+Acknowledgments
+The computations and data handling were enabled by the Alvis resource provided by the Knut and
+Alice Wallenberg Foundation at Chalmers University of Technology, and by the National Academic
+Infrastructure for Supercomputing in Sweden (NAISS) through project NAISS 2026/4-691. Andreas
+Hellander and Prashant Singh acknowledge support from the Swedish Research Council through
+grant agreement nos. 2023-05167 and 2023-05593, respectively.
+
+References
+ [1] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal,
+     Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual
+     models from natural language supervision. In International conference on machine learning,
+     pages 8748–8763. PMLR, 2021.
+
+ [2] Xiaohua Zhai, Basil Mustafa, Alexander Kolesnikov, and Lucas Beyer. Sigmoid loss for
+     language image pre-training. In Proceedings of the IEEE/CVF international conference on
+     computer vision, pages 11975–11986, 2023.
+
+ [3] Sanghyuk Chun, Seong Joon Oh, Rafael Sampaio De Rezende, Yannis Kalantidis, and Diane
+     Larlus. Probabilistic embeddings for cross-modal retrieval. In Proceedings of the IEEE/CVF
+     conference on computer vision and pattern recognition, pages 8415–8424, 2021.
+
+ [4] Uddeshya Upadhyay, Shyamgopal Karthik, Massimiliano Mancini, and Zeynep Akata. Probvlm:
+     Probabilistic adapter for frozen vison-language models. In Proceedings of the IEEE/CVF
+     international conference on computer vision, pages 1899–1910, 2023.
+
+ [5] Aishwarya Venkataramanan, Paul Bodesheim, and Joachim Denzler. Probabilistic embeddings
+     for frozen vision-language models: uncertainty quantification with gaussian process latent
+     variable models. In Proceedings of the Forty-First Conference on Uncertainty in Artificial
+     Intelligence, pages 4309–4328, 2025.
+
+ [6] Anton Baumann, Rui Li, Marcus Klasson, Santeri Mentu, Shyamgopal Karthik, Zeynep Akata,
+     Arno Solin, and Martin Trapp. Post-hoc probabilistic vision-language models. arXiv preprint
+     arXiv:2412.06014, 2024.
+
+ [7] Li Ju, Max Andersson, Stina Fredriksson, Edward Glöckner, Andreas Hellander, Ekta Vats, and
+     Prashant Singh. Exploiting the asymmetric uncertainty structure of pre-trained vlms on the unit
+     hypersphere. In 39th Conference on Neural Information Processing Systems (NeurIPS 2025),
+     2025.
+
+ [8] Yarin Gal and Zoubin Ghahramani. Dropout as a bayesian approximation: Representing model
+     uncertainty in deep learning. In Proceedings of the 33rd International Conference on Machine
+     Learning, volume 48 of Proceedings of Machine Learning Research, pages 1050–1059, 2016.
+
+ [9] Li Ju, Mayank Nautiyal, Andreas Hellander, Ekta Vats, and Prashant Singh. Epistemic un-
+     certainty quantification for pre-trained vlms via riemannian flow matching. In International
+     Conference on Machine Learning, 2026. URL https://arxiv.org/abs/2601.21662.
+
+[10] Sanghyuk Chun. Improved probabilistic image-text representations. In The Twelfth International
+     Conference on Learning Representations, 2024.
+
+[11] Sanghyuk Chun, Wonjae Kim, Song Park, and Sangdoo Yun. Probabilistic language-image
+     pre-training. In The Thirteenth International Conference on Learning Representations, 2025.
+
+[12] Alex Kendall and Yarin Gal. What uncertainties do we need in bayesian deep learning for
+     computer vision? In Proceedings of the 31st International Conference on Neural Information
+     Processing Systems, NIPS’17, pages 5580–5590, 2017.
+
+[13] Eyke Hüllermeier and Willem Waegeman. Aleatoric and epistemic uncertainty in machine
+     learning: An introduction to concepts and methods. Machine learning, 110(3):457–506, 2021.
+
+
+                                                10
+[14] Emile Mathieu and Maximilian Nickel. Riemannian continuous normalizing flows. Advances
+     in neural information processing systems, 33:2503–2515, 2020.
+
+[15] Valentin De Bortoli, Emile Mathieu, Michael Hutchinson, James Thornton, Yee Whye Teh, and
+     Arnaud Doucet. Riemannian score-based generative modelling. Advances in neural information
+     processing systems, 35:2406–2422, 2022.
+
+[16] Yaron Lipman, Ricky T. Q. Chen, Heli Ben-Hamu, Maximilian Nickel, and Matthew Le. Flow
+     matching for generative modeling. In The Eleventh International Conference on Learning
+     Representations (ICLR), 2023.
+
+[17] Ricky TQ Chen and Yaron Lipman. Flow matching on general geometries. In The Twelfth
+     International Conference on Learning Representations, 2024.
+
+[18] Alexander Tong, Kilian Fatras, Nikolay Malkin, Guillaume Huguet, Yanlei Zhang, Jarrid Rector-
+     Brooks, Guy Wolf, and Yoshua Bengio. Improving and generalizing flow-based generative
+     models with minibatch optimal transport. Transactions on Machine Learning Research, pages
+     1–34, 2024.
+
+[19] Junho Lee, Kwanseok Kim, and Joonseok Lee. Geometry-aware image flow matching. In
+     International Conference on Machine Learning, Proceedings of Machine Learning Research,
+     2026.
+
+[20] Meir Yossef Levi and Guy Gilboa. The double-ellipsoid geometry of CLIP. In Forty-second
+     International Conference on Machine Learning, pages 33999–34019, 2025.
+
+[21] Roy Betser, Meir Yossef Levi, and Guy Gilboa. Whitened CLIP as a likelihood surrogate
+     of images and captions. In Proceedings of the 42nd International Conference on Machine
+     Learning, volume 267 of Proceedings of Machine Learning Research, pages 4069–4095. PMLR,
+     2025.
+
+[22] Andrew Draganov, Sharvaree Vadgama, Sebastian Damrich, Jan Niklas Böhm, Lucas Maes,
+     Dmitry Kobak, and Erik Bekkers. On the importance of embedding norms in self-supervised
+     learning. In Proceedings of the 42nd International Conference on Machine Learning, volume
+     267 of Proceedings of Machine Learning Research. PMLR, 2025.
+
+[23] Victor Weixin Liang, Yuhui Zhang, Yongchan Kwon, Serena Yeung, and James Y Zou. Mind
+     the gap: Understanding the modality gap in multi-modal contrastive representation learning.
+     Advances in Neural Information Processing Systems, 35:17612–17625, 2022.
+
+[24] Tongzhou Wang and Phillip Isola. Understanding contrastive representation learning through
+     alignment and uniformity on the hypersphere. In Proceedings of the 37th International Confer-
+     ence on Machine Learning, ICML. PMLR, 2020.
+
+[25] Quan Sun, Yuxin Fang, Ledell Wu, Xinlong Wang, and Yue Cao. Eva-clip: Improved training
+     techniques for clip at scale. arXiv preprint arXiv:2303.15389, 2023.
+
+[26] Marco Cuturi. Sinkhorn distances: Lightspeed computation of optimal transport. Advances in
+     neural information processing systems, 26, 2013.
+
+[27] Thomas M Cover and Joy A Thomas. Elements of information theory (wiley series in telecom-
+     munications and signal processing). Wiley-interscience, 2006.
+
+[28] Mehdi Cherti, Romain Beaumont, Ross Wightman, Mitchell Wortsman, Gabriel Ilharco, Cade
+     Gordon, Christoph Schuhmann, Ludwig Schmidt, and Jenia Jitsev. Reproducible scaling laws
+     for contrastive language-image learning. In Proceedings of the IEEE/CVF conference on
+     computer vision and pattern recognition, pages 2818–2829, 2023.
+
+[29] Chao Jia, Yinfei Yang, Ye Xia, Yi-Ting Chen, Zarana Parekh, Hieu Pham, Quoc Le, Yun-Hsuan
+     Sung, Zhen Li, and Tom Duerig. Scaling up visual and vision-language representation learning
+     with noisy text supervision. In International conference on machine learning, pages 4904–4916.
+     PMLR, 2021.
+
+
+                                                11
+[30] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. Imagenet: A large-
+     scale hierarchical image database. In 2009 IEEE conference on computer vision and pattern
+     recognition, pages 248–255. Ieee, 2009.
+[31] Lukas Bossard, Matthieu Guillaumin, and Luc Van Gool. Food-101–mining discriminative
+     components with random forests. In European conference on computer vision, pages 446–461.
+     Springer, 2014.
+[32] A Krizhevsky. Learning multiple layers of features from tiny images. Master’s thesis, University
+     of Toronto, 2009.
+[33] Andrei Barbu, David Mayo, Julian Alverio, William Luo, Christopher Wang, Dan Gutfreund,
+     Josh Tenenbaum, and Boris Katz. Objectnet: A large-scale bias-controlled dataset for pushing
+     the limits of object recognition models. Advances in neural information processing systems, 32,
+     2019.
+[34] Piyush Sharma, Nan Ding, Sebastian Goodman, and Radu Soricut. Conceptual captions: A
+     cleaned, hypernymed, image alt-text dataset for automatic image captioning. In Proceedings of
+     the 56th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long
+     Papers), pages 2556–2565, 2018.
+[35] Tsung-Yi Lin, Michael Maire, Serge Belongie, James Hays, Pietro Perona, Deva Ramanan, Piotr
+     Dollár, and C Lawrence Zitnick. Microsoft coco: Common objects in context. In European
+     conference on computer vision, pages 740–755. Springer, 2014.
+[36] Bryan A Plummer, Liwei Wang, Chris M Cervantes, Juan C Caicedo, Julia Hockenmaier, and
+     Svetlana Lazebnik. Flickr30k entities: Collecting region-to-phrase correspondences for richer
+     image-to-sentence models. In Proceedings of the IEEE international conference on computer
+     vision, pages 2641–2649, 2015.
+[37] Catherine Wah, Steve Branson, Peter Welinder, Pietro Perona, and Serge Belongie. The caltech-
+     ucsd birds-200-2011 dataset. In California Institute of Technology, 2011. Technical Report
+     CNS-TR-2011-001.
+[38] Scott Reed, Zeynep Akata, Bernt Schiele, and Honglak Lee. Learning deep representations of
+     fine-grained visual descriptions. In Proceedings of the IEEE Conference on Computer Vision
+     and Pattern Recognition, 2016.
+[39] Ali Rahimi and Benjamin Recht. Random features for large-scale kernel machines. Advances
+     in neural information processing systems, 20, 2007.
+[40] William Peebles and Saining Xie. Scalable diffusion models with transformers. In Proceedings
+     of the IEEE/CVF international conference on computer vision, pages 4195–4205, 2023.
+[41] Hugo Touvron, Matthieu Cord, Alexandre Sablayrolles, Gabriel Synnaeve, and Hervé Jégou. Go-
+     ing deeper with image transformers. In Proceedings of the IEEE/CVF international conference
+     on computer vision, pages 32–42, 2021.
+[42] Noam Shazeer. Glu variants improve transformer. arXiv preprint arXiv:2002.05202, 2020.
+     URL https://arxiv.org/abs/2002.05202.
+[43] Jonathan Ho and Tim Salimans. Classifier-free diffusion guidance. In NeurIPS 2021 Workshop
+     on Deep Generative Models and Downstream Applications, 2021.
+
+
+A     Supplementary Material
+A.1   Datasets
+
+All models are trained on Conceptual Captions 1M (CC1M) [34], a web-crawled image-caption
+dataset providing one caption per image. Embeddings for all datasets are precomputed using
+OpenCLIP with a ViT-H/14 backbone initialized from the laion2b_s32b_b79k checkpoint, with
+standard OpenCLIP image preprocessing and matching text tokenization – and similarly for the
+
+
+                                                 12
+SigLIP (ViT-L-16-SigLIP-384) [2] backbone for additional experiments presented in Sec. D.5. All
+embeddings are ℓ2 -normalized before use. Precomputing and caching embeddings allows all training
+and evaluation to operate directly in the shared multimodal embedding space without repeatedly
+running the encoder.
+Table 4 summarises all datasets. For aleatoric uncertainty (Q1), we use three cross-modal retrieval
+benchmarks capped at 5,000 test samples each: MS-COCO [35] and Flickr [36] provide five captions
+per image, while CUB-200 [37] provides ten human-written captions per image [38] and introduces
+fine-grained visual ambiguity across 200 bird species alongside a domain shift from CC1M. For
+epistemic uncertainty (Q2), we use four zero-shot classification benchmarks capped at 10,000 test
+samples each: ImageNet-1K [30], Food-101 [31], CIFAR-100 [32], and ObjectNet [33].
+
+Table 4: Training and evaluation datasets. All models are trained on CC1M. Test sizes are capped at
+the values shown.
+       Dataset         Split       Task         Classes   Captions/Image   Samples (capped)
+       CC1M            Train         –            –             1             1,000,000
+       MS-COCO         Test      Retrieval        –            5                5,000
+       Flickr          Test      Retrieval        –            5                5,000
+       CUB-200         Test      Retrieval       200           10               5,000
+       ImageNet-1K     Test    Classification   1,000           –               10,000
+       Food-101        Test    Classification    101            –               10,000
+       CIFAR-100       Test    Classification    100            –               10,000
+       ObjectNet       Test    Classification    313            –               10,000
+
+
+A.2   Baselines
+
+We compare against four post-hoc probabilistic baselines for frozen vision-language models. The
+descriptions below follow the original papers; when used in our experiments, these methods are
+instantiated on frozen CLIP embeddings under a common training protocol for fair comparison.
+Table 5 summarises the main modeling choices most relevant to our Q1 and Q2 evaluations.
+
+ProbVLM [4] ProbVLM is a post-hoc probabilistic adapter that converts deterministic frozen
+VLM embeddings into probabilistic embeddings through separate image and text adaptors. The
+method can model both aleatoric and epistemic uncertainty. It captures aleatoric uncertainty by
+predicting the parameters of a heteroscedastic Generalized Gaussian Distribution (GGD) for each
+embedding, while training combines intra-modal reconstruction with cross-modal alignment. It
+captures epistemic uncertainty by keeping dropout active at inference and measuring the variance
+across multiple stochastic forward passes through the adaptors.
+
+AsymVLM [7] AsymVLM is a post-hoc probabilistic adaptation method designed for the hy-
+perspherical geometry of pretrained VLM embeddings. Its main formulation is asymmetric: text
+embeddings are modeled probabilistically using directional distributions on the unit hypersphere,
+while image embeddings remain deterministic. The paper studies two principal directional choices,
+von Mises–Fisher (vMF) and Power Spherical (PS), and optimizes a likelihood-based objective
+derived from an InfoNCE-style formulation. AsymVLM is primarily designed to model aleatoric
+uncertainty in language rather than density-based epistemic uncertainty.
+
+GroVE [5] GroVE is a post-hoc probabilistic embedding method based on a multimodal Gaussian
+Process Latent Variable Model (GPLVM). It learns a shared low-dimensional latent representation
+for each paired image–text example and uses two sparse variational Gaussian Processes, one per
+modality, to map this latent representation back to the observed embedding spaces. GroVE primarily
+models aleatoric uncertainty, capturing ambiguity in image–text correspondence through a predictive
+Gaussian embedding whose covariance arises from uncertainty in the inferred latent representation
+and the GP prediction.
+
+REPVLM [9] REPVLM explicitly models density-based epistemic uncertainty. It learns the
+conditional embedding density p(z | c) on the hypersphere using conditional Riemannian flow
+
+
+                                                  13
+ Table 5: Summary of baseline method families and their relevance to our two evaluation settings.
+
+          Method                 Distribution / Model                  Geometry          Q1       Q2
+          ProbVLM                Generalized Gaussian adapter          Euclidean         ✓         ✓
+          AsymVLM-vMF            Directional distribution (vMF)        Hypersphere       ✓         –
+          AsymVLM-PS             Directional distribution (PS)         Hypersphere       ✓         –
+          GroVE                  Shared-latent GPLVM with sparse GP    Euclidean         ✓         –
+          REPVLM                 Conditional Riemannian flow density   Hypersphere       –         ✓
+
+
+matching, where z is a pretrained VLM embedding and c is a discrete modality label indicating
+whether the embedding comes from the image or text encoder. Its epistemic uncertainty score is
+the conditional negative log-likelihood − log p(z | c), so embeddings in low-density regions of the
+manifold are interpreted as regions of model ignorance.
+
+B    GeoFlowVLM Architecture
+
+
+                                                                             AdaLN             AdaLN
+                        IMAGE
+                      PROJECTION                                            Cross Gate        Cross Gate
+                                                          IMAGE
+                                                         DECODER
+                                                                            LayerScale        LayerScale
+                                          IMAGE
+          TIME                             DSB
+        ENCODER
+                      CondMLP(     )                                         AdaLN             AdaLN
+          TIME                             TEXT
+        ENCODER                             DSB                              SwiGLU            SwiGLU
+
+                                                           TEXT             LayerScale        LayerScale
+                                                         DECODER
+                         TEXT
+                      PROJECTION
+
+                                                                         DUAL-STREAM-BLOCK (DSB)
+
+
+
+Figure 4: GeoFlowVLM architecture. Image and text CLIP embeddings zI and zT are projected
+into a shared H-dimensional latent space. Per-stream conditioning vectors cI , cT derived from flow
+times tI , tT and direction dir are shared across eight DualStreamBlocks (DSBs), each refining both
+streams via AdaLN-Zero, gated cross-modal interaction, and SwiGLU. Stream decoders produce the
+final velocity vtϕ (zt ).
+
+The joint velocity field vtϕ (zt , m) is parameterised by a symmetric dual-stream architecture, illus-
+trated in Figure 4. The noisy joint embedding zt is split into zI and zT , each projected into a shared
+H-dimensional latent space by modality-specific Image and Text Projection encoders, each consisting
+of a linear layer followed by LayerNorm. In parallel, the per-stream flow times tI , tT and the discrete
+flow direction dir ∈ {0, 1, 2} are processed by the CondMLP module: each time signal is encoded via
+Random Fourier Features [39] with frozen random frequencies, providing broader spectral coverage
+over t ∈ [0, 1] than a fixed sinusoidal grid, and summed with a learned direction embedding before
+being passed through a per-stream two-layer MLP with SiLU activations. This produces conditioning
+vectors cI , cT ∈ RH that are computed once and shared across all subsequent blocks.
+The projected hidden states hI , hT are then refined by L stacked DualStreamBlocks (DSBs). Each
+DSB applies two sequential sub-layers to both streams. In the first sub-layer, each stream hidden state
+is modulated by its conditioning vector via DiT-style AdaLN-Zero [40], which applies an affine-free
+LayerNorm followed by a learned shift and scale derived from cI or cT , with the projection zero-
+initialised so that conditioning begins as the identity and is learned incrementally. The modulated
+state is then passed through a multi-head Cross Gate, where the hidden space is partitioned into nheads
+independent subspaces and in each subspace the receiving stream selectively absorbs information
+from the sending stream:
+                               CrossGate(x, s) = σ(Wgate x) ⊙ Wval s,                               (8)
+where σ is the sigmoid function, Wgate operates on the receiving stream to produce a data-dependent
+gate, and Wval transforms the sending stream independently. This enforces the inductive bias that
+
+
+                                                        14
+CLIP features factor into independent semantic subspaces while allowing asymmetric cross-modal
+alignment. All Wval projections are zero-initialised for stability. The cross-gate output is scaled
+by LayerScale [41] initialised at 10−4 and added back to the stream via a residual connection. In
+the second sub-layer, another AdaLN-Zero modulates the updated hidden state before a SwiGLU
+feed-forward network [42], which computes SiLU(Wgate x) ⊙ Wval x and consistently outperforms
+GELU at equal parameter count, again followed by a LayerScale-weighted residual connection.
+After all DSBs, the Image and Text Decoders map each stream through a LayerNorm and a zero-
+initialised linear projection back to the original embedding dimension d. The two outputs are
+concatenated to form the full joint velocity vtϕ ∈ R2d . Zero initialisation of the decoders ensures
+near-zero initial velocities, preventing the model from displacing embeddings off M at the start of
+training and promoting stable geodesic transport.
+
+B.1   Classifier-Free Guidance
+
+For conditional generation under either of the two conditional masks, classifier-free guidance [43]
+can be applied at inference by linearly interpolating between conditional and unconditional velocity
+fields,
+              ṽtϕ = vtϕ (zt , m, zcond ) + λ vtϕ (zt , m, zcond ) − vtϕ (zt , m, zcond
+                                                                                         
+                                   1                        1                      0    ) ,       (9)
+where λ ≥ 0 is the guidance scale and the unconditional field is obtained by substituting the
+conditioning stream with its OT-coupled noise source zcond
+                                                         0    , consistent with the CFG dropout used
+during training. Increasing λ sharpens the generated distribution towards the conditioning signal.
+
+C     Hyperparameters
+C.1   GeoFlowVLM Hyperparameters
+
+GeoFlowVLM is trained once on Conceptual Captions (CC1M), capped at 1,000,000 image–text
+pairs. All experiments use frozen CLIP ViT-H/14 embeddings with image and text dimensionality
+1024. We use a single hyperparameter configuration for all downstream evaluations and do not
+perform dataset-specific tuning.
+Training uses AdamW with a cosine learning-rate schedule and linear warmup. To stabilize joint
+density learning, we use a three-stage curriculum over the mask distribution. In the first stage, the
+model is trained only on conditional flow tasks, which provides a stable initialization for learning
+cross-modal conditional structure. In the second stage, the probability of joint modeling is increased
+linearly, avoiding an abrupt shift in the training objective that can degrade the already learned
+conditional behavior. In the final stage, the joint probability is fixed at its target value, so the model
+primarily learns the full image–text joint distribution while continuing to observe conditional training
+masks. Classifier-free guidance dropout is applied during training by replacing the conditioning
+information with an unconditional mask with probability puncond . Full hyperparameter details are
+provided in Table 6.
+Note: All experiments were run on nodes with Intel Icelake CPUs (64 cores, 512GB RAM) and
+4×NVIDIA A100 GPUs (40GB each) on an HPC cluster.
+
+C.2   Baseline Hyperparameters
+
+All baseline methods follow the same training protocol as GeoFlowVLM: each is trained on the
+CC1M training split using frozen CLIP ViT-H/14 image and text embeddings of dimension d=1024,
+with a single configuration shared across all evaluation datasets and no per-dataset tuning. The
+learning rate schedule is cosine annealing with 1,000 linear warmup steps and 120,000 total training
+steps. Validation is performed every 10,000 steps over 20 validation batches, and the checkpoint with
+the lowest validation loss is retained for evaluation.
+ProbVLM [4] is optimised with AdamW at learning rate 1×10−4 , weight decay 5×10−4 , and
+batch size 2048, using a probabilistic adapter with hidden dimension 2048 (twice the embedding
+dimension).
+AsymVLM-vMF and AsymVLM-PSD [7] are both optimised with SGD at learning rate 1×10−2 ,
+weight decay 5×10−4 , momentum 0.9, and batch size 2048. Following the asymmetric design of the
+
+
+                                                   15
+Table 6: Training configuration for GeoFlowVLM. All experiments use the same configuration
+without dataset-specific tuning.
+
+     Parameter                                              Value
+     Optimisation
+     Optimiser                                              AdamW
+     Learning rate                                          6 × 10−4
+     Weight decay                                           1 × 10−3
+     Gradient clipping                                      1.0
+     Learning-rate schedule                                 cosine decay
+     Warmup steps                                           4,000
+     Total training steps                                   120,000
+     Batch size                                             8,192
+     Architecture
+     Hidden dimension                                       512
+     Number of dual stream blocks (depth)                   8
+     Cross modal gating heads per block                     4
+     Dropout                                                0.05
+     Training curriculum
+     Phase 1: conditional-only                              0.15 T = 18,000 steps
+     Phase 2: joint-probability ramp                        0.15 T = 18,000 steps
+     Phase 3: target joint probability                      pjoint = 0.40
+     Classifier-free guidance dropout                       puncond = 0.10
+     Inference (joint NLL)
+     ODE solver                                             fixed-step Euler
+     Integration steps                                      50
+     Hutchinson probes (K)                                  1
+     Inference (retrieval entropy)
+     Posterior samples (M )                                 50
+     vMF kernel concentration (κ)                           100
+     Guidance scale (λ)                                     3
+     Validation and early stopping
+     Validation frequency                                   every 2,000 steps
+     Validation batches                                     5
+     Patience                                               100 validations
+     Minimum absolute improvement                           10−6
+     Minimum relative improvement                           0.005
+
+
+
+
+original method, only the text branch is adapted while the image embedding remains deterministic;
+the text adaptor is a four-layer MLP with ReLU activations and hidden dimension 2048 (twice the
+embedding dimension).
+GroVE [5] is optimised with Adam at learning rate 1×10−5 and a batch size of 128 to accommodate
+the cost of variational Gaussian process inference. The model uses sparse variational Gaussian
+process likelihoods with 250 inducing points per modality and dataset-specific latent dimensions (5
+for MS-COCO and Flickr30k, 10 for CUB-200), with loss weights λ1 = 0.01 and λ2 = 400.0.
+REPVLM [9] is optimised with AdamW at learning rate 1×10−5 , weight decay 1×10−5 , and batch
+size 2048. The conditional Riemannian flow network is a six-block residual MLP with hidden
+dimension 2048, AdaLN-modulated time conditioning via sinusoidal embeddings, and a learnable
+modality embedding distinguishing the image and text streams.
+
+
+                                                16
+C.3   Product Hypersphere Geometry and Masked CFM Mechanics
+
+Because CLIP embeddings are ℓ2 -normalized, each image embedding eI and text embedding eT lies
+on the unit hypersphere Sd−1 . For paired embeddings we therefore work on the product manifold,
+
+                              M = Sd−1 × Sd−1 ,         z = (eI , eT ),
+
+rather than a single sphere formed by concatenation. This matches the Riemannian flow matching
+setting on simple manifolds and their product spaces.
+
+Base distribution. We take p0 to be the uniform distribution on M = Sd−1 ×Sd−1 (with respect
+to the product of round volume measures). Concretely, samples z0 = (e0I , e0T ) ∼ p0 are obtained
+by drawing each block from a unit Gaussian in Rd and renormalising to Sd−1 , independently across
+blocks. Under this choice log p0 is a constant equal to the negative of the log-volume of M, which
+simplifies the change-of-variables identity used for log-density evaluation in Sec. C.6.
+
+Tangent spaces and projection.     The tangent space factorizes as,
+
+              Tz M = TeI Sd−1 × TeT Sd−1 ,        Te Sd−1 = {v ∈ Rd : ⟨v, e⟩ = 0}.
+
+Accordingly, if the network outputs a raw ambient-space velocity (vI , vT ), we project it blockwise
+onto the tangent space,
+
+                         Πz (vI , vT ) = (I − eI e⊤                ⊤
+                                                                        
+                                                  I )vI , (I − eT eT )vT .
+
+In exact continuous-time dynamics, a tangent vector field keeps trajectories on M. In practice,
+numerical solvers may still use reprojection to control drift.
+
+Geodesics, exponential maps, and logarithmic maps.            Under the product metric, geodesics
+decouple across the two sphere factors. For each sphere,
+
+                                     dS (x, y) = arccos⟨x, y⟩,
+
+                                       v                        θ              
+  expx (v) = cos(∥v∥) x + sin(∥v∥)        ,      logx (y) =         y − cos θ x ,   θ = dS (x, y).
+                                      ∥v∥                     sin θ
+Using the geodesic-distance premetric and κ(t) = 1 − t, the conditional RFM path is the constant-
+speed geodesic,
+                                                              
+                                zt = expz1 (1 − t) logz1 (z0 ) ,
+where the exponential and logarithmic maps are applied componentwise on the two sphere factors.
+
+Masked interpolant. Writing gt for the per-block geodesic operator and decomposing z = [eI ; eT ],
+the masked interpolant used in LGeoFlowVLM is,
+
+      zt = (12d − m) ⊙ z1 + m ⊙ gt (z0 , z1 ),         gt (a, b) = sin((1−t)ω)
+                                                                       sin ω   a + sin(tω)
+                                                                                    sin ω b,
+
+with ω = arccos⟨a, b⟩. Conditioned dimensions (mk = 0) are pinned at z1 for all t; generated
+dimensions (mk = 1) follow the geodesic from z0 to z1 .
+
+Target velocity. The flow-matching regression target on the generated dimensions is the tangent
+vector of the geodesic,
+                                           ω                               
+                   vt (zt | z1 ) = m ⊙         cos(tω) z1 − cos((1 − t)ω) z0 ,
+                                         sin ω
+with ω computed per block. On conditioned dimensions (mk = 0) the target is identically zero, so
+the mask in LGeoFlowVLM removes any supervision there.
+
+
+                                                17
+OT Coupling. Given a data sample z1 = [e1I , e1T ] ∼ p(z) on the product sphere SdI −1 × SdT −1 ,
+we draw a source sample z0 = [e0I , e0T ] by projecting independent Gaussian samples onto each
+sphere factor. To reduce the variance of the flow matching objective and encourage more coherent
+geodesic trajectories, we pair source and target samples within each minibatch via entropic optimal
+transport [18, 26], using the sum of geodesic arc distances across both modalities as the transport
+cost,
+                 c(z0 , z1 ) = dS (e0I , e1I ) + dS (e0T , e1T ), dS (a, b) = arccos(⟨a, b⟩).       (10)
+Given uniform marginals, an entropically regularized transport plan is computed via Sinkhorn’s
+algorithm with regularization ε = 0.05, and converted to a deterministic assignment via row-wise
+argmax, which approximates a hard coupling. Because targets are assigned as paired product-space
+samples (e1I , e1T ), the coupling preserves the empirical image-text pairing structure during minibatch
+matching, unlike separate per-modality OT which could assign inconsistent image and text targets to
+the same source. We use a large minibatch size of B = 8192 to reduce OT estimation noise; smaller
+batches produce less stable couplings and worse training behaviour.
+
+Per-mask time scheduling. Times are sampled per stream. Under the joint mask mjoint both
+streams share a single t ∼ U[0, 1]. Under mI→T the text stream receives t ∼ U[0, 1] while the image
+stream is fixed at t = 0; under mT →I the roles are reversed. The conditional reduction in Theorem 1
+is driven by the mask zeroing the loss on conditioned dimensions and the interpolant pinning those
+dimensions to z1 , so the population-limit theorem is robust to the time-schedule choice. We adopt
+the fixed-t=0 convention on conditioned streams as a deliberate operational choice: it ensures the
+network sees a clean conditioner, matching how the model is queried at inference, and aligns the
+training and inference evaluation regimes, simplifying generalisation arguments under finite samples
+and finite capacity.
+
+Riemannian divergence on embedded submanifolds. For M ⊂ R2d embedded as in Sec. 3, write
+Πz ∈ R2d×2d for the orthogonal projector onto Tz M (the blockwise projector diag(I − eI e⊤    I , I −
+eT e⊤
+    T )). Let ṽt : R 2d
+                         → R2d
+                               be any smooth ambient extension of v t that agrees with v t on M   and
+takes tangent values there. The Riemannian divergence of vt on M   admits  the ambient  form,
+                                 divM vt (z) = tr Πz ∇ṽt (z) Πz ,                                (11)
+where ∇ṽt is the ambient Jacobian. This is the standard expression for the divergence of a tangent
+vector field on an embedded submanifold and will be used in Sec. C.6.
+
+C.4   Proof of Theorem 1
+
+We provide the full argument; the structure mirrors the conditional flow matching identity of Lipman
+et al. [16], generalised to manifolds by Chen and Lipman [17], with the only addition being that the
+conditioning input is supplied as a parallel un-flowing stream rather than as an external label, plus the
+mild bookkeeping required to handle the joint mask mjoint alongside the conditional masks.
+
+Setup. Let z = (eI , eT ) ∈ M = Sd−1 × Sd−1 with joint data distribution p satisfying assumption
+(A1). Write mI→T = [0d ; 1d ] for the image-to-text mask and let,
+              zt = (eI , etT ),    etT = gt (e0T , eT ),   e0T ∼ p0 , (eI , eT ) ∼ p,
+denote the masked interpolant; only the second-block component is transported. Let vt (etT | eT ) be
+the closed-form conditional geodesic velocity on Sd−1 defined in Sec. C.3.
+
+Loss decomposition. Under (A2) and the assumption that the mask distribution p(m) assigns
+positive probability to all three masks, the loss LGeoFlowVLM (ϕ) admits the additive decomposition,
+    LGeoFlowVLM (ϕ) = p(mjoint ) Ljoint (ϕ) + p(mI→T ) LI→T (ϕ) + p(mT →I ) LT →I (ϕ),
+where each of the three sub-objectives depends on the network only through its restriction to the
+corresponding mask. Restricted to mask mI→T the loss is,
+                                                                                      
+                                                                                    2
+            LI→T (ϕ) = Et,(eI ,eT )∼p,e0T ∼p0 [vtϕ (zt , mI→T )]T − vt (etT | eT ) g t ,       (12)
+                                                                                       e
+                                                                                        T
+
+where [ · ]T denotes the second-block (text) component. The first-block contribution vanishes directly
+because the mask mI→T = [0d ; 1d ] multiplies the image block by zero; consistently, the geodesic-
+tangent target on the image block is also zero, since the conditioned stream is pinned to the data point
+eI throughout (no transport).
+
+
+                                                   18
+Pointwise minimiser. Conditioning on (eI = e∗I , etT = x) inside the expectation in (12) reduces
+the inner squared error to a quadratic in the network output, whose unique minimiser is the conditional
+Bayes regressor,
+                 [vtϕ ]⋆T (e∗I , x), mI→T = E vt (etT | eT ) eI = e∗I , etT = x .
+                                                                                
+                                                                                                   (13)
+Because the conditioning e∗I enters the expectation only through the joint distribution of (eI , eT ), the
+inner expectation can be rewritten as,
+                              E(eT ,etT )∼pt ( · |e∗I ) vt (x | eT ) etT = x ,
+                                                                           
+                                                                                                     (14)
+where pt ( · | e∗I ) denotes the joint distribution over (eT , etT ) induced by eT ∼ p( · | e∗I ) and
+etT = gt (e0T , eT ) with e0T ∼ p0 .
+
+Identifying the marginal velocity. Expression (14) is exactly the marginal velocity field associated
+with the conditional probability path that interpolates from p0 on Sd−1 to p( · | e∗I ) via the geodesic
+mixture [16, Theorem 3][17, §4]. By the manifold continuity equation, integrating the ODE ẋt =
+[vtϕ ]⋆T ((e∗I , xt ), mI→T ) from t = 0 to t = 1 with x0 ∼ p0 produces samples whose distribution
+at t = 1 equals p(eT | e∗I ), almost everywhere in (t, x) as required by claim 2. The symmetric
+statement for mT →I follows by exchanging the roles of eI and eT . Claim 1 (joint mask) follows
+from the same conditional CFM identity applied without conditioner: Ljoint restricted to the joint
+mask is the canonical Riemannian CFM objective on M with target distribution p, whose unique
+pointwise minimiser by [17] is the marginal velocity transporting p0 to p.                            □
+
+On the simultaneous attainability of all three minimisers by a single network. A reader might
+worry that since one network must minimise three objectives that share parameters, the population
+minima of the three sub-objectives might not be jointly attainable. They are, in the population limit,
+because each pointwise minimiser is determined by a disjoint conditioning event: the masked CFM
+target depends on (m, zt , t), and the three masks mjoint , mI→T , mT →I partition the input space into
+disjoint regions (the network observes the mask explicitly as input). Therefore the three pointwise
+minimisers do not compete at any single (m, zt , t). Realising the population minimum requires only
+that the function class is large enough to represent the union of three target functions on disjoint
+domains, which is implied by (A3).
+
+Remark on finite samples and finite capacity. The theorem is a population-limit identity assuming
+a sufficiently expressive function class so that (13) is attained. In practice, the trained network only
+approximates (13), and the gap between the empirical conditional flow and the true conditional
+distribution is controlled by the generalisation gap of LI→T . We do not provide a quantitative bound;
+consistency arguments for CFM under finite capacity and finite samples remain an active area of
+theoretical work and are outside the scope of this paper.
+
+C.5   Retrieval Entropy: Computational Details
+
+We give the full computational pipeline for the aleatoric score H defined in Sec. 4.1. We describe the
+text-to-image direction; the image-to-text case is symmetric.
+
+Posterior sampling. Given a text query eT , we sample M image embeddings from the conditional
+flow by integrating the Riemannian ODE under mask mT →I ,
+                                           (t,m)
+                       (0,m)             deI             (t,m)
+                                                 = vtϕ (eI
+                                                                           
+                     eI        ∼ p0 ,                          , eT ), mT →I I ,
+                                           dt
+                   d−1
+projecting onto S      after each step to prevent manifold drift. We collect the endpoint samples
+  (m)      (1,m)
+êI := eI         for m = 1, . . . , M . By Theorem 1 these are samples from pϕ (eI | eT ) in the
+population limit.
+
+Gallery aggregation. For each gallery item gj ∈ Sd−1 , j = 1, . . . , N , we aggregate the M
+posterior samples into a single similarity score via a vMF-style log-sum-exp,
+                                                  M
+                                            1 X               (m) 
+                                   sj = log       exp κ gj⊤ êI .
+                                            M m=1
+
+
+                                                   19
+This is the log-density of an unnormalised vMF kernel-density estimate of pϕ (eI | eT ) at gj , with
+concentration parameter κ > 0 controlling kernel sharpness: at κ → 0, sj becomes constant in j and
+H saturates at log N ; larger κ sharpens discrimination between gallery items.
+
+Softmax normalisation andPentropy. Normalising across the gallery yields a posterior π =
+(π1 , . . . , πN ) with πj = esj / k esk , whose Shannon entropy,
+                                                    N
+                                                    X
+                                         H = −            πj log πj
+                                                    j=1
+
+is reported as the aleatoric score for the query.
+
+Hyperparameters and their roles. Three quantities govern the score: the number of samples M ,
+the kernel concentration κ, and the gallery size N . We use M = 50 samples per query and κ = 100
+throughout (Table 6). N is fixed by the benchmark and only affects H through the upper bound
+H ≤ log N ; for a fair comparison across datasets we report Recall@1-vs-entropy calibration on a
+per-dataset basis.
+
+C.6   Joint Log-Density Evaluation on the Product Hypersphere
+
+Let eI ∈ Sd−1 and eT ∈ Sd−1 denote the ℓ2 -normalised CLIP image and text embeddings, and
+define the joint state z = (eI , eT ) ∈ M on the product manifold M = Sd−1 × Sd−1 . The learned
+velocity field vt : M → T M transports the base distribution p0 at t = 0 (uniform on M, see
+Sec. C.3) to a target distribution p1 at t = 1 through the manifold ODE [17],
+                                     d
+                                        zt = vt (zt ),     t ∈ [0, 1].                        (15)
+                                    dt
+For any trajectory zt solving (15), the Riemannian instantaneous change-of-variables theorem gives,
+                                                         Z 1
+                           log p1 (z1 ) = log p0 (z0 ) −     divM vt (zt ) dt,                (16)
+                                                            0
+where z0 is the base point that flows to z1 under (15). Thus the log-density at the terminal point
+is determined by two terms: the base contribution log p0 (z0 ) and the accumulated divergence of
+the learned flow along the path from t = 0 to t = 1. To recover both quantities simultaneously
+we integrate a reverse-time augmented system. Specifically, we introduce a scalar accumulator st ,
+initialised to zero at t = 1, and evolve,
+                                                    
+                              d zt           vt (zt )
+                                       =                 ,    t : 1 → 0,                      (17)
+                              dt st       divM vt (zt )
+with terminal conditions zt=1 = z1 and st=1 = 0. Integrating (17) backward to t = 0 yields,
+                             Z 0                      Z 1
+                        s0 =     divM vt (zt ) dt = −     divM vt (zt ) dt,                    (18)
+                                 1                              0
+so that (16) becomes,
+                                     log p1 (z1 ) = log p0 (z0 ) + s0 .                        (19)
+where s0 is the accumulated divergence integral along the probability flow ODE trajectory. Since
+p0 is uniform on Sd−1 , the base log-density log p0 (z0 ) = C is a constant determined solely by the
+embedding dimension d, shared across all samples within a dataset and modality.
+
+Stochastic divergence estimation: tangent-projected Hutchinson. Computing divM vt (z) ex-
+actly would require materialising the full D × D Jacobian of vt , where D = 2d is the ambient joint
+dimension, which is prohibitively expensive at CLIP scale. We therefore estimate the divergence
+stochastically using Hutchinson trace estimation with tangent-projected probes. Given K ambient
+                         (k) (k)
+probe vectors ε(k) = (εI , εT ) ∈ R2d drawn i.i.d. from a zero-mean unit-covariance distribution
+(e.g., Rademacher or standard Gaussian), we project each blockwise onto the tangent space Tz M,
+                                                                            
+                                                        (k)           ⊤ (k)
+                     ε̃(k) = Πz ε(k) = (I − eI e⊤  I )ε I   , (I − e e
+                                                                    T T )ε T   .               (20)
+
+
+                                                    20
+Using these tangent probes, the divergence is estimated as,
+                                           K
+                              (K)        1 XD (k)   D              EE
+                          div
+                          c
+                              M vt (z) =     ε̃ , ∇z ṽt (z), ε̃(k) ,                                (21)
+                                         K
+                                                k=1
+
+where ṽt is any smooth ambient extension of vt that takes tangent values on M (in our implementa-
+tion, the network’s projected output, treated as a function of R2d ). Each term requires only a single
+vector–Jacobian product and is therefore implementable with one reverse-mode autodiff pass, at the
+same asymptotic cost as a standard gradient computation.
+Lemma 1 (Unbiasedness of the tangent-projected Hutchinson estimator). Let Πz be the orthogonal
+projector onto Tz M, and let ε ∈ R2d be a random vector with E[ε] = 0 and E[εε⊤ ] = I2d . Set
+ε̃ = Πz ε. Then for any smooth ambient extension ṽt of vt that takes tangent values on M,
+                         h              i
+                      Eε ε̃⊤ ∇ṽt (z) ε̃ = tr Πz ∇ṽt (z)Πz = divM vt (z).
+                                                              
+                                                                                                  (22)
+                                                        (K)
+Consequently the estimator (21) is unbiased: E[div M vt (z)] = divM vt (z) for every K ≥ 1.
+                                               c
+
+Proof. For any matrix A ∈ R2d×2d and any random vector ε with the stated moments, the standard
+Hutchinson identity gives E[ε⊤ Aε] = tr(A). Apply this to A = Πz ∇ṽt (z)Πz to obtain,
+                           E ε⊤ Πz ∇ṽt (z)Πz ε = tr Πz ∇ṽt (z)Πz .
+                                                                
+
+Using Π⊤                  2
+        z = Πz = Πz (since Πz is an orthogonal projector), the left-hand side equals
+E[(Πz ε) ∇ṽt (z)(Πz ε)] = E[ε̃⊤ ∇ṽt (z)ε̃]. The right-hand side equals divM vt (z) by (11).
+        ⊤
+                                                                                              □
+
+Variance of the estimator. The estimator’s variance for a single probe is bounded by
+∥Πz ∇ṽt (z)Πz ∥2F for Rademacher probes (and twice that for Gaussian probes), which is finite
+for our smooth network outputs and decreases as 1/K with the number of probes; see [18, Sec. A].
+In our experiments we use K = 1 probe with Rademacher entries, trading a small per-step variance
+for a K× reduction in compute; the resulting score s0 has non-trivial single-probe variance that
+contributes to the noise floor in our ranking-based metrics.
+
+Pipeline. Putting everything together, the joint NLL of an image–text pair (eI , eT ) is computed by:
+(i) setting z1 = (eI , eT ); (ii) integrating the augmented reverse-time ODE (17) from t = 1 to t = 0
+using the learned velocity field vt under the joint mask mjoint , with divergence estimated via (21);
+(iii) reading off s0 ; and (iv) reporting ujoint
+                                             ep    = −(C + s0 ), equivalently −s0 up to a dataset-level
+constant. Conditional log-densities are computed by the same procedure with m ∈ {mI→T , mT →I };
+per-modality marginals follow from the Bayes identity (2). In our experiments we solve (17) with a
+fixed-step Euler solver using 50 integration steps and a single Hutchinson probe (K = 1).
+
+Marginal estimation in zero-shot classification. For zero-shot classification we evaluate
+− log pϕ (eI ) via the Bayes identity by pairing the test image embedding eI with the predicted
+                (ŷ)                                  (ŷ)
+class prompt eT , and conversely for − log pϕ (eT ). In the population limit the identity holds for
+any eT and the choice is immaterial; under finite-step Euler integration with a single Hutchinson
+probe, however, the joint and conditional path integrals only cancel in expectation, so different
+choices of eT yield numerically different marginal estimates and couple the marginal estimate to the
+prediction. Our ablations on N and nprobe (Sec. D.2, Sec. D.3) show that the resulting AUSAC is
+stable to the precision of the path integrals at the values we use. The coupling of − log pϕ (eI ) to the
+                                                                                                    (ŷ)
+prediction is therefore a numerical artifact of finite-step integration; the coupling of − log pϕ (eT ) to
+the prediction is structural but intentional, reflecting that distinct class prompts occupy regions of the
+text manifold with different training-distribution support.
+
+D     Additional Results and Ablations
+D.1   Riemannian vs. Euclidean Flow Matching
+
+We train an otherwise identical model using Euclidean flow matching [16] to isolate the effect of the
+hyperspherical geometry. We evaluate on both uncertainty tasks.
+
+
+                                                   21
+Aleatoric uncertainty. Table 7 reports Spearman ρ across three retrieval datasets. The Euclidean
+model fails categorically: ρ is near zero or positive across almost all datasets and directions, indicating
+that its posterior entropy carries no meaningful signal about retrieval difficulty. Figure 5 shows the
+per-bin calibration curves; GeoFlowVLM produces a consistent monotone decrease across all six
+panels while the Euclidean baseline shows no trend. Respecting the hyperspherical support of CLIP
+embeddings is therefore not a minor implementation detail but a necessary condition for calibrated
+aleatoric uncertainty estimation.
+
+Table 7: Riemannian vs. Euclidean: aleatoric calibration. Spearman ρ (↓). Bold: best per column.
+
+                                                                                  MS-COCO                                             Flickr                                                 CUB
+                        Method                                                  I2T                     T2I                     I2T                 T2I                       I2T                       T2I
+                        Euclidean FM                                           −0.292            −0.358                 −0.043                   +0.146             −0.315                     +0.396
+                        Riemannian FM (ours)                                   −1.000            −1.000                 −0.988                   −1.000             −0.976                     −0.884
+
+
+                                                                COCO                                                Flickr                                                CUB
+                                                                                            80                                                    1.6
+                                            70
+                                                                                                                                                  1.4
+                                                                                            70
+                               Text Image
+
+
+
+
+                                            60                                                                                                    1.2
+                                  R@1
+
+
+
+
+                                                                                            60
+                                            50                                                                                                    1.0
+                                                                                            50                                                    0.8
+                                            40
+                                                                                            40                                                    0.6
+                                            30                                              30                                                    0.4
+                                                  1   3         5          7     9               1       3          5           7     9                  1    3           5              7     9
+
+                                            80                                                                                                     5
+                                                                                            80
+                                            70                                                                                                     4
+                               Image Text
+
+
+
+
+                                                                                            70
+                                  R@1
+
+
+
+
+                                            60                                              60                                                     3
+                                            50                                              50                                                     2
+                                            40                                              40
+                                                                                                                                                   1
+                                                  1   3         5          7     9               1       3          5           7     9                  1    3           5              7     9
+                                                          Uncertainty bin                                    Uncertainty bin                                      Uncertainty bin
+                                                                                        GeoFlowVLM                  GeoFlowVLM (Euclidean)
+
+
+Figure 5: Riemannian vs. Euclidean: aleatoric calibration. Recall@1 per entropy bin for T2I
+(top) and I2T (bottom) across MS-COCO, Flickr, and CUB datasets. GeoFlowVLM produces a
+consistent monotone decrease; the Euclidean baseline shows no calibration signal.
+
+
+Epistemic uncertainty. Figure 6 shows selective prediction accuracy across four classification
+datasets. GeoFlowVLM consistently outperforms the Euclidean baseline at all rejection fractions,
+with the gap widening substantially at high rejection rates and most prominently on ObjectNet.
+
+                                                                                                 Euclidean                      Geometric
+                               CIFAR100                                               IMAGENET                                                 FOOD101                                              OBJECTNET
+                                                                0.82                                                 0.97                                                     0.82
+           0.94
+                                                                                                                     0.96                                                     0.80
+                                                                0.80
+           0.92
+                                                                                                                                                                              0.78
+                                                                                                                     0.95
+Accuracy
+
+
+
+
+           0.90                                                 0.78                                                                                                          0.76
+                                                                                                                                                                              0.74
+           0.88                                                 0.76                                                 0.94
+                                                                                                                                                                              0.72
+           0.86                                                 0.74                                                 0.93                                                     0.70
+           0.84                                                                                                                                                               0.68
+                  0       30                     60        90          0         30              60            90           0             30             60          90              0             30          60      90
+                         Rejected Fraction (%)                                  Rejected Fraction (%)                                 Rejected Fraction (%)                                    Rejected Fraction (%)
+
+
+Figure 6: Riemannian vs. Euclidean: epistemic uncertainty. Selective prediction accuracy across
+four zero-shot datasets. GeoFlowVLM consistently outperforms the Euclidean baseline.
+
+
+D.2                   Effect of ODE Steps on Epistemic Uncertainty
+
+We study the sensitivity of the epistemic uncertainty signal to the number of probability flow ODE
+integration steps N used during NLL evaluation. We vary N ∈ {10, 20, 30, 40, 50} on a fixed subset
+
+
+                                                                                                              22
+                                                                                   N = 10                  N = 20                N = 30                     N = 40                      N = 50
+                                   CIFAR100                                                     IMAGENET                                                     FOOD101                                                     OBJECTNET
+                                                                        0.84
+                                                                                                                                     0.96                                                          0.82
+           0.94
+                                                                        0.82                                                                                                                       0.80
+           0.92                                                                                                                      0.95
+                                                                                                                                                                                                   0.78
+                                                                        0.80
+Accuracy
+
+           0.90                                                                                                                      0.94                                                          0.76
+
+           0.88                                                         0.78                                                                                                                       0.74
+                                                                                                                                     0.93
+                                                                                                                                                                                                   0.72
+           0.86                                                         0.76
+                                                                                                                                     0.92                                                          0.70
+           0.84
+                  0   10   20     30   40   50   60     70    80   90          0    10   20     30    40   50   60    70   80   90          0   10   20     30     40   50    60   70    80   90          0   10   20     30   40   50   60     70   80   90
+                                Rejected Fraction (%)                                         Rejected Fraction (%)                                       Rejected Fraction (%)                                         Rejected Fraction (%)
+
+
+Figure 7: Effect of ODE steps N on epistemic uncertainty. Selective prediction curves (mean
+± std over 10 runs) across four zero-shot datasets. All values of N ∈ {10, 20, 30, 40, 50} produce
+nearly identical curves, confirming that N = 10 is sufficient.
+
+Table 8: Effect of ODE steps N on epistemic uncertainty quality. AUSAC (mean ± std ×10−3 ,
+over 10 runs) across four zero-shot datasets.
+
+                                                                                                                                     ODE Steps N
+                      Dataset                                      N = 10                                  N = 20                               N = 30                             N = 40                                 N = 50
+                      CIFAR-100                              0.8027 ± 0.5                            0.8022 ± 0.6                     0.8019 ± 0.6                            0.8013 ± 0.4                         0.8012 ± 0.4
+                      Food-101                               0.8452 ± 0.5                            0.8451 ± 0.3                     0.8451 ± 0.4                            0.8451 ± 0.3                         0.8452 ± 0.4
+                      ImageNet-1K                            0.7128 ± 0.4                            0.7123 ± 0.6                     0.7118 ± 0.4                            0.7117 ± 0.5                         0.7117 ± 0.4
+                      ObjectNet                              0.6617 ± 0.8                            0.6595 ± 0.9                     0.6584 ± 0.7                            0.6578 ± 0.6                         0.6577 ± 0.5
+
+
+                                                                        nprobe = 1                    nprobe = 2                nprobe = 3                       nprobe = 4                nprobe = 5
+                                   CIFAR100                                                     IMAGENET                                                     FOOD101                                                     OBJECTNET
+                                                                        0.84                                                         0.96                                                          0.82
+           0.94
+                                                                        0.82                                                                                                                       0.80
+                                                                                                                                     0.95
+           0.92
+                                                                                                                                                                                                   0.78
+                                                                        0.80
+Accuracy
+
+
+
+
+           0.90                                                                                                                      0.94                                                          0.76
+
+           0.88                                                         0.78                                                                                                                       0.74
+                                                                                                                                     0.93
+                                                                                                                                                                                                   0.72
+           0.86                                                         0.76
+                                                                                                                                     0.92                                                          0.70
+           0.84
+                  0   10   20     30   40   50   60     70    80   90          0    10   20     30    40   50   60    70   80   90          0   10   20     30     40   50    60   70    80   90          0   10   20     30   40   50   60     70   80   90
+                                Rejected Fraction (%)                                         Rejected Fraction (%)                                       Rejected Fraction (%)                                         Rejected Fraction (%)
+
+
+Figure 8: Effect of Hutchinson probe count nprobe on epistemic uncertainty. Selective prediction
+curves (mean ± std over 10 runs) at fixed T = 10. All probe counts produce nearly identical curves,
+confirming that nprobe = 1 is sufficient.
+
+
+of 5,000 samples per dataset, repeating each configuration 10 times with fixed Hutchinson probe.
+Results are reported as mean ± std AUSAC in Table 8.
+AUSAC is stable across all values of N : variation across step counts is within run-to-run variance in
+every case. This confirms that the probability flow ODE produces reliable density estimates with as
+few as N = 10 steps, enabled by the smooth velocity field learned on the product hypersphere. We
+use N = 50 as a conservative default throughout all experiments.
+
+D.3                   Effect of Hutchinson Probe Count on Epistemic Uncertainty Quality.
+
+We study the sensitivity of the epistemic uncertainty signal to the number of Hutchinson probes
+nprobe used to estimate the divergence integral during NLL evaluation. We fix N = 10 ODE steps
+and vary nprobe ∈ {1, 2, 3, 4, 5} on a fixed subset of 5,000 samples per dataset, repeating each
+configuration 10 times to estimate variance. Results are reported as mean ± std AUSAC in Table 9
+and the corresponding selective prediction curves are shown in Figure 8.
+AUSAC is stable across all probe counts: the variation across nprobe is within run-to-run variance
+due to Hutchinson randomness in every case, and no meaningful trend is visible in either the table
+or the selective prediction curves. This confirms that a single Hutchinson probe (nprobe = 1) is
+sufficient for reliable epistemic uncertainty estimation, which we attribute to the well-regularized
+
+
+                                                                                                                                23
+Table 9: Effect of Hutchinson probe count on epistemic uncertainty quality. AUSAC (mean
+± std, ×10−3 , over 10 runs) across four zero-shot datasets at fixed T = 10. Variation across probe
+counts is within run-to-run variance in all cases.
+                                                                           nprobe
+       Dataset                   1                       2                      3                  4                5
+       CIFAR-100         0.8027 ± 0.5             0.8030 ± 0.7          0.8028 ± 0.5     0.8027 ± 0.3          0.8028 ± 0.4
+       Food-101          0.8452 ± 0.5             0.8451 ± 0.4          0.8448 ± 0.3     0.8449 ± 0.3          0.8450 ± 0.3
+       ImageNet-1K       0.7128 ± 0.4             0.7130 ± 0.6          0.7129 ± 0.6     0.7130 ± 0.5          0.7129 ± 0.3
+       ObjectNet         0.6617 ± 0.8             0.6616 ± 0.6          0.6617 ± 0.7     0.6620 ± 0.5          0.6625 ± 0.5
+
+
+                                                        COCO       CUB          FLICKR
+                                 Image Text                                                  Text Image
+               0.4                                                        0.4
+               0.2                                                        0.2
+               0.0                                                        0.0
+               0.2                                                        0.2
+           ρ
+
+
+
+
+                                                                    ρ
+               0.4                                                        0.4
+               0.6                                                        0.6
+               0.8                                                        0.8
+               1.0                                                        1.0
+                     0   1   2        3     4       5     6    7                0    1   2     3       4   5    6    7
+                                     Guidance λ                                               Guidance λ
+
+Figure 9: Guidance scale ablation. Spearman ρ between per-query posterior entropy and retrieval
+difficulty as a function of λ, for I2T (left) and T2I (right).
+
+
+and geometrically structured CLIP embedding space producing smooth velocity fields with low
+divergence variance. We use nprobe = 1 throughout all experiments.
+
+D.4   Effect of Guidance Scale λ on Aleatoric UQ
+
+The guidance scale λ controls how strongly conditional sampling is steered toward the query-
+conditioned posterior. When λ = 0, sampling reduces to the unconditional flow and ignores
+query-specific cross-modal
+                       P      structure, so the resulting posterior samples scatter across the gallery and
+the entropy H = − j πj log πj carries no information about query difficulty. As λ increases, the
+sampled distributions pϕ (eT | eI ) and pϕ (eI | eT ) concentrate around modes compatible with the
+conditioning embedding: easy queries produce low-entropy posteriors concentrated on few gallery
+items, while hard queries remain spread out, making H a meaningful aleatoric signal. We ablate
+λ ∈ {0, 1, 2, 3, 4, 5, 7} on MS-COCO, Flickr8k, and CUB using 1,000 images per dataset, evaluating
+the Spearman correlation ρ between per-query entropy and retrieval difficulty in both directions with
+all other factors fixed. As shown in Figure 9, ρ is near zero or positive at λ = 0, recovers strongly at
+λ ≥ 1, and remains stable across larger values. The T2I direction converges cleanly across all three
+datasets; I2T exhibits higher variance for CUB due to its dense 10-caption annotation structure, which
+destabilises per-bin recall estimates at this evaluation scale. Since retrieval rankings are derived from
+frozen CLIP embeddings, λ affects only the uncertainty estimates and not retrieval scores. We use
+λ = 3 in all experiments as a conservative default within the stable regime.
+
+D.5   Backbone Robustness: SigLIP
+
+GeoFlowVLM is designed as a post-hoc probabilistic adapter over any frozen encoder that produces
+L2-normalized embeddings on the unit hypersphere. To verify that our results are not specific to
+the CLIP backbone used in the main experiments, we evaluate on SigLIP [2] (ViT-L-16-SigLIP-
+384, pretrained on WebLI). Crucially, SigLIP embeddings share the same dimensionality as CLIP
+ViT-H-14 (d = 1024), so the GeoFlowVLM architecture and all baselines remain identical with no
+modification. We evaluate both aleatoric and epistemic uncertainty following the same protocol as
+the main paper (Q1 and Q2 respectively).
+
+
+                                                                   24
+Table 10: Aleatoric uncertainty calibration under SigLIP backbone. Spearman S (↓) and R2
+(↑) between predicted aleatoric uncertainty and Recall@1, averaged over 5 independent runs. Ideal:
+S = −1, R2 = 1. Bold: best; underline: second-best.
+                                                                                             Flickr                                    MS-COCO                                  CUB
+                                                     Method                           S↓                 R2 ↑                      S↓            R2 ↑              S↓                     R2 ↑
+
+                                                     ProbVLM                       +0.988                0.974             +0.985               0.915           −0.264                    0.045
+                                 Image→Text          AsymVLMPSD                    −0.117                0.023             −0.043               0.027           +0.012                    0.010
+                                                     AsymVLMvMF                    −0.117                0.023             −0.043               0.027           +0.012                    0.010
+                                                     GroVE                         −0.106                0.067             −0.216               0.091           +0.050                    0.010
+                                                     GeoFlowVLM                    −0.990                0.937             −0.970               0.788           −0.550                    0.295
+
+                                                     ProbVLM                       +1.000                0.892             +0.576               0.458           +0.927                    0.904
+                                 Text→Image
+
+
+
+
+                                                     AsymVLMPSD                    −1.000                0.868             −1.000               0.963           −0.994                    0.936
+                                                     AsymVLMvMF                    −0.927                0.822             −1.000               0.975           −0.976                    0.914
+                                                     GroVE                         −0.120                0.116             +0.534               0.256           +0.391                    0.151
+                                                     GeoFlowVLM                    −1.000                0.953             −0.995               0.900           −0.994                    0.955
+
+
+                                                                   COCO                                               Flickr                                           CUB
+                                                80                                             90
+                                                                                                                                                 2.5
+                                                70                                             80
+                                                                                                                                                 2.0
+                                   Text Image
+
+
+
+
+                                                60                                             70
+                                      R@1
+
+
+
+
+                                                50                                             60                                                1.5
+                                                                                               50
+                                                40                                                                                               1.0
+                                                                                               40
+                                                30
+                                                                                               30                                                0.5
+                                                20
+                                                      1   3        5          7        9            1       3         5            7       9           1    3          5            7      9
+                                                                                                                                                  6
+                                                80                                             90
+                                                                                                                                                  5
+                                                                                               80
+                                   Image Text
+
+
+
+
+                                                70
+                                                                                                                                                  4
+                                      R@1
+
+
+
+
+                                                60                                             70
+                                                                                                                                                  3
+                                                50                                             60
+
+                                                                                               50                                                 2
+                                                40
+                                                      1   3        5          7        9            1       3         5            7       9           1    3          5            7      9
+                                                              Uncertainty bin                                   Uncertainty bin                                 Uncertainty bin
+                                                          GeoFlowVLM                       GroVE           ProbVLM                       AsymVLM-vMF             AsymVLM-PSD
+
+
+Figure 10: Aleatoric uncertainty calibration under SigLIP backbone. R@1 across uncertainty
+bins ordered from low to high uncertainty for T2I (top) and I2T (bottom); curves show the mean over
+5 independent runs. GeoFlowVLM shows a stronger and more consistent monotonic decrease than
+all baselines across both retrieval directions and all datasets.
+
+
+Aleatoric Uncertainty (Q1). Table 10 reports mean calibration performance under the SigLIP
+backbone, and Figure 10 shows the corresponding per-bin trends averaged over 5 independent runs.
+GeoFlowVLM achieves the best or near-best Spearman correlation and R2 across all three datasets in
+both retrieval directions, with AsymVLM variants competitive on MS-COCO T2I by a narrow margin.
+These results are consistent with the main paper findings on the CLIP backbone, confirming that
+the conditional retrieval entropy derived from the joint density generalizes to the SigLIP embedding
+space despite the differences in pretraining objective.
+
+               81
+                          ImageNet-1K                                                 Food-101                                            CIFAR-100                                            ObjectNet
+                                                                                                                          88                                               78
+               80                                                  97.5
+Accuracy (%)
+
+
+
+
+                                                                                                                          86                                               76
+               79
+                                                                   97.0
+               78                                                                                                         84                                               74
+                                                                   96.5
+               77                                                                                                         82                                               72
+               76                                                  96.0
+                                                                                                                          80                                               70
+                    0       30                       60       90          0           30            60           90            0           30          60         90            0              30     60        90
+                        Rejected Fraction (%)                                     Rejected Fraction (%)                                Rejected Fraction (%)                            Rejected Fraction (%)
+                                                                                  GeoFlowVLM                          REPVLM                      ProbVLM
+
+                          Figure 11: Epistemic uncertainty: Selective accuracy under SigLIP backbone.
+
+
+Epistemic Uncertainty (Q2). Figure 11 reports selective accuracy curves under the SigLIP back-
+bone. GeoFlowVLM’s epistemic score is uep (eI , eT ) = − log pϕ (eI ) − log pϕ (eT ), where both
+
+
+                                                                                                                 25
+marginals are obtained via the chain-rule decomposition of the learned joint density without addi-
+tional parameters; REPVLM uses the same functional form but fits each marginal independently.
+Both methods exhibit degraded selective accuracy on ImageNet-1K, while ProbVLM maintains
+a broadly increasing curve. We attribute this to SigLIP’s sigmoid pairwise pretraining objective,
+which unlike CLIP’s softmax contrastive loss operates without cross-batch normalization, breaking
+the assumption that − log pϕ (e) is monotonically related to out-of-distribution degree. ProbVLM’s
+predicted variance is agnostic to this geometric structure and therefore unaffected. On Food-101,
+CIFAR-100, and ObjectNet all three methods produce increasing selective accuracy curves, with
+GeoFlowVLM consistently outperforming REPVLM, confirming that estimating the marginals from
+the joint density yields a richer epistemic signal than fitting them in isolation.
+
+
+
+
+                                               26
+

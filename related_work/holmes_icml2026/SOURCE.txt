@@ -1,0 +1,12 @@
+title: Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+arxiv_id: 2605.06083v1
+pdf_url: https://arxiv.org/pdf/2605.06083v1
+html_url: https://arxiv.org/html/2605.06083v1
+retrieved_at_utc: 2026-09-30T16:03:34Z
+license: CC BY 4.0 (arXiv HTML license link)
+pdf_sha256: ace10ae3d53a576c6e78f12dc0ee0b9f4e852c1632720909a607ed90ec091ae1
+text_extraction: pdftotext -layout; formulas checked against arXiv HTML
+venue_status_source: arXiv comments and author repository say ICML 2026 accepted
+code_repo: https://github.com/lijun2005/ICML26-Holmes
+code_commit_checked: 73bbbfcfca241418507a9a46691f0cb834e31d8b
+code_scope_checked: src and multisrc EDL definitions; src partition, label calibration, FOT, config and retrieval ranking

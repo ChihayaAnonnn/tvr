@@ -1,0 +1,10 @@
+title: GeoFlowVLM: Geometry-Aware Joint Uncertainty for Frozen Vision-Language Embeddings
+arxiv_id: 2605.13352v2
+pdf_url: https://arxiv.org/pdf/2605.13352v2
+html_url: https://arxiv.org/html/2605.13352v2
+retrieved_at_utc: 2026-09-30T16:03:34Z
+license: CC BY 4.0 (arXiv HTML license link)
+pdf_sha256: ebe49f0cdd6cba7a65a9ca3996def7804cded0c066d020b05b94d5bc32796c10
+text_extraction: pdftotext -layout; formulas checked against arXiv HTML
+venue_status: preprint; no venue specified on the inspected arXiv abstract page
+code_status: no code URL located in inspected abstract/full text; search did not verify a public implementation

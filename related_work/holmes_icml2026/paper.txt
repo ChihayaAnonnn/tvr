@@ -1,0 +1,1176 @@
+                                                                        Revisiting Uncertainty:
+                                                      On Evidential Learning for Partially Relevant Video Retrieval
+
+
+                                                                Jun Li 1 2 Peifeng Lai 3 Xuhang Lou 3 Jinpeng Wang 3 Yuting Wang
+                                                                              Ke Chen 2 Yaowei Wang 3 2 Shu-tao Xia 1 2
+
+
+                                                                 Abstract                                     trimmed videos with fully descriptive queries, they may
+                                                                                                              deviate from real-world settings, where videos are generally
+arXiv:2605.06083v1 [cs.CV] 7 May 2026
+
+
+
+
+                                             Partially relevant video retrieval aims to retrieve
+                                                                                                              untrimmed and queries correspond only to partial segments.
+                                             untrimmed videos using text queries that describe
+                                                                                                              Motivated by this discrepancy, Partially Relevant Video
+                                             only partial content. However, the inherent asym-
+                                                                                                              Retrieval (PRVR) (Dong et al., 2022a) was proposed for
+                                             metry between brief queries and rich video con-
+                                                                                                              retrieving untrimmed videos given partially relevant queries.
+                                             tent inevitably introduces uncertainty into the re-
+                                                                                                              However, this task faces a fundamental challenge rooted
+                                             trieval process. In this setting, vague queries often
+                                                                                                              in data asymmetry: compared with rich video content, text
+                                             induce semantic ambiguity across videos, a chal-
+                                                                                                              queries are often brief and vague, inevitably introducing
+                                             lenge that is further exacerbated by the sparse
+                                                                                                              inherent uncertainty into the retrieval process.
+                                             temporal supervision within videos, which fails
+                                             to provide sufficient matching evidence. To ad-                  Modeling this uncertainty involves two compounded chal-
+                                             dress this, we propose Holmes, a hierarchical evi-               lenges that exist at both inter- and intra-video levels: (i)
+                                             dential learning framework that aggregates multi-                Inter-video Semantic Ambiguity. Owing to the inherent
+                                             granular cross-modal evidence to quantify and                    uncertainty, queries often exhibit fine-grained heterogene-
+                                             model uncertainty explicitly. At the inter-video                 ity. As illustrated in Figure 1(a-d), beyond ideal precise
+                                             level, similarity scores are interpreted as eviden-              queries, real-world data contains under-determined queries
+                                             tial support and modeled via a Dirichlet distri-                 (insufficient semantics yielding low confidence), and poly-
+                                             bution. Based on the proposed three-fold prin-                   semous queries (ambiguous semantics matching multiple
+                                             ciple, we perform fine-grained query identifica-                 candidates). Most prior methods ignore this heterogeneity
+                                             tion, which then guides query-adaptive calibrated                (Wang et al., 2024b) or handle it implicitly via regulariza-
+                                             learning. At the intra-video level, to accumulate                tion (Zhang et al., 2025a; Moon et al., 2025b). While ARL
+                                             denser evidence, we formulate a soft query-clip                  (Cho et al., 2025) attempts to detect ambiguous video-text
+                                             alignment via flexible optimal transport with an                 pairs, it lacks a mechanism to explicitly quantify the specific
+                                             adaptive dustbin, which alleviates sparse tempo-                 type of uncertainty. (ii) Intra-video Sparse Supervision.
+                                             ral supervision while suppressing spurious local                 The inter-video ambiguity is also exacerbated by the lack
+                                             responses. Extensive experiments demonstrate                     of reliable evidence within the video. The prevalent multi-
+                                             that Holmes outperforms state-of-the-art methods.                instance learning (MIL) paradigm supervises only the single
+                                             Code is released at ICML26-Holmes.                               best-matching clip, leading to sparse supervision. As shown
+                                                                                                              in Figure 1(e), this supervisory imbalance provides limited
+                                                                                                              training signals and prevents the model from learning a holis-
+                                        1. Introduction                                                       tic representation, making it vulnerable to spurious local
+                                                                                                              noise. While distilling cues from CLIP (Radford et al., 2021)
+                                        With the rapid growth of online videos, Text-to-Video Re-             can alleviate sparsity (Dong et al., 2023), such frame-level
+                                        trieval (T2VR) (Lan et al., 2025) has received increasing             fragments fail to capture the temporal dynamics required to
+                                        attention. While most T2VR methods are designed for pre-              confirm a video’s relevance, thereby fueling the uncertainty
+                                           1                                                                  at the inter-video level and resulting suboptimal results.
+                                             Tsinghua Shenzhen International Graduate School, Tsinghua
+                                        University, Shenzhen, China 2 Peng Cheng Laboratory, Shenzhen,        To address these challenges, we argue that the model needs
+                                        China 3 Harbin Institute of Technology, Shenzhen, China. Corre-       to go beyond deterministic similarity scores and should eval-
+                                        spondence to: Jinpeng Wang <wangjp26@gmail.com>.
+                                                                                                              uate the uncertainty of its predictions. In this paper, we
+                                        Proceedings of the 43 rd International Conference on Machine          propose Holmes, a unified evidential learning framework
+                                        Learning, Seoul, South Korea. PMLR 306, 2026. Copyright 2026          that operates at dual levels to disentangle and model uncer-
+                                        by the author(s).
+
+                                                                                                          1
+                              Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+                      Challenge 1:Inter-video Semantic Ambiguity                                                     Challenge 2:Intra-video Sparse Supervision
+                                                             A person is shoveling the driveway.
+                                                                                                                                      video token                         The girl bends
+        He pulls the man from the river by car.                                                                                       q𝑢𝑢𝑢𝑢𝑢𝑢𝑦𝑦1,2,3 token
+score                                                score
+                                                                                                                                                                        down and ties the
+           I’m pretty sure that I find GT.                             I find GT but I’m not sure.                                    under-trained                      ballerina shoes.
+
+                                                                                                                                                                        A girl's legs and
+                                                                                                                                                                        feet wear untied
+                                             video                                                    video
+                                                                                                                        Video    ··                            Text      ballerina shoes.
+                                                                                                                       Encoder    ·                          Encoder
+                                                                                                                                                                        The girl shows her
+                                                                                                                                                                       tied ballerina shoes
+   GT video                                              GT video                                                                                                         to the camera.
+                 (a) Precise Query                           (c) Polysemous Query (case 1)
+        An athlete flexes his guns.                          The man spins and releases.                            The girl bends down and ties the ballerina shoes.
+score                                                score                                                    1.0
+              Can’t understand the query.                           GT is buried in similar videos.           0.8   max: 0.682                                          Score
+                                                                                                              0.6
+                                                                                                              0.4                                                                 I don’t
+                                                                                                              0.2                                                               trust this.
+                                                                                                              0.0
+                                             video                                                    video
+
+
+
+
+                   GT video                                                GT video
+          (b) Under-determined Query                         (d) Polysemous Query (case 2)                    (e) Unreliable retrieval due to spiky activations induced by MIL.
+
+Figure 1. (a) Precise queries produce a clear response margin, with the ground-truth video distinctly outperforming all candidates.
+(b) Under-determined queries are poorly interpreted, resulting in weak and non-discriminative similarity responses. (c-d) Polysemous
+queries are semantically ambiguous and correspond to multiple plausible candidates, necessitating more consideration to account for the
+associated uncertainty. (e) Optimizing only the closest pair, MIL yields sparse supervision and under-trained clips, making the model
+vulnerable to local noise from a globally irrelevant “running” video, causing spurious spiky activations and unreliable retrieval.
+
+
+tainty. First, to handle inter-video uncertainty, we treat                                            • Empirical: Holmes achieves significant improvements
+cross-modal similarities as evidence parameterized by a                                                 on three benchmarks. Detailed ablation studies further
+Dirichlet distribution. This allows us to move beyond sim-                                              validate its capability in quantifying query uncertainty
+ple matching scores and perform a diagnosis of the query                                                and effectively suppressing spurious local noise.
+type. We devise an Uncertainty Guided Identification (UGI)
+strategy based on a three-fold principle, namely epistemic                                        2. Related Works
+uncertainty, label consistency, and aleatoric uncertainty, to
+categorize queries and apply query-adaptive label calibra-                                        Partially Relevant Video Retrieval Unlike traditional
+tion. Second, to resolve the intra-video sparsity that fuels                                      Text-to-Video Retrieval (T2VR) methods (Reddy et al.,
+uncertainty, we seek to accumulate denser evidence. We                                            2025; Lan et al., 2025; Ko et al., 2025), which retrieve
+formulate a Flexible Optimal Transport (FOT) scheme to                                            fully relevant pre-trimmed videos, Partially Relevant Video
+establish soft alignments between the query and multiple rel-                                     Retrieval (PRVR) (Li et al., 2026; Jun et al., 2025; Yin et al.,
+evant clips. To ensure robustness against noise, we integrate                                     2024; Song et al., 2025; Jiang et al., 2023), first introduced
+a dustbin bucket to absorb irrelevant clips, thereby providing                                    by MS-SL (Dong et al., 2022a), targets untrimmed videos
+more comprehensive and reliable temporal supervision.                                             where only partial segments match the query. Video Cor-
+                                                                                                  pus Moment Retrieval (VCMR) (Zhang et al., 2025b; Chen
+Extensive experiments on ActivityNet Captions (Krishna
+                                                                                                  et al., 2023c) is another widely studied retrieval task that
+et al., 2017), Charades-STA (Gao et al., 2017), and TVR
+                                                                                                  aims to localize specific moments within a large video cor-
+(Lei et al., 2020) demonstrate that Holmes achieves state-
+                                                                                                  pus. PRVR is similar to the first stage of VCMR, as both
+of-the-art performance. Beyond standard retrieval metrics,
+                                                                                                  conduct coarse video-level retrieval. But VCMR requires
+our analysis reveals that Holmes effectively interprets query
+                                                                                                  moment-level annotations, which hinders scalability.
+ambiguity and suppresses spurious MIL activations.
+                                                                                                 Existing PRVR methods largely ignore semantic ambigu-
+Our main contributions are summarized as follows:
+                                                                                                 ity and primarily focus on clip modeling. MS-SL (Dong
+   • Conceptual: We provide a fresh perspective on PRVR                                          et al., 2022a; Chen et al., 2025b) constructs redundant clip
+     by revisiting the problem through the lens of uncer-                                        embeddings via a sliding window scheme, whereas Proto-
+     tainty, explicitly linking inter-video semantic ambigu-                                     PRVR (Moon et al., 2025a) accelerates retrieval by gener-
+     ity with intra-video sparse supervision.                                                    ating a small set of prototypes. GMMFormer (Wang et al.,
+   • Methodological: We propose Holmes, a dual-level ev-                                         2024b;a) implicitly models clips through Gaussian attention.
+     idential learning framework. It features a three-fold                                       While RAL (Zhang et al., 2025a) leverages probabilistic
+     principle for fine-grained query identification and label                                   embeddings and MSC-PRVR (Moon et al., 2025b) allevi-
+     calibration, coupled with Flexible Optimal Transport                                        ates semantic collapse through auxiliary training losses to
+     to enable dense and robust temporal alignment.                                              implicitly model query ambiguity, ARL (Cho et al., 2025)
+
+                                                                                             2
+                    Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+explicitly identifies ambiguous query-video pairs. Never-            frame-scale branch, Mf sampled frames are projected to a
+theless, these methods fail to distinguish fine-grained query        d-dimensional space via a fully connected layer, followed
+                                                                                                               Mf
+categories and overlook the sparse supervision induced by            by frame encoder to obtain Vf = {fi }i=1      ∈ RMf ×d . In
+multiple instance learning, which leads to suboptimal re-            the clip-scale branch, the video is sparsely segmented into
+trieval performance. We propose Holmes, which identifies             Mc clips, which are first projected and then processed by
+query heterogeneity through inter-video evidential learning          clip encoder to produce Vc = {ci }M  i=1 ∈ R
+                                                                                                            c     Mc ×d
+                                                                                                                        .
+and establishes soft query-clip associations via intra-video
+evidential learning, providing denser supervisory signals.           Similarity Computation To compute the similarity of a
+                                                                     text–video pair (T, V ), we first obtain q, Vf , and Vc and
+Uncertainty Learning Despite their success, deep neu-                compute frame- and clip-scale similarity scores:
+ral networks remain largely deterministic and lack explicit                sf (T, V ) = max{cos(q, f1 ), ..., cos(q, fMf )},
+mechanisms for uncertainty quantification. Early attempts                                                                    (1)
+to estimate uncertainty primarily relied on Bayesian Neural                sc (T, V ) = max{cos(q, c1 ), ..., cos(q, cMc )}.
+Networks (BNNs) (Franchi et al., 2023) and Monte Carlo               We then compute the overall text-video similarity score:
+Dropout (Gal & Ghahramani, 2016). More recently, Eviden-                        s(T, V ) = αf sf (T, V ) + αc sc (T, V ),          (2)
+tial Deep Learning (EDL) (Sensoy et al., 2018), grounded             where αf , αc ∈ [0, 1] and αf + αc = 1. Videos are finally
+in Dempster-Shafer Theory (DST) (Shafer, 1992) and Sub-              retrieved and ranked according to Equation (2).
+jective Logic (SL) (Jøsang, 2016), has attracted increasing
+attention by explicitly modeling uncertainty through second-
+                                                                     3.2. Inter-video Evidential Learning
+order probability distributions and has been successfully
+applied to various tasks, e.g., multi-view classification (Han       This section models query ambiguity via query uncertainty
+et al., 2022; Xu et al., 2024), noisy correspondence multi-          estimation with inter-video evidential learning. We first
+modal retrieval (Li et al., 2025a; Qin et al., 2025; 2022;           introduce the three-fold principle for query identification
+Zha et al., 2024; 2025), temporal action localization (Chen          (Figure 2(a)) and describe the framework using the frame-
+et al., 2023a;b), open-set action recognition (Bao et al.,           scale branch, as both branches share similar pipelines.
+2021; Zhao et al., 2023) and zero-shot learning (Huang
+                                                                     Three-fold Principle For query qi and K videos, we first
+et al., 2024), with ongoing efforts (Deng et al., 2023; Chen
+                                                                     compute the frame-scale similarity sfij with the j-th video
+et al., 2025a; Yoon & Kim, 2025) further improving the
+                                                                     (Equation (1)), denoted as sij for convenience. Evidence is
+capability of uncertainty estimation of EDL. Motivated by
+                                                                     derived via similarities following (Sensoy et al., 2018):
+these advances, we design a hierarchical evidential learning
+framework that aggregates multi-granularity cross-modal                  eij = exp (tanh (sij /τ )) , ei = [ei1 , . . . , eiK ], (3)
+evidence to jointly quantify retrieval uncertainty in PRVR.          where τ = 0.1 by default. According to Dempster-Shafer
+                                                                     Theory (DST) (Shafer, 1992), epistemic uncertainty can be
+                                                                     quantified by evidence and reflect how strongly the data
+3. Method                                                            support the association between a query and candidates. We
+3.1. Problem Statement and Overview                                  first map the evidence ei to Dirichlet parameters:
+                                                                                αi = [αi1 , . . . , αiK ], αij = eij + 1.        (4)
+Partially Relevant Video Retrieval aims to retrieve videos
+                                                                     Definition 3.1. Epistemic Uncertainty. For query qi , epis-
+that contain moments relevant to a given text query. Each
+                                                                     temic uncertainty ui and belief mass bij are defined as
+video consists of multiple candidate moments, while each                                                                K
+query corresponds to a specific moment within its relevant                         K              αij − 1             X
+                                                                             ui = , bij =                 , Si =           αij ,    (5)
+video. In this paper, we propose Holmes, a hierarchical evi-                       Si                Si               j=1
+                                                                                 P
+dential learning framework for addressing query ambiguity            with ui + j bij = 1. Here, Si denotes the Dirichlet
+in PRVR at both inter-video and intra-video levels, as shown         distribution strength and bi = [bi1 , . . . , biK ] represents the
+in Figure 1(a). We first introduces three components below.          subjective opinion derived from αi .
+Text Query Representation A text query is first encoded              High ui captures under-determined queries by reflecting
+by a pre-trained RoBERTa (Liu et al., 2019), followed by a           limited evidence and weak query comprehension, whereas
+projection layer and a Transformer (Vaswani et al., 2017) to         low ui does not ensure precise retrieval. Formally,
+                                                                     Theorem 3.2. A low epistemic uncertainty ui does not imply
+obtain contextualized representations, which are aggregated
+                                                                     that the highest belief is assigned to the annotated label yi .
+into the final q ∈ Rd similar to MS-SL (Dong et al., 2022a).
+                                                                            qi with low ui ⇏ arg max bi = arg max yi .              (6)
+Video Representation Given an untrimmed video, we                    See Appendix B.2 for the proof. yi = [yi1 , . . . , yiK ] is the
+first extract features using a pre-trained CNN. Following            one-hot ground-truth label. This shows that epistemic uncer-
+prior arts (Wang et al., 2024b), we adopt a dual-branch              tainty cannot ensure belief concentration on the annotated
+architecture to capture multi-scale representations. In the          video, motivating our label consistency principle.
+
+                                                                 3
+                           Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+                     Frame-scale Branch                                                  Frame Embeddings:
+                                                                                                                                                              Precise
+                          Dense                                           Frame                                                                               Queries
+                                                                FC
+                         Sampling                                        Encoder                               max                                          Polysemous
+ Video                             Dirichlet                                        Evidence Extractor                                                        Queries
+                                 distribution
+          CNN                                       Uncertainty Guided              Uncertainty-Dominant     Query Label                                  Under-determined
+                                                      Identification                   Partition Fusion      Calibration                                      Queries
+                                                                                                                 1    0    0
+                                                                                                                                   (b) Uncertainty Guided Identification
+                                                                                                                 0    1    0
+                            Epistemic
+                                                                                                                 0    0    1
+                                                                                                                                 frame-scale
+                           Uncertainty
+                                                                                                                0.87 0.11 0.02
+                             Label
+                          Consistency                                                                           0.05 0.88 0.07
+
+                                                                                                                0.01 0.06 0.93
+                            Aleatoric                                                                                            clip-scale
+                           Uncertainty                                                                           1    0    0
+                                                                                                                 0    1    0
+                                                                                                                                                             aggregated
+                                                                                                                 0    0    1
+                                                                                                                                                               opinion
+                                      Dirichlet                                                                                    (c) Dynamic Co-Evidential Aggregator
+                                                                                    Evidence Extractor
+                                    distribution
+                     Clip-scale Branch                                                    Clip Embeddings:     max                             dustbin        query token
+                          Sparse                                           Clip
+                         Sampling
+                                                                FC                                                                                 FOT
+                                                                         Encoder
+     Text Queries
+   The girl bends
+ down and ties the              RoBERTa            FC     Transformer        Attention
+  ballerina shoes.                                                                                                                                            video token
+                     Query Branch                                                        Query Embeddings:                                                   dustbin bucket
+                                            (a) The overall framework of Holmes                                                        (d) Flexible Optimal Transport
+
+Figure 2. Overview of Holmes. (a) The query branch produces the query embedding q, while the frame- and clip-scale branches extract
+video representations Vf and Vc , yielding similarity scores Sf and Sc . The candidate similarities are converted into evidence vectors and
+modeled with Dirichlet distributions to estimate the three-fold principle, based on which Uncertainty-Guided Identification partitions
+queries at each scale into precise (Spf , Spc ), polysemous (Snf , Snc ), and under-determined (Suf , Suc ) subsets. The dual-scale partitions
+are then integrated by Uncertainty-Dominant Partition Fusion to obtain the final results Spo , Sno , and Suo . Finally, after query-specific
+label calibration, the refined labels supervise inter-video evidential learning via Linter . (b) Uncertainty-Guided Identification partitions
+queries in a three-dimensional latent space through coarse separation on the c–u plane followed by refinement along ξ. (c) Dynamic
+Co-Evidential Aggregator fuses dual-scale evidential opinions in a parameter-free manner. (d) Flexible Optimal Transport employs an
+dustbin bucket to absorb noisy clips, establishing reliable soft query-clip assignments as label evidence for intra-video evidential learning.
+
+
+Definition 3.3. Label Consistency. For query qi , the label                                   where ψ denotes the digamma function, defined as ψ(x) =
+                                                                                               d
+consistency ci is defined as:                                                                 dx log Γ(x) and H denotes the Shannon entropy. Please
+                          ci = max(0, si · yi ),                                   (7)        refer to Appendix B.3 for the full derivation.
+where si = [si1 , . . . , siK ] denotes similarity scores.                                    Uncertainty Guided Identification          Based on the above
+                                                                                              principles, queries can be categorized into three types: (i)
+While low ci indicates poor alignment with the ground-truth,                                  under-determined queries with high epistemic uncertainty,
+high ci do not indicate query precision. Formally,                                            Su ; (ii) initially precise queries with low epistemic uncer-
+Proposition 3.4. A high label consistency ci does not imply                                   tainty and high label consistency, S̃p ; (iii) initially polyse-
+that the query is precise.                                                                    mous queries with low epistemic uncertainty and low label
+             qi with high ci ⇏ qi is precise query.                                (8)        consistency, S̃n , which can be formally expressed as
+                                                                                                            
+                                                                                                            Su = {qi | ui > βu },
+Proof. Figure 1(c) shows that a high response from the                                                      
+ground-truth video does not imply a precise match, as other                                                   S̃p = {qi | ui ≤ βu , ci ≥ βp },            (10)
+                                                                                                            
+                                                                                                              S̃n = {qi | ui ≤ βu , ci < βp }.
+                                                                                                            
+videos may exhibit similarly high similarity.
+To distinguish precise and polysemous queries, we introduce                                   The thresholds βu and βp are adaptively determined as
+aleatoric uncertainty (Ulmer et al., 2023) measured by the                                          βu = min(utp , 1 − β), βp = max(β, ctp ),             (11)
+expected entropy of Dir(αi ) in Equation (9). Low entropy                                     where utp =maxi∈S tp ui , ctp = mini∈S tp ci and β = 0.3.
+indicates concentration of probability mass on a single video,                                S tp = {i | arg max(si ) = arg max(yi )} denotes the cor-
+suggesting precise queries, while high entropy reflects a                                     rectly matched query–video pairs. S̃n is often treated as
+more uniform distribution, indicating polysemous queries.                                     noisy pairs in noisy correspondence learning. However,
+Definition 3.5. Aleatoric Uncertainty. For query qi ,                                         we interpret S̃n as reflecting query ambiguity, where am-
+aleatoric uncertainty ξi is defined as                                                        biguous semantic may weaken responses to ground-truth
+                                                                                              videos. Proposition 3.4 shows that S̃p still contain polyse-
+                    K
+                   X  αik                                                                     mous queries. We further refine S̃p by comparing ξ, yielding
+Ep∼Dir(αi ) [H(p)]=       (ψ(Si +1)−ψ(αik +1)) , (9)
+                      Si
+                            k=1
+                                                                                              the final precise queries Sp and polysemous queries Sn :
+
+                                                                                          4
+                       Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+   (
+     Sp = {qi ∈ S̃p | ξi < median({ξj }qj ∈S̃p )},                           uncertainty of the query and serve as a global supervisory
+                                                          (12)              signal for coordinating the two branches.
+     Sn = S̃p ∪ S̃n \ Sp .
+Uncertainty-Dominant Partition Fusion               Based on                 With multi-scale evidential opinions, query categorization,
+Equations (10) and (12), the frame-scale and clip-scale                      and label calibration established, we introduce the evidential
+branches independently yield query partitions {Suf , Spf , Snf }             learning objective. We formulate cross-modal retrieval as a
+and {Suc , Spc , Snc }. However, these two branches may yield                K-way classification problem and optimize Holmes by min-
+inconsistent predictions for the same query, motivating a                    imizing the least-squares loss between the Dirichlet-based
+principled mechanism to reconcile discrepancies.                             query probability pi and the calibrated label ŷi , defined as:
+                                                                                                                       K
+Definition 3.6. Uncertainty Dominance Ordering. An                                             Z
+                                                                                                            2    1    Y     α −1
+uncertainty dominance ordering over query categories is                       LU (αi , ŷi ) = ∥ŷi − pi ∥2                p ij dpi
+                                                                                                              B (αi ) j=1 ij
+                    Sp ≺ Sn ≺ Su ,                      (13)                                                                            (17)
+                                                                                                K             2
+which induces a total order according to increasing semantic                                   X           αij       αij (Si − αij )
+                                                                                             =      ŷij −         +                  .
+ambiguity and uncertainty.                                                                     j=1
+                                                                                                           Si          Si2 (Si + 1)
+This ordering is motivated by the observation that precise                   Additional details are provided in Appendix B.4. Equa-
+queries are semantically reliable, polysemous queries ad-                    tion (17) enforces higher evidence for matched pairs than
+mit multiple candidates, whereas under-determined queries                    for mismatched ones, thereby preserving reliable uncertainty
+lack sufficient evidence for confident matching. Accord-                     learning. Finally, for the i-th query, the overall objective of
+ingly, cross-branch conflicts are resolved by selecting the                  inter-video evidential learning is defined as:
+identification with higher uncertainty dominance:                                                   
+   o                                                                          Linter = LfU αfi , ŷi + LcU (αci , ŷi ) + LoU (αoi , ŷi ) , (18)
+    Sp = Spf ∩ Spc ,
+                                                                             where αfi , αci , and αoi are the Dirichlet parameters from the
+  
+  S o = (S f ∩ S c ) ∪ (S f ∩ S c ) ∪ (S f ∩ S c ),
+  
+       n       n     p         p     n
+       o        f     c
+                             f       c     c
+                                               n      n
+                                                           (14)              frame-scale, clip-scale, and aggregated evidential opinions.
+  
+    S u  =   Su  ∩ S u   ∪ S u  ∩ (S p ∪ S n )
+  
+              ∪ Suc ∩ (Spf ∪ Snf ) .
+                                  
+                                                                             3.3. Intra-video Evidential Learning
+Query Label Calibration Given the final Spo , Sno , and
+Suo , we perform query-specific label calibration. For precise               To mitigate the sparse supervision inherent in MIL, we
+queries in Spo , the original labels are preserved. For under-               employ optimal transport to establish a soft query-to-clip
+determined queries in Suo , which remain under-fitted due to                 alignment within each video. Specifically, given clip embed-
+insufficient semantic evidence, we retain the original labels                dings {ci } ∈ RMc ×d and corresponding query embeddings
+to encourage learning. In contrast, for polysemous queries                   {qj } ∈ RMq ×d , where Mq denotes the number of queries.
+in Sno , one-hot supervision overlooks semantic ambiguity,                   Let S ∈ RMc ×Mq denote the clip-query similarity matrix.
+potentially over-penalizing semantically related samples                     Q is the transport assignment. The objective of OT is:
+and introducing misleading supervision. We recalibrate                       max ⟨Q, S⟩ + εH(Q)
+                                                                             Q∈Q
+their labels by using model-estimated similarities to yield                         n                                             o (19)
+                                                                                            M ×M
+soft alignment probabilities that capture latent relevance.                  s.t. Q= Q ∈ R+ c q | Q1Mq = µ, Q⊤ 1Mc = ν ,
+Given the i-th query with label yi , the refined label ŷi is:
+      (                                                                      where 1Mq represents the vector of ones in dimension Mq ,
+                                                   o     o
+         yi ,                              i ∈ Sp ∪ Su , (15)               µ ∈ RMc and ν ∈ RMq . H(Q) is an entropy regularizer
+ ŷi=                 γ f                                                   and ε controls its smoothness. We obtain the optimal Q∗
+        (1 − γ)yi +       σ(si ) + σ(sci ) , i ∈ Sno ,
+                      2                                                      via the Sinkhorn algorithm (Cuturi, 2013).
+where σ(·) denotes the softmax operation and γ = 0.2. sfi
+                                                                             Flexible Optimal Transport Optimal transport enforces
+and sci are the frame-scale and clip-scale similarity scores.
+                                                                             full source-target mapping, which is ill-suited to PRVR
+Dynamic Co-Evidential Aggregator As is shown in Fig-                         where queries correspond to only partial clips and many
+ure 2 (c), for a query q, we first obtain      the frame-scale and          clips are noisy or redundant. Motivated by (Sarlin et al.,
+                                        f         f K      f
+clip-scale
+ c K      evidential    opinions    M    =    {b  }
+                                                  k k=1 , u     Mc =         2020; Lin et al., 2024), we introduce an adaptive dustbin
+  {bk }k=1 , uc according to Equations (4) and (5). The two                  bucket to filter such clips, as shown in Figure 2(d). The
+branch opinions are then fused using the Dempster–Shafer                     bucket is a constant column vector z, set to the bottom 30%
+                                                   
+Theory combination rule, yielding Mo = {bok }K                    o
+                                                          k=1 , u :
+                                                                             percentile of S and appended to it:
+                                                                                                      
+          1                                          1                                      S̄ = S | Z , Z = z 1Mc ×1 .              (20)
+ bok =         (bfk bck + bfk uc + bck uf ), uo =         uf uc , (16)
+        1−δ                                        1−δ                       By replacing Equation (19) with Equation (20), we ob-
+where δ = i̸=j bfi bcj quantifies conflict between the two                   tain the final assignment by dropping the dustbins, Q̄∗ =
+             P
+opinions. This unified opinion could capture the holistic                    Q̄∗1:Mc ,1:Mq , which provides a soft one-to-many matching.
+
+                                                                         5
+                            Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+Table 1. Retrieval performance comparison on three standard datasets. Models are ranked by ascending SumR on ActivityNet
+Captions. State-of-the-art results are shown in bold, while “–” indicates unavailable entries.
+                                              ActivityNet Captions                            Charades-STA                                          TVR
+ Model
+                                    R@1      R@5    R@10   R@100     SumR      R@1     R@5      R@10    R@100        SumR       R@1     R@5      R@10      R@100       SumR
+ Text-to-Video Retrieval (T2VR)
+ RIVRL (Dong et al., 2022b)         5.2      18.0   28.2     66.4    117.8     1.6      5.6      9.4     37.7        54.3         9.4   23.4      32.2      70.6       135.6
+ CLIP4Clip (Luo et al., 2022)       5.9      19.3   30.4     71.6    127.3     1.8      6.5     10.9     44.2        63.4         9.9   24.3      34.3      72.5       141.0
+ Cap4Video (Wu et al., 2023)        6.3      20.4   30.9     72.6    130.2     1.9      6.7     11.3     45.0        65.0        10.3   26.4      36.8      74.0       147.5
+ Video Corpus Moment Retrieval (VCMR)
+ ReLoCLNet (Zhang et al., 2021)     5.7      18.9   30.0     72.0    126.6     1.2      5.4     10.0     45.6        62.3        10.0   26.5      37.3      81.3       155.1
+ CONQUER (Hou et al., 2021)         6.5      20.4   31.8     74.3    133.1     1.8      6.3     10.3     47.5        66.0        11.0   28.9      39.6      81.3       160.8
+ JSG (Chen et al., 2023c)           6.8      22.7   34.8     76.1    140.5     2.4      7.7     12.8     49.8        72.7         -      -         -         -           -
+ Partially Relevant Video Retrieval (PRVR)
+ MS-SL (Dong et al., 2022a)         7.1      22.5   34.7     75.8    140.1     1.8      7.1     11.8     47.7        68.4        13.5   32.1      43.4      83.4       172.4
+ MS-SL++ (Chen et al., 2025b)       7.0      23.1   35.2     75.8    141.1     1.8      7.6     12.0     48.4        69.7        13.6   33.1      44.2      83.5       174.5
+ PEAN (Jiang et al., 2023)          7.4      23.0   35.5     75.9    141.8     2.7      8.1     13.5     50.3        74.7        13.5   32.8      44.1      83.9       174.2
+ LH (Fang et al., 2024)             7.4      23.5   35.8     75.8    142.4     2.1      7.5     12.9     50.1        72.7        13.2   33.2      44.4      85.5       176.3
+ BGM-Net (Yin et al., 2024)         7.2      23.8   36.0     76.9    143.9     1.9      7.4     12.2     50.1        71.6        14.1   34.7      45.9      85.2       179.9
+ GMMFormer (Wang et al., 2024b)     8.3      24.9   36.7     76.1    146.0     2.1      7.8     12.5     50.6        72.9        13.9   33.3      44.5      84.9       176.6
+ MamFusion (Ying et al., 2025)      8.0      25.4   37.2     76.8    147.4     2.0      8.8     14.2     51.5        76.5        14.2   33.9      44.9      84.5       177.5
+ ProtoPRVR (Moon et al., 2025a)     7.9      24.9   37.2     77.3    147.4      -        -       -        -           -          15.4   35.9      47.5      86.4       185.1
+ DL-DKD (Dong et al., 2023)         8.0      25.0   37.5     77.1    147.6      -        -       -        -           -          14.4   34.9      45.8      84.9       179.9
+ ARL (Cho et al., 2025)             8.3      24.6   37.4     78.0    148.3      -        -       -        -           -          15.6   36.3      47.7      86.3       185.9
+ MGAKD (Zhang et al., 2025c)        7.9      25.7   38.3     77.8    149.6      -        -       -        -           -          16.0   37.8      49.2      87.5       190.5
+ DL-DKD++ (Dong et al., 2025)       8.3      25.5   38.3     77.8    149.9     1.9      7.1     12.3     49.8        71.1        15.3   36.0      47.5      86.0       184.8
+ GMMFormerV2 (Wang et al., 2024a)   8.9      27.1   40.2     78.7    154.9     2.5      8.6     13.9     53.2        78.2        16.2   37.6      48.8      86.4       189.1
+ HLFormer (Li et al., 2025b)        8.7      27.1   40.1     79.0    154.9     2.6      8.5     13.7     54.0        78.7        15.7   37.1      48.5      86.4       187.7
+ DreamPRVR (Li et al., 2026)        8.7      27.5   40.3     79.5    156.1     2.6      8.7     14.5     54.2        80.0        17.4   39.0      50.4      86.2       193.1
+ Holmes (ours)                      9.3      27.8   40.5     79.1    156.8     2.3      9.5     15.2     53.6        80.6        18.4   40.7      52.0      87.5       198.6
+
+
+
+
+Treating each intra-video alignment as an Mc -way classi-                            Table 2. Training and Inference Efficiency. Inference time
+                                                                                     measures feature extraction for 4430 videos, while retrieval time
+fication, we can follow Equations (3) and (4) to collect                             is the total time for encoding, similarity computation, and ranking
+evidence and estimate the Dirichlet parameters. By viewing                           over 15,753 queries on ActivityNet Captions evaluation set.
+Q̄∗ as the calibrated label, we define the intra-video eviden-
+                                                                                                            Train               Model          Inference   Retrieval
+tial learning objective Lintra based on Equation (17). For                           Model
+                                                                                                       time/epoch (ms)      parameters (M)     time (ms)   time (ms)
+                                                                                                                                                                        SumR
+each query, Lintra encourages the accumulation of strong                             GMMFormer               38079              12.85            5473       15016       146.0
+evidence for multiple relevant clips and weak evidence for                           HLFormer                52866              28.43            6547       17001       154.9
+                                                                                     GMMFormerV2             62458              30.79            6578       17263       154.9
+irrelevant ones, thereby guiding the model to acquire denser                         Holmes                  52658              30.79            6556       17058       156.8
+and more comprehensive temporal supervision.
+
+3.4. Model Optimization                                                              tains approximately 20K YouTube videos with an average
+                                                                                     duration of 118 seconds, each annotated with an average of
+Besides the Lintra and Linter proposed by Holmes, following
+                                                                                     3.7 moments paired with textual descriptions. (ii) Charades-
+MS-SL (Dong et al., 2022a), we employ the standard similar-
+                                                                                     STA (Gao et al., 2017) comprises 6,670 videos with 16,128
+ity retrieval loss Lsim and a query diversity Ldiv (Wang et al.,
+                                                                                     sentence descriptions, averaging 2.4 moments per video.
+2024b) to enhance retrieval performance. These two com-
+                                                                                     (iii) TV Show Retrieval (TVR) (Lei et al., 2020) consists of
+ponents form the basic training loss: Lbase = Lsim + Ldiv .
+                                                                                     21.8K video clips from six TV shows, each accompanied by
+Therefore, the aggregate loss is defined as:                                         five natural language descriptions. For fair comparison, we
+                  Lagg = Lbase + Linter + Lintra .                      (21)         adopt the same data splits as in MS-SL (Dong et al., 2022a).
+Training follows a two-stage scheme: Lbase is applied                                Metrics We adopt rank-based metrics for evaluation,
+throughout, the first stage serves as a warm-up, activating                          specifically R@K(K = 1, 5, 10, 100). R@K is defined
+only Linter without query label recalibration to learn initial                       as the percentage of queries where the ground-truth item
+text-video matching. In the second stage, all objectives are                         appears within the top K ranked results. We also report the
+jointly optimized, including Lintra and label recalibration.                         Sum of Recalls (SumR) to show the holistic performance.
+                                                                                     All results are presented in percentages (%).
+4. Experiments
+                                                                                     4.2. Implementation Details
+4.1. Experimental Setup
+                                                                                     Data Pre-Processing      For ActivityNet Captions and
+Datasets We conduct experiments on three benchmark                                   Charades-STA, video representations are obtained using
+datasets. (i) ActivityNet Captions (Krishna et al., 2017) con-                       the provided I3D features from Zhang et al. (2020) and
+
+                                                                               6
+                                  Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+                                           Table 3. Extensive ablation studies of Holmes. The best scores are marked in bold.
+
+                                                               ActivityNet Captions                                                           Charades-STA                                                                                                       TVR
+      ID    Model
+                                             R@1           R@5            R@10          R@100              SumR            R@1    R@5              R@10                R@100                 SumR                            R@1          R@5              R@10                R@100                  SumR
+
+      (0)   Holmes (ours)                     9.3           27.8            40.5            79.1           156.8           2.3     9.5               15.2                  53.6                 80.6                         18.4          40.7               52.0                 87.5                198.6
+  Efficacy of Multi-scale Inter-video Evidential Learning
+      (1)   Frame-scale Only                  8.6           26.6            39.4            78.6           153.2           2.4     8.8               14.6                  52.6                 78.4                         16.8          38.4               50.5                 87.5                193.1
+      (2)   Clip-scale Only                   8.5           26.6            39.8            78.6           153.6           2.4     8.6               14.4                  52.6                 78.0                         17.1          38.8               50.6                 87.6                194.1
+      (3)   w/o Aggregation scale             8.7           27.1            39.8            78.7           154.4           2.3     9.2               14.9                  52.6                 79.1                         17.3          40.2               51.5                 87.7                196.7
+  Efficacy of various Partition Fusion Strategies
+      (5)   Trust Frame-scale                 8.8           27.3            40.0            78.8           155.0           2.3     8.9               14.6                  52.7                 78.5                         17.2          39.4               50.6                 87.5                194.7
+      (6)   Trust Clip-scale                  8.9           27.0            40.0            78.9           154.8           2.3     8.5               14.3                  53.4                 78.5                         17.0          39.8               51.1                 87.5                195.4
+      (7)   w/ Confidence Dominance           9.1           27.4            40.1            78.9           155.5           2.3     9.3               14.8                  53.0                 79.3                         17.9          40.0               51.4                 87.8                197.0
+  Efficacy of Query Label Calibration
+      (8)   w/o Calibration                   8.8           27.4            39.7            78.7           154.7           2.3     8.3               14.2                  52.7                 77.4                         17.4          39.7               51.5                 87.7                196.3
+      (9)   S̃n Only                          9.1           27.6            40.1            78.9           155.6           2.3     9.0               15.0                  53.1                 79.4                         17.7          40.4               51.4                 87.8                197.3
+  Efficacy of Intra-video Evidential Learning
+  (10)      w/o Lintra                        8.7           27.1            39.7            78.6           154.0           2.1     8.7               14.4                  52.4                 77.7                         17.3          39.2               50.7                 87.7                194.9
+  Efficacy of Flexible Optimal Transport
+  (11)      w/ softmax                        8.7           27.3            40.0            78.7           154.7           2.3     8.6               14.2                  53.5                 78.6                         17.6          39.8               51.2                 87.5                196.1
+  (12)      w/ OT                             9.0           27.5            40.3            78.8           155.6           2.3     9.0               15.0                  53.1                 79.4                         18.2          40.4               51.5                 87.4                197.5
+
+
+
+                                                                                                                                                                                                                                                                                                           1.0
+                The girl bends down and ties the ballerina shoes.                                                                                                                                                               q1
+1.0
+0.8                      max: 0.682             Score (w/o 𝐿𝐿𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖 )       Score (w/ 𝐿𝐿𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖 )                                                                                                  0.7                                                                                              0.8
+0.6
+            max: 0.281                                                                                        Reduce              q1                                                                      0.6
+                                                                                                                                                                                                                                q2
+0.4
+                                                                                                            local noise.                                                                                                                                                                                   0.6
+
+
+
+
+                                                                                                                                                                                                                                                                                                             Transport Mass
+0.2                                                                                                                                                                                                       0.5
+0.0                                                                                                                               q2                                                                                            q3
+
+
+
+
+                                                                                                                                                                                                            Transport Mass
+                                                                                                                                                                                                          0.4                                                                                              0.4
+
+                                                                                                                                  q3
+                                                                                                                                                                                                          0.3                   q4
+                                                                                                                                                                                                          0.2                                                                                              0.2
+
+                                                                                                                                  q4                                                                      0.1                       Z
+1.0                                                                                                                                                                                                                                                                                                        0.0
+0.8                           max: 0.673            Score (w/o 𝐿𝐿𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖 )   Score (w/ 𝐿𝐿𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖𝑖 )
+                                                                                                                                       0 1 2 3 4 5 6 7 8 9 10111213141516171819202122232425262728293031
+                                                                                                                                                                                                          0.0                           0 1 2 3 4 5 6 7 8 9 10111213141516171819202122232425262728293031
+0.6                                                                                                           Hit the
+0.4
+                                                                                                              target.                                (a) Standard OT                                                                                   (b) Flexible OT
+0.2                                                              max: 0.435
+0.0
+                                                                                                                                 Figure 4. Comparison of transport mass alignment between OT
+                                                                                                                                 and FOT. Z denotes the dustbin bucket, which is observed in the
+                                                                                                                                 visualization to absorb the mass from the last several clips.
+Figure 3. Using the same videos as in Figure 1 for comparison,
+removing Lintra leads to retrieval failure, as the irrelevant video
+receives a higher response score than the ground-truth video (0.682
+vs. 0.435). In contrast, incorporating Lintra correctly ranks the
+ground-truth video above irrelevant ones (0.281 vs. 0.673).
+                                                                                                                                 other methods in T2VR and VCMR. For T2VR, we com-
+                                                                                                                                 pare with RIVRL (Dong et al., 2022b), CLIP4Clip (Luo
+Mun et al. (2020), respectively. Query representations are                                                                       et al., 2022) and Cap4Video (Wu et al., 2023). For VCMR,
+encoded as 1,024-dimensional RoBERTa features follow-                                                                            the comparison includes ReLoCLNet (Zhang et al., 2021),
+ing MS-SL (Dong et al., 2022a). For TVR, we employ                                                                               CONQUER (Hou et al., 2021) and JSG (Chen et al., 2023c).
+the 3,072-dimensional video features released by Lei et al.
+(2020), which combine frame-level ResNet152 (He et al.,                                                                          Retrieval Performance Table 1 summarizes the retrieval
+2016) and segment-level I3D (Carreira & Zisserman, 2017)                                                                         performance of different models across three benchmarks.
+representations. Corresponding textual data is encoded as                                                                        PRVR-specific methods consistently outperform T2VR and
+768-dimensional RoBERTa features (Liu et al., 2019).                                                                             VCMR approaches. By effectively modeling query ambigu-
+                                                                                                                                 ity and providing reliable supervision for more video clips,
+Experimental Configurations To maintain the same                                                                                 Holmes achieves state-of-the-art performance. Specifically,
+model size, the frame/clip encoder adopts 8 Gaussian at-                                                                         it outperforms the strongest competitor, DreamPRVR(Li
+tention blocks following (Wang et al., 2024a). The latent                                                                        et al., 2025b), by 0.7 and 0.6 in SumR on ActivityNet Cap-
+dimension d = 384. The model is implemented in PyTorch                                                                           tions and Charades-STA, respectively, and further surpasses
+and trained on a single NVIDIA RTX 3080 Ti GPU for 100                                                                           MGAKD(Zhang et al., 2025c) by 8.1 in SumR on TVR.
+epochs, with the first stage lasting 20 epochs and a batch
+size of 128. Other details are depicted in Appendix A.1.                                                                         Model Efficiency We further evaluate the model effi-
+                                                                                                                                 ciency in Table 2. All results are averaged over 5 runs
+                                                                                                                                 under identical settings. Compared with similar-scale mod-
+4.3. Comparison with State-of-the arts
+                                                                                                                                 els, Holmes achieves better performance with comparable
+Baselines We select 15 representative PRVR baselines                                                                             efficiency, indicating that hierarchical evidential learning
+for comparison. In addition, we evaluate Holmes against                                                                          incurs negligible overhead and demonstrates high efficiency.
+
+                                                                                                                            7
+                    Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+                                                                                                Epistemic                 Label                    Aleatoric
+4.4. Model Analyses                                                                            Uncertainty             Consistency                Uncertainty
+
+                                                                          With one twist, she pulls it up and bobby pins
+Multi-scale Inter-video Evidential Learning We per-                        it together with the other side following.
+                                                                                                                                       Then people are swimming in a place.
+
+form ablations to evaluate the multi-scale branch by (i) us-         0.5907           0.3208                 0.2213        0.5656              0.5432             0.5237
+
+ing only the frame- or clip-scale branch, training only with
+LfU or LcU and (ii) removing the Dynamic Co-Evidential
+Aggregator Module, i.e., training w/o LoU . As shown in Ta-                        (a) Precise Query                                (c) Polysemous Query (case 1)
+ble 3, single-branch learning and the absence of aggregation                       Several people are own it.                       People are snowboarding down a hill of snow.
+
+both lead to inferior performance, showing the necessity             0.1183           0.1021                 0.0965        0.5438              0.5207             0.5066
+
+of multi-granularity inter-video evidential learning. It also
+suggests that cross-branch evidence aggregation could yield
+an overall uncertainty estimate that promotes optimization.                   (b) Under-determined Query                            (d) Polysemous Query (case 2)
+
+Effects of Various Partition Fusion Strategies We com-               Figure 5. Qualitative examples of query identification. For each
+pare three fusion strategies: (i) trusting single-branch, (ii)       query, the top-3 retrieved videos are shown, with correct matches
+                                                                     outlined in green and incorrect matches in red. Similarity scores
+UDPF (default), which addresses inter-branch conflicts by            are displayed at the upper-left corner of each video.
+favoring hypotheses with higher uncertainty and (iii) Confi-
+dence Dominance, which adopts the opposite fusion prin-
+ciple. As shown in Table 3, fusing dual-branch predictions           Qualitative Query Identification Results           Figure 5
+yields more reliable assignments and improved accuracy.              presents representative examples demonstrating the effec-
+Compared to the conservative UDPF strategy, the more ag-             tiveness of our identification algorithm. Under-determined
+gressive Confidence Dominance may induce over-confident              queries are clearly separated by u and c, while precise and
+yet incorrect associations, resulting in inferior performance.       polysemous queries are mainly distinguished by ξ, con-
+Efficacy of Query Label Calibration Comparing ID                     sistent with our categorization criteria. We observe that,
+(0), ID (8), and ID (9) in Table 3 shows that uncalibrated           compared with relatively short polysemous queries with-
+baseline performs worst. We attribute this to its neglect of         out explicit referential cues, precise queries are generally
+inherent semantic ambiguity, which indiscriminately pushes           longer and more spefic. Additionally, under-determined
+unpaired videos, over-penalizing semantically related sam-           queries may exhibit grammatical or spelling errors (e.g.,
+ples and introducing misleading supervision. Meanwhile,              misspellings such as own), which hinder semantic under-
+the initial polysemous set S̃n fails to capture polysemous           standing. These observations also align well with real-world
+queries present in S̃p , leading to suboptimal performance.          scenes and further support the validity of our approach.
+These results further validate the importance of modeling
+query ambiguity and fine-grained query identification.               5. Conclusions
+Efficacy of Intra-video Evidential Learning ID (10) in               In this paper, we presented Holmes, a hierarchical eviden-
+Table 3 shows that removing Lintra causes a notable drop             tial learning framework designed to address the inherent
+in retrieval accuracy. We further visualize the temporal at-         uncertainty and supervisory sparsity in PRVR. To tackle
+tention scores between queries and videos in Figure 3. With          query ambiguity at the inter-video level, Holmes models
+Lintra , the model exhibits suppressed responses to incorrect        cross-modal similarity as evidence via Dirichlet distribu-
+videos and reduced spurious local peaks, while producing             tions, employing a three-fold principle to identify query
+higher similarity scores on relevant ones. By establishing           types and guide adaptive label calibration. Complementar-
+soft one-to-many query-clip assignments and aggregating              ily, at the intra-video level, we introduced flexible optimal
+evidence over multiple relevant clips, it provides denser tem-       transport with an adaptive dustbin to enable dense temporal
+poral supervision, enabling the model to mitigate spurious           alignment, effectively filtering out noise while accumulating
+local noise and improve retrieval reliability and accuracy.          reliable supervision signals, yielding superior performance.
+Effect of Flexible Optimal Transport To evaluate the
+effect of Flexible Optimal Transport, we compare three vari-         Limitations
+ants: (i) softmax-based assignment, (ii) optimal transport
+(OT) and (iii) Flexible Optimal Transport (FOT, default).            For fair comparison, we follow prior works by using pre-
+As shown in Table 3, softmax performs worst, while OT                trained models (e.g., ResNet) for feature extraction, which
+improves performance but fails to capture partial relevance          may limit retrieval performance. In future work, we plan
+in PRVR. In contrast, as illustrated in Figure 4, FOT with the       to adopt more advanced encoders (e.g., CLIP) and enable
+proposed dustbin bucket absorbs noisy clips and mitigates            end-to-end training. Consistent with most retrieval methods,
+irrelevant misalignments, achieving the best performance.            Holmes requires access to the full video, making it less
+                                                                     suitable for online streaming video retrieval scenarios.
+
+                                                                 8
+                    Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+Acknowledgements                                                      Chen, M., Gao, J., and Xu, C. Revisiting essential and
+                                                                        nonessential settings of evidential deep learning. IEEE
+We sincerely thank the reviewers and chairs for their efforts           Transactions on Pattern Analysis and Machine Intelli-
+and constructive suggestions, which have helped us improve              gence, 2025a.
+the manuscript. This work is supported in part by the Na-
+tional Natural Science Foundation of China under grants               Chen, X., Liu, D., Yang, X., Li, X., Dong, J., Wang, M.,
+624B2088, 62571298, 62536003, 62521006, and in part by                  and Wang, X. Prvr: Partially relevant video retrieval.
+the project of Peng Cheng Laboratory (PCL2025A14).                      IEEE Transactions on Pattern Analysis and Machine In-
+                                                                        telligence, 2025b.
+Impact Statement                                                      Chen, Z., Jiang, X., Xu, X., Cao, Z., Mo, Y., and Shen,
+This paper introduces Holmes, a framework for PRVR that                 H. T. Joint searching and grounding: Multi-granularity
+explicitly models semantic uncertainty and query ambiguity              video content retrieval. In Proceedings of the 31st ACM
+to enhance the reliability of AI systems. Beyond improving              International Conference on Multimedia, pp. 975–983,
+retrieval accuracy, a primary societal benefit of our work              2023c.
+is the shift from deterministic “black-box” predictions to            Cho, C.-H., Moon, W., Jun, W., Jung, M., and Heo, J.-P.
+interpretable, uncertainty-aware retrieval. By distinguish-             Ambiguity-restrained text-video representation learning
+ing between confident matches and low-evidence guesses,                 for partially relevant video retrieval. In Proceedings of the
+our approach fosters trust in downstream applications and               AAAI Conference on Artificial Intelligence, volume 39,
+allows for human-in-the-loop verification. While advanced               pp. 2500–2508, 2025.
+retrieval technologies carry potential dual-use risks, such
+as in automated surveillance, Holmes actively mitigates the           Cuturi, M. Sinkhorn distances: Lightspeed computation
+harm of “false positives” through its intra-video evidential            of optimal transport. Advances in neural information
+learning and adaptive dustbin mechanism, which filter out               processing systems, 26, 2013.
+spurious correlations and noise. Furthermore, by explicitly
+                                                                      Deng, D., Chen, G., Yu, Y., Liu, F., and Heng, P.-A. Uncer-
+categorizing polysemous and under-determined queries, our
+                                                                        tainty estimation by fisher information-based evidential
+framework offers a methodological pathway to diagnose and
+                                                                        deep learning. In International conference on machine
+analyze dataset biases rather than blindly overfitting to them.
+                                                                        learning, pp. 7596–7616. PMLR, 2023.
+We believe that by prioritizing uncertainty quantification
+and the suppression of unreliable signals, this work steers           Dong, J., Li, X., Xu, C., Yang, X., Yang, G., Wang, X.,
+the field toward more robust, transparent, and responsible              and Wang, M. Dual encoding for video retrieval by text.
+multimodal video understanding.                                        IEEE Transactions on Pattern Analysis and Machine In-
+                                                                        telligence, 44(8):4065–4080, 2021.
+References                                                            Dong, J., Chen, X., Zhang, M., Yang, X., Chen, S., Li,
+Bao, W., Yu, Q., and Kong, Y. Evidential deep learning                 X., and Wang, X. Partially relevant video retrieval. In
+  for open set action recognition. In Proceedings of the               Proceedings of the 30th ACM International Conference
+  IEEE/CVF international conference on computer vision,                 on Multimedia, pp. 246–257, 2022a.
+  pp. 13349–13358, 2021.
+                                                                      Dong, J., Wang, Y., Chen, X., Qu, X., Li, X., He, Y., and
+Carreira, J. and Zisserman, A. Quo vadis, action recogni-              Wang, X. Reading-strategy inspired visual representation
+  tion? a new model and the kinetics dataset. In proceed-               learning for text-to-video retrieval. IEEE Transactions
+  ings of the IEEE Conference on Computer Vision and                    on Circuits and Systems for Video Technology, 32(8):
+  Pattern Recognition, pp. 6299–6308, 2017.                             5680–5694, 2022b.
+                                                                      Dong, J., Zhang, M., Zhang, Z., Chen, X., Liu, D., Qu, X.,
+Chen, M., Gao, J., and Xu, C. Uncertainty-aware dual-                  Wang, X., and Liu, B. Dual learning with dynamic knowl-
+  evidential learning for weakly-supervised temporal action             edge distillation for partially relevant video retrieval. In
+  localization. IEEE transactions on pattern analysis and              Proceedings of the IEEE/CVF International Conference
+  machine intelligence, 45(12):15896–15911, 2023a.                      on Computer Vision, pp. 11302–11312, 2023.
+Chen, M., Gao, J., and Xu, C. Cascade evidential learn-               Dong, J., Huang, L., Liu, D., Chen, X., Yang, X., Lin, C.,
+  ing for open-world weakly-supervised temporal action                 Wang, X., and Wang, M. Dual learning with dynamic
+  localization. In Proceedings of the IEEE/CVF conference               knowledge distillation and soft alignment for partially
+  on computer vision and pattern recognition, pp. 14741–                relevant video retrieval. arXiv preprint arXiv:2510.12283,
+ 14750, 2023b.                                                          2025.
+
+                                                                  9
+                     Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+Faghri, F., Fleet, D. J., Kiros, J. R., and Fidler, S. Vse++: Im-          and frame representations for partially relevant video re-
+  proving visual-semantic embeddings with hard negatives.                  trieval. Proceedings of the AAAI Conference on Artificial
+  arXiv preprint arXiv:1707.05612, 2017.                                   Intelligence, 39(4):4166–4174, Apr. 2025. doi: 10.1609/
+                                                                           aaai.v39i4.32437. URL https://ojs.aaai.org/
+Fang, S., Dang, T., Wang, S., and Huang, Q. Linguistic                     index.php/AAAI/article/view/32437.
+  hallucination for text-based video retrieval. IEEE Trans-
+  actions on Circuits and Systems for Video Technology,                  Ko, D., Lee, J. S., Choi, M., Meng, Z., and Kim, H. J. Bidi-
+  34(10):9692–9705, 2024. doi: 10.1109/TCSVT.2024.                         rectional likelihood estimation with multi-modal large
+  3393843.                                                                 language models for text-video retrieval. In ICCV, 2025.
+
+Franchi, G., Bursuc, A., Aldea, E., Dubuisson, S., and                   Krishna, R., Hata, K., Ren, F., Fei-Fei, L., and Car-
+  Bloch, I. Encoding the latent posterior of bayesian neural               los Niebles, J. Dense-captioning events in videos. In
+  networks for uncertainty quantification. IEEE Transac-                   Proceedings of the IEEE international conference on com-
+  tions on Pattern Analysis and Machine Intelligence, 46                   puter vision, pp. 706–715, 2017.
+  (4):2027–2040, 2023.                                                   Lan, B., Xie, R., Zhao, R., Sun, X., Kang, Z., Yang, G.,
+Gal, Y. and Ghahramani, Z. Dropout as a bayesian approx-                   and Li, X. Hybrid-tower: Fine-grained pseudo-query
+  imation: Representing model uncertainty in deep learn-                   interaction and generation for text-to-video retrieval. In
+  ing. In international conference on machine learning, pp.                Proceedings of the IEEE/CVF International Conference
+ 1050–1059. PMLR, 2016.                                                    on Computer Vision, pp. 24497–24506, 2025.
+                                                                         Lei, J., Yu, L., Berg, T. L., and Bansal, M. Tvr: A large-scale
+Gao, J., Sun, C., Yang, Z., and Nevatia, R. Tall: Temporal
+                                                                           dataset for video-subtitle moment retrieval. In Computer
+  activity localization via language query. In Proceedings
+                                                                           Vision–ECCV 2020: 16th European Conference, Glasgow,
+  of the IEEE international conference on computer vision,
+                                                                           UK, August 23–28, 2020, Proceedings, Part XXI 16, pp.
+  pp. 5267–5275, 2017.
+                                                                           447–463. Springer, 2020.
+Han, Z., Zhang, C., Fu, H., and Zhou, J. T. Trusted multi-               Li, H., Lin, Y., Hu, P., Yang, M., and Peng, X. Learning with
+  view classification with dynamic evidential fusion. IEEE                  dual-level noisy correspondence for multi-modal entity
+  transactions on pattern analysis and machine intelligence,                alignment. arXiv preprint arXiv:2510.18240, 2025a.
+  45(2):2551–2566, 2022.
+                                                                         Li, J., Wang, J., Tan, C., Lian, N., Chen, L., Wang, Y., Zhang,
+He, K., Zhang, X., Ren, S., and Sun, J. Deep residual learn-                M., Xia, S.-T., and Chen, B. Enhancing partially relevant
+  ing for image recognition. In Proceedings of the IEEE                    video retrieval with hyperbolic learning. In Proceedings
+  conference on computer vision and pattern recognition,                    of the IEEE/CVF International Conference on Computer
+  pp. 770–778, 2016.                                                       Vision (ICCV), pp. 23074–23084, October 2025b.
+Hou, Z., Ngo, C.-W., and Chan, W. K. Conquer: Contextual                 Li, J., Lou, X., Wang, J., Wang, Y., Wang, Y., Xia, S.-T., and
+  query-aware ranking for video corpus moment retrieval.                    Chen, B. Imagine before concentration: Diffusion-guided
+  In Proceedings of the 29th ACM International Conference                   registers enhance partially relevant video retrieval. arXiv
+  on Multimedia, pp. 3900–3908, 2021.                                       preprint arXiv:2604.03653, 2026.
+Huang, H., Qiao, X., Chen, Z., Chen, H., Li, B., Sun, Z.,                Lin, Y., Zhang, J., Huang, Z., Liu, J., zujie wen, and Peng,
+  Chen, M., and Li, X. Crest: Cross-modal resonance                        X. Multi-granularity correspondence learning from long-
+  through evidential deep learning for enhanced zero-shot                  term noisy videos. In The Twelfth International Confer-
+  learning. In Proceedings of the 32nd ACM International                   ence on Learning Representations, 2024. URL https:
+ Conference on Multimedia, pp. 5181–5190, 2024.                            //openreview.net/forum?id=9Cu8MRmhq2.
+
+Jiang, X., Chen, Z., Xu, X., Shen, F., Cao, Z., and Cai, X.              Liu, X., Yin, S., Wang, J., Zhu, J., Wang, X., and Yang,
+   Progressive event alignment network for partial relevant                Y.-H. Duq: Dual uncertainty quantification for text-
+   video retrieval. In 2023 IEEE International Conference                  video retrieval. In Proceedings of the Thirty-Fourth Inter-
+   on Multimedia and Expo (ICME), pp. 1973–1978. IEEE,                     national Joint Conference on Artificial Intelligence, pp.
+   2023.                                                                   5779–5787, 2025.
+
+Jøsang, A. Subjective logic, volume 3. Springer, 2016.                   Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D.,
+                                                                           Levy, O., Lewis, M., Zettlemoyer, L., and Stoyanov, V.
+Jun, W., Moon, W., Cho, C.-H., Jung, M., and Heo, J.-                      Roberta: A robustly optimized bert pretraining approach.
+  P. Bridging the semantic granularity gap between text                    arXiv preprint arXiv:1907.11692, 2019.
+
+                                                                    10
+                    Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+Luo, H., Ji, L., Zhong, M., Chen, Y., Lei, W., Duan, N., and           Sensoy, M., Kaplan, L., and Kandemir, M. Evidential deep
+  Li, T. Clip4clip: An empirical study of clip for end to                learning to quantify classification uncertainty. Advances
+  end video clip retrieval and captioning. Neurocomputing,               in neural information processing systems, 31, 2018.
+  508:293–304, 2022.
+                                                                       Shafer, G. Dempster-shafer theory. Encyclopedia of artifi-
+Miech, A., Alayrac, J.-B., Smaira, L., Laptev, I., Sivic, J.,            cial intelligence, 1:330–331, 1992.
+ and Zisserman, A. End-to-end learning of visual represen-
+                                                                       Song, P., Zhang, L., Lan, L., Chen, W., Guo, D., Yang,
+ tations from uncurated instructional videos. In Proceed-
+                                                                         X., and Wang, M. Towards efficient partially relevant
+ ings of the IEEE/CVF Conference on Computer Vision
+                                                                         video retrieval with active moment discovering. IEEE
+ and Pattern Recognition, pp. 9879–9889, 2020.
+                                                                         Transactions on Multimedia, 27:6740–6751, 2025. doi:
+Moon, W., Cho, C.-H., Jun, W., Kim, T., Lee, I., Wee, D.,                10.1109/TMM.2025.3590937.
+ Shim, M., and Heo, J.-P. Prototypes are balanced units for            Ulmer, D. T., Hardmeier, C., and Frellsen, J. Prior and
+ efficient and effective partially relevant video retrieval. In          posterior networks: A survey on evidential deep learn-
+ Proceedings of the IEEE/CVF International Conference                    ing methods for uncertainty estimation. Transactions on
+ on Computer Vision, pp. 21789–21799, 2025a.                             Machine Learning Research, 2023. ISSN 2835-8856.
+Moon, W., Jung, M., Park, G., Kim, T.-Y., Cho, C.-H.,                  Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones,
+ Jun, W., and Heo, J.-P. Mitigating semantic collapse                    L., Gomez, A. N., Kaiser, Ł., and Polosukhin, I. At-
+ in partially relevant video retrieval. In The Thirty-ninth              tention is all you need. Advances in neural information
+ Annual Conference on Neural Information Processing                      processing systems, 30, 2017.
+ Systems, 2025b. URL https://openreview.net/
+ forum?id=Wlpf0Vg4yU.                                                  Wang, Y., Wang, J., Chen, B., Dai, T., Luo, R., and Xia,
+                                                                        S.-T. Gmmformer v2: An uncertainty-aware frame-
+Mun, J., Cho, M., and Han, B. Local-global video-text                   work for partially relevant video retrieval. arXiv preprint
+ interactions for temporal grounding. In Proceedings of the             arXiv:2405.13824, 2024a.
+ IEEE/CVF Conference on Computer Vision and Pattern
+ Recognition, pp. 10810–10819, 2020.                                   Wang, Y., Wang, J., Chen, B., Zeng, Z., and Xia, S.-T. Gmm-
+                                                                        former: Gaussian-mixture-model based transformer for
+Qin, Y., Peng, D., Peng, X., Wang, X., and Hu, P. Deep                  efficient partially relevant video retrieval. In Proceedings
+  evidential learning with noisy correspondence for cross-              of the AAAI Conference on Artificial Intelligence, 2024b.
+  modal retrieval. In Proceedings of the 30th ACM Interna-
+  tional Conference on Multimedia, pp. 4948–4956, 2022.                Wu, W., Luo, H., Fang, B., Wang, J., and Ouyang, W.
+                                                                        Cap4video: What can auxiliary captions do for text-video
+Qin, Y., Huang, L., Peng, D., Jiang, B., Zhou, J. T., Peng,             retrieval? In Proceedings of the IEEE/CVF Conference
+  X., and Hu, P. Trustworthy visual-textual retrieval. IEEE             on Computer Vision and Pattern Recognition, pp. 10704–
+  Transactions on Image Processing, 2025.                               10713, 2023.
+
+Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G.,             Xu, C., Si, J., Guan, Z., Zhao, W., Wu, Y., and Gao, X. Re-
+  Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J.,           liable conflictive multi-view learning. In Proceedings of
+  et al. Learning transferable visual models from natural                the AAAI conference on artificial intelligence, volume 38,
+  language supervision. In International conference on                   pp. 16129–16137, 2024.
+  machine learning, pp. 8748–8763. PMLR, 2021.                         Yin, S., Zhao, S., Wang, H., Xu, T., and Chen, E. Exploiting
+                                                                         instance-level relationships in weakly supervised text-
+Reddy, A., Martin, A., Yang, E., Yates, A., Sanders, K.,
+                                                                         to-video retrieval. ACM Trans. Multim. Comput. Com-
+  Murray, K., Kriz, R., de Melo, C. M., Van Durme, B.,
+                                                                         mun. Appl., 20(10):316:1–316:21, October 2024. URL
+  and Chellappa, R. Video-colbert: Contextualized late
+                                                                         https://doi.org/10.1145/3663571.
+  interaction for text-to-video retrieval. In Proceedings of
+  the Computer Vision and Pattern Recognition Conference,              Ying, X., Mo, J., Lin, J., Jin, C., Wang, F., and Wei, L. Mam-
+  pp. 19691–19701, 2025.                                                 fusion: Multi-mamba with temporal fusion for partially
+                                                                         relevant video retrieval. arXiv preprint arXiv:2506.03473,
+Sarlin, P.-E., DeTone, D., Malisiewicz, T., and Rabinovich,              2025.
+  A. Superglue: Learning feature matching with graph
+  neural networks. In Proceedings of the IEEE/CVF con-                 Yoon, T. and Kim, H. Uncertainty estimation by flexible
+  ference on computer vision and pattern recognition, pp.                evidential deep learning. In The Thirty-ninth Annual
+  4938–4947, 2020.                                                       Conference on Neural Information Processing Systems,
+
+                                                                  11
+                    Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+  2025. URL https://openreview.net/forum?
+  id=N6ujq5Yfwa.
+Zha, Q., Liu, X., Cheung, Y.-m., Xu, X., Wang, N., and
+  Cao, J. Ugncl: Uncertainty-guided noisy correspondence
+  learning for efficient cross-modal matching. In Proceed-
+  ings of the 47th International ACM SIGIR Conference on
+  Research and Development in Information Retrieval, pp.
+  852–861, 2024.
+Zha, Q., Liu, X., Cheung, Y.-m., Peng, S.-J., Xu, X., and
+  Wang, N. Ucpm: Uncertainty-guided cross-modal re-
+  trieval with partially mismatched pairs. IEEE Transac-
+  tions on Image Processing, 2025.
+
+Zhang, B., Hu, H., Lee, J., Zhao, M., Chammas, S., Jain, V.,
+  Ie, E., and Sha, F. A hierarchical multi-modal encoder
+  for moment localization in video corpus. arXiv preprint
+  arXiv:2011.09046, 2020.
+Zhang, H., Sun, A., Jing, W., Nan, G., Zhen, L., Zhou, J. T.,
+  and Goh, R. S. M. Video corpus moment retrieval with
+  contrastive learning. In Proceedings of the 44th Interna-
+  tional ACM SIGIR Conference on Research and Develop-
+  ment in Information Retrieval, pp. 685–695, 2021.
+Zhang, L., Song, P., Dong, J., Li, K., and Yang, X. Enhanc-
+  ing partially relevant video retrieval with robust align-
+  ment learning. In Findings of the Association for Com-
+  putational Linguistics: EMNLP 2025, pp. 4615–4629,
+  November 2025a.
+Zhang, L., Song, P., Duan, Z., Wang, S., Chang, X., and
+  Yang, X. Video corpus moment retrieval with query-
+  specific context learning and progressive localization.
+  IEEE Transactions on Circuits and Systems for Video
+  Technology, 2025b.
+Zhang, Q., Yang, C., Jiang, B., and Zhang, B. Multi-grained
+  alignment with knowledge distillation for partially rele-
+  vant video retrieval. ACM Transactions on Multimedia
+  Computing, Communications and Applications, 2025c.
+Zhao, C., Du, D., Hoogs, A., and Funk, C. Open set action
+  recognition via multi-label evidential learning. In Pro-
+  ceedings of the IEEE/CVF conference on computer vision
+  and pattern recognition, pp. 22982–22991, 2023.
+
+
+
+
+                                                                12
+                                       Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+A. More Experiments
+A.1. Hyper-Parameters
+We adopt the hyperparameter settings from HLFormer (Li et al., 2025b) and GMMFormerV2 (Wang et al., 2024a). The
+numbers of clips and frames are set to Mc = 32 and Mf = 128, respectively. The maximum query length Nq is fixed to 64
+for ActivityNet Captions and 30 for TVR and Charades-STA. All remaining settings, including Lsim and Ldiv , follow (Li
+et al., 2025b). Detailed implementation can be provided in the submitted code ICML26-Holmes.
+
+A.2. Parameter Analysis
+We performed a comprehensive hyperparameter analysis on the TVR dataset to investigate the effects of the temperature τ
+in Equation (3), the threshold β in Equation (11), and the dustbin bucket ratio z in Equation (20), as depicted in Figure 6.
+The results indicate that our model maintains relatively stable performance when τ is within [0.06, 0.2], β within [0.2, 0.5],
+and z within [0.2, 0.4], demonstrating that the proposed approach is largely insensitive to hyperparameter variations and
+exhibits strong robustness.
+                                                                                                                                                                                   
+                                                                                                                                                                                      
+                                                                                                                                                                                   
+                                                                                           6 X P 5
+             6 X P 5
+
+
+
+
+                                                                                                                                                                            6 X P 5
+                                                                                                                                                                                      
+                                                                                                                                                                                   
+                                                                                                                             0.3                                                      
+                                                    0.1                                                                                                           0.3                              
+                                                     7 H P S H U D W X U H                                                       7 K U H V K R O G                                                              % X F N H W  5 D W L R z
+Figure 6. The parameter analysis of the temperature τ in Equation (3), the threshold β in Equation (11), and the dustbin bucket ratio z in
+Equation (20) on the TVR dataset, with the default settings highlighted in bold.
+
+
+B. More Details on Method
+B.1. Basic Training Objectives
+Following existing works(Dong et al., 2022a; Wang et al., 2024b), we adopt triplet loss (Dong et al., 2021; Faghri et al.,
+2017) Ltrip and InfoNCE loss (Miech et al., 2020; Zhang et al., 2021) Lnce , query diverse loss (Wang et al., 2024b) Ldiv
+that are widely used in PRVR. A text-video pair is considered positive if the video contains a moment relevant to the text;
+otherwise, it is regarded as negative. Given a positive text-video pair (T, V ), the triplet ranking loss over the mini-batch B is
+formulated as:
+                        1 X
+               Ltrip =             {max(0, m + s(T − , V ) − s(T, V )) + max(0, m + s(T, V − ) − s(T, V ))},
+                        n
+                                                   (T,V )∈B
+
+where m is a margin constant. T − and V − indicate a negative text for V and a negative video for T , respectively. The
+similarity score s(, ) is obtained by Equation (1) and Equation (2).
+The infoNCE loss is computed as:
+                         (                                      !                                                                                                                                                                                                !)
+        nce     1 X                        s(T, V )                                                                                                                                                              s(T, V )
+       L    =−             log                                    + log                                                                                                                                                                                               ,
+                                 s(T, V ) + T − ∈NT s(Ti− , V )                                                                                                                                                                       −
+                                           P                                                                                                                                                                     P
+               n                                                                                                                                                                 s(T, V ) +                            Vi− ∈NV s(T, Vi )
+                                       (T,V )∈B                                                               i
+
+
+where NT and NV represent the negative texts and videos of V and T within the mini-batch B, respectively.
+Finally , Lsim is defined as:
+                                                                                  Lsim = Ltrip
+                                                                                          c    + Ltrip
+                                                                                                  f    + λc Lnce
+                                                                                                             c   + λf Lnce
+                                                                                                                       f ,                                                                                                                                                (22)
+where f and c mark the objectives for the frame-level branch and the clip-level branch, respectively. λc and λf are
+hyper-parameters to balance the contributions of InfoNCE objectives.
+Given a collection of text queries T in the mini-batch B, the query diverse loss is defined as:
+                                            1 X                                        
+                                    Ldiv =            1qi ,qj log 1 + eα(cos(qi ,qj )+δ) ,                                                                                                                                                                                (23)
+                                            n
+                                                                                          qi ,qj ∈T
+where δ > 0 denotes the margin, α > 0 is a scaling factor, and 1qi ,qj ∈ {0, 1} represents an indicator function, 1qi ,qj = 1
+when qi and qj correspond to the same video.
+
+                                                                                                                                  13
+                    Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+B.2. Detailed proofs for Theorem 3.2
+Proof. We prove the theorem by providing a counter-example. Let yi be the ground-truth label corresponding to index t
+(i.e., yit = 1). Let ei be an evidence vector constructed such that all evidence is assigned to an incorrect video k (k ̸= t):
+                                                         (
+                                                           λ, if j = k,
+                                                   eij =                                                                  (24)
+                                                           0, otherwise,
+
+where λ ≫ 0 is a large positive constant. According to Eq. (4) and Eq. (5), the Dirichlet strength is Si = λ + K.
+                                                 K
+Consequently, the epistemic uncertainty is ui =      . By choosing a sufficiently large λ, we can make ui arbitrarily
+                                                λ+K
+close to 0 (low uncertainty).
+However, the belief mass bij is maximized at index k because αik > αij for all j ̸= k. Since k ̸= t, the highest belief is not
+assigned to the annotated label. This implies that a low epistemic uncertainty indicates that the model has collected a large
+amount of evidence, but it does not guarantee that this evidence points to the correct video.
+
+B.3. The derivation of aleatoric uncertainty in Equation (9)
+Following standard formulations in evidential learning (Li et al., 2025a; Chen et al., 2025a), let p = [p1 , . . . , pK ]⊤ be the
+probability vector for the i-th sample, defined on the K-dimensional unit simplex S K . We assume p follows a Dirichlet
+distribution parameterized by the concentration vector αi = [αi1 , . . . , αiK ]⊤ . The probability density function (PDF) is
+defined as:
+                                                               K
+                                                    
+                                                     1
+                                                               Y
+                                                                   pαik −1 , for p ∈ S K ,
+                                                    
+                                      Dir(p; αi ) = B(αi ) k=1 k                                                             (25)
+                                                    
+                                                    
+                                                      0,                      otherwise,
+                 QK
+                       Γ(αik )                                               P  K
+where B(αi ) = k=1   Γ(Si )    is the multivariate beta function, and Si = k=1 αik is the strength of the distribution. The
+expected entropy (aleatoric uncertainty) of the random variable p under this distribution is derived as follows:
+                                         Z                     K
+                                                                            !
+                                                              X
+                 Ep∼Dir(αi ) [H(p)] =         Dir(p; αi ) −        pk ln pk dp
+                                           SK                         k=1
+                                           K Z
+                                           X
+                                      =−                  Dir(p; αi )(pk ln pk )dp
+                                           k=1       SK
+                                           K Z                              K
+                                           X                     Γ(Si )     Y    α −1
+                                      =−                   QK                   pj ij   (pk ln pk )dp
+                                           k=1       SK       j=1 Γ(αij ) j=1
+                                           K Z
+                                           X             αik       Γ(Si + 1)                Y α −1
+                                      =−                                Q             pα
+                                                                                       k
+                                                                                         ik
+                                                                                             pj ij ln pk dp
+                                                     S K S i Γ(αik + 1)  j̸=k Γ(αij )
+                                           k=1                                                   j̸=k
+                                           K              Z
+                                           X αik
+                                      =−                         Dir(p; αi + 1k ) ln pk dp
+                                                     Si     SK
+                                           k=1
+                                           K
+                                           X αik
+                                      =−                  Ep∼Dir(αi +1k ) [ln pk ]
+                                                     Si
+                                           k=1
+                                           K
+                                           X αik
+                                      =−                  (ψ(αik + 1) − ψ(Si + 1))
+                                                     Si
+                                           k=1
+                                          K
+                                          X αik
+                                      =              (ψ(Si + 1) − ψ(αik + 1)),
+                                                Si
+                                          k=1
+
+where the term 1k represents a one-hot vector with the k-th element set to 1 and all others set to 0. The derivation primarily
+relies on the recursive property of the Gamma function, Γ(z + 1) = zΓ(z). This property allows us to rewrite the probability
+
+                                                                      14
+                    Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+                                           αik
+density function by extracting the factor      , thereby transforming the original integral into an expectation over a new
+                                            Si
+Dirichlet distribution with parameters shifted by 1k (i.e., αi + 1k ).
+
+B.4. The derivation of loss function in Equation (17)
+In this section, we provide the detailed derivation of the evidential learning objective presented in the main paper.
+Our method aims to guide the predicted probability pi to align with the calibrated label ŷi . Since pi is a random variable, we
+formulate the uncertainty-aware learning objective as the expected sum of squared errors between ŷi and pi . The derivation
+is as follows:
+                                                   Z                        K
+                                                                2    1     Y     α −1
+                                   LU (αi , ŷi ) = ∥ŷi − pi ∥2                pijij dpi
+                                                                  B (αi ) j=1
+                                                   Z
+                                                  = ∥ŷi − pi ∥22 Dir(pi ; αi ) dpi
+                                                     K
+                                                     X
+                                                           Epi ∼Dir(αi ) (ŷij − pij )2
+                                                                                       
+                                                 =
+                                                                                                                           (26)
+                                                     j=1
+                                                     K h
+                                                     X                               i
+                                                                        2
+                                                 =      (ŷij − E[pij ]) + Var(pij )
+                                                     j=1
+                                                    K            2
+                                                   X          αij      αij (Si − αij )
+                                                 =     ŷij −        +                 ,
+                                                   j=1
+                                                              S i       Si2 (Si + 1)
+             PK
+where Si = j=1 αij . The third step utilizes the standard bias-variance decomposition, E[(X − c)2 ] = (c − E[X])2 +
+Var(X), and the final step substitutes the mean and variance of the Dirichlet distribution: E[pij ] = αij /Si and Var(pij ) =
+αij (Si − αij )/[Si2 (Si + 1)].
+
+B.5. Derivation of the Sinkhorn Algorithm
+In this section, we provide a detailed derivation of the Sinkhorn algorithm used for calculating the optimal transport
+(Equation (19)). Consider a similarity matrix S ∈ Rn×m , where [S]i,j represents the similarity score between a video clip ci
+and a query qj . The goal of optimal transport is to find a transport plan Q that maximizes the total similarity under marginal
+constraints. The primal problem is defined as:
+                                                                      n X
+                                                                      X m
+                                   max      ⟨Q, S⟩ = tr(Q⊤ S) =                 [Q]i,j · [S]i,j
+                                   Q∈Q                                                                                     (27)
+                                                                      i=1 j=1
+
+                                            Q = Q ∈ Rn×m | Q1m = µ, Q⊤ 1n = ν ,
+                                               
+                                     s.t.            +
+
+where µ ∈ Rn and ν ∈ Rm are probability vectors representing the mass distribution of video clips and queries, respectively.
+For uniform distributions, we set µ = n1 1n and ν = m
+                                                    1
+                                                      1m .
+Standard linear programming solvers for Eq. (27) typically require O(n3 log n) time complexity, which is computationally
+prohibitive for large-scale datasets. To address this, Cuturi (Cuturi, 2013) proposed an entropy-regularized formulation that
+admits a fast approximate solution:
+                                                   max ⟨Q, S⟩ + εH(Q),                                                   (28)
+                                                   Q∈Q
+                    P
+where H(Q) = − i,j [Q]i,j ln([Q]i,j ) is the entropy regularization term and ε > 0 is the regularization coefficient. This
+convex objective function allows us to utilize the Lagrange multiplier method. The Lagrangian L(Q, u, v) with dual
+multipliers u ∈ Rn and v ∈ Rm is given by:
+                          L(Q, u, v) = ⟨Q, S⟩ + εH(Q) + u⊤ (Q1m − µ) + v ⊤ (Q⊤ 1n − ν).                                    (29)
+Taking the partial derivative of Eq. (29) with respect to each entry [Q]i,j and setting it to zero (KKT condition):
+                                      ∂L
+                                            = [S]i,j − ε(ln([Q]i,j ) + 1) + ui + vj = 0.                                   (30)
+                                    ∂[Q]i,j
+
+                                                                 15
+                    Revisiting Uncertainty: On Evidential Learning for Partially Relevant Video Retrieval
+
+Solving for [Q]i,j , we obtain:
+                                                                    
+                                               [S]i,j + ui + vj               1   ui      [S]i,j        1   vj
+                            [Q]i,j = exp                        −1       = e− 2 + ε · e     ε      · e− 2 + ε .             (31)
+                                                       ε
+
+This factorization suggests that the optimal solution Q∗ can be expressed in terms of two scaling vectors, κ1 ∈ Rn and
+κ2 ∈ Rm . By defining [κ1 ]i = exp (−1/2 + ui /ε) and [κ2 ]j = exp (−1/2 + vj /ε), the optimal transport matrix takes the
+form of a normalized exponential matrix:
+
+                                               Q∗ = Diag(κ1 ) exp(S/ε)Diag(κ2 ).                                            (32)
+
+Since Q∗ must satisfy the marginal constraints in Eq. (27), we have:
+
+                                                Q∗ 1m = µ    and     Q∗⊤ 1n = ν.                                            (33)
+
+Substituting Eq. (32) into these constraints leads to the Sinkhorn-Knopp fixed-point iteration updates:
+
+                                  κ1 ← µ ⊘ (exp(S/ε)κ2 ),        κ2 ← ν ⊘ (exp(S⊤ /ε)κ1 ),                                  (34)
+
+where ⊘ denotes element-wise division. Empirically, a few iterations (e.g., 50 steps) are sufficient to converge to a
+satisfactory transport plan Q∗ . The final optimal transport distance is then computed as ⟨Q∗ , S⟩.
+
+B.6. Further details of Our Architecture
+We replace the standard self-attention in the Transformer block with Gaussian attention (Wang et al., 2024b), yielding a
+Gaussian block. Multiple Gaussian blocks (Ng ) operate in parallel, and their outputs are aggregated via MAIM (Li et al.,
+2025b) to construct the frame-/clip-level encoder. For notational convenience, we unify the frame and clip embeddings as
+Vo , since they are processed in an identical manner. Given Vo , the Gaussian attention is defined as:
+                                                               Vo W q (Vo W k )⊤
+                                                                                
+                                                           g
+                                  GA(Vo ) = softmax Mσ ⊙              √            Vo W v ,                              (35)
+                                                                        dh
+                      1 − (j−i) 2
+
+where Mgσ (i, j) =      e σ2 is a Gaussian kernel with variance σ 2 . Varying σ enables modeling feature interactions at
+                     2π
+different temporal scales, yielding multi-receptive-field representations. W q , W k and W v denote linear projections. dh is
+the attention dimension and ⊙ indicates element-wise multiplication.
+
+B.7. Further discussion of related work
+Existing evidential learning methods have been applied to noisy cross-modal retrieval and text-to-video retrieval, In noisy
+settings, prior works(Qin et al., 2022; Zha et al., 2025) leverage epistemic uncertainty derived from Dirichlet parameters to
+identify instance-level noisy pairs (i.e., clean vs. noisy). In text-video retrieval, (Liu et al., 2025) integrates probabilistic
+embeddings with epistemic uncertainty only as a regularization signal. They do not explicitly model query-level semantic
+heterogeneity and also fail to address the unique challenges of PRVR.
+Holmes introduces a hierarchical evidential framework specifically designed for PRVR:
+
+   • Inter-video: PRVR queries exhibit fine-grained heterogeneity beyond a simple clean/noisy dichotomy. We propose a
+     three-fold principle that goes beyond epistemic uncertainty by incorporating label consistency and aleatoric uncertainty
+     for query diagnosis, enabling cross-scale conflict-aware fusion and query-adaptive label calibration.
+   • Intra-video: PRVR relies on MIL to handle partial relevance, which induces sparse supervision. We employ FOT to
+     provide denser supervision, generating reliable intra-video evidence to support inter-video learning.
+
+
+
+
+                                                               16
+
