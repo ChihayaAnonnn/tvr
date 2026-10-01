@@ -58,6 +58,11 @@ class Episode:
     preprocessing: EpisodePreprocessing
     aliases: Mapping[str, tuple[str, ...]]
     query_conditioned_group_labels: tuple[tuple[str, str, int], ...] = ()
+    relevance_space: str = "reviewed_semantic"
+    label_protocol: Mapping | None = None
+    query_source_ids: tuple[str, ...] = ()
+    query_component_id: str = ""
+    benchmark_positive_ids: tuple[str, ...] = ()
 
 
 def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episode]:
@@ -67,13 +72,35 @@ def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episo
         raise ValueError("unsupported episode split")
     path = Path(path)
     payload = json.loads(path.read_text())
-    if (
-        not isinstance(payload, dict)
-        or set(payload) != {"schema_version", "gallery_version", "preprocessing", "episodes"}
-        or payload["schema_version"] != 1
-        or payload["gallery_version"] != gallery_version
-    ):
+    base_fields = {"schema_version", "gallery_version", "preprocessing", "episodes"}
+    benchmark = isinstance(payload, dict) and payload.get("schema_version") == 2
+    fields = base_fields | {"relevance_space", "label_protocol", "label_references"} if benchmark else base_fields
+    if (not isinstance(payload, dict) or set(payload) != fields
+            or type(payload["schema_version"]) is not int or payload["schema_version"] not in (1, 2)
+            or payload["gallery_version"] != gallery_version):
         raise ValueError("episode manifest schema/gallery mismatch")
+    protocol = None
+    relations = id_map = None
+    if benchmark:
+        if payload["relevance_space"] != "benchmark_annotation":
+            raise ValueError("unsupported v2 label scope")
+        protocol = validate_label_protocol(payload["label_protocol"])
+        references = payload["label_references"]
+        if not isinstance(references, dict) or set(references) != {"relations", "id_map"}:
+            raise ValueError("benchmark label references are required")
+        tables = {}
+        for name, key in (("relations", "relation_sha256"), ("id_map", "id_map_sha256")):
+            ref = references[name]
+            if not isinstance(ref, dict) or set(ref) != {"path", "sha256"} or ref["sha256"] != protocol[key]:
+                raise ValueError("benchmark label reference identity mismatch")
+            target = path.parent / ref["path"]
+            if target.is_symlink() or file_sha256(target) != ref["sha256"]:
+                raise ValueError("benchmark label reference SHA mismatch")
+            tables[name] = json.loads(target.read_text())
+        relations, id_map = tables["relations"], tables["id_map"]
+        if (not isinstance(relations, dict) or not isinstance(id_map, dict)
+                or any(not isinstance(k, str) or not k or not isinstance(v, str) or not v for k, v in id_map.items())):
+            raise ValueError("invalid benchmark relationship tables")
     if not isinstance(payload["episodes"], list) or not payload["episodes"]:
         raise ValueError("episodes must be a nonempty list")
     preprocessing = EpisodePreprocessing(**payload["preprocessing"])
@@ -94,6 +121,8 @@ def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episo
         "source_ids",
         "caption_group_id",
     }
+    if benchmark:
+        required |= {"query_source_ids", "query_component_id"}
     episodes = []
     query_ids = set()
     for row in payload["episodes"]:
@@ -126,13 +155,27 @@ def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episo
         if len(set(row["candidate_ids"])) != size:
             raise ValueError("candidate aliases must be unique")
         provenance = row["annotation_provenance"]
-        if (
-            not isinstance(provenance, dict)
-            or not isinstance(provenance.get("source"), str)
-            or not provenance["source"]
-            or not _digest(provenance.get("sha256"))
-            or type(provenance.get("reviewed")) is not bool
-        ):
+        if benchmark:
+            if (not isinstance(provenance, dict) or set(provenance) != {"source", "sha256", "protocol_id"}
+                    or provenance["source"] != "benchmark_annotation"
+                    or provenance["sha256"] != protocol["annotation_sha256"]
+                    or provenance["protocol_id"] != protocol["protocol_id"]
+                    or row["answer_in_gallery"] != "yes"
+                    or not isinstance(row["query_source_ids"], list) or not row["query_source_ids"]
+                    or any(not isinstance(x, str) or not x for x in row["query_source_ids"])
+                    or not _digest(row["query_component_id"])):
+                raise ValueError("invalid benchmark annotation/source identity")
+            gt = relations.get(row["query_id"])
+            if (not isinstance(gt, list) or not gt or any(v not in id_map for v in gt)
+                    or len({id_map[v] for v in gt}) != 1):
+                raise ValueError("benchmark query must have one canonical positive")
+            positives = {id_map[v] for v in gt}
+            if any(label != ("positive" if canonical in positives else "negative")
+                   for canonical, label in zip(row["canonical_ids"], row["relevance"])):
+                raise ValueError("benchmark labels disagree with bound official relationships")
+        elif (not isinstance(provenance, dict) or not isinstance(provenance.get("source"), str)
+              or not provenance["source"] or not _digest(provenance.get("sha256"))
+              or type(provenance.get("reviewed")) is not bool):
             raise ValueError("invalid annotation provenance")
         if (
             any(label not in LABELS for label in row["relevance"])
@@ -140,7 +183,7 @@ def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episo
             or row["answer_in_gallery"] not in PRESENCE
         ):
             raise ValueError("invalid three-state supervision")
-        if not provenance["reviewed"] and (
+        if not benchmark and not provenance["reviewed"] and (
             any(x != "unknown" for x in row["relevance"])
             or row["answer_in_candidates"] != "unknown"
             or row["answer_in_gallery"] != "unknown"
@@ -204,7 +247,7 @@ def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episo
         groups = []
         for group in row.get("query_conditioned_group_labels", []):
             if (
-                not provenance["reviewed"]
+                benchmark or not provenance["reviewed"]
                 or not provenance.get("equivalence_reviewed")
                 or len(group) != 3
                 or group[0] not in ids
@@ -236,6 +279,11 @@ def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episo
                 preprocessing,
                 MappingProxyType({i: tuple(sorted(merged[i]["aliases"])) for i in ids}),
                 tuple(groups),
+                "benchmark_annotation" if benchmark else "reviewed_semantic",
+                MappingProxyType(protocol) if benchmark else None,
+                tuple(sorted(set(row["query_source_ids"]))) if benchmark else (),
+                row["query_component_id"] if benchmark else "",
+                tuple(sorted(positives)) if benchmark else (),
             )
         )
     audit_episode_splits(episodes)
@@ -252,7 +300,9 @@ def audit_episode_splits(episodes):
             contents[canonical] = digest
         for kind, values in [
             ("canonical", episode.canonical_ids),
-            ("source", episode.source_ids),
+            ("source", tuple(set(episode.source_ids) | set(episode.query_source_ids))),
+            ("query_source", episode.query_source_ids),
+            ("query_component", (episode.query_component_id,) if episode.query_component_id else ()),
             ("caption", (episode.caption_group_id,)),
         ]:
             for value in values:
@@ -260,3 +310,20 @@ def audit_episode_splits(episodes):
                 if key in seen and seen[key] != episode.split:
                     raise ValueError(f"{kind} split leakage: {value}")
                 seen[key] = episode.split
+
+
+def validate_label_protocol(protocol):
+    keys = {"protocol_id", "annotation_sha256", "relation_sha256", "id_map_sha256",
+            "source_report_sha256", "allowlist_sha256", "source_annotation_sha256"}
+    if (not isinstance(protocol, dict) or set(protocol) != keys
+            or not isinstance(protocol["protocol_id"], str) or not protocol["protocol_id"]
+            or any(not _digest(protocol[k]) for k in keys - {"protocol_id"})):
+        raise ValueError("benchmark label protocol identity mismatch")
+    return dict(protocol)
+
+
+def assert_episode_scope(episodes, data):
+    for episode in episodes:
+        if (episode.relevance_space != data.relevance_space
+                or (dict(episode.label_protocol) if episode.label_protocol else None) != data.label_protocol):
+            raise ValueError("episode/config label scope or protocol mismatch")

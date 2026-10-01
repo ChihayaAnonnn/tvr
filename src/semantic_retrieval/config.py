@@ -156,6 +156,8 @@ class DataConfig:
     episode_sha256: str
     gallery_version: str
     split: str
+    relevance_space: str = "reviewed_semantic"
+    label_protocol: dict | None = None
 
     def __post_init__(self):
         if (
@@ -165,6 +167,11 @@ class DataConfig:
             or self.split not in {"train", "val", "val_development", "val_calibration", "val_locked"}
         ):
             raise ValueError("invalid or sealed data configuration")
+        if self.relevance_space == "benchmark_annotation":
+            from semantic_retrieval.data.episodes import validate_label_protocol
+            validate_label_protocol(self.label_protocol)
+        elif self.relevance_space != "reviewed_semantic" or self.label_protocol is not None:
+            raise ValueError("invalid label scope/protocol")
 
 
 @dataclass(frozen=True)
@@ -275,6 +282,8 @@ def load_system_config(path):
     p["k_sequence"] = tuple(p["k_sequence"])
     d = payload["data"].copy()
     d["episode_manifest"] = local(d["episode_manifest"])
+    d.setdefault("relevance_space", "reviewed_semantic")
+    d.setdefault("label_protocol", None)
     dep = payload["deployment"]
     if dep is not None:
         dep = dep.copy()
