@@ -65,6 +65,8 @@ A 阶段交付独立的 `src/semantic_retrieval/` 基础组件：输入合同、
 
 B 阶段实现新编码器、共享匹配/候选存在头、多正例监督、canonical 索引缓存、有限扩检、validation 校准，以及新训练/评测入口。接口与显式数据格式见 [系统合同](docs/agent/semantic-retrieval-system.md)，设计见 [研究模型计划](docs/superpowers/plans/2026-10-01-retrieval-rebuild-b-system.md)。验证仅合成 CPU；尚无真实数据效果或 GPU 资格结论。语义分组/OT 默认关闭，CPU qualification 不能替代四卡 Stage 0 gate。
 
+下一轮[实验设计](docs/superpowers/specs/2026-10-01-semantic-retrieval-experiment-design.md)使用官方标签自动构造候选存在与扩检任务，保留指标、消融、敏感性和可视化；人工语义审核为可选扩展。[C1 数据实施计划](docs/superpowers/plans/2026-10-01-semantic-pilot-c1-data-audit.md)已同步修订，标签适配器和实验编排尚未实施，实验尚未启动。
+
 ```bash
 CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 PYTHONPATH=src:. \
   /home/xujie/.conda/envs/tvr/bin/python -m pytest -q -p no:cacheprovider tests/semantic_retrieval

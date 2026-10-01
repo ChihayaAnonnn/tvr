@@ -1,304 +1,255 @@
-# 重建检索系统实验计划：多答案、候选存在与有限扩检
+# 重建检索系统实验计划：官方标签下的候选存在、检索风险与有限扩检
 
-日期：2026-10-01。状态：**设计已通过用户审阅（含指标、可视化、消融与敏感性补充）；未预注册、未预留 run、未启动实验。**
+状态：2026-10-01 按用户“按这个方向更新设计”修订；仅设计，未建立新 study、预留 run、启动实验或解封 test。
 
-本轮交付是研究实验设计，不是代码实施计划。用户已授权设置有限人工审核预算，并于本会话批准本设计；下文的审核量、训练量和成功判据已作为设计接受，正式 study 签署前的修订必须说明理由并审阅，看到相应结果后不得追改。实施准备分为 C1 数据/审核、C2 训练/实验臂、C3 校准/分析、C4 四卡资格/运行；首个详细计划见 [C1 实施计划](../plans/2026-10-01-semantic-pilot-c1-data-audit.md)。
+主实验改为官方标签驱动的自动流程。此前获准的有限人工审核移为可选语义扩展，不再是训练、评估或 C1 的入口条件。原 32 视频小库、576 查询语义配额、40,000 次判断/192 人时及 A5 多正例消融不再适用于本版。修订未使用新实验结果；正式协议签署后不得按结果追改。实施分 C1 数据/来源、C2 训练/实验臂、C3 校准/分析、C4 四卡资格/运行，首个详细计划见 [C1 实施计划](../plans/2026-10-01-semantic-pilot-c1-data-audit.md)。
 
-## 1. 目的、证据与范围
+## 1. 目的、证据与结论范围
 
-验证两个假设：H1，内容身份去重与显式多正例训练能稳定处理多个有效答案；H2，候选存在监督与匹配共享连续表征，能在保留答案覆盖的同时减少误接受，并指导漏召回后的扩检。
+首轮验证两个限定于 benchmark 标注空间的问题：
 
-前置阅读已核对：[研究入口](../../../research/README.md)、[north star](../../../research/00-north-star.md)、[证据账本](../../../research/01-evidence-ledger.md)、[死路](../../../research/02-dead-ends.md)、[常设协议](../../../research/07-protocol-constraints.md)、Contextual Risk 的 study/registry，以及 OQ1 停止结论。旧 north star 是历史未验证命题，本方案不把它升级为结论。
+- **B-H1：共享存在监督。** 候选存在头与匹配共享连续表征，能否在保留标注正例覆盖的同时，降低候选不含标注正例时的误接受？比较强标量策略、无存在监督、detach 与 score-only 对照。
+- **B-H2：检索失败判断。** 能否改善自然检索错误的风险—覆盖率曲线，并在有限预算下指导扩检找回标注正例？风险排序是主检验，扩检是预设辅助检验。
 
-- E-31/E-32：旧 A3 未超过强标量基线。因此 top-score、margin、entropy/energy 必须纳入；不能仅与弱模型比较。
-- E-52：旧 SAP 监督曾因冻结成为 NO-OP。因此每项损失必须核对实际梯度、参数更新和部署分数变化。
-- E-89b/E-90：低精度并列曾改变分母。因此科学评分采用 FP32、canonical ID 确定并列次序、每查询唯一分母。
-- 不重启 SAP、A2-CG 或旧 A3 study；不继承其 checkpoint、冻结检索矩阵或成功阈值。标量/独立头在这里仅作新任务的必要对照。
+原架构的“跨视频多个语义答案”和“完整语义无答案”仍是待验证假设，本版不检验其完整成立。MSRVTT 同一视频的多条 caption 是多个查询，不是某个文本查询的多个视频正例。标注之外的视频可能语义相关，官方标签实验不能将它们宣称为真实语义负例。
 
-实现依据为 [系统合同](../../agent/semantic-retrieval-system.md)、[架构设计](2026-10-01-uatvr-audit-cleanup-and-semantic-retrieval-design.md)和 [B 阶段验证报告](../../maintenance/2026-10-01-retrieval-rebuild-b-verification.md)。302 项合成 CPU 测试是软件证据，不是方法效果或四卡资格证据。
+前置阅读：[研究入口](../../../research/README.md)、[north star](../../../research/00-north-star.md)、[证据账本](../../../research/01-evidence-ledger.md)、[死路](../../../research/02-dead-ends.md)、[常设协议](../../../research/07-protocol-constraints.md)，以及 Contextual Risk study/registry 和 OQ1 停止结论。历史命题不升级为结论。
 
-首轮只做 MSRVTT 非 sealed 的训练来源、文本到视频、有限声明库。扩散/flow、ANN、视频到文本、自动澄清、CRF 偏移保证和外部方法完整复现均不属于 v1。Holmes 与 GeoFlowVLM 是设计来源，不将不同任务论文表格作为本研究的同条件基线。
+- E-31/E-32：旧 A3 未超过强标量基线；本版保留 top-score、margin、entropy/energy。
+- E-52：旧 SAP 监督曾因冻结成为 NO-OP；各 loss 必须核对实际梯度、参数更新和部署分数变化。
+- E-89b/E-90：低精度并列曾改变分母；科学评分使用 FP32、确定性并列规则、每查询唯一分母。
+- 不重启 SAP、A2-CG 或旧 A3 study，不继承其 checkpoint、检索矩阵或成功结论。
 
-## 2. 路线选择与研究层级
+实现依据为 [系统合同](../../agent/semantic-retrieval-system.md)、[架构设计](2026-10-01-uatvr-audit-cleanup-and-semantic-retrieval-design.md)和 [B 阶段验证报告](../../maintenance/2026-10-01-retrieval-rebuild-b-verification.md)。302 项合成 CPU 测试是软件证据，不是方法效果或四卡资格。
 
-| 路线 | 优点 | 限制 | 决定 |
-|---|---|---|---|
-| 有限声明库，逐查询穷举审核 | 多答案与无答案真值可核验，审核成本可封顶 | 规模小，不能代表大库或开放世界 | **v1 首选** |
-| 大库 top-K pooled 审核 | 接近实际检索，容易扩展 | 池外未知，不能证明全库无答案或完整召回 | 后续探索性验证 |
-| 外部开放集/PRVR 数据集迁移 | 可检验外部效度 | 新许可、标签合同、划分与预算均需审查 | 后续独立 study |
+首轮只做 MSRVTT train 来源的文本到视频验证。扩散/flow、ANN、视频到文本、自动澄清、分布无关风险保证及外部方法完整复现不属于 v1。Holmes/GeoFlowVLM 是设计来源，其论文表格不能充当同条件基线。
 
-v1 是有停止条件的先导研究。其结果可支持或削弱机制，但**任何 v1 结果都不解封 test，也不自动授权确认性研究**。若数据或区间不足，结论必须是 inconclusive。
+## 2. 端到端流程与自动化边界
 
 ```mermaid
 flowchart TD
-    Review[书面审阅与新协议签署] --> Data[有限审核与 split 冻结]
-    Data --> Ready[代码缺口补齐＋CPU 保护验证]
-    Ready --> Qual[新系统四卡 Stage 0]
-    Qual --> Pilot[seed 0 开发实验]
-    Pilot --> Freeze[冻结全部臂、阈值选择规则与评测]
-    Freeze --> Seeds[seed 1 / 2 复核]
-    Seeds --> Locked[一次性 val_locked 评估]
-    Locked --> Report[PASS-pilot / FAIL / inconclusive]
-    Report --> Later[另行设计与批准确认性 study]
+  Protocol[冻结标签范围、协议与来源清单] --> Import[自动导入官方 caption-video 关系]
+  Import --> Split[按来源组件划分 train / dev / cal / locked]
+  Split --> Truth[自动生成正例集合与候选存在真值]
+  Truth --> Software[C1 数据合同 / C2 训练 / C3 分析 / C4 运行工具]
+  Software --> Qualification[四卡 Stage 0 与吞吐资格]
+  Qualification --> Train[匹配父模型与五个最终实验臂]
+  Train --> Dev[开发集选择标量基线与动作阈值]
+  Dev --> Cal[校准集拟合温度并冻结全部身份]
+  Cal --> Locked[一次 locked 验证与有限扩检]
+  Locked --> Report[指标、消融、敏感性、图表与研究 gate]
+  Report -.另立协议.-> Optional[可选跨视频语义正例 / 真实无答案审核]
 ```
 
-## 3. 数据来源、划分与审核预算
+输入与协议就绪后，正常 phase 的预留、提交、启动、终态收束及下一 phase 可由 C4 编排，不需要逐视频或逐 seed 人工标注。当前尚未实现该编排，不能声称已可一键运行。来源身份无法证明、资格失败、预算不足、协议变更或 failed/cancelled 重试需要人工处理；不自动调参、补标签或解封 test。
 
-### 3.1 来源与身份
+## 3. 数据、标签与划分
 
-只从经清单确认不属于 MSRVTT/MSVD sealed test 的训练来源抽取。不得打开 test 视频、caption、标签或从 test 派生的候选来构造 episode。不能确认来源身份的文件不使用。
+### 3.1 标签空间与来源合同
 
-对 canonical 内容、原始来源、同源片段和 caption group 建连通分量，再以 `SHA256("semantic-answerability-pilot-v1:" + component_id)` 排序，按组件数 70%/10%/10%/10% 划分 train、val_development、val_calibration、val_locked；取整余量归 train。组件跨分区零交集。清单冻结在查看新模型结果之前，且记录源文件 SHA、选择算法、排除名单、许可与来源。
+主实验显式声明 `relevance_space=benchmark_annotation`。官方关系定义标注正例集合 `R_b(q)`；非成员仅在该 benchmark 评价约定下记为负例，不称为语义不相关。缺失、格式异常或来源无法证明的关系拒绝导入或保留 unknown，不能直接转 negative。
 
-各分区从自己的组件中确定一个 **32 个 canonical 视频的声明库 G**；四个库之间内容及来源不重叠。查询可以来自该分区其他来源，查询来源是否在 G 内不决定它在 G 中有没有语义答案。视频覆盖 8 个预先登记的主题，每主题 4 个；主题由人工内容描述确定，不按新模型得分选择。每分区可审查的库候选上限 64 个视频，按哈希次序选取满足主题与可解码要求的前 32 个，不因模型表现换库。
+只使用有可验证 allowlist、来源报告和 SHA 的 MSRVTT **train-only** annotation/video snapshot。身份审计检查来源与文件完整性，不要求逐条确认视频语义。若只能找到含 test 的混合注释文件，先报告缺失训练来源资产，不读取混合文件 caption 后再筛掉 test。本设计不假设真实资产已齐备，也不虚构输入 SHA。
 
-同库条件下进行候选复制、顺序打乱和漏召回干预。所有效应仅解释为对该声明库条件成立，不推广到随机新库。
+官方 video ID 与 canonical 内容 ID 分开保留。精确内容重复可作为 alias 合并，`R_c(q)` 为 `R_b(q)` 经版本化 ID 映射得到的 canonical 正例集合；不得按语义相似扩充。canonical pair 标签以是否属于 `R_c` 为准，避免同内容 alias 正负矛盾。官方排序指标使用所有官方 video ID 的展开排名，canonical 集合/预算指标使用去重 ID，二者分别标注，不混用。
 
-### 3.2 有限审核配额
+### 3.2 确定性分区与数量门
 
-| 分区 | 单答案查询 | 多答案查询 | 库无答案查询 | 合计 |
-|---|---:|---:|---:|---:|
-| train | 48 | 40 | 40 | 128 |
-| val_development | 20 | 20 | 24 | 64 |
-| val_calibration | 32 | 32 | 32 | 96 |
-| val_locked | 96 | 96 | 96 | 288 |
-| 合计 | 196 | 188 | 192 | **576** |
+用 canonical/source/caption-group 连通组件覆盖全部查询来源与视频，再按 namespace=`semantic-answerability-pilot-v1:` 的组件哈希排序划分。组件不可跨分区，不能只对候选视频查泄漏。
 
-每查询对所在 G 的 32 个视频全部审核，理论为 18,432 个 query-video 关系；双人独立审核为 36,864 次判断。预算上限为 **40,000 次关系判断和 192 人时，先到者停止**。库视频观看、查询筛选、仲裁都计入人时；第三人仲裁也计入关系判断。相同判断的追加仲裁不会扩充样本量。
+依次向 locked、calibration、development 分配完整组件，直到各自覆盖至少 1,000、500、500 个官方视频 ID；余下组件归 train。held-out 分区按官方 ID 哈希顺序取恰好目标数量组成库，未入库的组件成员仍留在该分区，不回流 train。库成员先于模型输出冻结。组件过大造成数量门不满足时停止，不拆组件或悄悄缩小评估库。
 
-每分区最多筛查目标查询数的 2 倍，候选查询按来源分层、哈希次序提出；禁止按模型错误挑题。每类每来源视频最多 1 个查询，同源 caption 全部保持同一分区。锁定评估要求至少 200 个独立来源组件、各类至少 80 个；达不到配额或组件门槛，在科学训练前停止并记录数据不足，不拿重复 caption 凑数。
+| 分区 | 官方视频库规模 | 首轮查询 | 用途 |
+|---|---|---|---|
+| train | 剩余完整组件，至少 6,500 个官方 ID | 每视频一条稳定 caption | 优化权重，不选阈值 |
+| val_development | 500 个官方 ID | 每视频一条，共 500 条 | 选标量比较对象与动作阈值 |
+| val_calibration | 500 个官方 ID | 每视频一条，共 500 条 | 拟合温度/bias |
+| val_locked | 1,000 个官方 ID | 每视频一条，共 1,000 条 | 冻结后一次验证 |
 
-查询类别是全库审核后的结果，未满足类别配额的关系记录仍保留，但不得通过改写文本或标签强行补齐。预算不足时交付标签与审核报告，停止 v1，不自动增加审核额度。实际耗时由审核记录得到，本设计不把 192 人时当成保证足够的预测。
+caption 取最小稳定官方 caption ID；没有该字段则用预先登记的不可变行 ID，不能按文本或得分挑选。额外 caption 不计入首轮独立样本。每库至少 129 个 canonical ID，以支持 K=128 的 absent 面板；locked 至少 800 个来源组件。输出官方/canonical/query/component 数量、正例数直方图和组件余量。
 
-### 3.3 标注规范
+这是 train 来源的新验证协议，**不是官方 MSRVTT 1K-A test，不能与其 SOTA 表直接比较**。split、库、标签及预处理 hash 必须冻结；test 保持 sealed。
 
-- relevance 为 positive/negative/unknown；标注依据是查询全部明确语义要求，而非原始 video ID 是否相同。
-- 两名审核者独立看完整查询与视频，不看模型得分。分歧由第三人仲裁；未解决保持 unknown。
-- 多答案要求至少 2 个不同 canonical 视频为正例；alias 不算第二个答案。
-- 声明库无答案要求 32 项全为可靠 negative，完整审核的 source、reviewed、scope=complete、gallery_version 和 SHA 均归档。
-- 有 unknown 的查询不能进入需要全库完整真值的主指标；不将 unknown 改为负例。已发生的审核成本仍计入上限。
-- 报告原始一致率、positive/negative 混淆表、仲裁率和 unknown 比例；原始一致率低于 85% 时，停止并修订下一版本标注规范，不在本版结果中补救。
-- 本版不新增“等价/冲突”关系审核，避免 relevance 被偷换成答案等价。语义分组与 OT 均关闭。
+### 3.3 当前 schema 与拟议升级
 
-原始 labels、来源证据、完整库清单及每一步审核记录只读归档。审核完成后再推导 answer_in_candidates；在线服务不接收任何真值字段。
+当前 B 阶段 Episode v1 的 known 标签要求 `reviewed`，全库 no 要求完整语义审核。本版不能把官方非配对关系伪装成人审语义负例，也不能填 `reviewed=true` 绕过该合同。
 
-## 4. Episode 与候选控制
+C1 须新增显式 Episode v2 benchmark 分支，记录标签空间、官方 annotation SHA、关系/ID 映射 SHA、协议身份和查询来源组件。语义审核 v1 合同保持严格。标签空间贯穿配置、训练/部署 checkpoint、校准状态及指标 provenance；不同范围混用须拒绝。benchmark 的 `answer_in_gallery` 只表示库是否含标注正例，本版自然查询均为 yes，不生成“真实语义全库 no”。
 
-训练和校准各查询生成 K=4、8、16、32 的前缀候选，共用全部 G 的已审核关系。训练前缀由本地预训练 CLIP 的确定性 pooled cosine 排序生成并冻结；不是由新模型反复重挖。K 采用按步轮转的等频序列，canonical 去重在 top-K 前执行。
+## 4. 候选构造与评估轨
 
-基础评估分两轨：
+GT 仅用于离线构造、loss 和评测。线上 `QueryInputs` 不含 GT、panel 类别或存在真值。canonical 去重在 top-K 前，并列按 canonical ID；展开官方排名后同分按官方 video ID。
 
-1. **固定集合机制轨**：所有臂消费相同预训练 CLIP 候选前缀，以隔离存在/排序效应。固定 K=32 是主比较，K=4/8/16 和扩检是辅助比较。
-2. **完整系统轨**：每臂用最终冻结模型重建自己的粗索引与帧缓存。区别可能来自粗检索，单独报告；不将它归因于存在头。
+### 4.1 自然轨与受控轨
 
-对有答案查询，从共享排序中移去全部已审核正例再接到尾部，得到受控初始 miss：K=4 内无答案，K=32 内有答案。只在离线构造过程读标签，线上仅读取候选 ID/特征。自然 miss 另报，不能与受控 miss 混算。32 项完整评分是扩检恢复的预算上限对照，不拿更少预算的基线制造优势。
-
-复制压力使用每个候选 1/2/4/8 个 alias，置换使用固定种子 0/1/2/3/4；候选、分数并列顺序由 canonical ID 决定。变换沿用原 query_id 的 lineage，不增加独立统计样本。
-
-## 5. 模型、监督与训练预算
-
-所有臂使用同一经 SHA 验证的本地 CLIP ViT-B/32、224×224 图像、均匀 8 帧、文本长度 32、512 维共享空间、256 维粗投影。首版 `num_layers=0`，即有效帧均值，无可训练时序 Transformer；`num_heads=8` 保持显式合同。CLIP 全程冻结，解冻编码器留给后续 study。
-
-优化器 AdamW，lr=1e-4，weight_decay=0.01，constant scheduler，全局 batch=16 queries，四 rank 各 4 个不同 query。按 train 组件固定种子洗牌，循环取样；每批各 rank 的 query_id 不重叠。初始化 seed 必须在构造新模块前设定，训练采样 RNG 独立存证。
-
-每臂总路径 240 optimizer updates；分支共享 120 步匹配预训练，再各训练 120 步。K 四档等频，候选由原始内容编码；冻结 CLIP 也不使用旧实验缓存。只使用最后一个 checkpoint，不按 val 选 epoch；120 步父 checkpoint 仅用于规定的分支。所有正负/存在损失均屏蔽 unknown。
-
-损失向量顺序为 `(coarse, match, pair, exist, align, group)`：
-
-| 身份 | 训练设计与权重 | 推理/比较用途 |
+| 轨道 | 自动构造 | 能回答的问题 |
 |---|---|---|
-| A0 | 240 步校准 WTI，(1,1,1,0,0,0)；attention/MLP 残差禁用 | 低容量匹配基线 |
-| P1 | 120 步完整 PairMatcher，(1,1,1,0,0,0) | 同 seed 的共同父 checkpoint，不独立选优 |
-| A1 | 从 P1 继续匹配 120 步，(1,1,1,0,0,0) | 同匹配容量、无存在监督；pair 阈值/标量策略 |
-| A2 | 从 P1 训练 120 步，(1,1,1,1,0,0)；存在头输入 h/logit 全部 detach，匹配分支照常训练 | 独立存在监督，隔离存在梯度进入 matcher 的贡献 |
-| A3 | 从 P1 联合训练 coarse/matcher/存在头 120 步，(1,1,1,1,0,0) | 主方法；匹配与存在共用未 detach 表征 |
-| A4 | 从 P1 训练 120 步，(1,1,1,1,0,0)；score-only MLP 输入 detach，匹配分支照常训练 | 检验 pair 表征是否超出分数几何 |
-| P5 | 与 P1 相同初始化，单正例损失视图预训练 120 步，(1,1,1,0,0,0) | A5 父 checkpoint，不作选优候选 |
-| A5 | 从 P5 联合训练 120 步，(1,1,1,1,0,0)；沿用单正例损失视图 | 同结构/同预算，隔离多正例监督贡献 |
+| 自然检索 | 固定粗排序的 K 前缀，`y_C=1[R_c∩C≠∅]` | 实际漏召回、错误判断与覆盖 |
+| 受控 present | 最靠前 K−1 个非正例，加唯一标注正例；输入按 ID 排序 | 已有标注正例时是否误弃答 |
+| 受控 absent | 最靠前 K 个非正例，剔除全部标注正例 | 没有标注正例时是否误接受 |
+| 受控 miss 轨迹 | 前 32 项为非正例，正例放第 33 项，后续沿原排序补齐 | 初始 miss 后能否扩检恢复 |
 
-A2/A3 的存在头复制同一随机初始化，A1/A2/A3/A4 起始匹配权重逐张量一致。A4 输入预先固定为 top1、top2、margin、mean、population std、normalized entropy、logsumexp energy、log(1+K) 八维特征；entropy/energy 的 temperature 固定为 1，熵除以 log K。仅能看当前候选分数。两层隐藏 MLP 宽度均为 2880，Linear 后接 GELU，输出一个 logit；含 bias 的参数量为 8,326,081。512 维模型的 A3 存在头为 8,413,201 参数，差约 1.04%，均计入有效容量与预算。参数量在注册前用实际代码再核对，失配则停止，不能以效果选择宽度。
+受控轨为同 query 的成对变体，不增加独立查询数，也不代表自然缺失比例。若导入发现多 canonical 正例，先停止并修订单正例构造协议，不暗中只留一个。alias 不增加正例数。present/absent 与自然轨分别报告，不能把 balanced 受控分布的概率当线上先验。
 
-P5/A5 的单正例损失视图：每查询在当前监督集合的可靠正例中保留 canonical ID 最小者，其余正例只在 coarse/match/pair 的损失视图中置为 unknown，绝不置为 negative。候选内容、原始审核标签、存在真值和评测真值均保持完整；存在头照常接受完整匹配表征。粗检索全局关系与局部关系各自按此确定性规则产生损失视图，记录选择结果。A3/A5 的架构、初始化、步数、存在损失和返回集合规则相同，只有匹配损失的正例监督不同。
+**固定集合机制轨**使用同一 SHA 绑定的预训练 CLIP pooled cosine 排序，固定 K=32 为 B-H1 主比较；扩检/K 敏感性另报。**完整系统轨**为各臂最终模型重建各自粗索引/帧缓存，单独报告；粗检索差异不归因于存在头。
 
-A0 是组件基线，不用它单独支撑容量公平的创新结论；A1 是匹配容量对照，A2 是存在头部署容量对照，A4 是分数信息/参数容量对照。240 updates 不是等 FLOPs 的承诺：记录每臂前向、反向、优化时间、可训练参数量与 GPU 小时；A2/A4 不得超过 A3 的总训练预算。
+训练 K=4/8/16/32、受控 present/absent 等频；自然轨另评。评估 K=4/8/16/32/64/128；64/128 是训练候选数之外的外推分析。默认扩检 4→8→16→32→64→128，最多 128 个唯一 canonical pair，与静态同预算策略并列；初始 miss、GT 进入候选和最终正确返回分开。
 
-固定 seeds=0/1/2。每 seed 有 A0、P1、A1、A2、A3、A4、P5、A5 共 8 个训练 run，**最多 24 个科学训练 run**。seed 0 只查看 development；只有数据、数值及梯度门通过才执行另两个 seed，不按 seed 0 的收益删选实验臂。任何臂失败保留原记录，不换超参重试。
+完整库排序用于离线 R@K/MRR 等诊断，全部计算计入评估 GPU 额度。服务最多评分 128 项，延迟/预算按真实动作路径计算，不把离线评分伪装成免费服务结果。复制每项 1/2/4/8 个 alias、置换种子 0/1/2/3/4；变体归原 query/component 的统计簇。
 
-单 run 最长 2 小时占用四卡，科学训练总上限 192 GPU 小时，Stage 0 上限 8 GPU 小时，校准/推理上限 24 GPU 小时，总上限 **224 GPU 小时**。上限不是预计耗时；不足以完成固定更新则停止、记 cancelled，不以减少训练步数继续同一协议。所有 GPU 操作先经 Stage 0。
+## 5. 实验臂、梯度与训练预算
+
+所有臂使用同一本地 CLIP ViT-B/32 及已验证 SHA，224×224、均匀 8 帧、文本长度 32、共享维度 512、粗投影 256。CLIP 冻结，`num_layers=0` 为有效帧均值，无可训练时序 Transformer；`num_heads=8` 显式记录。grouping/alignment 关闭，align/group 权重为 0，不读旧实验缓存。
+
+AdamW lr=1e-4、weight_decay=0.01、constant scheduler；全局 batch=16 queries，四 rank 各 4 个不同 query。train 按独立固定采样 RNG 洗牌循环取样，不重复 padding。初始化 seed 在模块构造前设置，批次表、K/panel 调度及 RNG 存证。
+
+保留原固定更新数：总路径 240 updates，P1 先 120 步，分支再 120 步；只用最终 checkpoint，不选 epoch。每个 120 步阶段的四 K × 两 panel 类型各出现 15 步。分支批次表相同，P1/A0 同样消费调度。240 步是有限计算 pilot，最多 3,840 次 query 呈现，不等于遍历完整 train；报告唯一查询覆盖、标签计数/loss 曲线，不把未收敛结果当充分训练后的否定。
+
+损失顺序 `(coarse, match, pair, exist, align, group)`；无正例行不强造对角正例，unknown 不计 loss。
+
+| 身份 | 训练路径与损失权重 | 作用 |
+|---|---|---|
+| A0 | WTI-only 240 步，(1,1,1,0,0,0)，attention/MLP 残差禁用 | 低容量组件基线 |
+| P1 | 完整 PairMatcher 120 步，(1,1,1,0,0,0) | 共同父 checkpoint，不独立选优 |
+| A1 | P1 后匹配 120 步，(1,1,1,0,0,0) | 无存在监督，同匹配容量 |
+| A2 | P1 后 120 步，(1,1,1,1,0,0)，存在输入 h/logit detach | 存在梯度不进 matcher |
+| A3 | P1 后 120 步，(1,1,1,1,0,0)，共享表征不 detach | 主方法，共享梯度 |
+| A4 | P1 后 120 步，(1,1,1,1,0,0)，score-only 输入 detach | 分数信息与容量对照 |
+
+A1/A2/A3/A4 起始匹配权重逐张量一致，A2/A3 存在头同一随机初始化；A2/A4 匹配分支照常更新。A4 八维输入为 top1、top2、margin、mean、population std、normalized entropy、logsumexp energy、log(1+K)；temperature=1，熵除 log K。两层隐藏宽度 2880、GELU、输出一 logit，8,326,081 参数；A3 存在头 8,413,201 参数，差约 1.04%。注册前核对实际参数量，不按效果调整宽度。
+
+**不运行 P5/A5**：单视频标注正例下，多正例与单正例损失相同，不能作为有信息的消融。系统保留多正例能力，跨视频多正例验证待后续协议。
+
+seeds=0/1/2，每 seed 为 A0/P1/A1/A2/A3/A4 六个 run 身份，最多 **18 个科学训练 run**、五个最终实验臂。seed 0 只看 development；数据/数值/梯度门通过后才跑另两 seed，不按收益删臂。记录参数量、前/反向及优化时间、GPU 小时；固定 updates 不是等 FLOPs 承诺。
+
+每 run 最长 2 小时占四卡，科学训练上限 18×2×4=144 GPU 小时；Stage 0 上限 8，校准/推理/分析上限 24，总上限 **176 GPU 小时**。此为移除 P5/A5 后的新上限，不是耗时预测。吞吐资格须验证预算可行；不足则停止/记录 cancelled，不减少步数继续同协议，失败不静默重试。
 
 ## 6. 强基线、校准与阈值冻结
 
-在 A1 最终匹配分数上比较 top-score、top1-top2 margin、负 entropy、energy，以及直接校准 pair 阈值的集合返回。前四种只判断是否接受，返回同一 pair 阈值筛选的集合；另报其 top-1 返回版本。存在头臂同样保留 pair 支持阈值，避免“存在即随便返回”。不重新实现旧 A3 架构。
+A1 分数上比较 top-score、top1−top2 margin、负 entropy、energy，以及 pair-only 集合返回。标量策略判断是否接受，集合仍由相同 pair 支持阈值筛选；另报 top-1 版本。存在头也保留 pair 支持门，不把存在判断当任意候选正确率。
 
-为了避免校准文件与 policy 身份循环依赖：
+1. development 固定 K=32 受控 panels 上选阈值。pair/presence 用未校准 sigmoid(logit) 的 0/0.05/…/1 网格；标量用同一 21 档 development 分位点。
+2. 可行条件：present return coverage≥0.50、absent false_accept≤0.10、benchmark set micro precision≥0.90。最大化 macro set recall，再以更少评分/返回项、更高 pair/接受阈值打破并列。无可行点记 infeasible，不用全部弃答冒充改善。
+3. B-H1 的 strongest scalar 在 development 按该动作规则确定；B-H2 的 strongest scalar 则在自然 K=32 development 按最低 AURC 确定，并列按 top-score、margin、负 entropy、energy 的预设顺序。两者身份分别冻结，可以不同；locked 报所有标量，不换主比较对象。
+4. calibration 拟合 pair/presence 的正 temperature+bias；raw 阈值冻结后单调映射，保持动作不变。A0/A1 不校准未训练的存在头。pair 每个唯一 query-canonical 关系只使用一次。
 
-1. 在 development 上，以未校准 `sigmoid(logit)` 的 0/0.05/…/1 网格选择 pair 和 presence/标量接受阈值；基线的非 logit 标量使用 development 的同一 21 档分位点。raw 阈值先冻结。
-2. 每臂只在 calibration 上拟合 temperature+bias。pair 每个 query-video 使用一次；存在/score-only 臂的 presence 使用每查询四个固定 K 前缀、等权重。A0/A1 的 pair-only 策略不拟合未训练的存在输出。候选来源和四 K 混合分布写入 provenance。
-3. 用拟合变换将 raw logit 阈值单调映射为部署概率阈值，使动作与 raw 阈值规则相同；标量阈值保持原单位。绑定最终 policy/model/gallery/preprocessing/split SHA 后发布校准状态，不再调阈值。
+presence 分别拟合**自然前缀**和**balanced 受控 panels**，候选机制、K 混合权重、标签空间、正类比例记 provenance；两种状态不可互用。各轨六档 K 等权，64/128 外推单独报告。缺少任一类时拒绝拟合该状态、报告 unavailable，不补伪样本。
 
-temperature 校准只优化 NLL，不是风险保证。每分区使用其独立 gallery_version；针对 locked 库的校准只允许使用 calibration 查询对该库的关系将违反查询/视频分区，本版**禁止这样做**。因此从 calibration 库迁移的温度只能作为显式跨库校准迁移实验；必须由新校准 schema 记录 fit_gallery_version 与 target_gallery_version，不能伪装为同库拟合。跨库概率的 Brier/ECE 单独报告，动作保持冻结 raw 阈值规则。
+四分区库不交叉；禁止用 calibration 查询对 locked 库评分拟合。校准 schema 须记录 fit_gallery_version、target_gallery_version 及双方 manifest SHA，这是显式跨库迁移，不伪装成同库校准。temperature 只优化 NLL、不保证风险。概率迁移 Brier/ECE 与 controlled 结果分开。model/policy/preprocessing/label/protocol/split 身份冻结后才能发布。
 
-development 阈值选择约束：有答案 return coverage≥0.50、无答案 false_accept≤0.10、返回集合 micro precision≥0.90，均为 development 点估计。可行候选中最大化有答案 macro set recall，再依次以更少候选评分、更少返回项、更高 pair 阈值、更高接受阈值打破并列。无可行点则该臂标记 development-infeasible，不用全部弃答当成功。
+## 7. 指标、图表与敏感性
 
-strongest scalar 只在 development 按同一规则选定，其身份在 locked 前冻结；locked 报告所有标量结果，不事后换主比较对象。固定 K=32 的主比较不受 adaptive K 差异影响。不同 coverage 时不宣称“相同覆盖率改善”，完整曲线仅作描述。
+令 `S` 为实际返回 canonical 集合，abstain 时为空；`C` 为当前候选，`y_C=1[R_c∩C≠∅]`。本版没有已审核语义 no-answer 类；“负例/错误”均带 benchmark_annotation 范围。clarify 禁用，其率应为 0。
 
-## 7. 指标与明确分母
-
-令 S 为实际返回 canonical 集合，R 为 G 中全体审核正例。return 才计为返回；abstain 时 S=空。澄清默认禁用，v1 clarify_rate 应为 0。
-
-| 指标 | 定义/分母 |
+| 指标 | 定义与分母 |
 |---|---|
-| no-answer false accept | R=空的查询中 action=return 的比例 |
-| answer return coverage | R 非空查询中 action=return 的比例，不因返回错误而移除该查询 |
-| wrong return | 返回非空但 S∩R=空的查询比例；分别报告库有/无答案 |
-| false abstain | R 非空查询中 action=abstain 的比例 |
-| micro set precision | 正确返回项总数 / 返回项总数；包含无答案查询上的错误返回 |
-| macro set recall | 对 R 非空查询平均“返回正例数 / 全库正例数”，弃答计 0 |
-| Recall@1/5/10 | R 非空查询中前 K 至少包含一个正例；另报完整正例召回 |
-| MRR | R 非空查询的第一个正例 rank 倒数的平均值，rank 从 1 开始 |
-| mAP | R 非空查询的 AP 平均值；AP 对全部 32 项排序，正例位置的 Precision@rank 之和除以全库正例数 |
-| nDCG@10 | binary relevance 的 DCG/IDCG；discount=1/log2(rank+1)，每查询按完整正例数形成理想排序 |
-| macro set F1 | R 非空查询的集合 F1 平均值；弃答记 0，不用 F1 替代 precision/coverage gate |
-| expansion recovery | 初始 miss 且 G 有答案的查询中，最终 return 且 S∩R 非空的比例 |
-| presence/pair 概率质量 | NLL、Brier、10 个固定等宽 bin 的 ECE、presence AUROC；单类为 null |
-| 无答案检测 AP | 固定 K=32 时以库无答案为正类、1-presence probability 为分数计算 average precision；附正类比例，不混用梯形 PR-AUC |
-| 成本 | 每查询唯一 pair 评分数、轮数、p50/p95 延迟、缓存/索引建立成本和训练 GPU 小时 |
+| R@1/5/10、MRR | 全库官方 video ID 展开排名，标注正例首次命中；与弃答分开 |
+| mAP、nDCG@10、mean/median rank | 官方标注相关性；单正例 AP=RR、mAP=MRR，不当独立证据 |
+| candidate-absent false_accept | y_C=0 时实际返回 / 所有 y_C=0 panels |
+| present coverage / false_abstain | y_C=1 时返回 / 弃答比例；返回错误另计 |
+| wrong_return / overall coverage | 自然轨 S∩R_c 为空的返回 / 所有返回；实际返回 / 所有查询 |
+| set precision / recall / macro F1 | S 与 R_c 比较；micro 汇总计数，macro 每 query 等权；空返回 recall/F1=0 |
+| presence AUROC/AP、Brier、NLL、ECE | 事件 y_C，AP 以存在为正类；ECE 固定 15 等宽 bins；单类 AUROC=null、附计数 |
+| 候选缺失检测 AP | 以 1−presence 检测 y_C=0，附类比例；不称语义无答案 AP |
+| RC / AURC | 自然轨假设 top-1 返回的 benchmark 错误随置信度排序；实际策略风险另报 |
+| 扩检候选找回 / 正确返回恢复 | 初始 y_C=0 且库含 GT 的查询中，最终 GT 入候选 / S 命中 GT；自然/受控分开 |
+| 成本 | 唯一 pair 评分数、K/动作/弃答比例、P50/P95 延迟、训练/评估 GPU 小时 |
 
-每项提供 numerator/denominator 或 per-query 汇总引用，零分母为 null。现有 `evaluate_episodes` 的 set recall 是汇总计数口径，不能改名成 macro recall；后续报告同时保留 micro 原指标和新增 macro 指标。每类分别报告，不以平衡构造比例冒充自然部署分布。
+micro precision 空分母为 null；没有可靠 R_c 的 query 不进入相关率并报排除数，本版合法自然查询应都有 R_c。不能排除失败样本改善指标。wrong_return 同时给错误返回/全部查询。各率带分子/分母，natural/controlled/fixed/system 不混算。
 
-### 7.1 排序与选择风险的区别
+### 7.1 风险曲线与排序
 
-MRR/mAP/nDCG 使用固定 K=32 机制轨的完整排序，即使策略弃答也保留原排名。这能区分“排序更好了”和“只把难查询拒绝了”。多正例下 R@K 只要求找出任意一个答案，mAP/nDCG 和集合 recall 更能反映多个答案是否都得到支持。32 项库的 R@10 可能较易饱和，所有数字必须同时标明库规模，不直接与 1K-A 论文表比较。
+R@K/MRR 使用未弃答排名，不能因拒绝难查询改善。RC 使用自然轨同一 top-1 错误事件；A3/A2/A4 的排序置信度为 `min(pair_top1_probability, presence_probability)`，A1 比较 pair-only/top-score 和 strongest scalar。min 是选择分数，不宣称校准正确率。缺失自然校准时用冻结 raw sigmoid 分数，相关臂统一 raw 规则，概率指标记 unavailable，不混用 raw/calibrated 选择收益。
 
-补充 top-1 risk–coverage 曲线及 AURC：错误事件为全排序 top-1 不属于完整 R，无答案查询的 top-1 必然错误。每查询产生潜在 top-1，不先按最终 return 筛掉困难查询。A3 的诊断 confidence 固定为 min(校准后的 top-1 pair probability, candidate presence probability)；A2/A4 对应同规则，pair-only 使用 top-1 pair probability，标量基线使用已冻结方向的标量。存在概率不是 top-1 正确率，不把这个 confidence 称作已校准 failure probability。
+exact ties 成组增加覆盖；风险=已覆盖错误/已覆盖查询，AURC=各覆盖增量乘右端风险之和，避免 ID 并列顺序制造收益。完整库 RC 与有限预算服务 RC 分开，B-H2 主检验为固定 CLIP 自然 K=32 机制轨，粗检索漏召回自然计为 top-1 错误。
 
-相同 confidence 的查询整组接受，以各组新增 coverage 乘该组端点累计错误率求和形成 AURC；coverage=0 的 risk 为 null。报告全部平衡查询与仅有答案查询两套曲线，并固定混合权重。曲线用于描述，不替换 8.1 的主终态判据，不从 locked 曲线上选新 operating point。
+每臂另报其相同匹配排名上的 pair-only 置信度曲线，分开“匹配排名改变”与“存在分数改善拒绝排序”。若未胜过该臂自身 pair-only 对照，不能把 AURC 收益全部归因于存在判断。
 
-### 7.2 固定可视化交付
+### 7.2 固定图表交付
 
-以下图均由真实归档数据生成，导出 SVG/PDF 与用于作图的哈希引用；未运行前不绘制模拟结果图。误差带基于原始来源组件的 paired bootstrap，seed 点单独显示。
+| 图表 | 内容 |
+|---|---|
+| RC / AURC | 自然全曲线、冻结 operating point、对照及区间 |
+| 误接受—coverage | controlled absent false_accept 对 present coverage，自然另面板 |
+| 集合 precision—recall | benchmark 集合返回，附返回率及一正例解释 |
+| Reliability | pair/presence，natural/controlled 分开，跨库身份及类比例 |
+| 消融效应与 CI | A0/A1/A2/A3/A4、强标量与共享梯度差值 |
+| K 与成本 | GT 入候选、错误返回、Brier、延迟及同预算静态对照 |
+| alias / 置换 | 分数误差、答案 ID、动作/attempted K 一致性 |
+| loss / gradient | loss、已知标签数、更新量、梯度 cosine/范数 |
+| 案例链路 | query、帧、官方 GT、pair/presence、扩检路径/动作 |
 
-| 图 | 坐标/内容 | 回答的问题 |
+每图标注 split、轨道、标签空间、库规模、seed、分母、CI 方法、manifest SHA。逐查询数值外置 run-local NPY/NPZ，Markdown 只链接图/摘要。
+
+### 7.3 必做敏感性与分层
+
+- K=4/8/16/32/64/128、最大扩检预算的对应前缀；固定模型，不加训练，与静态同预算比较。
+- development 冻结阈值网格只作 locked 描述曲线，不反向选 operating point。
+- alias 数 1/2/4/8、五种置换；FP32 分数绝对误差≤1e-6，canonical 答案/动作/attempted K 一致。
+- token 数 1–8/9–16/17–32、初始 GT rank 档、自然 present/miss、controlled present/absent、三个 seed 散布。
+- 正例数直方图必报；若均为一个 canonical 正例，多答案分层/A5 为 N/A，不能用 caption 数冒充多答案。
+
+loss 权重、帧数、时序层、解冻 CLIP 不在本轮搜索，改变需新预算/协议。每 20 updates 探测匹配/存在梯度范数及 cosine，不加 optimizer step、不污染训练 RNG，计入训练额度。四类案例：已有 GT 被拒绝、无标注 GT 候选被接受、扩检成功/耗尽、pair/presence 矛盾；各类按 query ID 哈希取前三，标签来源明确，不能称其余视频为语义错误。
+
+## 8. 统计与成功判据
+
+三个 seed 的 development 门通过，代码、权重、阈值、校准及分析规则全冻结后才一次读取 locked 模型输出。以下为预设研究价值标准，不是预计效果：
+
+- **B-H1 主检验**：固定 K=32 controlled panels，A3 对 strongest scalar 和 A1 pair-only 的 absent false_accept 均降低≥5 个百分点，present coverage 均下降≤5 个百分点。
+- **B-H2 主检验**：固定机制轨自然 K=32，A3 对 strongest scalar 和 A1 pair-only 的 AURC 均降低≥0.01；未弃答同轨 top-1 命中率下降≤1 个百分点。
+- **共享机制辅助**：A3 对 A2 的 false_accept 降低≥3 个百分点且 coverage 不劣于 5 个百分点；A4 报差值/区间。未胜过 detach/score-only，不宣称共享局部表征提供额外机制优势。
+- **扩检辅助**：受控 miss 正确返回恢复比初始 K=32 不扩检提高≥10 个百分点，同时报告静态 K=64/128 同预算结果。只胜过不扩检不证明适应性扩检优势；自然 miss 独立组件不足 30 时只描述。
+
+paired cluster bootstrap 10,000 次，seed=20261001，原始来源组件共同重采样所有臂；panel/K/alias/置换与原 query 同簇，2,000 panels 不是 2,000 独立查询。每次在各训练 seed 内重算率/RC/AURC，再平均三个 seed 的效应。查询采样 CI 与训练 seed 散布分别报告。
+
+一般 95% CI；两项主假设同时宣称通过时各用 97.5% CI：B-H1 误接受差值上界<0、coverage 下界≥−0.05；B-H2 AURC 差值上界<0、top-1 下界≥−0.01，并达到最小点效应。各主假设对两个冻结比较对象均须满足，辅助比较不替代主失败。
+
+1,000 查询/≥800 组件不保证所有小差异的功效。确认性研究须用 train/dev discordance 和簇结构模拟至少 80% 功效，不看 locked 后追补样本或增 seed 直至显著。区间仅适用于本验证协议，不保证跨数据集/开放世界。
+
+- `PASS-benchmark-pilot`：数据/资格/梯度/稳定性门过，B-H1/B-H2 均过点估计及 CI；只支持官方标注空间的后续研究，不验证完整语义创新，不授权 test。
+- `FAIL`：软件/数据合法且稳定训练后，区间明确不满足实用阈值或显示明显退化，保留负结果。
+- `inconclusive`：预算、样本、自然两类、可行阈值或训练稳定性不足，或 CI 不能支持以上判定；先 PASS、再 FAIL，其余 inconclusive。
+
+软件不变性/归档身份缺陷是停止条件，不冒充方法负结果。自动数据构造不取消 failed/cancelled 的人工审查与新 ID 规则。
+
+## 9. 实施缺口与资格
+
+1. **C1：** 来源证明、官方关系导入、组件 split、v2 benchmark 合同、自动 truth/报告，不需语义任务平台。
+2. **C2：** 逐步 minibatch、四 rank 不重复 query、已知标签/无正例聚合、候选调度、A0–A4/P1 模式与初始化/梯度隔离；当前循环不代表已实现该协议。
+3. **C3：** natural/controlled 独立校准、跨库 fit/target 身份、官方展开排名、RC/AURC/cluster CI、图表/敏感性及 null 分母。
+4. **C4：** 新控制面/path policy、整批 reservation 提交、资格/预算/依赖门、正常自动 phase 编排，不改旧 study 停止结论。
+5. 本地 B/32 权重、train allowlist、帧、GPU 拓扑、完整库评估吞吐需实证；本设计不是资产就绪声明。
+6. 新四卡 FP32 Stage 0 实测 rank、梯度/更新、全局标签计数、unknown batch、checkpoint/RNG、取消/恢复、hash tamper、跨 rank 参数一致性；CPU/旧 Stage 0 不替代。
+
+## 10. Phase、归档与交付
+
+| Phase | 工作 | 出口 |
 |---|---|---|
-| 风险—覆盖率 | coverage 对 top-1 error risk，附 AURC；全部/有答案分面 | 低风险是否只是大量拒答造成 |
-| 无答案误接受—有答案覆盖率 | 固定 pair 阈值，按 development 冻结的接受阈值网格描点；标出正式工作点 | 减少误接受时保留了多少有答案查询 |
-| 返回集合 precision—recall | 按预设 pair 阈值网格，存在阈值固定；单/多答案分面 | 多返回答案是否只是牺牲精度 |
-| Reliability diagram | pair/presence 各自 before/after，10 个固定等宽 bin，附样本数/Brier/NLL | 概率与事件频率是否一致，跨库迁移是否失准 |
-| 消融效应图 | A0–A5 的主指标与 paired 差值 CI，独立标出 scalar baseline | 哪个监督、信息或梯度路径产生收益 |
-| 候选数与预算曲线 | K=4/8/16/32 对 recall、误接受、presence Brier、pair 评分数与延迟 | 方法是否依赖特定 K，扩检收益是否值得成本 |
-| 复制与置换压力图 | alias 倍数对 action/答案变更率与最大 logit 差，附置换结果 | canonical 去重和集合聚合是否稳定 |
-| 训练/梯度诊断 | 各 loss、实际监督计数、matcher/存在头梯度范数；共享投影上 match 与 exist 梯度 cosine | 是否存在断链、塌缩或梯度冲突 |
-| 案例链路 | 查询、32 项中的代表帧、GT、pair/presence、候选前缀与最终动作 | 模型为什么返回、扩检或弃答 |
+| D0 | 提交新路径契约/协议，实现 C1–C4 | 源码/守卫可验证，不启动科学 GPU |
+| D1 | CPU 来源审计、官方标签导入/编译 | split/库/标签/映射 SHA、数量报告，无人审配额 |
+| E0 | 冻结候选/调度/比较规则 | CPU 身份就绪；GPU 部分在 Q0 后 |
+| Q0 | 四卡资格及吞吐 | 新 Stage 0 报告/摘要提交，失败停 |
+| P1a | seed 0 A0/P1，2 个训练 run | 父 checkpoint 全部终态、摘要提交 |
+| P1b | seed 0 A1/A2/A3/A4，4 个 run，仅 dev | 数据/梯度/数值门，不按收益删臂 |
+| P2a | seed 1/2 A0/P1，4 个 run | 同配置，父 checkpoint 终态/hash |
+| P2b | seed 1/2 A1/A2/A3/A4，8 个 run | 共 18 个训练 run 完成及摘要 |
+| C0 | dev 阈值、cal 校准、冻结统计代码 | model/policy/provenance/分析 identity 冻结 |
+| V0 | 一次 locked、固定分析 | 三 seed、强基线、成本及研究终态 |
 
-raw alias 归一化 entropy 可另作离线重复敏感性示例，但它不属于去重后生产基线，不用于制造主比较优势。热力图展示 token-frame cosine/attention/dustbin，不能仅因热力图直观就声称时序定位或因果解释正确。
+E0 的 CPU 身份编译可先做，CLIP 编码/科学 GPU 候选生成必须在 Q0 后；输入变动须重新绑定。拟议控制面 `experiments/semantic-answerability-pilot-v1/`、数据面 `artifacts/semantic-answerability-pilot-v1/<dataset>/<stage>/<run-id>/` 先在 D0 修改并提交路径合同才可使用；本次不建目录、不改旧 registry。
 
-### 7.3 敏感性与分层分析
+每 phase 先 reserve-phase、整批提交 reserved、verify-run，再从干净精确 SHA 启动；worker 不改 tracked 文件，全员终态后 finalize/摘要/提交再前进。重试须人工授权、唯一新 ID、parent_run_ids 与受跟踪 selection_lineage，不原地覆盖。绑定 source/config/input/manifest SHA；数组/逐查询结果 run-local NPY/NPZ 外置并验 hash，JSON 不嵌张量，超过 1 MiB 必须外置。预算为 144+8+24=176 GPU 小时，不借旧研究额度。
 
-| 项目 | 固定取值/分层 | v1 地位 |
-|---|---|---|
-| 候选 K | 4/8/16/32 | 必做，复用完整评分，不追加训练 |
-| 扩检最大预算 | 4/8/16/32 个唯一候选；只允许对应 K 序列前缀 | 必做，与静态同预算评分并列 |
-| 接受阈值 | development 已冻结的 21 档网格；pair 固定扫描 presence，presence 固定扫描 pair | 必做；locked 只展示预先登记曲线，不选阈值 |
-| alias/候选置换 | alias=1/2/4/8，置换 seed=0/1/2/3/4 | 必做；变换不增加独立样本 |
-| 正例数量 | 1、2–3、≥4 | 必做分层，辨别“答案越多越易弃答” |
-| 文本长度 | 有效 token 数 1–8、9–16、17–32 | 必做分层，不重新截断或编码文本 |
-| episode 难度 | 单/多答案、库无答案、自然 miss、受控 miss，分别报告 | 必做，不混合成一个成功率 |
-| seed | 0/1/2，每 seed 及汇总 CI | 必做；区分训练散布与查询抽样误差 |
-| 存在损失权重 | 建议后续固定网格 0/0.25/0.5/1/2 | 需追加训练及单独批准预算；v1 只做 0 与 1 的核心消融 |
-| 帧数/时序容量/编码器解冻 | 后续可分别研究 4/8/16 帧、0/1/2 层、冻结/部分解冻 | 不在 v1；需合法新配置、缓存身份、校准及训练对照 |
-| 库规模/语义分组/OT | 更大或多个独立库、等价监督、对齐辅助项 | 后续独立研究；v1 不能据此声称普适稳定 |
+## 11. 可选语义扩展与后续研究
 
-阈值曲线的作图操作也必须提前绑定命令和网格；不能看到 locked 后才决定新增扫描。任何分层独立来源数<30 时仅展示计数和描述，不做可靠子群差异结论。锁定库只有一个，库规模泛化不是把 K 改小就能证明的。
+主实验结束后可另立协议，在预先声明的有限库审核跨视频多正例、等价/冲突或完整语义无答案，届时再确定样本量、双人/仲裁与有限人时预算。此前允许人审表示用户接受可选研究，不代表必须花完旧配额。
 
-### 7.4 失败案例与机制分析
+扩展单独使用 `relevance_space=reviewed_semantic`、数据/校准/指标及研究 gate，不用 benchmark 非配对标签充当审核。多正例 A5、分组、OT、编码器解冻、MSVD/DiDeMo 转移、flow/diffusion 各需具体问题、同预算对照和新协议。pilot locked 看过即为历史数据，不作下一版独立确认集。test 解封仍需明确授权，本版无预授权。
 
-预设四类案例：多答案被错误拒绝；全负候选被高分错误接受；扩检成功/耗尽仍失败；存在与 pair 支持矛盾。每类按 query_id 哈希次序选前 3 个案例，类别不足则全部展示，不仅挑有利示例。每例附真值审核来源，并区分事实与解释。
+## 12. 设计自检
 
-共享梯度诊断在每 20 个 optimizer step 采样一次，用同 batch 的各 loss 分别求梯度，不执行额外 optimizer update；A2/A4 存在损失到 matcher 的梯度应为零，A3 应有实际路径。gradient cosine 为负说明局部冲突，不自动说明方法无效；dustbin 权重、logit 分布和 BCE 学习曲线只能诊断，不能代替主指标。
-
-所有作图、分层、梯度记录和固定网格分析纳入原 run/评估 phase 的 manifest 与原 224 GPU 小时总上限，其中推理/作图数值计算仍在 24 GPU 小时评估额度内；不暗中追加训练或 GPU 资格以外的科学运行。数据不足或预算耗尽时记录缺失原因，不能以删图掩盖失败。新增分析代码仍需第 9 节的实施与验证。
-
-## 8. 统计、机制与结论规则
-
-主比较固定 K=32，确认锁定之前不读取 val_locked 模型输出。先完成三个 seed 的开发门、所有模型/阈值/代码冻结，再统一一次性运行 locked。
-
-### 8.1 预设效应与对照
-
-- **H1-pilot**：A3 对 A5 的多答案 macro recall 提高至少 5 个百分点；micro precision 下降不超过 3 个百分点，answer coverage 下降不超过 5 个百分点。A3 对 A1 及同分数 top-1 返回另外报告，以分开存在监督与集合返回收益。这不是语义等价预测有效的证据。
-- **H2-pilot**：A3 对 development 选定的 strongest scalar，以及 A1 pair-only 策略，无答案误接受均下降至少 5 个百分点；answer coverage 均下降不超过 5 个百分点。固定 K=32 的候选预算相同。
-- **共享机制**：A3 对 A2 的无答案误接受下降至少 3 个百分点，并满足相同 coverage 限制；对 A4 至少报告差值与区间。仅胜过 scalar、未胜过 A2/A4 时，不宣称共享语义表征提供了额外信息。
-- **扩检辅助**：受控 miss 的最终找回率比不扩检提高至少 10 个百分点，并与静态 K=32 的相同预算结果并列；自然 miss 分母不足 30 时只描述，不判定。
-- canonical alias/置换后答案 ID、action、attempted K 应一致，分数允许 FP32 绝对误差≤1e-6。任何违反都是软件缺陷，不是研究负结果，停止后进入新修复 phase。
-
-以上效应阈值是研究价值标准，不是从现有数字推得的预计收益。
-
-### 8.2 区间与多重比较
-
-每 seed 单独报告，再以三个 seed 的每查询结果平均计算主差值。10,000 次、seed=20261001 的 paired cluster bootstrap，以原始来源连通组件为单位共同重采样所有臂；复制/置换/受控 miss 与原查询同簇。查询采样 CI 与训练 seed 散布分开，不能把三个 seed 当作三份独立测试集。
-
-报告 95% paired CI；两项主假设同时通过时，使用各自 97.5% CI 保守控制联合错误率。H1 要求 recall 差值下界>0 且 precision/coverage 差值下界分别≥-0.03/-0.05；H2 要求误接受差值上界<0 且 coverage 差值下界≥-0.05。点估计还必须达到 8.1 的最小效应。多项辅助比较只报告区间，不作为替代成功路径。
-
-区间条件只适用于固定四个小库下的查询来源抽样；本版无跨库总体置信保证，也不提供 distribution-free/selective-risk 保证。locked 各类仅 96 个查询，**不能承诺有能力检出 3–5 个百分点的小差异**。增加 seed 不解决这个问题。
-
-确认性样本量不能照抄先导配额：作为预算量级示例，配对二元差异的 discordant 比例为 0.20、目标差异 0.05、双侧 alpha=0.025、power=0.80 时，正态近似需要约 760 个独立查询；聚类会进一步增加需求。正式下一版用 train/development 的 discordance 与组件大小模拟功效，至少 80% 才冻结新样本量；不得用 locked 反复加样本直至显著。
-
-### 8.3 三种终态
-
-- `PASS-pilot`：数据、资格、梯度及稳定性门均过，H1/H2 均满足点估计和区间规则。允许提交下一版研究提案；不授权继续 worker 或 test。
-- `FAIL`：数据合格且结果区间明确落在不满足实用阈值的一侧，或明显检索/coverage 退化；保留负结果，不换 loss 名称续跑。
-- `inconclusive`：预算/审核数量/独立来源不足，或区间不足以满足 8.2 且不能明确判失败，某些强基线无可行 operating point，或模型未稳定训练。不能写“验证了创新”。判定顺序先检查 PASS-pilot，再检查 FAIL，其余 inconclusive，避免部分重叠。
-
-若只 H1 或 H2 通过，逐项记录 supported/not-supported，不用部分通过替代整项 `PASS-pilot`。机制结论要求 A2 对照及分数信息对照一致支持，bootstrap 显著不替代因果消融。
-
-## 9. 软件与资格前置条件
-
-以下是代码核对发现的真实缺口，当前 CLI 不能直接执行本方案：
-
-1. `train_semantic_retrieval.py` 当前加载全部 episode 后重复同一个 batch；需实现固定种子 batch schedule、rank 不交叠分片和 step/K 轮转，绑定其配置及输入哈希。拒绝四 rank 重复 query；验证 epoch/step 的覆盖与可恢复 RNG。
-2. A0 的 WTI-only 模式、A2 的存在输入 detach 和 A4 score-only 头未有配置合同；需新增明确模式、严格 schema、容量审计，禁止靠临时 monkeypatch。
-   A5 还需完整审核标签与单正例损失视图分离，验证舍弃的正例不变负例、存在真值及在线特征不变。
-3. P1 派生分支需要 model-only 初始化与“新 optimizer/new run”合同，区别于同 world-size 的训练恢复；记录父 checkpoint SHA。不能误把新分支当成原 run 续训。
-4. 校准身份目前仅一个 gallery_version，不能合法表达分区独立库之间迁移；需独立 fit/target 身份与有效性声明，以及 pair-only/双通道/标量策略合同。保留严格加载，不能直接改 metadata 欺骗验证器。
-5. 需新增 scalar-policy adapter、raw 阈值冻结/单调映射、macro recall/wrong return、MRR/mAP/nDCG/集合 F1、risk–coverage/AURC、分层绘图、按 query 来源聚类 CI、受控 miss 与标签完整度报告。固定集合轨需读取预先归档的候选前缀，完整系统轨才用各自索引；候选构造器与线上服务分离，线上接口始终无标签输入。
-6. 本地生产 B/32 权重、非 test 输入清单、解码完整性和审核工具需真实检查；当前仅确认代码合同，不保证这些资产已经齐全。
-7. 新系统四卡 FP32 Stage 0 要实测 rank 身份、梯度/参数更新、全局已知标签计数、未知 batch、checkpoint/RNG、恢复/取消、hash tamper 拒绝与跨 rank 参数一致性。CPU qualification 和旧研究 Stage 0 均不能替代。
-
-单独反传 coarse/match/pair/exist，核对允许参数有有限梯度、冻结 CLIP 零更新、存在损失确实改变共享 matcher；A2 单独 exist 反传和 step 必须证明匹配张量及相同输入的 logit 不变，但联合损失中的 match/pair/coarse 仍可更新 matcher。A2/A4 不能为了实现 detach 同时关闭匹配训练，否则与 A3 混淆训练预算。测试使用合成数据，不能以检查梯度为由提前访问 sealed 数据。
-
-## 10. Phase、预算与归档交付
-
-| Phase | 输入/工作 | gate 与交付 |
-|---|---|---|
-| D0 | 书面设计审阅、路径契约裁决 | 签署新 study；仍不开 worker |
-| D1 | 有限人工审核、身份与 split 审计 | 配额/来源/一致性通过；标签、库和预算报告 |
-| E0 | 补齐第 9 节软件并通过 CPU 验证 | 新实现审阅及精确 source SHA |
-| Q0 | 四卡资格，最多 8 GPU 小时 | 完整登记资格报告，通过才可科学训练 |
-| P1a | seed 0 的 A0/P1/P5，共 3 个训练 run，仅 development | 父 checkpoint 完成、摘要提交、哈希验证 |
-| P1b | seed 0 的五个子臂，共 5 个训练 run，仅 development | 无 NaN/身份/梯度错误；四 K 的存在标签合计至少 20 yes、20 no；无类缺失的校准输入 |
-| P2a | seed 1/2 的 A0/P1/P5，共 6 个训练 run | 同冻结配置；父 checkpoint 全部终态、完成摘要 |
-| P2b | seed 1/2 的五个子臂，共 10 个训练 run | 精确父 SHA 可绑定后才预留；全部终态、完成摘要 |
-| C0 | development 阈值、calibration 温度与最终身份冻结 | 所有 operating point 及 strongest scalar 身份写入 Git；锁定代码和命令 |
-| V0 | 三 seed 的一次性 val_locked 与压力评估 | 全部模型同时评估，不中途选优；支持/失败/不确定报告 |
-
-若 P1b 任一臂 development 无可行点，仍保留该臂，并将其记为不可行；全部策略都不可行则停止，不打开 locked。P2a/P2b 不因收益筛臂。父/子必须分 phase，不能预留引用尚不存在 checkpoint SHA 的子 run。无授权的基础设施重试不纳入“24 个”中静默追加。
-
-新研究身份设计为 `semantic-answerability-pilot-v1`，独立 frozen protocol 与 registry。**当前 AGENTS.md 的物理路径只允许 contextual-risk-v2，且旧 study 已停止**：设计审阅通过不替代路径契约落地，不能直接在新数据面写输出，也不能把新训练挂成旧 study 的 Stage 2。D0 还需提交 AGENTS.md/归档契约的路径修订和新控制面。未完成则预留拒绝。本设计没有创建这些目录或修改旧协议。
-
-设计采用 `experiments/semantic-answerability-pilot-v1/` 控制面与 `artifacts/semantic-answerability-pilot-v1/<dataset>/<stage>/<run-id>/` 数据面，实际使用仍以 D0 提交后的路径契约为准。每 phase 先 reserve-phase、整批提交 reserved、verify-run、从干净精确 SHA 启动。worker 不改受跟踪文件；终态后再 finalize 并提交摘要。失败/cancelled 不原地重试；审核后的新尝试在后续 phase 用新 run ID 和受跟踪理由连接 parent_run_ids。
-
-数值数组、逐查询记录和 bootstrap 样本均写 run-local 外置 NPY/NPZ，JSON 仅放统计量和哈希引用；超过 1 MiB 必须外置并验证哈希。审核过程的历史记录 append-only，不覆盖已审核决定，仲裁作为新版本关联原判断。
-
-最终报告至少含四张表：数据/标注预算与完整度；各臂固定集合效果与 CI；共享梯度/容量/成本消融；完整系统扩检及复制稳定性。失败 run 单列，不能只报告完成的 seed。旧 ledger 不写入新效果数字；新事实取得证据后才按其写入规则追加。
-
-## 11. 后续确认性研究的进入条件
-
-本版结束后才可另写新协议，且必须满足：新增大库或多个独立声明库、足够独立 query/来源组件、80% 功效审查、审核规模与训练预算获批、强基线和固定覆盖率比较可行、选定配置与明确停止条件冻结。pilot locked 作为已看过的历史数据，不再充当下一版独立确认集。
-
-语义分组需独立等价/冲突审核；OT 需单独的开关消融；解冻 CLIP 需同预算冻结表示对照。三个扩展分别立项，不在 v1 中临时追加。MSVD/DiDeMo 转移与任何 test 解封需要新的明确研究 gate；本版没有预授权路径。
-
-## 12. 设计自检与审阅边界
-
-- 已明确两假设、八个 run 身份、三 seed、分区和候选生成、审核/GPU 上限、阈值规则、概率迁移边界、每项分母、统计单位与终态规则；A2 用存在输入 detach 而非冻结整个 matcher，以隔离梯度路径。
-- 已把当前 CLI、模式、校准身份和指标缺口列作启动前硬条件，没有虚构可运行命令、run ID、文件 SHA 或 GPU 资格。
-- 新数据面与 AGENTS.md 的冲突必须在 D0 裁决，不能通过本设计草案默默解除。
-- 设计审阅已通过；C1 实施计划另行审阅，协议签署、预留和实验启动尚未完成。
+- 官方排序、候选标注正例存在、语义答案已区分；v1 不伪造审核，v2 待实现。
+- 查询/视频来源组件一起分区，库/caption 选择、数量门、组件余量与 unknown 可审计。
+- 六个 run 身份/seed、五个最终臂、三 seed、240 步、18 个 run、176 GPU 小时一致，无 P5/A5 成功路径。
+- natural/controlled、机制/系统、官方展开/canonical、GT 入候选/正确返回、离线评分/服务成本分别报告。
+- 保留消融、图表、敏感性及 cluster CI；无真实输入、资格、run 或方法效果声明。

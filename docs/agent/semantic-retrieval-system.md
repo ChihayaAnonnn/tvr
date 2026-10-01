@@ -2,14 +2,14 @@
 
 本页描述 B 阶段代码合同，数值测试只用合成 CPU fixture。真实训练/校准/阈值选择必须另有获批 study、四卡 Stage 0 和 Scheme A 预留；现有失败 study 不因代码实现而恢复授权。test 保持 sealed。
 
-研究实验设计见 [多答案、候选存在与有限扩检计划](../superpowers/specs/2026-10-01-semantic-retrieval-experiment-design.md)。
-该设计已通过用户审阅，列出了启动前的软件缺口与数据审核条件；正式协议与四卡资格尚未完成。
+研究实验设计见 [官方标签下的候选存在、检索风险与有限扩检计划](../superpowers/specs/2026-10-01-semantic-retrieval-experiment-design.md)。
+2026-10-01 按用户指令将主实验修订为官方标签自动构造，人工语义审核改为可选扩展。下文首先描述当前 B 代码；新增标签范围合同见单独的待实现小节。正式协议、适配器与四卡资格尚未完成。
 
 ## 端到端链路
 
 ```mermaid
 flowchart LR
-  Raw[审核后的原始文本与视频] --> Episode[canonical episode 与 unknown 标签]
+  Raw[来源明确的原始文本与视频] --> Episode[canonical episode 与 unknown 标签]
   Episode --> Encoder[CLIP 与时序编码器]
   Encoder --> Coarse[独立粗投影]
   Coarse --> Index[冻结 canonical 索引]
@@ -55,6 +55,16 @@ candidate 对齐数组等长；video_paths 相对 manifest 解析，内容哈希
 provenance 必须声明非空 `source`、SHA-256 与布尔 `reviewed`，known 标注只接受 reviewed。全库 no 另需 `gallery_audit` 中的正确 gallery_version、scope=complete、reviewed=true 和 source。审核来源字段是数据提供方的声明，loader 不能替代人工审查。
 
 `audit_episode_splits` 分别拒绝 canonical、same-source、caption group 跨 split 泄漏。数据 adapter 必须对联合 split 执行该审核；单文件加载不自动发现其他文件的泄漏。
+
+## 官方标签实验合同修订（待实现）
+
+[C1 计划](../superpowers/plans/2026-10-01-semantic-pilot-c1-data-audit.md)拟新增 Episode v2，明确 `relevance_space=benchmark_annotation` 与官方协议、annotation、关系/ID 映射及来源报告 SHA。官方 caption-video 关系直接提供训练与评价真值，不需逐条人工确认；非配对关系只在该 benchmark 范围下记负例，不代表语义不相关。缺失/异常关系不能转为负例。
+
+候选存在事件为“当前 canonical 候选含至少一个标注正例”。自然查询的标注正例在所属库内；离线受控移除正例只得到候选缺失，不得到真实语义全库无答案。同视频多个 caption 是多个查询，不是跨视频多答案。官方 video ID 排序与 canonical 集合/预算分别评价，alias 不制造额外正例。
+
+v2 不通过填写 `reviewed=true` 兼容 v1；当前 v1 的 known/全库 no 审核要求继续有效。标签空间和协议身份须贯穿配置、checkpoint、校准与指标，不允许 benchmark 状态与未来 `reviewed_semantic` 状态混用。查询来源组件也须纳入跨分区审计。跨库校准还需显式 fit/target gallery 身份，自然/受控候选分布分别绑定。
+
+以上是设计要求，当前 loader、配置和校准代码尚未实现该分支；不能直接将官方标签交给 v1 入口运行。主实验不包含真实语义无答案率或跨视频语义多正例成功声明，相关人工审核另立可选协议。
 
 ## Gallery JSON
 
