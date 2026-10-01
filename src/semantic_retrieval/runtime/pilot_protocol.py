@@ -8,8 +8,13 @@ import subprocess
 from pathlib import Path
 
 from experiment_artifacts import (
-    hash_run_outputs, load_validated_run_lifecycle, make_run_paths, manifest_sha256,
-    parse_registry_text, strict_json_loads, validate_artifact_json_payload,
+    hash_run_outputs,
+    load_validated_run_lifecycle,
+    make_run_paths,
+    manifest_sha256,
+    parse_registry_text,
+    strict_json_loads,
+    validate_artifact_json_payload,
 )
 
 PILOT = "semantic-answerability-pilot-v1"
@@ -17,10 +22,21 @@ CONTROL = f"experiments/{PILOT}"
 Q0_PROTOCOL = f"{PILOT}:c1-c2-c3-q0-v2"
 PHYSICAL_INDICES = (0, 2, 3, 4)
 Q0_CHECKS = (
-    "label_v2", "dynamic_panels", "unique_rank_queries", "global_known_counts",
-    "a2_detach", "a3_shared", "a4_score_only", "unknown_no_step",
-    "sampler_checkpoint", "rng_restore", "optimizer_restore", "hash_tamper",
-    "rank_parameter_consistency", "calibration_tracks", "cross_gallery_identity",
+    "label_v2",
+    "dynamic_panels",
+    "unique_rank_queries",
+    "global_known_counts",
+    "a2_detach",
+    "a3_shared",
+    "a4_score_only",
+    "unknown_no_step",
+    "sampler_checkpoint",
+    "rng_restore",
+    "optimizer_restore",
+    "hash_tamper",
+    "rank_parameter_consistency",
+    "calibration_tracks",
+    "cross_gallery_identity",
     "cancellation_guard",
 )
 _TRAIN = {
@@ -30,14 +46,19 @@ _TRAIN = {
     "P2b": tuple((a, s) for s in (1, 2) for a in ("A1", "A2", "A3", "A4")),
 }
 _REQUIRES = {
-    "D1": (), "Q0P": (), "Q0": ("D1", "Q0P"), "E0": ("D1", "Q0"),
-    "P1a": ("D1", "Q0", "E0"), "P1b": ("D1", "Q0", "E0", "P1a"),
+    "D1": (),
+    "Q0P": (),
+    "Q0": ("D1", "Q0P"),
+    "E0": ("D1", "Q0"),
+    "P1a": ("D1", "Q0", "E0"),
+    "P1b": ("D1", "Q0", "E0", "P1a"),
     "P2a": ("D1", "Q0", "E0", "P1a", "P1b"),
     "P2b": ("D1", "Q0", "E0", "P1a", "P1b", "P2a"),
     "C0S": ("D1", "Q0", "E0", "P1a", "P1b", "P2a", "P2b"),
     "C0": ("P1a", "P1b", "P2a", "P2b", "C0S"),
     "V0E": ("D1", "Q0", "C0"),
-    "V0S": ("D1", "Q0", "E0", "C0", "V0E"), "V0": ("C0", "V0S"),
+    "V0S": ("D1", "Q0", "E0", "C0", "V0E"),
+    "V0": ("C0", "V0S"),
 }
 
 
@@ -51,16 +72,36 @@ def phase_contract(phase_id):
         runs = tuple((f"{a}-{sp}", s) for s in (0, 1, 2) for a in ("A0", "A1", "A2", "A3", "A4") for sp in splits)
         category, hours, dataset, split = "evaluation", (8.0 if phase_id == "C0S" else 10.0) / len(runs), "msrvtt", None
     else:
-        variant = {"D1": "benchmark_compile", "Q0P": "pilot-q0-prep", "Q0": "pilot-q0-v2",
-                   "E0": "fixed-clip-candidates", "V0E": "fixed-clip-locked-candidates",
-                   "C0": "pilot-analysis-freeze", "V0": "pilot-analysis-locked"}[phase_id]
+        variant = {
+            "D1": "benchmark_compile",
+            "Q0P": "pilot-q0-prep",
+            "Q0": "pilot-q0-v2",
+            "E0": "fixed-clip-candidates",
+            "V0E": "fixed-clip-locked-candidates",
+            "C0": "pilot-analysis-freeze",
+            "V0": "pilot-analysis-locked",
+        }[phase_id]
         runs, dataset = ((variant, 0),), "synthetic" if phase_id in {"Q0P", "Q0"} else "msrvtt"
         category = "qualification" if phase_id == "Q0" else "evaluation"
         hours = 8.0 if phase_id == "Q0" else (4.0 if phase_id == "E0" else (2.0 if phase_id == "V0E" else 0.0))
-        split = {"D1": "val", "Q0P": "val", "Q0": "train", "E0": "val_development",
-                 "C0": "val_development", "V0E": "val_locked", "V0": "val_locked"}[phase_id]
-    return dict(phase_id=phase_id, requires=_REQUIRES[phase_id], runs=runs, category=category,
-                run_gpu_hours=hours, dataset=dataset, eval_split=split)
+        split = {
+            "D1": "val",
+            "Q0P": "val",
+            "Q0": "train",
+            "E0": "val_development",
+            "C0": "val_development",
+            "V0E": "val_locked",
+            "V0": "val_locked",
+        }[phase_id]
+    return dict(
+        phase_id=phase_id,
+        requires=_REQUIRES[phase_id],
+        runs=runs,
+        category=category,
+        run_gpu_hours=hours,
+        dataset=dataset,
+        eval_split=split,
+    )
 
 
 def _git_bytes(repo, *args):
@@ -76,9 +117,13 @@ def committed_bytes(repo_root, reference, *, prefix=CONTROL):
     if not isinstance(reference, dict) or set(reference) != {"path", "sha256", "commit"}:
         raise ValueError("pilot evidence reference requires path, sha256 and commit")
     path = Path(reference["path"])
-    if (path.is_absolute() or ".." in path.parts or not path.is_relative_to(prefix)
-            or not re.fullmatch("[0-9a-f]{64}", str(reference["sha256"]))
-            or not re.fullmatch("[0-9a-f]{40}", str(reference["commit"]))):
+    if (
+        path.is_absolute()
+        or ".." in path.parts
+        or not path.is_relative_to(prefix)
+        or not re.fullmatch("[0-9a-f]{64}", str(reference["sha256"]))
+        or not re.fullmatch("[0-9a-f]{40}", str(reference["commit"]))
+    ):
         raise ValueError("pilot evidence namespace or digest is invalid")
     disk = repo / path
     if disk.resolve() != disk or disk.is_symlink() or not disk.is_file():
@@ -98,14 +143,20 @@ def verify_phase_evidence(repo_root, evidence_ref, expected_phase):
     raw = committed_bytes(repo, evidence_ref, prefix=f"{CONTROL}/summaries")
     summary = strict_json_loads(raw.decode("utf-8"))
     validate_artifact_json_payload(summary)
-    if (not isinstance(summary, dict) or summary.get("study") != PILOT
-            or not isinstance(summary.get("phase"), str)
-            or not (summary["phase"] == expected_phase or summary["phase"].startswith(expected_phase + "-"))
-            or not isinstance(summary.get("runs"), list) or not summary["runs"]
-            or summary.get("terminal_counts") != {"completed": len(summary["runs"])}):
+    if (
+        not isinstance(summary, dict)
+        or summary.get("study") != PILOT
+        or not isinstance(summary.get("phase"), str)
+        or not (summary["phase"] == expected_phase or summary["phase"].startswith(expected_phase + "-"))
+        or not isinstance(summary.get("runs"), list)
+        or not summary["runs"]
+        or summary.get("terminal_counts") != {"completed": len(summary["runs"])}
+    ):
         raise ValueError("pilot predecessor phase must be the complete successful batch")
     registry = parse_registry_text(_git_bytes(repo, "show", f"HEAD:{CONTROL}/registry.jsonl").decode("utf-8"))
-    old_registry = parse_registry_text(_git_bytes(repo, "show", f"{evidence_ref['commit']}:{CONTROL}/registry.jsonl").decode("utf-8"))
+    old_registry = parse_registry_text(
+        _git_bytes(repo, "show", f"{evidence_ref['commit']}:{CONTROL}/registry.jsonl").decode("utf-8")
+    )
     if (repo / CONTROL / "registry.jsonl").read_bytes() != _git_bytes(repo, "show", f"HEAD:{CONTROL}/registry.jsonl"):
         raise ValueError("predecessor terminal registry must be committed")
     results, seen = [], set()
@@ -121,21 +172,28 @@ def verify_phase_evidence(repo_root, evidence_ref, expected_phase):
         if paths.root != root:
             raise ValueError("predecessor belongs to a foreign artifact namespace")
         manifest, status, _ = load_validated_run_lifecycle(paths)
-        if (manifest["study"] != PILOT or manifest["test_authorized"] is not False
-                or status["state"] != "completed" or status["exit_code"] != 0
-                or manifest_sha256(manifest) != row.get("manifest_sha256")
-                or status["output_hashes"] != row.get("output_hashes")
-                or hash_run_outputs(paths) != status["output_hashes"]):
+        if (
+            manifest["study"] != PILOT
+            or manifest["test_authorized"] is not False
+            or status["state"] != "completed"
+            or status["exit_code"] != 0
+            or manifest_sha256(manifest) != row.get("manifest_sha256")
+            or status["output_hashes"] != row.get("output_hashes")
+            or hash_run_outputs(paths) != status["output_hashes"]
+        ):
             raise ValueError("pilot predecessor identity or output inventory differs")
         selected = entries[0]["selected_validation"]
-        expected = _registry_record(manifest, "completed", summary_metrics=row.get("summary_metrics"), selected_validation=selected)
+        expected = _registry_record(
+            manifest, "completed", summary_metrics=row.get("summary_metrics"), selected_validation=selected
+        )
         if entries[0] != expected:
             raise ValueError("pilot predecessor terminal record differs from its archive")
-        results.append(dict(manifest=manifest, status=status, paths=paths))
+        results.append(dict(manifest=manifest, status=status, paths=paths, run_dir=str(paths.root)))
     contract = phase_contract(expected_phase)
-    if ([(r['manifest']['variant'], r['manifest']['seed']) for r in results] != list(contract['runs'])
-            or any(r['manifest']['dataset'] != contract['dataset'] or r['manifest']['stage'] != 'baseline' for r in results)):
-        raise ValueError('pilot predecessor is not the complete registered phase batch')
+    if [(r["manifest"]["variant"], r["manifest"]["seed"]) for r in results] != list(contract["runs"]) or any(
+        r["manifest"]["dataset"] != contract["dataset"] or r["manifest"]["stage"] != "baseline" for r in results
+    ):
+        raise ValueError("pilot predecessor is not the complete registered phase batch")
     return dict(phase=summary["phase"], summary=summary, runs=results)
 
 
@@ -143,48 +201,73 @@ def validate_frozen_prerequisite(repo_root, evidence):
     """Require C0's actual immutable scientific freeze before any locked worker."""
     from semantic_retrieval.data.episodes import file_sha256
     from semantic_retrieval.evaluation import pilot_analysis
-    if len(evidence['runs']) != 1:
-        raise ValueError('locked access requires one completed C0 frozen analysis')
-    run = evidence['runs'][0]
-    path = run['paths'].provenance/'pilot_frozen.json'
-    digest = run['status']['output_hashes'].get('provenance/pilot_frozen.json')
+
+    if len(evidence["runs"]) != 1:
+        raise ValueError("locked access requires one completed C0 frozen analysis")
+    run = evidence["runs"][0]
+    path = run["paths"].provenance / "pilot_frozen.json"
+    digest = run["status"]["output_hashes"].get("provenance/pilot_frozen.json")
     if not path.is_file() or digest != file_sha256(path):
-        raise ValueError('locked access requires the hash-bound C0 frozen artifact')
+        raise ValueError("locked access requires the hash-bound C0 frozen artifact")
     frozen = strict_json_loads(path.read_text())
-    evaluation = run['manifest']['config']['evaluation']
-    expected_models = {f'{arm}_seed{seed}' for seed in (0,1,2) for arm in ('A0','A1','A2','A3','A4')}
-    if (run['manifest']['variant'] != 'pilot-analysis-freeze'
-            or evaluation != dict(eval_split='val_development',qualification_scenario='pilot_analysis')
-            or frozen.get('schema_version') != 1 or frozen.get('relevance_space') != 'benchmark_annotation'
-            or frozen.get('source_sha') != run['manifest']['git_sha']
-            or frozen.get('analysis_sha256') != file_sha256(pilot_analysis.__file__)
-            or set(frozen.get('model_identities',{})) != expected_models
-            or not isinstance(frozen.get('label_protocol'),dict) or not frozen['label_protocol']
-            or not isinstance(frozen.get('target_gallery'),dict)
-            or any(not isinstance(frozen.get(key),dict) or not frozen[key] for key in ('policies','scalar_policies','calibration','strongest_scalar'))):
-        raise ValueError('C0 frozen model, source, target or policy identity is incomplete')
-    return dict(path=str(path),sha256=digest)
+    evaluation = run["manifest"]["config"]["evaluation"]
+    expected_models = {f"{arm}_seed{seed}" for seed in (0, 1, 2) for arm in ("A0", "A1", "A2", "A3", "A4")}
+    if (
+        run["manifest"]["variant"] != "pilot-analysis-freeze"
+        or evaluation != dict(eval_split="val_development", qualification_scenario="pilot_analysis")
+        or frozen.get("schema_version") != 1
+        or frozen.get("relevance_space") != "benchmark_annotation"
+        or frozen.get("source_sha") != run["manifest"]["git_sha"]
+        or frozen.get("analysis_sha256") != file_sha256(pilot_analysis.__file__)
+        or set(frozen.get("model_identities", {})) != expected_models
+        or not isinstance(frozen.get("label_protocol"), dict)
+        or not frozen["label_protocol"]
+        or not isinstance(frozen.get("target_gallery"), dict)
+        or any(
+            not isinstance(frozen.get(key), dict) or not frozen[key]
+            for key in ("policies", "scalar_policies", "calibration", "strongest_scalar")
+        )
+    ):
+        raise ValueError("C0 frozen model, source, target or policy identity is incomplete")
+    gates = frozen.get("qualification_gates")
+    required_gates = {"data", "four_gpu_qualification", "gradients", "stability"}
+    if (
+        not isinstance(gates, dict)
+        or set(gates) != required_gates
+        or any(gates[key] is not True for key in required_gates)
+        or frozen.get("development_gate_passed") is not True
+    ):
+        raise ValueError("locked access requires all authenticated C0 development gates to pass")
+    return dict(path=str(path), sha256=digest)
 
 
 def validate_q0_report(report, *, source_sha):
-    if (not isinstance(report, dict) or report.get("schema_version") != 1
-            or report.get("protocol") != Q0_PROTOCOL or report.get("source_sha") != source_sha
-            or report.get("world_size") != 4 or report.get("device") != "cuda"
-            or report.get("precision") != "fp32" or report.get("tf32") is not False
-            or report.get("synthetic_only") is not True
-            or report.get("physical_indices") != list(PHYSICAL_INDICES)
-            or not isinstance(report.get("checks"), dict)
-            or any(report["checks"].get(k) is not True for k in Q0_CHECKS)):
+    if (
+        not isinstance(report, dict)
+        or report.get("schema_version") != 1
+        or report.get("protocol") != Q0_PROTOCOL
+        or report.get("source_sha") != source_sha
+        or report.get("world_size") != 4
+        or report.get("device") != "cuda"
+        or report.get("precision") != "fp32"
+        or report.get("tf32") is not False
+        or report.get("synthetic_only") is not True
+        or report.get("physical_indices") != list(PHYSICAL_INDICES)
+        or not isinstance(report.get("checks"), dict)
+        or any(report["checks"].get(k) is not True for k in Q0_CHECKS)
+    ):
         raise ValueError("new pilot four-GPU qualification evidence is incomplete")
     ranks = report.get("rank_records")
-    if (not isinstance(ranks, list) or len(ranks) != 4
-            or {r.get("rank") for r in ranks if isinstance(r, dict)} != {0, 1, 2, 3}
-            or len({r.get("gpu_uuid") for r in ranks if isinstance(r, dict)}) != 4
-            or any(not isinstance(r.get("gpu_uuid"), str) or not r["gpu_uuid"].startswith("GPU-") for r in ranks)):
+    if (
+        not isinstance(ranks, list)
+        or len(ranks) != 4
+        or {r.get("rank") for r in ranks if isinstance(r, dict)} != {0, 1, 2, 3}
+        or len({r.get("gpu_uuid") for r in ranks if isinstance(r, dict)}) != 4
+        or any(not isinstance(r.get("gpu_uuid"), str) or not r["gpu_uuid"].startswith("GPU-") for r in ranks)
+    ):
         raise ValueError("qualification must record four unique physical devices and ranks")
     seconds = report.get("seconds_per_update")
-    if (type(seconds) not in {int, float} or not math.isfinite(seconds) or seconds <= 0
-            or seconds * 240 > 2 * 3600):
+    if type(seconds) not in {int, float} or not math.isfinite(seconds) or seconds <= 0 or seconds * 240 > 2 * 3600:
         raise ValueError("qualified throughput cannot satisfy the registered per-run budget")
     for field in ("resume_parameter_max_abs_delta", "resume_optimizer_max_abs_delta"):
         value = report.get(field)
@@ -194,7 +277,9 @@ def validate_q0_report(report, *, source_sha):
 
 
 def _marker(manifest):
-    markers = [e for e in manifest.get("selection_lineage", []) if isinstance(e, dict) and e.get("kind") == "pilot_phase"]
+    markers = [
+        e for e in manifest.get("selection_lineage", []) if isinstance(e, dict) and e.get("kind") == "pilot_phase"
+    ]
     if len(markers) != 1:
         raise ValueError("pilot run needs exactly one archived phase identity")
     marker = markers[0]
@@ -204,7 +289,21 @@ def _marker(manifest):
 
 
 def _same_q0_source(repo, q0_source, source):
-    changed = _git_bytes(repo, "diff", "--name-only", f"{q0_source}..{source}", "--", "src/semantic_retrieval", "scripts", ":(top,glob)*.py", "experiments/contextual-risk-v2/schemas").decode().splitlines()
+    changed = (
+        _git_bytes(
+            repo,
+            "diff",
+            "--name-only",
+            f"{q0_source}..{source}",
+            "--",
+            "src/semantic_retrieval",
+            "scripts",
+            ":(top,glob)*.py",
+            "experiments/contextual-risk-v2/schemas",
+        )
+        .decode()
+        .splitlines()
+    )
     if changed:
         raise ValueError("execution source changed after the new pilot qualification: " + ", ".join(changed))
 
@@ -217,30 +316,40 @@ def validate_pilot_gpu_qualification(context):
         raise ValueError("pilot Q0 must have one complete four-rank qualification run")
     run = evidence["runs"][0]
     manifest = run["manifest"]
-    if (manifest["dataset"] != "synthetic" or manifest["variant"] != "pilot-q0-v2"
-            or manifest["environment"]["gpu_count"] != 4):
+    if (
+        manifest["dataset"] != "synthetic"
+        or manifest["variant"] != "pilot-q0-v2"
+        or manifest["environment"]["gpu_count"] != 4
+    ):
         raise ValueError("old or scientific evidence cannot replace new synthetic Q0")
     report = strict_json_loads((run["paths"].provenance / "pilot-qualification.json").read_text())
     validate_q0_report(report, source_sha=manifest["git_sha"])
     _same_q0_source(context.repo_root, manifest["git_sha"], context.manifest["git_sha"])
     if manifest["run_id"] not in context.manifest["parent_run_ids"]:
         raise ValueError("pilot scientific worker must declare its qualified Q0 parent")
-    if hasattr(context,'config'):
+    if hasattr(context, "config"):
         import os
+
         import torch
+
         from scripts.qualify_semantic_retrieval import local_device_uuid
-        uuids = [r['gpu_uuid'] for r in sorted(report['rank_records'],key=lambda r:r['rank'])]
-        if (not torch.cuda.is_available() or torch.cuda.device_count() != 4
-                or os.environ.get('CUDA_VISIBLE_DEVICES','').split(',') != uuids
-                or [local_device_uuid(i) for i in range(4)] != uuids):
-            raise ValueError('worker physical GPU UUID topology differs from qualified Q0')
+
+        uuids = [r["gpu_uuid"] for r in sorted(report["rank_records"], key=lambda r: r["rank"])]
+        if (
+            not torch.cuda.is_available()
+            or torch.cuda.device_count() != 4
+            or os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",") != uuids
+            or [local_device_uuid(i) for i in range(4)] != uuids
+        ):
+            raise ValueError("worker physical GPU UUID topology differs from qualified Q0")
     return report
 
 
 def build_phase(phase_id, *, phase_path, scheduled_timestamp_utc, run_templates, evidence):
     contract = phase_contract(phase_id)
-    if (not isinstance(run_templates, list)
-            or [(r.get("variant"), r.get("seed")) for r in run_templates] != list(contract["runs"])):
+    if not isinstance(run_templates, list) or [(r.get("variant"), r.get("seed")) for r in run_templates] != list(
+        contract["runs"]
+    ):
         raise ValueError("pilot phase batch must contain every registered arm/seed in order")
     if set(contract["requires"]) - set(evidence):
         raise ValueError("pilot phase is missing prerequisite evidence")
@@ -257,8 +366,16 @@ def build_phase(phase_id, *, phase_path, scheduled_timestamp_utc, run_templates,
         run.pop("timestamp_utc", None)
         run["scheduled_timestamp_utc"] = scheduled_timestamp_utc
         run["selection_lineage"] = [e for e in run.get("selection_lineage", []) if e.get("kind") != "pilot_phase"]
-        run["selection_lineage"].append(dict(kind="pilot_phase", protocol_version=1, phase_id=phase_id,
-            phase_path=path.as_posix(), evidence=copy.deepcopy(evidence), gpu_hours=contract["run_gpu_hours"]))
+        run["selection_lineage"].append(
+            dict(
+                kind="pilot_phase",
+                protocol_version=1,
+                phase_id=phase_id,
+                phase_path=path.as_posix(),
+                evidence=copy.deepcopy(evidence),
+                gpu_hours=contract["run_gpu_hours"],
+            )
+        )
         runs.append(run)
     return dict(phase=f"{phase_id}-{scheduled_timestamp_utc}", study=PILOT, runs=runs)
 
@@ -266,6 +383,7 @@ def build_phase(phase_id, *, phase_path, scheduled_timestamp_utc, run_templates,
 def assert_phase_authorized(repo_root, manifest, operation):
     """Validate whole committed batch and all prerequisites before archive mutations."""
     from types import SimpleNamespace
+
     from scripts.manage_experiment_run import _build_manifest
 
     repo = Path(repo_root).resolve()
@@ -279,20 +397,37 @@ def assert_phase_authorized(repo_root, manifest, operation):
         raise ValueError("pilot phase must match its committed source exactly")
     phase = strict_json_loads(raw.decode())
     runs = phase.get("runs", [])
-    if (phase.get("study") != PILOT or [(r.get("variant"), r.get("seed")) for r in runs] != list(contract["runs"])
-            or any(r.get("dataset") != contract["dataset"] or r.get("test_authorized") is not False for r in runs)):
+    if (
+        phase.get("study") != PILOT
+        or [(r.get("variant"), r.get("seed")) for r in runs] != list(contract["runs"])
+        or any(r.get("dataset") != contract["dataset"] or r.get("test_authorized") is not False for r in runs)
+    ):
         raise ValueError("pilot scientific batch must contain all registered arm/seed identities")
-    expected = [_build_manifest(r, study=PILOT, git_sha=manifest["git_sha"], artifact_root=Path(manifest["artifact_path"]).parents[3],
-                registry=Path(CONTROL) / "registry.jsonl", common_root=Path(_git_bytes(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").decode().strip()).parent) for r in runs]
+    expected = [
+        _build_manifest(
+            r,
+            study=PILOT,
+            git_sha=manifest["git_sha"],
+            artifact_root=Path(manifest["artifact_path"]).parents[3],
+            registry=Path(CONTROL) / "registry.jsonl",
+            common_root=Path(
+                _git_bytes(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").decode().strip()
+            ).parent,
+        )
+        for r in runs
+    ]
     if manifest not in expected or any(_marker(m) != marker for m in expected):
         raise ValueError("pilot manifest differs from its complete committed phase")
     if marker.get("gpu_hours") != contract["run_gpu_hours"]:
         raise ValueError("pilot run exceeds its allocated GPU budget")
     env = manifest["environment"]
     gpu = contract["run_gpu_hours"] > 0
-    if (env.get("precision") != "fp32" or type(env.get("gpu_count")) is not int
-            or env["gpu_count"] != (4 if gpu else 0)
-            or (gpu and "A800" not in env.get("gpu_model", ""))):
+    if (
+        env.get("precision") != "fp32"
+        or type(env.get("gpu_count")) is not int
+        or env["gpu_count"] != (4 if gpu else 0)
+        or (gpu and "A800" not in env.get("gpu_model", ""))
+    ):
         raise ValueError("pilot environment differs from frozen FP32/four-A800 topology")
     split = manifest["config"]["evaluation"].get("eval_split")
     wanted = contract["eval_split"]
@@ -307,22 +442,32 @@ def assert_phase_authorized(repo_root, manifest, operation):
             raise ValueError("pilot prerequisite run must appear in parent_run_ids")
     if "D1" in evidence:
         from semantic_retrieval.data.pilot_catalog import TARGETS
+
         ready = [r for r in evidence["D1"]["runs"] if r["manifest"]["variant"] == "benchmark_compile"]
-        summaries = [strict_json_loads((r['paths'].provenance/'input-summary.json').read_text()) for r in ready]
-        if not summaries or any(s.get('ready') is not True or s.get('relevance_space') != 'benchmark_annotation'
-                or not s.get('label_protocol') or set(s.get('splits',{})) != {'train','val_development','val_calibration','val_locked'}
-                or any(s['splits'][sp].get('official_video_count',0) < (TARGETS['train_min'] if sp=='train' else TARGETS[sp])
-                    or s['splits'][sp].get('canonical_video_count',0) < TARGETS['canonical_min']
-                    or s['splits'][sp].get('query_count',0) != s['splits'][sp].get('official_video_count')
-                    for sp in s['splits'])
-                or s['splits']['val_locked'].get('component_count',0) < TARGETS['locked_components_min'] for s in summaries):
+        summaries = [strict_json_loads((r["paths"].provenance / "input-summary.json").read_text()) for r in ready]
+        if not summaries or any(
+            s.get("ready") is not True
+            or s.get("relevance_space") != "benchmark_annotation"
+            or not s.get("label_protocol")
+            or set(s.get("splits", {})) != {"train", "val_development", "val_calibration", "val_locked"}
+            or any(
+                s["splits"][sp].get("official_video_count", 0)
+                < (TARGETS["train_min"] if sp == "train" else TARGETS[sp])
+                or s["splits"][sp].get("canonical_video_count", 0) < TARGETS["canonical_min"]
+                or s["splits"][sp].get("query_count", 0) != s["splits"][sp].get("official_video_count")
+                for sp in s["splits"]
+            )
+            or s["splits"]["val_locked"].get("component_count", 0) < TARGETS["locked_components_min"]
+            for s in summaries
+        ):
             raise ValueError("pilot D1 benchmark data compilation is not ready")
-    if marker['phase_id'] in {'V0E','V0S','V0'}:
-        frozen = validate_frozen_prerequisite(repo,evidence['C0'])
+    if marker["phase_id"] in {"V0E", "V0S", "V0"}:
+        frozen = validate_frozen_prerequisite(repo, evidence["C0"])
         from semantic_retrieval.runtime.input_bindings import manifest_input_references
-        inputs = manifest_input_references(repo,manifest)
-        if inputs.get(frozen['path']) != frozen['sha256']:
-            raise ValueError('locked worker must reserve its exact C0 frozen artifact')
+
+        inputs = manifest_input_references(repo, manifest)
+        if inputs.get(frozen["path"]) != frozen["sha256"]:
+            raise ValueError("locked worker must reserve its exact C0 frozen artifact")
     if gpu and marker["phase_id"] != "Q0":
         validate_pilot_gpu_qualification(SimpleNamespace(manifest=manifest, repo_root=repo))
     if marker["phase_id"] in _TRAIN:
@@ -334,8 +479,8 @@ def assert_phase_authorized(repo_root, manifest, operation):
         # C2's effective serializer places the bound pilot config in evaluation.
         if not isinstance(pilot, dict) or pilot.get("arm") != manifest["variant"]:
             raise ValueError("scientific training requires the new dynamic sampler protocol")
-        if manifest['config']['optimizer'].get('seed') != manifest['seed']:
-            raise ValueError('training seed differs from reserved arm/seed identity')
+        if manifest["config"]["optimizer"].get("seed") != manifest["seed"]:
+            raise ValueError("training seed differs from reserved arm/seed identity")
     limits = dict(training=144.0, qualification=8.0, evaluation=24.0)
     totals = {key: 0.0 for key in limits}
     records = parse_registry_text(_git_bytes(repo, "show", f"HEAD:{CONTROL}/registry.jsonl").decode())

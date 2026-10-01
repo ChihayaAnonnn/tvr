@@ -83,8 +83,9 @@ created after training and binds the completed arm/seed's exact parent summary,
 run ID, config, checkpoint and metadata. V0S additionally binds C0's freeze and
 full argsort candidate orders for actual frozen expansion.
 
-C0/V0 templates assemble their bundle from completed C0S/V0S fragments, NPZ
-outputs and D1's target-gallery descriptor. C0 reads target-gallery metadata but
+C0 templates assemble development/calibration observations from C0S; V0 bundles
+contain only V0S locked observations and retain C0S summary references as gate
+evidence. Both bind NPZ outputs and D1's target-gallery descriptor. C0 reads target-gallery metadata but
 does not rank or score locked queries. Each analysis config fixes 10,000 bootstrap
 replicates and binds all measured inputs. Qualification gates are recomputed from
 successful committed D1/Q0 archives, all 18 complete C2 optimizer logs and gradient
@@ -92,6 +93,12 @@ probes, and C3's measured invariance arrays. Caller booleans cannot supply gates
 Invariance requires every arm/seed/track and the actual four alias multiplicities
 times five permutations; missing coverage remains unavailable and prevents PASS.
 These pilot gates make no confirmatory statistical-power claim.
+
+Locked access additionally requires C0's archived `qualification_gates` to contain
+exactly data, four_gpu_qualification, gradients and stability, all true, plus
+`development_gate_passed=true`. C3 recomputes these from C0's authenticated inputs
+before releasing the freeze. Missing/failed gates stop V0E/V0S/V0; invariance is
+measured during V0S and is not a prerequisite for opening locked observations.
 
 Executable source changes after Q0 reject scientific starts, including top-level
 Python helpers such as `experiment_tracking.py`, runtime/model code, scripts and

@@ -1,6 +1,6 @@
 # Semantic Pilot C4 Orchestration Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Connect the approved benchmark pilot's archived phases and qualify the new C1/C2/C3 chain before scientific GPU work.
 
@@ -35,10 +35,10 @@
 
 **Interfaces:** `phase_contract(phase_id)`, `verify_phase_evidence(repo_root, evidence_ref, expected_phase)` and `assert_phase_authorized(repo_root, manifest, operation)` consume tracked summary refs `{path,sha256,commit}` and ordinary manifest selection lineage. They enforce D1 → Q0-prep → Q0 → E0 → P1a/P1b/P2a/P2b → C0 → V0, fixed training batches and explicit budget ceilings.
 
-- [ ] Write tests for YAML toggles, foreign/malformed/dirty evidence, uncommitted terminal records, broken output hashes, phase dependencies, fixed batches and sealed locked/test.
-- [ ] Run the new file and observe expected missing-feature failures.
-- [ ] Implement authentication through Git bytes, existing lifecycle loader and exact registry terminal records; preserve CPU preparation variants.
-- [ ] Run protocol and existing pilot-policy tests; commit only owned files.
+- [x] Write tests for YAML toggles, foreign/malformed/dirty evidence, uncommitted terminal records, broken output hashes, phase dependencies, fixed batches and sealed locked/test.
+- [x] Run the new file and observe expected missing-feature failures.
+- [x] Implement authentication through Git bytes, existing lifecycle loader and exact registry terminal records; preserve CPU preparation variants.
+- [x] Run protocol and existing pilot-policy tests; commit only owned files.
 
 ### Task 2: Connected phase planning, provisioning and execution
 
@@ -46,10 +46,10 @@
 
 **Interfaces:** `build_phase(phase_id, *, phase_path, scheduled_timestamp_utc, run_templates, evidence)` produces existing manager payload `{phase,study,runs}` with exact arm/seed batch. `provision_run_config(repo_root, run_dir, template)` injects reserved runtime identity into immutable run-local config. CLI plan/reserve/run/finalize delegates to existing manager, commits batch reservation/terminal summary, invokes sealed command once and stops on failures.
 
-- [ ] Write tests demonstrating real batch reservation/provisioning, startup refusal before commit, no duplicate retry, command failure archival and finalized predecessor handoff.
-- [ ] Run tests and observe expected failures.
-- [ ] Implement the CLI using structured argv and exact immutable templates; verify dependency and budget checks before mutations.
-- [ ] Run integration tests and commit only owned files.
+- [x] Write tests demonstrating real batch reservation/provisioning, startup refusal before commit, no duplicate retry, command failure archival and finalized predecessor handoff.
+- [x] Run tests and observe expected failures.
+- [x] Implement the CLI using structured argv and exact immutable templates; verify dependency and budget checks before mutations.
+- [x] Run integration tests and commit only owned files.
 
 ### Task 3: New synthetic v2 qualification chain
 
@@ -57,18 +57,18 @@
 
 **Interfaces:** Synthetic prep publishes hashed v2 label references, raw-video/CLIP fixtures and candidate orders. `qualify_pilot_chain(context,cfg,device)` exercises C2 `PilotSampler`, `controlled_panel`, `pilot_trainable_prefixes`/model arm modes and checkpoint sampler progress, plus C3 `fit_pilot_calibration`/`calibrated_probabilities`. Q0 report includes protocol version, four-rank FP32/hardware identity, gradient paths, sampler/RNG/optimizer restoration, tamper rejection and separate natural/controlled gallery calibration identities.
 
-- [ ] Import committed C1/C2/C3 dependency changes into this worktree without editing their files.
-- [ ] Write CPU tests for real v2 fixture/chain and report rejection when old, incomplete, one-rank or mismatched evidence is presented as Q0 PASS.
-- [ ] Observe RED, implement shared CPU/GPU chain, and run GREEN including CPU four-rank coverage where required.
-- [ ] Run relevant suite and full project suite, record actual results in this plan, and commit only owned files.
+- [x] Import committed C1/C2/C3 dependency changes into this worktree without editing their files.
+- [x] Write CPU tests for real v2 fixture/chain and report rejection when old, incomplete, one-rank or mismatched evidence is presented as Q0 PASS.
+- [x] Observe RED, implement shared CPU/GPU chain, and run GREEN including CPU four-rank coverage where required.
+- [x] Run relevant suite and full project suite, record actual results in this plan, and commit only owned files.
 
 ### Task 4: Authenticated analysis handoff
 
 Root requested a connected C0/V0 factory and removal of caller-supplied gate booleans. Extend the workflow with immutable bundle/config/qualification documents assembled from successful committed D1/Q0/training/score archives. Recompute gradient and stability gates from actual C2 logs, and invariance from hash-bound C3 probe arrays with required coverage; missing measurements remain unavailable and cannot pass. C3 consumes `validate_analysis_qualification(context, document)` before using any gates. No confirmatory power claim is inferred from pilot sample quantities.
 
-- [ ] Observe RED for changed executable dependencies, incomplete training evidence and forged qualification gates.
-- [ ] Implement archive-derived gate producer/validator and C0/V0 bundle/config templates with all inputs reserved.
-- [ ] Coordinate C3 frozen expansion/invariance schemas, verify CPU integration, and record any unavailable measurement honestly.
+- [x] Observe RED for changed executable dependencies, incomplete training evidence and forged qualification gates.
+- [x] Implement archive-derived gate producer/validator and C0/V0 bundle/config templates with all inputs reserved.
+- [x] Coordinate C3 frozen expansion/invariance schemas, verify CPU integration, and record any unavailable measurement honestly.
 
 ## Execution Record
 
@@ -88,3 +88,6 @@ Root requested a connected C0/V0 factory and removal of caller-supplied gate boo
 - Full CPU suite:478 passed, one TypedStorage deprecation warning,128.89s. No real inputs/reservations/GPU workers launched by this implementer. CPU/fake fixture metadata cannot grant new Q0 GPU PASS. Real four-GPU qualification remains root's authorized task after integration and resource availability.
 - Task 4 RED: seven missing gate APIs plus the `experiment_tracking.py` source-change bypass; later missing analysis/producer/score-parent factory paths and incomplete invariance coverage reproduced before implementation. GREEN: archive-based evidence tests12 passed in18.91s. Full committed software fixtures exercise C0/V0 handoff, reject forged/unreserved gates, and verify Q0 consumes its complete own inventory and E0 binds separate scientific weights. No GPU worker is executed by these fixtures. C3 confirmed actual system trajectory and twenty invariance probes use reserved frozen policies, argsort orders and measured `[N,4,5]` arrays; its final integration remains separate.
 - Final owned-source verification:72 focused tests passed in51.46s; complete CPU suite500 passed in162.13s, one existing PyTorch TypedStorage warning. `git diff --check` and CLI help passed. C3 review commits `2d6cc974`/`72695a6` became available during this full run and will be integrated for a separate compatibility check; this500 result predates those commits. Real four-GPU PASS remains pending root execution.
+- C3 compatibility: integrated math/producer fixes (`2d6cc974`, `72695a6`) and shared subset71 passed in104.83s. Actual manager-based boundary RED exposed missing `run_dir` and relative-summary handling; own alias plus C3 `fa98d2e` fixed it. V0 mixed-observation RED reproduced45 vs15 fragments; V0 now contains only15 locked producers. Ruff formatting/import fixes preserved explicit public gate re-exports; owned-source Ruff and format checks pass. Fresh C4 subset53 passed in45.01s plus real boundary/V0 tests2 passed in11.03s.
+- Prelocked gate RED: five authenticated archived freezes with missing/false/extra/unreleased development gates incorrectly unlocked V0. C4 now requires the exact four authenticated C0 gates and explicit release; invariance is not a prelocked requirement. GREEN: seven archive gate/boundary/V0 tests passed in12.10s. C3 persists the recomputed four gates before freeze release. All C4 software tasks are implemented and checked; actual new four-GPU qualification is explicitly pending root, with no real workers/reservations or historical mutations by this implementer. Root owns fresh final repository verification after integration.
+- Final shared boundary verification after C3 `fa98d2e` and `7139ab0`:84 protocol/CPU-policy/workflow/evidence/archive tests passed in25.22s. Owned source Ruff check, format check and diff check pass. Public gate re-exports remain explicit. CPU policy semantics match root's stricter preparation-branch routing; only formatting changes there. The prior full500 and shared71 results are recorded above with their source scope; no new full-suite or actual GPU claim is made here.
