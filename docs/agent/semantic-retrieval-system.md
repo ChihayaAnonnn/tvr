@@ -1,6 +1,6 @@
 # 新检索系统：接口与数据合同
 
-本页描述 B 阶段代码合同，数值测试只用合成 CPU fixture。真实训练/校准/阈值选择必须另有获批 study、四卡 Stage 0 和 Scheme A 预留；现有失败 study 不因代码实现而恢复授权。test 保持 sealed。
+本页描述 B 阶段代码合同。CPU 回归 324 项通过；正式 ViT-B/32 容量的合成四卡验收首次尝试未通过，修复已完成 CPU 验证，待人工处理归档异常和授权新 run 复验，见[事故报告](../../experiments/contextual-risk-v2/incidents/2026-10-01-rebuilt-q0-first-attempt-review.md)。真实训练/校准/阈值选择必须另有获批 study、四卡 Stage 0 和 Scheme A 预留；现有失败 study 不因代码实现而恢复授权。test 保持 sealed。
 
 研究实验设计见 [官方标签下的候选存在、检索风险与有限扩检计划](../superpowers/specs/2026-10-01-semantic-retrieval-experiment-design.md)。
 2026-10-01 按用户指令将主实验修订为官方标签自动构造，人工语义审核改为可选扩展。下文首先描述当前 B 代码；新增标签范围合同见单独的待实现小节。正式协议、适配器与四卡资格尚未完成。
