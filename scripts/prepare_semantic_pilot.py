@@ -338,11 +338,15 @@ def execute_preparation(runtime, preparation, *, repo_root):
                     expected_sha256=preparation["annotation"]["sha256"],
                     protocol_id=preparation["protocol_id"],
                 )
-                for entry in catalog:
-                    if entry.kind == "video":
-                        inspect_training_video(
-                            entry.path, expected_sha256=entry.sha256, expected_frame_count=entry.frame_count
+                with ThreadPoolExecutor(max_workers=8) as executor:
+                    list(
+                        executor.map(
+                            lambda entry: inspect_training_video(
+                                entry.path, expected_sha256=entry.sha256, expected_frame_count=entry.frame_count
+                            ),
+                            (entry for entry in catalog if entry.kind == "video"),
                         )
+                    )
                 assignment, summary = prepare_assignment(
                     catalog, label, report_path=context.paths.provenance / "input-summary.json"
                 )
