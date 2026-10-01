@@ -152,14 +152,71 @@ strongest scalar 只在 development 按同一规则选定，其身份在 locked 
 | answer return coverage | R 非空查询中 action=return 的比例，不因返回错误而移除该查询 |
 | wrong return | 返回非空但 S∩R=空的查询比例；分别报告库有/无答案 |
 | false abstain | R 非空查询中 action=abstain 的比例 |
-| micro set precision | 总 |S∩R| / 总 |S|；包含无答案查询上的错误返回 |
-| macro set recall | 对 R 非空查询平均 |S∩R|/|R|，弃答计 0 |
+| micro set precision | 正确返回项总数 / 返回项总数；包含无答案查询上的错误返回 |
+| macro set recall | 对 R 非空查询平均“返回正例数 / 全库正例数”，弃答计 0 |
 | Recall@1/5/10 | R 非空查询中前 K 至少包含一个正例；另报完整正例召回 |
+| MRR | R 非空查询的第一个正例 rank 倒数的平均值，rank 从 1 开始 |
+| mAP | R 非空查询的 AP 平均值；AP 对全部 32 项排序，正例位置的 Precision@rank 之和除以全库正例数 |
+| nDCG@10 | binary relevance 的 DCG/IDCG；discount=1/log2(rank+1)，每查询按完整正例数形成理想排序 |
+| macro set F1 | R 非空查询的集合 F1 平均值；弃答记 0，不用 F1 替代 precision/coverage gate |
 | expansion recovery | 初始 miss 且 G 有答案的查询中，最终 return 且 S∩R 非空的比例 |
 | presence/pair 概率质量 | NLL、Brier、10 个固定等宽 bin 的 ECE、presence AUROC；单类为 null |
+| 无答案检测 AP | 固定 K=32 时以库无答案为正类、1-presence probability 为分数计算 average precision；附正类比例，不混用梯形 PR-AUC |
 | 成本 | 每查询唯一 pair 评分数、轮数、p50/p95 延迟、缓存/索引建立成本和训练 GPU 小时 |
 
 每项提供 numerator/denominator 或 per-query 汇总引用，零分母为 null。现有 `evaluate_episodes` 的 set recall 是汇总计数口径，不能改名成 macro recall；后续报告同时保留 micro 原指标和新增 macro 指标。每类分别报告，不以平衡构造比例冒充自然部署分布。
+
+### 7.1 排序与选择风险的区别
+
+MRR/mAP/nDCG 使用固定 K=32 机制轨的完整排序，即使策略弃答也保留原排名。这能区分“排序更好了”和“只把难查询拒绝了”。多正例下 R@K 只要求找出任意一个答案，mAP/nDCG 和集合 recall 更能反映多个答案是否都得到支持。32 项库的 R@10 可能较易饱和，所有数字必须同时标明库规模，不直接与 1K-A 论文表比较。
+
+补充 top-1 risk–coverage 曲线及 AURC：错误事件为全排序 top-1 不属于完整 R，无答案查询的 top-1 必然错误。每查询产生潜在 top-1，不先按最终 return 筛掉困难查询。A3 的诊断 confidence 固定为 min(校准后的 top-1 pair probability, candidate presence probability)；A2/A4 对应同规则，pair-only 使用 top-1 pair probability，标量基线使用已冻结方向的标量。存在概率不是 top-1 正确率，不把这个 confidence 称作已校准 failure probability。
+
+相同 confidence 的查询整组接受，以各组新增 coverage 乘该组端点累计错误率求和形成 AURC；coverage=0 的 risk 为 null。报告全部平衡查询与仅有答案查询两套曲线，并固定混合权重。曲线用于描述，不替换 8.1 的主终态判据，不从 locked 曲线上选新 operating point。
+
+### 7.2 固定可视化交付
+
+以下图均由真实归档数据生成，导出 SVG/PDF 与用于作图的哈希引用；未运行前不绘制模拟结果图。误差带基于原始来源组件的 paired bootstrap，seed 点单独显示。
+
+| 图 | 坐标/内容 | 回答的问题 |
+|---|---|---|
+| 风险—覆盖率 | coverage 对 top-1 error risk，附 AURC；全部/有答案分面 | 低风险是否只是大量拒答造成 |
+| 无答案误接受—有答案覆盖率 | 固定 pair 阈值，按 development 冻结的接受阈值网格描点；标出正式工作点 | 减少误接受时保留了多少有答案查询 |
+| 返回集合 precision—recall | 按预设 pair 阈值网格，存在阈值固定；单/多答案分面 | 多返回答案是否只是牺牲精度 |
+| Reliability diagram | pair/presence 各自 before/after，10 个固定等宽 bin，附样本数/Brier/NLL | 概率与事件频率是否一致，跨库迁移是否失准 |
+| 消融效应图 | A0–A5 的主指标与 paired 差值 CI，独立标出 scalar baseline | 哪个监督、信息或梯度路径产生收益 |
+| 候选数与预算曲线 | K=4/8/16/32 对 recall、误接受、presence Brier、pair 评分数与延迟 | 方法是否依赖特定 K，扩检收益是否值得成本 |
+| 复制与置换压力图 | alias 倍数对 action/答案变更率与最大 logit 差，附置换结果 | canonical 去重和集合聚合是否稳定 |
+| 训练/梯度诊断 | 各 loss、实际监督计数、matcher/存在头梯度范数；共享投影上 match 与 exist 梯度 cosine | 是否存在断链、塌缩或梯度冲突 |
+| 案例链路 | 查询、32 项中的代表帧、GT、pair/presence、候选前缀与最终动作 | 模型为什么返回、扩检或弃答 |
+
+raw alias 归一化 entropy 可另作离线重复敏感性示例，但它不属于去重后生产基线，不用于制造主比较优势。热力图展示 token-frame cosine/attention/dustbin，不能仅因热力图直观就声称时序定位或因果解释正确。
+
+### 7.3 敏感性与分层分析
+
+| 项目 | 固定取值/分层 | v1 地位 |
+|---|---|---|
+| 候选 K | 4/8/16/32 | 必做，复用完整评分，不追加训练 |
+| 扩检最大预算 | 4/8/16/32 个唯一候选；只允许对应 K 序列前缀 | 必做，与静态同预算评分并列 |
+| 接受阈值 | development 已冻结的 21 档网格；pair 固定扫描 presence，presence 固定扫描 pair | 必做；locked 只展示预先登记曲线，不选阈值 |
+| alias/候选置换 | alias=1/2/4/8，置换 seed=0/1/2/3/4 | 必做；变换不增加独立样本 |
+| 正例数量 | 1、2–3、≥4 | 必做分层，辨别“答案越多越易弃答” |
+| 文本长度 | 有效 token 数 1–8、9–16、17–32 | 必做分层，不重新截断或编码文本 |
+| episode 难度 | 单/多答案、库无答案、自然 miss、受控 miss，分别报告 | 必做，不混合成一个成功率 |
+| seed | 0/1/2，每 seed 及汇总 CI | 必做；区分训练散布与查询抽样误差 |
+| 存在损失权重 | 建议后续固定网格 0/0.25/0.5/1/2 | 需追加训练及单独批准预算；v1 只做 0 与 1 的核心消融 |
+| 帧数/时序容量/编码器解冻 | 后续可分别研究 4/8/16 帧、0/1/2 层、冻结/部分解冻 | 不在 v1；需合法新配置、缓存身份、校准及训练对照 |
+| 库规模/语义分组/OT | 更大或多个独立库、等价监督、对齐辅助项 | 后续独立研究；v1 不能据此声称普适稳定 |
+
+阈值曲线的作图操作也必须提前绑定命令和网格；不能看到 locked 后才决定新增扫描。任何分层独立来源数<30 时仅展示计数和描述，不做可靠子群差异结论。锁定库只有一个，库规模泛化不是把 K 改小就能证明的。
+
+### 7.4 失败案例与机制分析
+
+预设四类案例：多答案被错误拒绝；全负候选被高分错误接受；扩检成功/耗尽仍失败；存在与 pair 支持矛盾。每类按 query_id 哈希次序选前 3 个案例，类别不足则全部展示，不仅挑有利示例。每例附真值审核来源，并区分事实与解释。
+
+共享梯度诊断在每 20 个 optimizer step 采样一次，用同 batch 的各 loss 分别求梯度，不执行额外 optimizer update；A2/A4 存在损失到 matcher 的梯度应为零，A3 应有实际路径。gradient cosine 为负说明局部冲突，不自动说明方法无效；dustbin 权重、logit 分布和 BCE 学习曲线只能诊断，不能代替主指标。
+
+所有作图、分层、梯度记录和固定网格分析纳入原 run/评估 phase 的 manifest 与原 224 GPU 小时总上限，其中推理/作图数值计算仍在 24 GPU 小时评估额度内；不暗中追加训练或 GPU 资格以外的科学运行。数据不足或预算耗尽时记录缺失原因，不能以删图掩盖失败。新增分析代码仍需第 9 节的实施与验证。
 
 ## 8. 统计、机制与结论规则
 
@@ -202,7 +259,7 @@ strongest scalar 只在 development 按同一规则选定，其身份在 locked 
    A5 还需完整审核标签与单正例损失视图分离，验证舍弃的正例不变负例、存在真值及在线特征不变。
 3. P1 派生分支需要 model-only 初始化与“新 optimizer/new run”合同，区别于同 world-size 的训练恢复；记录父 checkpoint SHA。不能误把新分支当成原 run 续训。
 4. 校准身份目前仅一个 gallery_version，不能合法表达分区独立库之间迁移；需独立 fit/target 身份与有效性声明，以及 pair-only/双通道/标量策略合同。保留严格加载，不能直接改 metadata 欺骗验证器。
-5. 需新增 scalar-policy adapter、raw 阈值冻结/单调映射、macro recall/wrong return、按 query 来源聚类 CI、受控 miss 与标签完整度报告。固定集合轨需读取预先归档的候选前缀，完整系统轨才用各自索引；候选构造器与线上服务分离，线上接口始终无标签输入。
+5. 需新增 scalar-policy adapter、raw 阈值冻结/单调映射、macro recall/wrong return、MRR/mAP/nDCG/集合 F1、risk–coverage/AURC、分层绘图、按 query 来源聚类 CI、受控 miss 与标签完整度报告。固定集合轨需读取预先归档的候选前缀，完整系统轨才用各自索引；候选构造器与线上服务分离，线上接口始终无标签输入。
 6. 本地生产 B/32 权重、非 test 输入清单、解码完整性和审核工具需真实检查；当前仅确认代码合同，不保证这些资产已经齐全。
 7. 新系统四卡 FP32 Stage 0 要实测 rank 身份、梯度/参数更新、全局已知标签计数、未知 batch、checkpoint/RNG、恢复/取消、hash tamper 拒绝与跨 rank 参数一致性。CPU qualification 和旧研究 Stage 0 均不能替代。
 
