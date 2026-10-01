@@ -2,6 +2,9 @@
 
 本页描述 B 阶段代码合同，数值测试只用合成 CPU fixture。真实训练/校准/阈值选择必须另有获批 study、四卡 Stage 0 和 Scheme A 预留；现有失败 study 不因代码实现而恢复授权。test 保持 sealed。
 
+研究实验设计见 [多答案、候选存在与有限扩检计划](../superpowers/specs/2026-10-01-semantic-retrieval-experiment-design.md)。
+该文档是待审阅草案，列出了启动前的软件缺口与数据审核条件，尚未形成实验授权。
+
 ## 端到端链路
 
 ```mermaid
