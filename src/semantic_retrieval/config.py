@@ -47,7 +47,6 @@ def load_runtime_config(path: Path) -> RuntimeConfig:
         raise ValueError("malformed runtime configuration") from exc
 
 
-
 @dataclass(frozen=True)
 class ModelConfig:
     clip: ClipConfig
@@ -72,3 +71,29 @@ class ModelConfig:
             raise ValueError("invalid model capacities")
         if self.dim != self.clip.embed_dim or self.dim % self.num_heads:
             raise ValueError("incompatible representation dimensions")
+
+
+@dataclass(frozen=True)
+class PolicyConfig:
+    pair_threshold: float
+    presence_threshold: float
+    k_sequence: tuple[int, ...]
+    max_budget: int
+
+    def __post_init__(self):
+        import math
+
+        if any(
+            not isinstance(x, (float, int)) or not math.isfinite(x) or not 0 <= x <= 1
+            for x in (self.pair_threshold, self.presence_threshold)
+        ):
+            raise ValueError("invalid policy thresholds")
+        if (
+            not isinstance(self.k_sequence, tuple)
+            or not self.k_sequence
+            or any(type(x) is not int or x <= 0 for x in self.k_sequence)
+            or any(a >= b for a, b in zip(self.k_sequence, self.k_sequence[1:]))
+            or type(self.max_budget) is not int
+            or self.max_budget < self.k_sequence[-1]
+        ):
+            raise ValueError("invalid K sequence or budget")

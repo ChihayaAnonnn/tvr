@@ -120,3 +120,17 @@ class EpisodeBatch:
 
     def inference_queries(self) -> QueryInputs:
         return QueryInputs(self.inputs.input_ids, self.inputs.text_mask)
+
+
+@dataclass(frozen=True)
+class Decision:
+    action: str
+    answer_ids: tuple[str, ...]
+    reason: str
+    next_k: int | None
+
+    def __post_init__(self):
+        if self.action not in {"return", "expand", "clarify", "abstain"}:
+            raise ValueError("invalid decision action")
+        if (self.action == "expand") != (self.next_k is not None):
+            raise ValueError("expansion requires next K")
