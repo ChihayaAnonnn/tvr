@@ -110,6 +110,7 @@ class TrainConfig:
     scheduler_steps: int
     trainable_prefixes: tuple[str, ...]
     loss_weights: dict[str, float]
+    checkpoint_interval: int = 20
 
     def __post_init__(self):
         import math
@@ -132,6 +133,8 @@ class TrainConfig:
             or self.scheduler_steps <= 0
         ):
             raise ValueError("explicit scheduler required")
+        if type(self.checkpoint_interval) is not int or self.checkpoint_interval <= 0:
+            raise ValueError("checkpoint_interval must be a positive integer")
         if (
             not isinstance(self.trainable_prefixes, tuple)
             or not self.trainable_prefixes
@@ -165,6 +168,33 @@ class DataConfig:
 
 
 @dataclass(frozen=True)
+class ResumeConfig:
+    checkpoint_path: Path
+    checkpoint_sha256: str
+    metadata_sha256: str
+    parent_run_id: str
+    review_report_path: Path
+    review_report_sha256: str
+
+    def __post_init__(self):
+        if not isinstance(self.checkpoint_path, Path) or not isinstance(self.review_report_path, Path):
+            raise ValueError("resume requires checkpoint and review report paths")
+        if (
+            any(
+                not isinstance(x, str) or not re.fullmatch("[0-9a-f]{64}", x)
+                for x in (
+                    self.checkpoint_sha256,
+                    self.metadata_sha256,
+                    self.review_report_sha256,
+                )
+            )
+            or not isinstance(self.parent_run_id, str)
+            or not re.fullmatch("[A-Za-z0-9][A-Za-z0-9._-]*", self.parent_run_id)
+        ):
+            raise ValueError("invalid resume input identity")
+
+
+@dataclass(frozen=True)
 class SystemConfig:
     runtime: RuntimeConfig
     model: ModelConfig
@@ -172,6 +202,7 @@ class SystemConfig:
     policy: PolicyConfig
     data: DataConfig | None = None
     deployment: "DeploymentConfig | None" = None
+    resume: ResumeConfig | None = None
 
 
 def config_payload(config):
@@ -196,16 +227,21 @@ def effective_manifest_config(config, *, eval_split):
         model=payload["model"],
         loss=t["loss_weights"],
         optimizer={k: t[k] for k in ("learning_rate", "weight_decay", "seed", "trainable_prefixes")},
-        scheduler={k: t[k] for k in ("scheduler_name", "scheduler_steps")},
+        scheduler={k: t[k] for k in ("scheduler_name", "scheduler_steps", "checkpoint_interval")},
         evaluation=dict(
-            eval_split=eval_split, policy=payload["policy"], data=payload["data"], deployment=payload["deployment"]
+            eval_split=eval_split,
+            policy=payload["policy"],
+            data=payload["data"],
+            deployment=payload["deployment"],
+            resume=payload["resume"],
         ),
     )
 
 
 def load_system_config(path):
     payload = json.loads(path.read_text())
-    if not isinstance(payload, dict) or set(payload) != {"runtime", "model", "train", "policy", "data", "deployment"}:
+    required = {"runtime", "model", "train", "policy", "data", "deployment"}
+    if not isinstance(payload, dict) or set(payload) not in (required, required | {"resume"}):
         raise ValueError("system requires explicit runtime/model/train/policy/data")
 
     def construct(cls, values):
@@ -233,6 +269,7 @@ def load_system_config(path):
     if m["alignment"] is not None:
         m["alignment"] = construct(AlignmentConfig, m["alignment"])
     t = payload["train"].copy()
+    t.setdefault("checkpoint_interval", 20)
     t["trainable_prefixes"] = tuple(t["trainable_prefixes"])
     p = payload["policy"].copy()
     p["k_sequence"] = tuple(p["k_sequence"])
@@ -245,6 +282,14 @@ def load_system_config(path):
             if dep[name] is not None:
                 dep[name] = local(dep[name])
         dep = construct(DeploymentConfig, dep)
+    resume = payload.get("resume")
+    if resume is not None:
+        if not isinstance(resume, dict):
+            raise ValueError("invalid ResumeConfig fields")
+        resume = resume.copy()
+        for name in ("checkpoint_path", "review_report_path"):
+            resume[name] = local(resume[name])
+        resume = construct(ResumeConfig, resume)
     return SystemConfig(
         construct(RuntimeConfig, rt),
         construct(ModelConfig, m),
@@ -252,6 +297,7 @@ def load_system_config(path):
         construct(PolicyConfig, p),
         construct(DataConfig, d),
         dep,
+        resume,
     )
 
 

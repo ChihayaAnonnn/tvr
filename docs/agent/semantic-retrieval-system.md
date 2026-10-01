@@ -32,16 +32,40 @@ flowchart LR
 
 - `runtime`：Scheme A study/registry/run 路径、run ID、manifest SHA-256、source Git SHA、eval split。
 - `model`：`clip` 的全部容量与显式 `fixture` 标志、本地 `clip_weights/clip_sha256`、`dim/num_layers/num_heads/max_frames/coarse_dim`，及默认关闭的 `grouping/alignment`。生产 CLIP 只支持已迁移的 ViT-B/32 容量；小容量仅测试。
-- `train`：学习率、weight decay、seed、scheduler 名与步数、trainable prefixes，以及 `coarse/match/pair/exist/align/group` 六个显式权重。CLI 的有限训练循环以 `scheduler_steps` 为步数，每步消费预留 episode batch；不包含数据挖掘或隐式采样配置。
+- `train`：学习率、weight decay、seed、scheduler 名与步数、trainable prefixes、`checkpoint_interval`，以及 `coarse/match/pair/exist/align/group` 六个显式权重。CLI 的有限训练循环以 `scheduler_steps` 为循环次数，每次消费预留 episode batch；全 unknown 批次不增加 optimizer step。不包含数据挖掘或隐式采样配置。
 - `policy`：冻结的 pair/presence 阈值、严格递增 `k_sequence`、`max_budget`。
 - `data`：`episode_manifest/episode_sha256/gallery_version/split`。
 - `deployment`：训练时为 null；校准/评估显式提供 checkpoint 路径、文件 SHA、训练配置 SHA、gallery manifest 路径/SHA、calibration split SHA，以及 `mode=calibrate/evaluate`。evaluate 必须另提供校准文件路径/SHA；calibrate 的校准输入为 null。
+- `resume`：正常启动为 null；断点续训显式提供旧 checkpoint、sidecar 和审核报告身份，字段见下节。仅用于训练，不用于部署或 P1 分支初始化。
 
 `effective_manifest_config` 将这些实际消费的字段映射到 manifest 的 model/loss/optimizer/scheduler/evaluation；额外输入必须列在 input_checkpoints/dataset_splits，不能仅在 JSON 写一个路径。
 
-训练配置 digest 包含 model/train/policy/data/deployment，排除 run runtime identity；恢复需要另一个唯一 run 的审核 lineage，不能重用终态 run。新 checkpoint 保存模型、optimizer、scheduler 与逐 rank RNG，超过 1 MiB 的张量外置到 run-local NPY 引用，读取逐项验 hash 并核对 schema、配置与文件/模型哈希。部署可通过 model-only loader 读取任意训练 world size；训练恢复仍要求 world size 一致。
+训练配置 digest 包含 model/train/policy/data/deployment，排除 run runtime identity、恢复来源和保存间隔；这些执行字段仍绑定在 manifest 中。新 checkpoint 保存模型、optimizer、scheduler 与逐 rank RNG，超过 1 MiB 的张量外置到 run-local NPY 引用，读取逐项验 hash 并核对 schema、配置与文件/模型哈希。部署可通过 model-only loader 读取任意训练 world size；训练恢复仍要求 world size 一致。
 
 入口为 `scripts/train_semantic_retrieval.py` 与 `scripts/evaluate_semantic_retrieval.py`，只接受 `--config` 和可核对的 `--run-id/--manifest-sha256/--source-sha`，无任意输出目录。帮助可在 CPU 环境查看；普通调用仍执行完整归档启动保护。
+
+## 训练断点与续训
+
+训练入口已接通定期和最终 checkpoint。`train.checkpoint_interval` 为正整数，默认每 20 次循环保存；不整除总循环次数时仍保存最终断点。文件为 `checkpoints/iteration-XXXXXXXX-step-XXXXXXXX.pt` 及同名 `.json` sidecar，按临时文件写入、fsync、独占发布，sidecar 最后发布；不覆盖已有文件。失败时保留最近的完整断点，不从信号处理器发起可能阻塞的 DDP 保存。
+
+checkpoint v2 增加 `progress.next_iteration` 和最后一批 metrics，与 optimizer step 分开。恢复先校验已绑定的输入/配置/卡数，加载模型及优化器/调度器/各 rank Python、NumPy、Torch、CUDA RNG，再从 next_iteration 执行剩余循环。例如 next_iteration=80、scheduler_steps=240，只再执行160次；全 unknown 批次也不会因为 optimizer step=0 而重复执行。最后一批已完成但报告中断时，可从最终断点只发布新 run 的最终结果，不再做梯度更新。
+
+`resume` 配置字段如下，示意路径/哈希必须替换为实际值；不能直接用该片段启动：
+
+```json
+{
+  "checkpoint_path": "/absolute/path/to/old-run/checkpoints/iteration-00000080-step-00000080.pt",
+  "checkpoint_sha256": "<checkpoint 实际 SHA-256>",
+  "metadata_sha256": "<同名 .json 实际 SHA-256>",
+  "parent_run_id": "<旧 run ID>",
+  "review_report_path": "/absolute/path/to/repository/docs/resume-review.md",
+  "review_report_sha256": "<审核报告实际 SHA-256>"
+}
+```
+
+旧 run 必须先经控制面收束为 failed/cancelled，且 terminal registry 已提交。新 run ID 和目录必须不同，manifest 的 `parent_run_ids` 引用旧 ID；`input_checkpoints` 绑定 `.pt` 和 `.json`，`dataset_splits` 绑定受 Git 跟踪的审核报告。`selection_lineage` 必须有 `kind=training_resume`、`parent_run_id`、`approved=true`、非空 `reason`、仓库相对的 `report_path` 和 `report_sha256`，与 resume 配置一致。程序校验该授权声明与证据，不代替真人审批，不自动创建重试或修改旧运行。
+
+checkpoint v1 仍可由底层训练/model-only loader 加载，但缺少循环位置，CLI 不将其猜成精确续训。当前入口每 rank 消费固定 batch，next_iteration 已覆盖其数据位置；未来 C2 的动态 minibatch/候选调度须扩展相应采样状态，并另做恢复验证。P1→A1–A4 是另设分支的初始化，不能用完整 resume 偷换其优化器/训练阶段。
 
 ## Episode JSON
 

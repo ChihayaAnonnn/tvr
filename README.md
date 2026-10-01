@@ -67,6 +67,8 @@ B 阶段实现新编码器、共享匹配/候选存在头、多正例监督、ca
 
 下一轮[实验设计](docs/superpowers/specs/2026-10-01-semantic-retrieval-experiment-design.md)使用官方标签自动构造候选存在与扩检任务，保留指标、消融、敏感性和可视化；人工语义审核为可选扩展。[C1 数据实施计划](docs/superpowers/plans/2026-10-01-semantic-pilot-c1-data-audit.md)已同步修订，标签适配器和实验编排尚未实施，实验尚未启动。
 
+训练入口已接通定期 checkpoint 与新 run 的显式断点续训，恢复模型、优化器、调度器、各 rank 随机状态和循环位置；配置与审核/预留要求见[训练断点合同](docs/agent/semantic-retrieval-system.md)。这不代替 C2 的动态 minibatch 调度或四卡资格。
+
 ```bash
 CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 PYTHONPATH=src:. \
   /home/xujie/.conda/envs/tvr/bin/python -m pytest -q -p no:cacheprovider tests/semantic_retrieval

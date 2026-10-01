@@ -16,7 +16,7 @@ from semantic_retrieval.data.collate import collate_episodes
 from semantic_retrieval.data.episodes import file_sha256, read_episodes
 from semantic_retrieval.models.model import SemanticRetrievalModel
 from semantic_retrieval.runtime.artifacts import complete_run, fail_run, prepare_run, publish_metrics, start_run
-from semantic_retrieval.runtime.checkpoint import save_checkpoint
+from semantic_retrieval.runtime.checkpoint import config_sha256, load_checkpoint, save_checkpoint
 from semantic_retrieval.runtime.trainer import Trainer, build_optimizer
 
 
@@ -96,9 +96,39 @@ def main(argv=None):
                 model, device_ids=[device.index] if device.type == "cuda" else None, find_unused_parameters=True
             )
         worker = Trainer(model, opt, scheduler, context)
-        for _ in range(cfg.train.scheduler_steps):
+        next_iteration = 0
+        if cfg.resume is not None:
+            state = load_checkpoint(cfg.resume.checkpoint_path, worker.raw, expected_config_sha256=config_sha256(cfg))
+            if state.progress is None or state.progress["next_iteration"] > cfg.train.scheduler_steps:
+                raise ValueError("resume requires a checkpoint with compatible loop progress")
+            worker.restore(state)
+            next_iteration = state.progress["next_iteration"]
+            metrics = state.progress["metrics"]
+        last_checkpoint_iteration = None
+        for iteration in range(next_iteration, cfg.train.scheduler_steps):
             metrics = worker.train_step(batch)
-        save_checkpoint(context, worker.raw, opt, scheduler, cfg, worker.step)
+            next_iteration = iteration + 1
+            if next_iteration % cfg.train.checkpoint_interval == 0:
+                save_checkpoint(
+                    context,
+                    worker.raw,
+                    opt,
+                    scheduler,
+                    cfg,
+                    worker.step,
+                    progress=dict(next_iteration=next_iteration, metrics=metrics),
+                )
+                last_checkpoint_iteration = next_iteration
+        if last_checkpoint_iteration != next_iteration:
+            save_checkpoint(
+                context,
+                worker.raw,
+                opt,
+                scheduler,
+                cfg,
+                worker.step,
+                progress=dict(next_iteration=next_iteration, metrics=metrics),
+            )
         if world > 1:
             dist.barrier()
         if rank == 0:

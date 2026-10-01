@@ -19,6 +19,7 @@ from experiment_artifacts import (
     load_validated_run_lifecycle,
     make_run_paths,
     manifest_sha256,
+    parse_registry_text,
     transition_run_status,
     validate_artifact_json_payload,
     verify_array_reference,
@@ -55,6 +56,70 @@ def _hash_input(repository, reference):
         return digest.hexdigest()
     finally:
         os.close(descriptor)
+
+
+def _validate_resume(repository, manifest, system_config):
+    resume = system_config.resume
+    if resume is None:
+        return
+    if system_config.data is None or system_config.data.split != "train" or system_config.deployment is not None:
+        raise ValueError("resume is only supported for training")
+    refs = {str(r["path"]): r["sha256"] for r in manifest["input_checkpoints"]}
+    if any(
+        refs.get(str(path)) != digest
+        for path, digest in (
+            (resume.checkpoint_path, resume.checkpoint_sha256),
+            (resume.checkpoint_path.with_suffix(".json"), resume.metadata_sha256),
+        )
+    ):
+        raise ValueError("resume checkpoint and metadata must be reserved inputs")
+    if resume.parent_run_id == manifest["run_id"] or resume.parent_run_id not in manifest["parent_run_ids"]:
+        raise ValueError("resume requires a distinct reserved parent run")
+    report = resume.review_report_path
+    if not report.is_relative_to(repository):
+        raise ValueError("resume review report must be Git tracked")
+    relative_report = report.relative_to(repository).as_posix()
+    refs = {str(r["path"]): r["sha256"] for r in manifest["dataset_splits"]}
+    if refs.get(str(report)) != resume.review_report_sha256:
+        raise ValueError("resume review report must be a reserved input")
+    subprocess.run(
+        ["git", "ls-files", "--error-unmatch", relative_report], cwd=repository, check=True, capture_output=True
+    )
+    if not any(
+        isinstance(entry, dict)
+        and entry.get("kind") == "training_resume"
+        and entry.get("parent_run_id") == resume.parent_run_id
+        and entry.get("approved") is True
+        and entry.get("report_path") == relative_report
+        and entry.get("report_sha256") == resume.review_report_sha256
+        and isinstance(entry.get("reason"), str)
+        and entry["reason"].strip()
+        for entry in manifest["selection_lineage"]
+    ):
+        raise ValueError("resume requires a tracked approved review lineage")
+    root = Path(manifest["artifact_path"])
+    parent = make_run_paths(root.parents[3], manifest["study"], resume.parent_run_id)
+    if resume.checkpoint_path.parent != parent.checkpoints or resume.checkpoint_path.suffix != ".pt":
+        raise ValueError("resume checkpoint must belong to its declared parent")
+    parent_manifest, status, _ = load_validated_run_lifecycle(parent)
+    if status["state"] not in {"failed", "cancelled"}:
+        raise ValueError("resume parent must first be finalized failed/cancelled")
+    for path, expected in (
+        (resume.checkpoint_path, resume.checkpoint_sha256),
+        (resume.checkpoint_path.with_suffix(".json"), resume.metadata_sha256),
+    ):
+        if status["output_hashes"].get(path.relative_to(parent.root).as_posix()) != expected:
+            raise ValueError("resume checkpoint differs from terminal output evidence")
+    committed = subprocess.run(
+        ["git", "show", f"HEAD:{manifest['registry_path']}"], cwd=repository, check=True, capture_output=True, text=True
+    ).stdout
+    if not any(
+        record["run_id"] == resume.parent_run_id
+        and record["state"] == status["state"]
+        and record["manifest_sha256"] == manifest_sha256(parent_manifest)
+        for record in parse_registry_text(committed)
+    ):
+        raise ValueError("resume parent terminal record must be committed")
 
 
 def prepare_run(config, *, repo_root, system_config=None):
@@ -191,6 +256,8 @@ def prepare_run(config, *, repo_root, system_config=None):
         for reference in manifest[field]:
             if _hash_input(repository, reference) != reference["sha256"]:
                 raise ValueError(f"input {field} SHA-256 mismatch")
+    if system_config is not None:
+        _validate_resume(repository, manifest, system_config)
     return RunContext(
         paths, manifest, ArtifactArrayStore(paths.arrays), config, repository, system_config=system_config
     )

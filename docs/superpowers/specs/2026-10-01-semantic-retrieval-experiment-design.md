@@ -105,6 +105,8 @@ AdamW lr=1e-4、weight_decay=0.01、constant scheduler；全局 batch=16 queries
 
 保留原固定更新数：总路径 240 updates，P1 先 120 步，分支再 120 步；只用最终 checkpoint，不选 epoch。每个 120 步阶段的四 K × 两 panel 类型各出现 15 步。分支批次表相同，P1/A0 同样消费调度。240 步是有限计算 pilot，最多 3,840 次 query 呈现，不等于遍历完整 train；报告唯一查询覆盖、标签计数/loss 曲线，不把未收敛结果当充分训练后的否定。
 
+“只用最终 checkpoint”仅约束评估选择，不禁止中间恢复断点。[训练入口](../../agent/semantic-retrieval-system.md)已接通默认每20次循环保存和显式新 run 续训，恢复完整训练状态及循环位置，不额外重跑总步数。当前固定 batch 入口仍不代表 C2 的候选/minibatch 协议已实现；C2 必须将新采样位置纳入 checkpoint，并验证失败重启与连续训练一致。断点保存不自动授权重试，也不重置阶段累计计算预算。
+
 损失顺序 `(coarse, match, pair, exist, align, group)`；无正例行不强造对角正例，unknown 不计 loss。
 
 | 身份 | 训练路径与损失权重 | 作用 |

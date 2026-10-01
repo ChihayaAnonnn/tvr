@@ -2,7 +2,10 @@
 
 import hashlib
 import json
+import math
+import os
 import random
+import tempfile
 from dataclasses import dataclass
 
 import numpy as np
@@ -16,6 +19,8 @@ from semantic_retrieval.config import config_payload, effective_manifest_config
 def config_sha256(config):
     payload = config_payload(config)
     payload.pop("runtime")
+    payload.pop("resume", None)
+    payload["train"].pop("checkpoint_interval", None)
     return hashlib.sha256(artifact_json_bytes(payload)).hexdigest()
 
 
@@ -54,6 +59,55 @@ class TrainingState:
     optimizer_state: dict
     scheduler_state: dict
     rng_state: dict
+    progress: dict | None = None
+
+
+def _validate_progress(progress, step):
+    from semantic_retrieval.objectives.retrieval import LOSS_NAMES
+
+    if progress is None:
+        return
+    keys = set(LOSS_NAMES) | {"total", "step", "stepped"} | {"valid_" + k + "_count" for k in LOSS_NAMES}
+    if (
+        not isinstance(progress, dict)
+        or set(progress) != {"next_iteration", "metrics"}
+        or type(progress["next_iteration"]) is not int
+        or progress["next_iteration"] < step
+        or not isinstance(progress["metrics"], dict)
+        or set(progress["metrics"]) != keys
+    ):
+        raise ValueError("invalid checkpoint training progress")
+    metrics = progress["metrics"]
+    if (
+        any(type(x) not in (int, float) or not math.isfinite(x) for x in metrics.values())
+        or type(metrics["step"]) is not int
+        or metrics["step"] != step
+        or type(metrics["stepped"]) is not int
+        or metrics["stepped"] not in (0, 1)
+        or any(
+            type(metrics["valid_" + k + "_count"]) is not int or metrics["valid_" + k + "_count"] < 0
+            for k in LOSS_NAMES
+        )
+    ):
+        raise ValueError("invalid checkpoint progress metrics")
+
+
+def _publish_file(path, writer):
+    """Publish complete bytes without replacing an existing checkpoint."""
+    with tempfile.NamedTemporaryFile(mode="wb", dir=path.parent, prefix=".checkpoint-", delete=False) as handle:
+        temporary = handle.name
+        try:
+            writer(handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+            os.link(temporary, path)
+        finally:
+            os.unlink(temporary)
+    descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def assert_running(context):
@@ -67,23 +121,23 @@ def assert_running(context):
         raise ValueError("worker must have exact running identity")
 
 
-def save_checkpoint(context, model, optimizer, scheduler, config, step):
+def save_checkpoint(context, model, optimizer, scheduler, config, step, *, progress=None):
     assert_running(context)
     if context.system_config != config or type(step) is not int or step < 0:
         raise ValueError("checkpoint config/step mismatch")
     from semantic_retrieval.runtime.trainer import verify_training_contract
 
     verify_training_contract(model, optimizer, scheduler, context, step)
-    path = context.paths.checkpoints / f"step-{step:08d}.pt"
+    _validate_progress(progress, step)
+    name = f"step-{step:08d}" if progress is None else f"iteration-{progress['next_iteration']:08d}-step-{step:08d}"
+    path = context.paths.checkpoints / f"{name}.pt"
     rng = [rng_state()]
     rank = dist.get_rank() if dist.is_initialized() else 0
     if dist.is_initialized():
         rng = [None] * dist.get_world_size()
         dist.all_gather_object(rng, rng_state())
-    if rank != 0:
-        return path
     payload = dict(
-        schema_version=1,
+        schema_version=1 if progress is None else 2,
         config_sha256=config_sha256(config),
         step=step,
         model=model.state_dict(),
@@ -91,17 +145,29 @@ def save_checkpoint(context, model, optimizer, scheduler, config, step):
         scheduler=scheduler.state_dict(),
         rng=rng,
     )
-    payload = _externalize_large_tensors(payload, context.array_store)
-    with path.open("xb") as handle:
-        torch.save(payload, handle)
-    meta = dict(
-        schema_version=1,
-        sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-        config_sha256=payload["config_sha256"],
-        model_sha256=model_sha256(model),
-    )
-    with path.with_suffix(".json").open("xb") as handle:
-        handle.write(artifact_json_bytes(meta))
+    if progress is not None:
+        payload["progress"] = progress
+    error = [None]
+    if rank == 0:
+        try:
+            payload = _externalize_large_tensors(payload, context.array_store)
+            _publish_file(path, lambda handle: torch.save(payload, handle))
+            meta = dict(
+                schema_version=payload["schema_version"],
+                sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+                config_sha256=payload["config_sha256"],
+                model_sha256=model_sha256(model),
+            )
+            # The sidecar is the final publication marker; missing/partial pairs cannot load.
+            _publish_file(path.with_suffix(".json"), lambda handle: handle.write(artifact_json_bytes(meta)))
+        except Exception as exc:
+            if not dist.is_initialized():
+                raise
+            error[0] = f"checkpoint publication failed: {type(exc).__name__}: {exc}"
+    if dist.is_initialized():
+        dist.broadcast_object_list(error, src=0)
+    if error[0] is not None:
+        raise ValueError(error[0])
     return path
 
 
@@ -109,20 +175,30 @@ def _validated_checkpoint(path, model, *, expected_config_sha256):
     meta = json.loads(path.with_suffix(".json").read_text())
     if (
         set(meta) != {"schema_version", "sha256", "config_sha256", "model_sha256"}
-        or meta["schema_version"] != 1
+        or type(meta["schema_version"]) is not int
+        or meta["schema_version"] not in (1, 2)
         or meta["config_sha256"] != expected_config_sha256
         or hashlib.sha256(path.read_bytes()).hexdigest() != meta["sha256"]
     ):
         raise ValueError("checkpoint hash/config mismatch")
     payload = torch.load(path, map_location="cpu", weights_only=True)
+    fields = {"schema_version", "config_sha256", "step", "model", "optimizer", "scheduler", "rng"}
+    if meta["schema_version"] == 2:
+        fields.add("progress")
     if (
-        set(payload) != {"schema_version", "config_sha256", "step", "model", "optimizer", "scheduler", "rng"}
-        or payload["schema_version"] != 1
+        not isinstance(payload, dict)
+        or set(payload) != fields
+        or type(payload["schema_version"]) is not int
+        or payload["schema_version"] != meta["schema_version"]
         or payload["config_sha256"] != expected_config_sha256
         or type(payload["step"]) is not int
         or payload["step"] < 0
     ):
         raise ValueError("checkpoint state schema mismatch")
+    if meta["schema_version"] == 2:
+        if payload["progress"] is None:
+            raise ValueError("checkpoint v2 requires training progress")
+        _validate_progress(payload["progress"], payload["step"])
     payload = _hydrate_array_references(payload, path.parent.parent)
     current = model.state_dict()
     saved = payload["model"]
@@ -164,6 +240,7 @@ def load_checkpoint(path, model, *, expected_config_sha256):
         payload["optimizer"],
         payload["scheduler"],
         payload["rng"][dist.get_rank() if dist.is_initialized() else 0],
+        payload.get("progress"),
     )
 
 
