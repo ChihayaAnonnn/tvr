@@ -688,7 +688,11 @@ def _write_json(path, payload):
         stream.write(artifact_json_bytes(payload))
 
 
-def _freeze(context, bundle, rows, references):
+DEVELOPMENT_GATES = ("data", "four_gpu_qualification", "gradients", "stability")
+
+
+def _freeze(context, bundle, rows, references, *, qualification_gates=None):
+    release_gates = {key: (qualification_gates or {}).get(key) is True for key in DEVELOPMENT_GATES}
     if any(r["group"]["split"] == "val_locked" for r in rows):
         raise ValueError("development freeze must not read locked observations")
     development = [
@@ -824,6 +828,9 @@ def _freeze(context, bundle, rows, references):
         source_sha=context.manifest["git_sha"],
         analysis_sha256=file_sha256(__file__),
         target_gallery=bundle["galleries"]["locked"],
+        qualification_gates=release_gates,
+        development_gate_passed=all(release_gates.values()),
+        qualification_reference=bundle.get("qualification"),
         strongest_scalar=strongest,
         policies=policies,
         scalar_policies=scalar_policies,
@@ -1534,13 +1541,20 @@ def run_pilot_analysis(context, bundle, *, mode, bootstrap_samples=10000):
         gates = validate_analysis_qualification(context, evidence)
     references = []
     if mode == "freeze":
+        if isinstance(context, RunContext) and not all(gates.get(key) is True for key in DEVELOPMENT_GATES):
+            raise ValueError("development qualification gates must all pass before freeze release")
         if any(g["split"] == "val_locked" for g in bundle["groups"]):
             raise ValueError("freeze must not consume locked arrays")
         rows = [_load_group(g, bundle) for g in bundle["groups"]]
-        return _freeze(context, bundle, rows, references)
+        return _freeze(context, bundle, rows, references, qualification_gates=gates)
     if mode != "locked" or any(g["split"] != "val_locked" for g in bundle["groups"]):
         raise ValueError("locked analysis only accepts frozen validation locked observations")
     frozen = json.loads(_read_hashed(bundle["frozen"]).read_text())
+    if isinstance(context, RunContext) and (
+        frozen.get("development_gate_passed") is not True
+        or not all(frozen.get("qualification_gates", {}).get(key) is True for key in DEVELOPMENT_GATES)
+    ):
+        raise ValueError("development qualification gates did not authorize locked analysis")
     for key in ("relevance_space", "label_protocol", "preprocessing_sha256", "policy_sha256"):
         if frozen[key] != bundle[key]:
             raise ValueError("frozen benchmark/model/policy identity mismatch")

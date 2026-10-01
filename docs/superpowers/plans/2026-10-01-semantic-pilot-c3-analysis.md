@@ -108,3 +108,15 @@ boundary regression `test_c3_consumer_uses_real_committed_c4_summary_and_output_
 was run against this C3 module and C4's actual phase/lifecycle implementation:
 **1 passed**, 5.02s; no phase authentication mock. That regression remains in C4's
 owned test file and covers its `run_dir` result alias along with this fix.
+
+Development release gate review: authenticated C0 data, four-card qualification,
+gradient and stability gates must each be exactly true before a scientific
+freeze can be released. Frozen output now records those four gates, their source
+qualification reference and `development_gate_passed`. Locked scientific
+analysis rejects missing/false development release gates. This prerequisite does
+not include later locked invariance, power or effect-hypothesis success. Private
+synthetic freezes without archive evidence remain marked unreleased. Six watched
+RED regressions became GREEN; full focused producer/archive/math/release scope:
+**46 passed**, one existing TypedStorage warning, 7.38s. Ruff and whitespace checks
+passed after organizing the new test imports. C4 owns corresponding frozen
+controller validation and its real archive boundary regression.
