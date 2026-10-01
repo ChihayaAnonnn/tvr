@@ -8,8 +8,8 @@ data_plane: artifacts/semantic-answerability-pilot-v1
 registry: experiments/semantic-answerability-pilot-v1/registry.jsonl
 design:
   path: docs/superpowers/specs/2026-10-01-semantic-retrieval-experiment-design.md
-  sha256: ef5f89d79c279c73e86c3dd1e98cb0fbe30a6c66bf2a004fc01db678ead8ed05
-  commit: 4f6a5c9752dd4f4f4ed674d81ce91864fc6e8054
+  sha256: c2cee8a9277838048d68238fd358430c7cf33517b4ff00bbb7237ab3b6902171
+  commit: e7bf143c95b2fe8273279af6896c8fe3fc9e7ab7
 authorization: user_request_2026-10-01_complete_C1_C2_C3_C4_and_real_train_only_snapshot
 relevance_space: benchmark_annotation
 protocol_id: clip4clip-msrvtt-9k-train-pilot-v1
