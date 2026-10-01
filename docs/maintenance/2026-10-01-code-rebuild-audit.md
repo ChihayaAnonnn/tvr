@@ -355,3 +355,11 @@ Final whole retained suite: `CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 O
 ### Deferred minor
 
 - Final: minor (deferred): Add committed synthetic TorchScript success/metadata-mismatch regression tests; reviewer independently verified both paths, existing tests cover bare state dictionaries.
+
+## Local master integration
+
+User selected local merge into master. master fast-forwarded from ff8137c to 46c47ec; no remote operation occurred. All nine existing tracked documentation changes were restored without staging or committing them; eight file hashes are identical to the pre-merge snapshot, and README is exactly the merged README plus its original navigation section. Existing untracked papers, notes and maintenance records were preserved.
+
+The two previously approved untracked MSVD launchers matched the SHA-256 values listed above and were removed only after backups were verified. Pre-integration documentation/launcher backup: /tmp/uatvr-master-integration-bv1h43iy. No history, logs, checkpoints or artifact runs were deleted.
+
+Post-integration validation in the main checkout: full CPU test suite **245 passed, 1 warning**, exit 0; git diff --check passed. The integration branch and task-owned worktree can now be cleaned up; the user's pre-existing changes remain uncommitted.
