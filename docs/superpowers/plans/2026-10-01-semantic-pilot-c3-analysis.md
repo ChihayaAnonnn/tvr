@@ -60,3 +60,40 @@ C3 + ranking/binary regression scope → **22 passed**.
 `ruff check` on the four Python deliverables → **All checks passed**.
 `git diff --check` → no whitespace errors. Complete and finite RC separation and
 full-gallery trained presence were included in this final suite.
+
+## Independent review resolution (2026-10-01)
+
+Resolved direct C1 relation-table consumption; controlled-only development K32
+selection shared by both tracks; strict canonical/official GT, fixed K and
+per-query controlled pairing; removal of confirmatory power as a pilot gate;
+completed training-parent/checkpoint/config authentication and authenticated
+C0S/V0S score-fragment membership. The math changes are in the separate reviewed
+C2 commit; this follow-up implements producer/authentication integration.
+
+Implemented actual expanding matcher/presence paths from bound full CLIP orders,
+controlled rank33 misses, static budget comparators and measured 4×5 alias/order
+probes. Service matching never reuses the diagnostic full-bank logits/features
+as free query-dependent work. Visited unique-pair counts and measured latency
+are exported, full-bank work and probes contribute to export wall/GPU hours.
+Frozen model/label/analysis/policy/target/preprocessing identities are checked
+before locked export. C4's archive-derived qualification validator is invoked in
+both analysis modes; reduced bootstrap or non-archive synthetic contexts cannot
+claim a scientific PASS. No scientific workers, GPU use, asset changes or
+reservations occurred in this implementation round.
+
+Synthetic regression evidence includes RED→GREEN visited-prefix call accounting,
+a connected actual-model expansion/invariance export, legal G129 end-to-end
+freeze/locked fixtures, archive composition rejection of arm/seed relabeling,
+forged producer source and group substitution. Lifecycle/phase primitives are
+mocked only in the archive composition fixture; their committed archive checks
+are owned and tested by C4. Focused validation: 38 passed; Ruff clean. Final full
+CPU verification is recorded in the commit handoff below.
+
+Review-round verification:
+`CUDA_VISIBLE_DEVICES='' .../python -m pytest -q` → **471 passed**, one existing
+TypedStorage warning, 132.35s. After an additional global-protocol substitution
+RED regression and guard, the fresh focused producer/archive/math suite →
+**39 passed**, one existing warning, 6.96s. Ruff and `git diff --check` passed.
+The final narrow guard compares all bundle label/preprocessing/policy/gallery
+identities against authenticated score fragments. Actual scientific qualification,
+full asset inference, budgets and performance remain unexecuted in this CPU scope.

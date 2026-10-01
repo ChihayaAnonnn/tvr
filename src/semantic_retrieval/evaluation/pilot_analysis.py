@@ -614,7 +614,7 @@ def _load_group(group, bundle):
         "alias_count",
         "permutation",
     ):
-        if key in row and (row[key].shape != (n,) or not np.isfinite(row[key]).all()):
+        if key in row and ((row[key].shape != (n,) and row[key].shape != (n, 4, 5)) or not np.isfinite(row[key]).all()):
             raise ValueError("diagnostic observations must align with query rows")
     row.update(group=group, gallery=gallery)
     return row
@@ -876,9 +876,13 @@ def _evaluate_group(context, bundle, frozen, row, references, *, raw_rc):
     if g["arm"] in ("A2", "A3", "A4"):
         confidence = np.minimum(top_pair, expit(row["presence_logits"]) if raw_rc else presence_p)
     curve, pair_curve = risk_curve(confidence, error), risk_curve(top_pair, error)
-    full_row = dict(row, candidate_mask=np.ones_like(row["candidate_mask"], bool))
+    full_row = dict(
+        row,
+        pair_logits=row.get("full_pair_logits", row["pair_logits"]),
+        candidate_mask=np.ones_like(row["candidate_mask"], bool),
+    )
     full_first, full_error = _top1(full_row)
-    full_pair = expit(row["pair_logits"][np.arange(len(full_first)), full_first])
+    full_pair = expit(full_row["pair_logits"][np.arange(len(full_first)), full_first])
     full_pair_curve = risk_curve(full_pair, full_error)
     full_curve = full_pair_curve
     if g["arm"] in ("A2", "A3", "A4"):
@@ -895,6 +899,8 @@ def _evaluate_group(context, bundle, frozen, row, references, *, raw_rc):
         point,
         presence_logits=row.get("presence_logits") if g["arm"] in ("A2", "A3", "A4") else None,
     )
+    if "actual_returned_mask" in row and not np.array_equal(answers, row["actual_returned_mask"]):
+        raise ValueError("actual service actions differ from frozen analysis policy")
     metrics = (
         policy_metrics(
             answers, row["relevance"], row["candidate_mask"], initial_candidates=row.get("initial_candidate_mask")
@@ -978,7 +984,13 @@ def _evaluate_group(context, bundle, frozen, row, references, *, raw_rc):
         unique_pair_scores=rate(np.sum(row.get("unique_pair_count", candidate.sum(axis=1))), len(candidate)),
         latency_p50_ms=float(np.median(row["latency_ms"])) if "latency_ms" in row else None,
         latency_p95_ms=float(np.quantile(row["latency_ms"], 0.95)) if "latency_ms" in row else None,
-        attempted_k=g["K"],
+        declared_max_k=g["K"],
+        mean_final_k=float(np.mean(row["final_k"])) if "final_k" in row else float(g["K"]),
+        mean_prefix_calls=float(np.mean(np.count_nonzero(row["attempted_k"], axis=1))) if "attempted_k" in row else 1.0,
+        total_unique_pair_scores=int(np.sum(row.get("unique_pair_count", candidate.sum(axis=1)))),
+        invariance_probe_unique_pair_scores=int(np.sum(row["probe_unique_pair_count"]))
+        if "probe_unique_pair_count" in row
+        else None,
     )
     invariance = dict(status="unavailable")
     checks = ("score_error", "answer_consistent", "action_consistent", "attempted_k_consistent")
@@ -1014,7 +1026,9 @@ def _evaluate_group(context, bundle, frozen, row, references, *, raw_rc):
         gallery_size=len(row["gallery"]["canonical_ids"]),
         label_protocol=bundle["label_protocol"],
         relevance_space="benchmark_annotation",
-        official_ranking=official_ranking(row["pair_logits"], row["official_relevance"], row["gallery"]),
+        official_ranking=official_ranking(
+            row.get("full_pair_logits", row["pair_logits"]), row["official_relevance"], row["gallery"]
+        ),
         policy=metrics,
         top1_policy=policy_metrics(top1_answers, row["relevance"], candidate)
         if top1_answers is not None
@@ -1056,6 +1070,11 @@ def _evaluate_group(context, bundle, frozen, row, references, *, raw_rc):
         "pair_logits",
         "presence_logits",
         "full_presence_logits",
+        "full_pair_logits",
+        "actual_returned_mask",
+        "attempted_k",
+        "final_k",
+        "probe_unique_pair_count",
         "candidate_mask",
         "relevance",
         "official_relevance",
@@ -1190,8 +1209,7 @@ def _hypotheses(effects, gates):
         )
     # Confirmatory power is descriptive metadata, not a benchmark-pilot gate.
     qualified = all(
-        gates.get(k) is True
-        for k in ("data", "four_gpu_qualification", "gradients", "stability", "invariance")
+        gates.get(k) is True for k in ("data", "four_gpu_qualification", "gradients", "stability", "invariance")
     )
     if not qualified:
         return tests, "inconclusive"
@@ -1444,7 +1462,7 @@ def _plots(context, bundle, evaluated, effects, report):
         found = True
         for ax, key in zip(axes, ("alias_count", "permutation")):
             if key in r:
-                ax.scatter(r[key], r["score_error"], label=_key(r))
+                ax.scatter(r[key].reshape(-1), r["score_error"].reshape(-1), label=_key(r))
     for ax, key in zip(axes, ("alias count 1/2/4/8", "five permutations")):
         ax.set(xlabel=key, ylabel="FP32 absolute score error")
         ax.axhline(1e-6, color="red", linestyle="--")
@@ -1497,6 +1515,23 @@ def run_pilot_analysis(context, bundle, *, mode, bootstrap_samples=10000):
     committed manifest and publishes via the shared lifecycle.
     """
     _validate_bundle(bundle)
+    from semantic_retrieval.runtime.artifacts import RunContext
+
+    if isinstance(context, RunContext):
+        from semantic_retrieval.evaluation.pilot_archive import authenticate_score_fragments
+
+        authenticate_score_fragments(context, bundle)
+    gates = {}
+    if "qualification" in bundle:
+        evidence = json.loads(_read_hashed(bundle["qualification"]).read_text())
+        if (
+            evidence.get("relevance_space") != "benchmark_annotation"
+            or evidence.get("target_gallery_manifest_sha256") != bundle["galleries"]["locked"]["manifest_sha256"]
+        ):
+            raise ValueError("qualification gate evidence identity mismatch")
+        from semantic_retrieval.runtime.pilot_workflow import validate_analysis_qualification
+
+        gates = validate_analysis_qualification(context, evidence)
     references = []
     if mode == "freeze":
         if any(g["split"] == "val_locked" for g in bundle["groups"]):
@@ -1584,19 +1619,10 @@ def run_pilot_analysis(context, bundle, *, mode, bootstrap_samples=10000):
                 )
             )
     expansion_effects = _expansion_effects(context, evaluated, references, bootstrap_samples)
-    gates = {}
-    if "qualification" in bundle:
-        evidence = json.loads(_read_hashed(bundle["qualification"]).read_text())
-        if (
-            evidence.get("relevance_space") != "benchmark_annotation"
-            or evidence.get("target_gallery_manifest_sha256") != frozen["target_gallery"]["manifest_sha256"]
-        ):
-            raise ValueError("qualification gate evidence identity mismatch")
-        gates = evidence.get("gates", {})
     if any(e["summary"]["invariance"].get("passed") is False for e in evaluated):
         raise ValueError("software invariance violation is a stop condition, not a method FAIL")
     hypotheses, verdict = _hypotheses(effects, gates)
-    if bootstrap_samples != 10000:
+    if bootstrap_samples != 10000 or not isinstance(context, RunContext):
         verdict = "inconclusive"  # reduced replicates are fixture-only, never registered confirmation
     report = dict(
         schema_version=1,
@@ -1689,6 +1715,9 @@ def export_model_scores(
     preprocessing_sha256,
     policy_sha256,
     pair_batch_size=64,
+    producer_identity=None,
+    frozen=None,
+    candidate_orders=None,
 ):
     """Actual model → score fragment consumer used by the reserved inference worker.
 
@@ -1719,6 +1748,13 @@ def export_model_scores(
     n, m = len(query_ids), len(gallery["canonical_ids"])
     if np.asarray(canonical_relevance).shape != (n, m):
         raise ValueError("source benchmark truth must match full gallery")
+    panels = list(panels)
+    expansion_panels = (
+        build_expansion_panels(candidate_orders, query_ids, gallery["canonical_ids"], canonical_relevance)
+        if frozen is not None and candidate_orders is not None
+        else []
+    )
+    panels.extend(expansion_panels)
     parsed = []
     for p in panels:
         qids = np.asarray(p["query_ids"]).astype(str)
@@ -1727,7 +1763,15 @@ def export_model_scores(
         if mask.shape != (len(qids), m) or not mask.any(axis=1).all() or np.any(mask.sum(axis=1) > p["K"]):
             raise ValueError("panel query/candidate budget identity mismatch")
         parsed.append(
-            dict(p, query_ids=qids, positions=positions, candidate_mask=mask, presence_logits=[], latency_ms=[])
+            dict(
+                p,
+                query_ids=qids,
+                positions=positions,
+                candidate_mask=mask,
+                presence_logits=[],
+                latency_ms=[],
+                service_pair_logits={},
+            )
         )
     model.eval().requires_grad_(False)
     started = time.perf_counter()
@@ -1781,6 +1825,7 @@ def export_model_scores(
                     synchronize()
                     begin = time.perf_counter()
                     finite = score_candidates(qi, candidates)
+                    p["service_pair_logits"][int(pi)] = finite.logits.cpu().numpy()
                     presence = (
                         model.score_presence(finite, torch.tensor([0, len(candidates)], device=device))
                         if arm in ("A2", "A3", "A4")
@@ -1797,10 +1842,14 @@ def export_model_scores(
     for p in parsed:
         positions = p["positions"]
         qids = p["query_ids"]
-        tag = f"{arm}_seed{seed}_{split}_{p['track']}_K{p['K']}"
+        tag = f"{arm}_seed{seed}_{split}_{p['track']}_{p.get('mechanism', 'fixed')}_K{p['K']}"
         latency = np.array([v for _, v in sorted(p["latency_ms"])])
         pres = np.array([v for _, v in sorted(p["presence_logits"])]) if arm in ("A2", "A3", "A4") else None
+        service_scores = scores[positions].copy()
+        for ri in range(len(positions)):
+            service_scores[ri, p["candidate_mask"][ri]] = p["service_pair_logits"][ri]
         observations = dict(
+            full_pair_logits=scores[positions],
             latency_ms=latency,
             unique_pair_count=p["candidate_mask"].sum(axis=1),
             token_count=query_inputs.text_mask.sum(axis=1).cpu().numpy()[positions],
@@ -1812,7 +1861,7 @@ def export_model_scores(
             context.paths.arrays / (tag + ".npz"),
             query_ids=qids,
             component_ids=np.asarray(component_ids)[positions],
-            pair_logits=scores[positions],
+            pair_logits=service_scores,
             relevance=canonical[positions],
             candidate_mask=p["candidate_mask"],
             presence_logits=pres,
@@ -1834,6 +1883,34 @@ def export_model_scores(
                 arrays=ref,
             )
         )
+    if frozen is not None and expansion_panels:
+        presence_function = (
+            (lambda pairs: model.score_presence(pairs, torch.tensor([0, len(pairs.logits)], device=device)))
+            if arm in ("A2", "A3", "A4")
+            else None
+        )
+        with torch.no_grad():
+            groups.extend(
+                _export_expansion(
+                    context,
+                    score_candidates,
+                    presence_function,
+                    query_ids,
+                    component_ids,
+                    canonical,
+                    official,
+                    gallery,
+                    expansion_panels,
+                    arm,
+                    seed,
+                    split,
+                    split_sha256,
+                    model_sha256(model),
+                    frozen,
+                    scores,
+                    full_presence,
+                )
+            )
     elapsed = time.perf_counter() - started
     fragment = dict(
         schema_version=1,
@@ -1844,6 +1921,7 @@ def export_model_scores(
         galleries={gallery["version"]: gallery},
         groups=groups,
         source_sha=context.manifest["git_sha"],
+        producer_identity=producer_identity,
         inference_wall_seconds=elapsed,
         evaluation_gpu_hours=elapsed / 3600 if device.type == "cuda" else 0.0,
         latency_scope="finite-panel matcher and presence only; excludes offline full-gallery bank/encoding/coarse lookup",
@@ -1852,7 +1930,9 @@ def export_model_scores(
     return fragment
 
 
-def build_pilot_bundle(fragment_references, *, locked_gallery, frozen=None, qualification=None):
+def build_pilot_bundle(
+    fragment_references, *, locked_gallery, frozen=None, qualification=None, score_phase_summaries=None
+):
     """Assemble only hash-bound inference worker fragments, preserving every track/K identity."""
     fragments = [json.loads(_read_hashed(ref).read_text()) for ref in fragment_references]
     if not fragments:
@@ -1875,6 +1955,7 @@ def build_pilot_bundle(fragment_references, *, locked_gallery, frozen=None, qual
         galleries=galleries,
         groups=groups,
         fragment_references=fragment_references,
+        score_phase_summaries=score_phase_summaries or {},
         evaluation_gpu_hours=sum(f["evaluation_gpu_hours"] for f in fragments),
         inference_wall_seconds=sum(f["inference_wall_seconds"] for f in fragments),
     )
@@ -1998,12 +2079,12 @@ def _expansion_effects(context, evaluated, references, samples):
                     statics = [
                         e
                         for e in matching
-                        if e["row"]["group"]["mechanism"] == "fixed" and e["row"]["group"]["K"] == static_k
+                        if e["row"]["group"]["mechanism"] == "static" and e["row"]["group"]["K"] == static_k
                     ]
                     initial = [
                         e
                         for e in matching
-                        if e["row"]["group"]["mechanism"] == "fixed" and e["row"]["group"]["K"] == 32
+                        if e["row"]["group"]["mechanism"] == "static" and e["row"]["group"]["K"] == 32
                     ]
                     if not systems or not statics or not initial:
                         continue
@@ -2055,3 +2136,267 @@ def _expansion_effects(context, evaluated, references, samples):
                     result.update(status="descriptive", reason="fewer than 30 natural miss source components")
                 effects.append(result)
     return effects
+
+
+def official_truth_from_relations(query_ids, relations, official_ids):
+    if not isinstance(relations, dict) or any(
+        q not in relations or not isinstance(relations[q], list) or not relations[q] for q in query_ids
+    ):
+        raise ValueError("direct official relation table required")
+    return np.array([[v in relations[q] for v in official_ids] for q in query_ids], np.int8)
+
+
+def run_expanding_path(
+    score_candidates, presence_head, canonical_ids, prefix_masks, k_sequence, point, *, alias_count=1, permutation=0
+):
+    """Real visited-prefix matcher consumer; never reads a diagnostic full-score bank."""
+    import time
+
+    import torch
+
+    from semantic_retrieval.types import PairScores
+
+    if point is None:
+        raise ValueError("expansion requires a feasible frozen operating point")
+    masks = np.asarray(prefix_masks, bool)
+    if masks.shape != (len(k_sequence), len(canonical_ids)) or any(
+        np.any(masks[i] & ~masks[i + 1]) for i in range(len(masks) - 1)
+    ):
+        raise ValueError("expansion requires nested, identity-bound prefixes")
+    if alias_count not in (1, 2, 4, 8) or permutation not in range(5):
+        raise ValueError("undeclared alias/permutation probe")
+    cache = {}
+    attempted = []
+    trace = []
+    started = time.perf_counter()
+    final = None
+    for k, mask in zip(k_sequence, masks):
+        attempted.append(int(k))
+        indices = np.flatnonzero(mask)
+        if len(indices) != min(k, len(canonical_ids)):
+            raise ValueError("expansion prefix does not match its declared budget")
+        aliased = np.repeat(indices, alias_count)
+        if permutation % 2:
+            aliased = aliased[::-1]
+        aliased = np.roll(aliased, permutation * max(1, len(aliased) // 5))
+        # Production canonicalization: aliases collapse before scoring, retaining actual input permutation.
+        order = list(dict.fromkeys(int(i) for i in aliased))
+        new = [i for i in order if i not in cache]
+        if new:
+            fresh = score_candidates(new)
+            for j, i in enumerate(new):
+                cache[i] = (fresh.logits[j], fresh.features[j])
+        pairs = PairScores(torch.stack([cache[i][0] for i in order]), torch.stack([cache[i][1] for i in order]), None)
+        presence = float(presence_head(pairs).detach().cpu().reshape(-1)[0]) if presence_head is not None else None
+        logits = pairs.logits.detach().cpu().numpy()
+        supported = expit(logits) >= point["pair_threshold"]
+        accepted = point["accept_kind"] == "pair_only" or (
+            point["accept_kind"] == "presence" and presence is not None and expit(presence) >= point["accept_threshold"]
+        )
+        if point["accept_kind"] not in ("pair_only", "presence"):
+            raise ValueError("unsupported expansion acceptance head")
+        answer = tuple(sorted(i for i, yes in zip(order, supported) if yes)) if accepted else ()
+        trace.append(
+            dict(K=int(k), pair_logits={i: float(cache[i][0].detach().cpu()) for i in order}, presence_logit=presence)
+        )
+        final = dict(
+            final_k=int(k), candidate_indices=tuple(sorted(order)), answer_indices=answer, presence_logit=presence
+        )
+        if answer:
+            break
+    return dict(
+        final,
+        attempted_k=attempted,
+        unique_pair_count=len(cache),
+        latency_ms=1000 * (time.perf_counter() - started),
+        trace=trace,
+    )
+
+
+def _trajectory_error(first, second):
+    errors = []
+    for a, b in zip(first["trace"], second["trace"]):
+        common = set(a["pair_logits"]) & set(b["pair_logits"])
+        errors.extend(abs(a["pair_logits"][i] - b["pair_logits"][i]) for i in common)
+        if a["presence_logit"] is not None and b["presence_logit"] is not None:
+            errors.append(abs(a["presence_logit"] - b["presence_logit"]))
+    return max(errors, default=0.0)
+
+
+def build_expansion_panels(candidate_orders, query_ids, canonical_ids, relevance):
+    """Frozen CLIP orders → natural and controlled GT33 nested trajectory prefixes."""
+    supplied = list(map(str, candidate_orders["query_ids"]))
+    ranks = np.asarray(candidate_orders["ranks"])
+    if (
+        supplied != list(query_ids)
+        or list(map(str, candidate_orders["canonical_ids"])) != list(canonical_ids)
+        or ranks.shape != (len(query_ids), len(canonical_ids))
+    ):
+        raise ValueError("expansion candidate-order query/gallery identity mismatch")
+    if ranks.dtype.kind not in "iu" or not np.all(np.sort(ranks, axis=1) == np.arange(len(canonical_ids))):
+        raise ValueError("candidate ranks must be complete zero-based ranked canonical indices")
+    truth = np.asarray(relevance, bool)
+    if not np.all(truth.sum(axis=1) == 1) or len(canonical_ids) < 33:
+        raise ValueError("GT33 controlled expansion requires one GT and at least33 gallery items")
+    ordered = ranks
+    result = []
+    for track in ("natural", "controlled"):
+        row_ids = []
+        orders = []
+        for qi, q in enumerate(query_ids):
+            gt = int(np.flatnonzero(truth[qi])[0])
+            order = ordered[qi].tolist()
+            if track == "natural":
+                row_ids.append(q)
+                orders.append(order)
+            else:
+                others = [i for i in order if i != gt]
+                row_ids.extend([q, q])
+                orders.extend([[gt] + others, others[:32] + [gt] + others[32:]])
+        for k in (32, 64, 128):
+            mask = np.zeros((len(orders), len(canonical_ids)), bool)
+            for i, order in enumerate(orders):
+                mask[i, order[: min(k, len(order))]] = True
+            result.append(
+                dict(track=track, K=k, query_ids=np.asarray(row_ids), candidate_mask=mask, mechanism="static")
+            )
+    return result
+
+
+def _export_expansion(
+    context,
+    score_candidates,
+    presence_function,
+    query_ids,
+    component_ids,
+    truth,
+    official,
+    gallery,
+    panels,
+    arm,
+    seed,
+    split,
+    split_sha256,
+    model_identity,
+    frozen,
+    full_scores,
+    full_presence,
+):
+    ids = {q: i for i, q in enumerate(query_ids)}
+    groups = []
+    point = frozen["policies"].get(f"{arm}_seed{seed}_controlled_fixed_K32", {}).get("operating_point")
+    if point is None:
+        return groups
+    for track in ("natural", "controlled"):
+        selected = sorted([p for p in panels if p["track"] == track], key=lambda p: p["K"])
+        if [p["K"] for p in selected] != [32, 64, 128]:
+            raise ValueError("expansion needs exact32/64/128 prefixes per track")
+        row_ids = list(map(str, selected[0]["query_ids"]))
+        if any(list(map(str, p["query_ids"])) != row_ids for p in selected):
+            raise ValueError("expansion query copies changed across K")
+        n = len(row_ids)
+        m = len(gallery["canonical_ids"])
+        scores = np.empty((n, m))
+        mask = np.zeros((n, m), bool)
+        answers = np.zeros((n, m), bool)
+        pres = []
+        latency = []
+        budgets = []
+        final_k = []
+        attempts = np.zeros((n, 3), int)
+        probes = {
+            key: np.zeros((n, 4, 5), float)
+            for key in (
+                "score_error",
+                "answer_consistent",
+                "action_consistent",
+                "attempted_k_consistent",
+                "probe_unique_pair_count",
+            )
+        }
+        for ri, q in enumerate(row_ids):
+            qi = ids[q]
+            prefix = np.stack([p["candidate_mask"][ri] for p in selected])
+
+            def score(indices):
+                return score_candidates(qi, indices)
+
+            baseline = run_expanding_path(
+                score, presence_function, gallery["canonical_ids"], prefix, (32, 64, 128), point
+            )
+            scores[ri] = full_scores[qi]
+            for i, value in baseline["trace"][-1]["pair_logits"].items():
+                scores[ri, i] = value
+            mask[ri, list(baseline["candidate_indices"])] = True
+            answers[ri, list(baseline["answer_indices"])] = True
+            latency.append(baseline["latency_ms"])
+            budgets.append(baseline["unique_pair_count"])
+            final_k.append(baseline["final_k"])
+            attempts[ri, : len(baseline["attempted_k"])] = baseline["attempted_k"]
+            pres.append(baseline["presence_logit"])
+            for ai, alias in enumerate((1, 2, 4, 8)):
+                for permutation in range(5):
+                    changed = run_expanding_path(
+                        score,
+                        presence_function,
+                        gallery["canonical_ids"],
+                        prefix,
+                        (32, 64, 128),
+                        point,
+                        alias_count=alias,
+                        permutation=permutation,
+                    )
+                    probes["score_error"][ri, ai, permutation] = _trajectory_error(baseline, changed)
+                    probes["answer_consistent"][ri, ai, permutation] = (
+                        changed["answer_indices"] == baseline["answer_indices"]
+                    )
+                    probes["action_consistent"][ri, ai, permutation] = bool(changed["answer_indices"]) == bool(
+                        baseline["answer_indices"]
+                    )
+                    probes["attempted_k_consistent"][ri, ai, permutation] = (
+                        changed["attempted_k"] == baseline["attempted_k"]
+                        and changed["unique_pair_count"] == baseline["unique_pair_count"]
+                    )
+                    probes["probe_unique_pair_count"][ri, ai, permutation] = changed["unique_pair_count"]
+        positions = [ids[q] for q in row_ids]
+        observations = dict(
+            full_pair_logits=full_scores[positions],
+            latency_ms=latency,
+            unique_pair_count=budgets,
+            final_k=final_k,
+            attempted_k=attempts,
+            actual_returned_mask=answers,
+            alias_count=np.broadcast_to(np.array([1, 2, 4, 8])[None, :, None], (n, 4, 5)),
+            permutation=np.broadcast_to(np.arange(5)[None, None, :], (n, 4, 5)),
+            **probes,
+        )
+        if full_presence is not None:
+            observations["full_presence_logits"] = full_presence[positions]
+        tag = f"{arm}_seed{seed}_{split}_{track}_system_K128"
+        ref = write_pilot_rows(
+            context.paths.arrays / (tag + ".npz"),
+            query_ids=row_ids,
+            component_ids=np.asarray(component_ids)[positions],
+            pair_logits=scores,
+            relevance=truth[positions],
+            official_relevance=official[positions],
+            candidate_mask=mask,
+            presence_logits=np.array(pres) if presence_function is not None else None,
+            initial_candidate_mask=selected[0]["candidate_mask"],
+            **observations,
+        )
+        groups.append(
+            dict(
+                arm=arm,
+                seed=seed,
+                split=split,
+                track=track,
+                mechanism="system",
+                K=128,
+                gallery=gallery["version"],
+                model_sha256=model_identity,
+                split_sha256=split_sha256,
+                arrays=ref,
+            )
+        )
+    return groups

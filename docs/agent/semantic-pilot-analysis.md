@@ -96,3 +96,52 @@ work contributes separately to evaluation GPU hours. The full science asset,
 throughput, new four-card qualification and actual seed training were not run as
 part of the CPU implementation tests. These external evidence gates are required
 for a scientific PASS, alongside both hypotheses and their two frozen comparators.
+
+## Review corrections and measured expansion
+
+Scientific score panels additionally bind `training_parent={phase,summary,run_id,
+config,checkpoint,metadata}`. Summary references include `commit`; all references
+are reserved inputs. The completed training manifest and config must agree on
+arm, seed, model, source and benchmark labels, and checkpoint metadata must bind
+the producing config and checkpoint bytes. Score fragments retain both their
+export source and the authenticated training source. Bundle inputs name
+`score_phase_summaries={C0S:summary[,V0S:summary]}`; analysis authenticates producer
+run identity, committed completion, exact output inventory hashes, every array,
+and exact group membership. A same-shape A2 checkpoint cannot become A3 by
+changing caller labels. Both workers use expanded `context_input_references` for
+large immutable input indexes.
+
+`candidate_orders` references NPZ with unique `query_ids`, sorted `canonical_ids`
+and integer `ranks[N,G]`: each row contains canonical column indices in ranked
+order, a permutation of 0..G-1. Locked panels also bind `frozen`. The producer
+uses those orders for natural prefixes and paired controlled prefixes with GT at
+rank1 or rank33. It emits static32/64/128 and a measured expanding system, using
+the frozen controlled K32 operating point for both tracks. Each service path
+scores only new canonical pairs at the visited prefix, caches those pairs within
+that path, and recomputes presence on the actual prefix. Full-bank matching is
+computed independently for retrieval diagnostics and counted in total evaluation
+GPU hours. Gallery feature encoding is common preparation; reported service
+latency covers matcher and presence calls. The score export records measured
+`attempted_k`, `final_k`, `unique_pair_count`, and returned sets. The summary
+separates total service pairs and invariance-probe pairs.
+
+Alias multiplicity 1/2/4/8 and five permutations each execute canonicalization
+and matching/presence again. System NPZs record measured score errors, answer,
+action and attempted-prefix consistency and unique-pair costs in `[N,4,5]`
+arrays. These are actual scoring probes rather than duplicated baseline curves.
+A missing feasible operating point yields unavailable system evidence.
+
+Every legal row has exactly one canonical GT and nonempty complete official GT.
+Fixed masks contain exactly `min(K,G)` candidates; natural queries are unique,
+and controlled rows are one present/absent pair per source query with identical
+truth and source component. Expansion's static64/128 groups can recover the GT
+in both copies and are marked `mechanism='static'`. C1 relation JSON is the direct
+query-ID to official-positive-ID mapping, not a wrapper document.
+
+Only development controlled K32 selects raw operating points. Natural and
+controlled calibration remain separate, and both use the same frozen raw
+policy. Qualification documents are validated by
+`runtime.pilot_workflow.validate_analysis_qualification` before either analysis
+mode; arbitrary caller booleans cannot establish data, Q0 or gradient gates.
+The confirmatory 80% power requirement is descriptive for this pilot, rather
+than a mandatory pilot gate. Missing authenticated evidence remains inconclusive.

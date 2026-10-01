@@ -17,6 +17,7 @@ from semantic_retrieval.evaluation.pilot_analysis import (
     _read_hashed,
     export_model_scores,
     file_sha256,
+    official_truth_from_relations,
     stream_pilot_gallery,
 )
 from semantic_retrieval.models.model import SemanticRetrievalModel
@@ -58,7 +59,9 @@ def main(argv=None):
     from semantic_retrieval.runtime.pilot_protocol import validate_pilot_gpu_qualification
 
     validate_pilot_gpu_qualification(context)
-    refs = {r["path"]: r["sha256"] for r in context.manifest["dataset_splits"]}
+    from semantic_retrieval.runtime.input_bindings import context_input_references
+
+    refs = context_input_references(context)
     panels_path = _read_hashed(dict(path=str(args.panels.resolve()), sha256=args.panels_sha256))
     if refs.get(str(panels_path)) != args.panels_sha256:
         raise ValueError("E0 panel manifest must be a reserved input")
@@ -79,6 +82,37 @@ def main(argv=None):
             raise ValueError("E0 panel NPZ must be reserved")
         with np.load(_read_hashed(group["arrays"]), allow_pickle=False) as arrays:
             panels.append(dict(track=group["track"], K=group["K"], **{k: arrays[k] for k in arrays.files}))
+    from semantic_retrieval.evaluation.pilot_archive import authenticate_training_parent
+
+    training_binding = authenticate_training_parent(context, panel_manifest["training_parent"], cfg)
+    candidate_orders = None
+    if "candidate_orders" in panel_manifest:
+        reference = panel_manifest["candidate_orders"]
+        if refs.get(reference["path"]) != reference["sha256"]:
+            raise ValueError("candidate orders must be reserved")
+        with np.load(_read_hashed(reference), allow_pickle=False) as arrays:
+            candidate_orders = {k: arrays[k] for k in arrays.files}
+    frozen = None
+    if cfg.data.split == "val_locked":
+        reference = panel_manifest.get("frozen")
+        if (
+            not isinstance(reference, dict)
+            or refs.get(reference["path"]) != reference["sha256"]
+            or candidate_orders is None
+        ):
+            raise ValueError("locked scoring requires archived frozen policy and bound expansion orders")
+        frozen = json.loads(_read_hashed(reference).read_text())
+        if (
+            frozen["model_identities"].get(f"{cfg.model.pilot_arm}_seed{cfg.train.seed}")
+            != training_binding["model_sha256"]
+            or frozen["label_protocol"] != dict(cfg.data.label_protocol)
+            or frozen["analysis_sha256"]
+            != file_sha256(Path(__file__).resolve().parents[1] / "src/semantic_retrieval/evaluation/pilot_analysis.py")
+            or frozen["policy_sha256"] != policy_sha256(cfg.policy)
+            or frozen["target_gallery"]["version"] != cfg.data.gallery_version
+            or frozen["target_gallery"]["manifest_sha256"] != cfg.deployment.gallery_sha256
+        ):
+            raise ValueError("frozen scoring model/protocol/analysis/policy identity mismatch")
     start_run(context)
     try:
         episodes = read_episodes(
@@ -101,6 +135,8 @@ def main(argv=None):
         )
         gallery = stream_pilot_gallery(cfg.deployment.gallery_manifest, gallery_version=cfg.data.gallery_version)
         audit_episode_gallery(episodes, gallery)
+        if frozen is not None and frozen["preprocessing_sha256"] != preprocessing_sha256(gallery.preprocessing):
+            raise ValueError("frozen preprocessing differs from locked score export")
         if (
             panel_manifest.get("gallery_manifest_sha256") != cfg.deployment.gallery_sha256
             or panel_manifest.get("split_sha256") != cfg.data.episode_sha256
@@ -118,10 +154,7 @@ def main(argv=None):
         canonical = np.array(
             [[c in e.benchmark_positive_ids for c in gallery.canonical_ids] for e in episodes], np.int8
         )
-        official = np.array(
-            [[v in relations["official_positives_by_query"][e.query_id] for v in official_ids] for e in episodes],
-            np.int8,
-        )
+        official = official_truth_from_relations(query_ids, relations, official_ids)
         for panel in panels:
             indices = {q: i for i, q in enumerate(query_ids)}
             y = np.array(
@@ -157,6 +190,13 @@ def main(argv=None):
             label_protocol=dict(cfg.data.label_protocol),
             preprocessing_sha256=preprocessing_sha256(gallery.preprocessing),
             policy_sha256=policy_sha256(cfg.policy),
+            frozen=frozen,
+            candidate_orders=candidate_orders,
+            producer_identity=dict(
+                run_id=context.manifest["run_id"],
+                manifest_sha256=cfg.runtime.manifest_sha256,
+                training_parent=training_binding,
+            ),
         )
         path = context.paths.provenance / "pilot_score_fragment.json"
         publish_metrics(

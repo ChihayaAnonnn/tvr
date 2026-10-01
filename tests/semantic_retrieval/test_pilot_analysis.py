@@ -154,27 +154,45 @@ def test_score_export_and_freeze_locked_pipeline_are_hash_bound(tmp_path):
     galleries = {}
     for tag, digest in [("dev", "2"), ("cal", "3"), ("locked", "4")]:
         galleries[tag] = dict(
-            version=tag, manifest_sha256=digest * 64, canonical_ids=["a", "b"], aliases={"a": ["v0"], "b": ["v1"]}
+            version=tag,
+            manifest_sha256=digest * 64,
+            canonical_ids=["a", "b"] + [f"z{i:03d}" for i in range(2, 129)],
+            aliases={c: [f"v{i}"] for i, c in enumerate(["a", "b"] + [f"z{j:03d}" for j in range(2, 129)])},
         )
-    truth = np.array([[1, 0], [0, 1], [1, 0], [0, 1]])
-    cand = np.array([[1, 1], [1, 1], [0, 1], [1, 0]], bool)
-    score = np.array([[2.0, -2.0], [-2.0, 2.0], [-2.0, -2.0], [-2.0, -2.0]])
+    truth = np.pad(np.array([[1, 0], [0, 1], [1, 0], [0, 1]]), ((0, 0), (0, 127)))
+    score = np.pad(
+        np.array([[2.0, -2.0], [-2.0, 2.0], [-2.0, -2.0], [-2.0, -2.0]]), ((0, 0), (0, 127)), constant_values=-100
+    )
+
+    def observations(track, k, tag):
+        positions = np.arange(4) if track == "natural" else np.repeat(np.arange(4), 2)
+        mask = np.zeros((len(positions), 129), bool)
+        events = []
+        for ri, qi in enumerate(positions):
+            gt = int(np.flatnonzero(truth[qi])[0])
+            present = qi < 2 if track == "natural" else ri % 2 == 0
+            candidates = (
+                ([gt] + [j for j in range(129) if j != gt])[:k] if present else [j for j in range(129) if j != gt][:k]
+            )
+            mask[ri, candidates] = True
+            events.append(present)
+        return dict(
+            query_ids=[tag + str(i) for i in positions],
+            component_ids=[tag + "c" + str(i) for i in positions],
+            pair_logits=score[positions],
+            relevance=truth[positions],
+            official_relevance=truth[positions],
+            candidate_mask=mask,
+            presence_logits=np.where(events, 2.0, -2.0),
+        )
+
     groups = []
     for split, gallery_tag in [("val_development", "dev"), ("val_calibration", "cal")]:
         for arm in ("A1", "A3"):
             for track in ("natural", "controlled"):
                 for k in (4, 8, 16, 32, 64, 128) if split == "val_calibration" else (32,):
                     path = tmp_path / f"{split}-{arm}-{track}-{k}.npz"
-                    ref = write_pilot_rows(
-                        path,
-                        query_ids=[gallery_tag + str(i) for i in range(4)],
-                        component_ids=[gallery_tag + "c" + str(i) for i in range(4)],
-                        pair_logits=score,
-                        relevance=truth,
-                        candidate_mask=cand,
-                        presence_logits=np.array([2, 2, -2, -2]),
-                        official_relevance=truth,
-                    )
+                    ref = write_pilot_rows(path, **observations(track, k, gallery_tag))
                     groups.append(
                         dict(
                             arm=arm,
@@ -206,14 +224,7 @@ def test_score_export_and_freeze_locked_pipeline_are_hash_bound(tmp_path):
     for group in groups:
         if group["split"] == "val_development":
             ref = write_pilot_rows(
-                tmp_path / f"locked-{group['arm']}-{group['track']}.npz",
-                query_ids=["lq" + str(i) for i in range(4)],
-                component_ids=["lc" + str(i) for i in range(4)],
-                pair_logits=score,
-                relevance=truth,
-                candidate_mask=cand,
-                presence_logits=np.array([2, 2, -2, -2]),
-                official_relevance=truth,
+                tmp_path / f"locked-{group['arm']}-{group['track']}.npz", **observations(group["track"], 32, "lq")
             )
             locked_groups.append(dict(group, split="val_locked", gallery="locked", split_sha256="9" * 64, arrays=ref))
     locked_bundle = dict(
@@ -427,3 +438,106 @@ def test_three_seed_paired_effect_uses_source_clusters_and_recomputes_false_acce
     assert result["ci_low"] == result["ci_high"] == -1
     assert result["component_count"] == 8
     assert result["seed_values"] == [-1.0, -1.0, -1.0]
+
+
+def test_direct_c1_relation_table_expands_only_official_gt():
+    from semantic_retrieval.evaluation.pilot_analysis import official_truth_from_relations
+
+    y = official_truth_from_relations(["q"], {"q": ["v1"]}, ["v0", "v1", "v2"])
+    assert y.tolist() == [[0, 1, 0]]
+    with pytest.raises(ValueError, match="relation"):
+        official_truth_from_relations(["q"], {"official_positives_by_query": {"q": ["v1"]}}, ["v1"])
+
+
+def test_expansion_scores_only_visited_new_pairs_and_counts_real_calls():
+    import torch
+
+    from semantic_retrieval.evaluation.pilot_analysis import run_expanding_path
+    from semantic_retrieval.types import PairScores
+
+    calls = []
+
+    def score(indices):
+        calls.append(tuple(indices))
+        logits = torch.tensor([-2.0, -2.0, 2.0])[indices]
+        return PairScores(logits, logits[:, None], None)
+
+    def presence(pairs):
+        return pairs.logits.max()
+
+    masks = np.array([[1, 0, 0], [1, 1, 0], [1, 1, 1]], bool)
+    point = dict(pair_threshold=0.5, accept_threshold=0.5, accept_kind="presence")
+    result = run_expanding_path(score, presence, ["a", "b", "c"], masks, (1, 2, 3), point)
+    assert calls == [(0,), (1,), (2,)]
+    assert result["attempted_k"] == [1, 2, 3]
+    assert result["unique_pair_count"] == 3
+    assert result["answer_indices"] == (2,)
+    assert result["final_k"] == 3
+    for aliases in (1, 2, 4, 8):
+        for permutation in range(5):
+            changed = run_expanding_path(
+                score, presence, ["a", "b", "c"], masks, (1, 2, 3), point, alias_count=aliases, permutation=permutation
+            )
+            assert changed["answer_indices"] == result["answer_indices"]
+            assert changed["attempted_k"] == result["attempted_k"]
+            assert changed["unique_pair_count"] == 3
+
+
+def test_connected_export_emits_real_expansion_and_invariance_arrays(model, inputs, tmp_path):
+    from types import SimpleNamespace
+
+    from semantic_retrieval.evaluation.pilot_analysis import export_model_scores
+    from semantic_retrieval.types import QueryInputs
+
+    context = SimpleNamespace(
+        paths=SimpleNamespace(root=tmp_path, arrays=tmp_path / "arrays", provenance=tmp_path / "provenance"),
+        manifest={"git_sha": "1" * 40},
+    )
+    context.paths.arrays.mkdir()
+    context.paths.provenance.mkdir()
+    ids = [f"c{i:03d}" for i in range(33)]
+    qids = ["q0", "q1"]
+    truth = np.zeros((2, 33), np.int8)
+    truth[:, 32] = 1
+    gallery = dict(version="locked", manifest_sha256="a" * 64, canonical_ids=ids, aliases={c: [c] for c in ids})
+    orders = dict(
+        query_ids=np.array(qids), canonical_ids=np.array(ids), ranks=np.tile(np.arange(33, dtype=np.int32), (2, 1))
+    )
+    point = dict(pair_threshold=1.0, accept_threshold=0.0, accept_kind="presence")
+    frozen = dict(policies={"A3_seed0_controlled_fixed_K32": dict(operating_point=point)})
+    fragment = export_model_scores(
+        context,
+        model,
+        QueryInputs(inputs.input_ids, inputs.text_mask),
+        inputs.video[[0] * 33],
+        inputs.frame_mask[[0] * 33],
+        query_ids=qids,
+        component_ids=["s0", "s1"],
+        canonical_relevance=truth,
+        official_relevance=truth,
+        gallery=gallery,
+        panels=[],
+        arm="A3",
+        seed=0,
+        split="val_locked",
+        split_sha256="b" * 64,
+        label_protocol={"name": "official"},
+        preprocessing_sha256="c" * 64,
+        policy_sha256="d" * 64,
+        frozen=frozen,
+        candidate_orders=orders,
+    )
+    systems = [g for g in fragment["groups"] if g["mechanism"] == "system"]
+    assert len(systems) == 2
+    assert len([g for g in fragment["groups"] if g["mechanism"] == "static"]) == 6
+    for group in systems:
+        with np.load(group["arrays"]["path"]) as arrays:
+            n = len(arrays["query_ids"])
+            assert arrays["score_error"].shape == (n, 4, 5)
+            assert np.all(arrays["unique_pair_count"] == 33)
+            assert np.all(arrays["attempted_k"] == [32, 64, 128])
+            assert np.all(arrays["score_error"] <= 1e-6)
+            assert np.all(arrays["answer_consistent"] == 1)
+            assert np.all(arrays["attempted_k_consistent"] == 1)
+            assert np.all(arrays["actual_returned_mask"] == 0)
+            assert np.all(arrays["latency_ms"] > 0)

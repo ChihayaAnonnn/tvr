@@ -42,7 +42,9 @@ def main(argv=None):
         "qualification_scenario": "pilot_analysis",
     }:
         raise ValueError("analysis evaluation scenario differs from reservation")
-    refs = {str(r["path"]): r["sha256"] for r in context.manifest["dataset_splits"]}
+    from semantic_retrieval.runtime.input_bindings import context_input_references
+
+    refs = context_input_references(context)
     if refs.get(str(path)) != file_sha256(path):
         raise ValueError("analysis configuration must be a reserved immutable input")
     bundle_path = _read_hashed(raw["bundle"])
@@ -55,6 +57,9 @@ def main(argv=None):
         if refs.get(reference["path"]) != reference["sha256"]:
             raise ValueError("every score/frozen/gate input must be reserved")
         _read_hashed(reference)
+    from semantic_retrieval.evaluation.pilot_archive import authenticate_score_fragments
+
+    authenticate_score_fragments(context, bundle)
     start_run(context)
     try:
         result = run_pilot_analysis(context, bundle, mode=raw["mode"], bootstrap_samples=raw["bootstrap_samples"])
