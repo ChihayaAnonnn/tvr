@@ -1,5 +1,11 @@
 # research/ —— UATVR 研究路径的持久记录（anti-drift anchor）
 
+> **2026-09-30 导航补充：** [实验总览](../experiments/README.md)汇总现有 study 的停止状态；
+> [论文索引](../related_work/README.md)汇总已下载资料。
+> OQ1 v1 已于 2026-08-30 在 Stage 1 终止（inconclusive），见其
+> [最终判定](../experiments/oq1-kl-variance-hubness-v1/summaries/stage1-arm0-baseline.md)。
+> `00-north-star.md` 中的下一步计划与冻结协议的 `registered` 是历史状态，不能作为续跑授权。
+
 **这是什么。** 本目录是 UATVR 课题跨 session 的**唯一权威记忆**。它存在的理由：
 context 一满、新 session 一开，助手就会重新提出已被证伪的方向、混用不可信的数字、
 忘记协议约束。本目录把"哪些结论是硬的、哪些是带 caveat 的、哪些已经死了、哪些规则

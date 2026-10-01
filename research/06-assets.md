@@ -85,7 +85,9 @@
 > ⚠️ Fix 1 v1/v2 与 SAP study **从未生成数据平面 artifact**（原 `WT/artifacts/` 就不存在，
 > 也无 `registry.jsonl`）。正因为没注册，2026-08-24 删 worktree 时它们的权重无法保留；
 > 现在只剩 `artifacts/dead-lines/sap-fix1-campaign-provenance/` 里的日志与超参。
-> **教训：没走 `manage_experiment_run.py` 注册的 run，在清理时就是可丢弃的。**
+> **2026-09-30 清理规则澄清：未注册不等于可丢弃。** 上述删除是历史事件，
+> 不是通用授权。未注册日志、权重和配置仍可能是唯一证据；后续清理应保留并标注，
+> 不得只因它们不在 registry 就删除。
 
 ---
 

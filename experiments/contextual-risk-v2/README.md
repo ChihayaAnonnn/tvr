@@ -1,5 +1,8 @@
 # Contextual Risk v2 研究
 
+> **当前结论：Stage 1 gate FAIL，HALT。** `next_authorized_stage = null`，
+> 见 [阶段报告](summaries/stage1-baselines.md)。以下是归档流程说明，不是续跑授权。
+
 本研究的控制面位于此目录，运行输出只能位于
 `artifacts/contextual-risk-v2/`。开始前阅读 `study.yaml` 与 `registry.jsonl`；不得将新实验直接写入 `logs/` 或 `ckpts/`。
 

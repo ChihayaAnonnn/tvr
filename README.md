@@ -1,5 +1,17 @@
 # Semantic retrieval reconstruction
 
+## 仓库导航（2026-09-30 整理）
+
+- [研究状态与证据](research/README.md)：先读 00–02，再决定是否提出新实验。
+- [实验总览](experiments/README.md)：5 个 study 的结论、证据位置和续跑限制。
+- [论文索引](related_work/README.md)：已下载论文、版本、阅读笔记和旁支参考资料。
+- [本次整理记录](docs/maintenance/2026-09-30-cleanup.md)：实际清理范围、逐 run 清单和验证结果。
+
+**当前没有获准继续的实验阶段。** Contextual Risk v2 在 Stage 1 gate 失败后停止；
+OQ1 v1 在 Stage 1 以 inconclusive 终止；SAP 路线已关闭。详见实验总览，
+不要把历史计划、交接文档或冻结协议里的 `registered` 当作续跑授权。
+MSRVTT/MSVD test 继续 sealed。
+
 UATVR 的可靠检索实验使用两层归档：受 Git 管理的控制面在
 `experiments/contextual-risk-v2/`，大文件和运行时证据在被忽略的
 `artifacts/contextual-risk-v2/`。任何人不得将新实验直接写入 `logs/` 或 `ckpts/`；

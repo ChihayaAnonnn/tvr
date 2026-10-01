@@ -6,6 +6,17 @@
 
 ---
 
+## 2026-09-30 —— 仓库资料整理与缓存清理
+
+补齐 [实验总览](../experiments/README.md)和[论文索引](../related_work/README.md)，
+把已终止 study 与旧计划区分；原交接文档全文归档，旧磁盘清理报告增加过时提示。
+32 个登记 run 的 canonical manifest digest 与终态核对一致；11 份参考 PDF 全部保留。
+删除 9 个可再生缓存目录（116 个文件，2,211,256 字节）。
+原始论文、checkpoint、日志、registry、冻结协议和两个未跟踪启动脚本保留，
+未启动实验，test 仍 sealed。详见 [整理记录](../docs/maintenance/2026-09-30-cleanup.md)。
+
+---
+
 ## 2026-08-30 (3) —— Stage 1 判定:P0 regime 门不通过,study HALT (inconclusive)
 
 **发生了什么。** r2 phase 三个 arm0 seed 全程跑完并 finalize({completed: 3},

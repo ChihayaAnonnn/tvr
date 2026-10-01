@@ -1,5 +1,10 @@
 # Cleanup Proposal — /data2/hxj/project/UATVR
 
+> **历史审计，不可直接照抄执行。** 下文是 2026-08-23 的快照，多项清理已于
+> 2026-08-24 完成，旧体积与 worktree 状态不再适用。2026-09-30 实测 `.git` 约 29 MiB；
+> 当前清理范围与保留项见 [整理记录](../docs/maintenance/2026-09-30-cleanup.md)。
+> 不要依据本文的旧“zero-risk”标签删除 checkpoint、LFS 对象或历史证据。
+
 Audit date: 2026-08-23. **Read-only audit — nothing was deleted, moved, or modified.**
 All sizes are `du -sb` actual bytes converted to GB (1 GB = 2^30), not rounded `du -sh` output.
 

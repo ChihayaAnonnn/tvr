@@ -1,5 +1,9 @@
 # oq1-kl-variance-hubness-v1 · 控制面
 
+> **当前结论：HALT / inconclusive（2026-08-30）。** Stage 1 regime gate 未通过，
+> Stage 2–6 不再执行，test 保持 sealed。见 [最终判定](summaries/stage1-arm0-baseline.md)。
+> 冻结的 `study.yaml` 保留注册时状态，不是继续执行许可。
+
 预注册协议见 `PREREGISTRATION.md`（散文体，签署于 2026-08-28）与 `study.yaml`
 （冻结，commit 20a4a1d 起）。归档机制沿用 `docs/agent/experiment-artifacts.md` 的
 Scheme A 生命周期（reserve-phase → verify-run → worker → transition-run →
