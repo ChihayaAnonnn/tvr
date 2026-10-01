@@ -30,6 +30,8 @@ presence 数组：`arrays/sha256/e7/e7b338a97db39ca13048c0a189a1aec1497835b074e0
 
 修复验证：窄测 4 项通过（饱和/非饱和链路、两种非终态过渡）；完整命令 `CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 PYTHONPATH=src:. /home/xujie/.conda/envs/tvr/bin/python -m pytest -q` → 324 passed，79.13 秒，1 个 PyTorch TypedStorage 弃用警告。修复仅完成 CPU 验证，未进行第二次 GPU run。
 
+独立修复审阅：无 Critical/Important 问题；另独立执行 4 项窄测通过，全部 127 个归档字节哈希匹配。仅有一项已记录、暂缓的 Minor：饱和回归目前未直接断言 locked 指标来自实际拟合 calibration；当前实现明确重建 fitted service，行为正确，可后续补充该断言。
+
 ## 人工审查与后续授权
 
 本报告仅提供事实和修复，不代表人工批准。按 AGENTS.md，本事故不满足自动恢复条件，必须先人工处理归档异常；任何后续 GPU 验收须得到人工审查与授权，在后续 phase 使用全新 run ID，并以 `parent_run_ids` 和引用受跟踪报告的 `selection_lineage` 保留本次尝试的关系。不得覆盖、原地重启或静默忽略此 run，不能把其状态标记为 PASS。
