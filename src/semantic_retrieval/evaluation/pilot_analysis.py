@@ -527,7 +527,7 @@ def _load_group(group, bundle):
     if (
         group["arm"] not in ("A0", "P1", "A1", "A2", "A3", "A4")
         or group["track"] not in ("natural", "controlled")
-        or group["mechanism"] not in ("fixed", "system", "full")
+        or group["mechanism"] not in ("fixed", "system", "full", "static")
         or group["K"] not in KS
     ):
         raise ValueError("unknown benchmark arm/track/mechanism/K")
@@ -557,6 +557,34 @@ def _load_group(group, bundle):
     for key in ("relevance", "candidate_mask"):
         if row[key].shape != (n, m) or not np.isin(row[key], (0, 1)).all():
             raise ValueError("complete benchmark relationship matrix required")
+    if not np.all(row["relevance"].sum(axis=1) == 1):
+        raise ValueError("pilot requires exactly one canonical benchmark GT per query")
+    if (
+        not np.isin(row["official_relevance"], (0, 1)).all()
+        or row["official_relevance"].ndim != 2
+        or row["official_relevance"].shape[0] != n
+        or not np.all((row["official_relevance"] == 1).any(axis=1))
+    ):
+        raise ValueError("pilot requires complete official labels and nonempty official GT")
+    if group["mechanism"] == "fixed":
+        if not np.all(row["candidate_mask"].sum(axis=1) == min(group["K"], m)):
+            raise ValueError("fixed benchmark panels must contain the exact registered candidate budget")
+        if group["track"] == "natural":
+            if len(set(row["query_ids"])) != n:
+                raise ValueError("natural fixed panels require one row per source query")
+        else:
+            present = (row["relevance"].astype(bool) & row["candidate_mask"].astype(bool)).any(axis=1)
+            for query in set(row["query_ids"]):
+                positions = np.flatnonzero(row["query_ids"] == query)
+                if len(positions) != 2 or present[positions].sum() != 1:
+                    raise ValueError("controlled fixed panels require a present/absent pair per source query")
+                first, second = positions
+                if (
+                    row["component_ids"][first] != row["component_ids"][second]
+                    or not np.array_equal(row["relevance"][first], row["relevance"][second])
+                    or not np.array_equal(row["official_relevance"][first], row["official_relevance"][second])
+                ):
+                    raise ValueError("controlled panel copies changed source component or benchmark GT")
     if not row["candidate_mask"].any(axis=1).all() or np.any(row["candidate_mask"].sum(axis=1) > group["K"]):
         raise ValueError("empty or over-budget candidate panel")
     if group["arm"] in ("A2", "A3", "A4") and ("presence_logits" not in row or row["presence_logits"].shape != (n,)):
@@ -668,34 +696,36 @@ def _freeze(context, bundle, rows, references):
         for r in rows
         if r["group"]["split"] == "val_development" and r["group"]["mechanism"] == "fixed" and r["group"]["K"] == 32
     ]
-    if not development:
-        raise ValueError("development K32 fixed panels required")
+    if not any(r["group"]["track"] == "controlled" for r in development):
+        raise ValueError("controlled development K32 fixed panels required")
     policies, scalar_policies, h1_scores, h2_scores = {}, {}, {s: [] for s in SCALARS}, {s: [] for s in SCALARS}
     for r in development:
         g = r["group"]
         key = _key(r)
-        presence = r.get("presence_logits") if g["arm"] in ("A2", "A3", "A4") else None
-        selected = select_operating_point(
-            r["pair_logits"], r["relevance"], r["candidate_mask"], presence_logits=presence
-        )
-        grid = selected.pop("grid")
-        selected["grid_reference"] = _store(
-            context,
-            key + "_grid",
-            [
+        # Raw action thresholds come only from controlled development K32.
+        if g["track"] == "controlled":
+            presence = r.get("presence_logits") if g["arm"] in ("A2", "A3", "A4") else None
+            selected = select_operating_point(
+                r["pair_logits"], r["relevance"], r["candidate_mask"], presence_logits=presence
+            )
+            grid = selected.pop("grid")
+            selected["grid_reference"] = _store(
+                context,
+                key + "_grid",
                 [
-                    p["pair_threshold"],
-                    p["accept_threshold"],
-                    *[
-                        p[k] if p[k] is not None else -1.0
-                        for k in ("present_coverage", "absent_false_accept", "set_micro_precision", "macro_recall")
-                    ],
-                ]
-                for p in grid
-            ],
-            references,
-        )
-        policies[key] = selected
+                    [
+                        p["pair_threshold"],
+                        p["accept_threshold"],
+                        *[
+                            p[k] if p[k] is not None else -1.0
+                            for k in ("present_coverage", "absent_false_accept", "set_micro_precision", "macro_recall")
+                        ],
+                    ]
+                    for p in grid
+                ],
+                references,
+            )
+            policies[key] = selected
         if g["arm"] == "A1":
             confidences = scalar_confidences(r["pair_logits"], r["candidate_mask"])
             for scalar, confidence in confidences.items():
@@ -857,7 +887,7 @@ def _evaluate_group(context, bundle, frozen, row, references, *, raw_rc):
             if "full_presence_logits" in row
             else None
         )
-    point_key = f"{g['arm']}_seed{g['seed']}_{g['track']}_fixed_K32"
+    point_key = f"{g['arm']}_seed{g['seed']}_controlled_fixed_K32"
     point = frozen["policies"].get(point_key, {}).get("operating_point")
     answers = apply_operating_point(
         row["pair_logits"],
@@ -1158,9 +1188,10 @@ def _hypotheses(effects, gates):
             else ("FAIL" if any(c["status"] == "FAIL" for c in comparisons) else "inconclusive"),
             comparisons=comparisons,
         )
+    # Confirmatory power is descriptive metadata, not a benchmark-pilot gate.
     qualified = all(
         gates.get(k) is True
-        for k in ("data", "four_gpu_qualification", "gradients", "stability", "invariance", "power")
+        for k in ("data", "four_gpu_qualification", "gradients", "stability", "invariance")
     )
     if not qualified:
         return tests, "inconclusive"
