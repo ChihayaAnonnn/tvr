@@ -1,8 +1,8 @@
 # 重建检索系统实验计划：多答案、候选存在与有限扩检
 
-日期：2026-10-01。状态：**完整设计草案，待书面审阅；未预注册、未预留 run、未启动实验。**
+日期：2026-10-01。状态：**设计已通过用户审阅（含指标、可视化、消融与敏感性补充）；未预注册、未预留 run、未启动实验。**
 
-本轮交付是研究实验设计，不是代码实施计划。用户已授权设置有限人工审核预算；下文的审核量、训练量和成功判据是拟定值，正式 study 签署前可以修订，看到相应结果后不得追改。
+本轮交付是研究实验设计，不是代码实施计划。用户已授权设置有限人工审核预算，并于本会话批准本设计；下文的审核量、训练量和成功判据已作为设计接受，正式 study 签署前的修订必须说明理由并审阅，看到相应结果后不得追改。实施准备分为 C1 数据/审核、C2 训练/实验臂、C3 校准/分析、C4 四卡资格/运行；首个详细计划见 [C1 实施计划](../plans/2026-10-01-semantic-pilot-c1-data-audit.md)。
 
 ## 1. 目的、证据与范围
 
@@ -282,9 +282,9 @@ raw alias 归一化 entropy 可另作离线重复敏感性示例，但它不属�
 
 若 P1b 任一臂 development 无可行点，仍保留该臂，并将其记为不可行；全部策略都不可行则停止，不打开 locked。P2a/P2b 不因收益筛臂。父/子必须分 phase，不能预留引用尚不存在 checkpoint SHA 的子 run。无授权的基础设施重试不纳入“24 个”中静默追加。
 
-建议新研究身份 `semantic-answerability-pilot-v1`，独立 frozen protocol 与 registry。**当前 AGENTS.md 的物理路径只允许 contextual-risk-v2，且旧 study 已停止**：不能直接在建议的新数据面写输出，也不能把新训练挂成旧 study 的 Stage 2。D0 必须明确审阅并提交 AGENTS.md/归档契约的路径授权修订，再建立独立控制面与数据面。未完成则预留拒绝。本设计没有创建这些目录或修改旧协议。
+新研究身份设计为 `semantic-answerability-pilot-v1`，独立 frozen protocol 与 registry。**当前 AGENTS.md 的物理路径只允许 contextual-risk-v2，且旧 study 已停止**：设计审阅通过不替代路径契约落地，不能直接在新数据面写输出，也不能把新训练挂成旧 study 的 Stage 2。D0 还需提交 AGENTS.md/归档契约的路径修订和新控制面。未完成则预留拒绝。本设计没有创建这些目录或修改旧协议。
 
-授权后拟采用 `experiments/semantic-answerability-pilot-v1/` 控制面与 `artifacts/semantic-answerability-pilot-v1/<dataset>/<stage>/<run-id>/` 数据面；只是待批准的布局。每 phase 先 reserve-phase、整批提交 reserved、verify-run、从干净精确 SHA 启动。worker 不改受跟踪文件；终态后再 finalize 并提交摘要。失败/cancelled 不原地重试；审核后的新尝试在后续 phase 用新 run ID 和受跟踪理由连接 parent_run_ids。
+设计采用 `experiments/semantic-answerability-pilot-v1/` 控制面与 `artifacts/semantic-answerability-pilot-v1/<dataset>/<stage>/<run-id>/` 数据面，实际使用仍以 D0 提交后的路径契约为准。每 phase 先 reserve-phase、整批提交 reserved、verify-run、从干净精确 SHA 启动。worker 不改受跟踪文件；终态后再 finalize 并提交摘要。失败/cancelled 不原地重试；审核后的新尝试在后续 phase 用新 run ID 和受跟踪理由连接 parent_run_ids。
 
 数值数组、逐查询记录和 bootstrap 样本均写 run-local 外置 NPY/NPZ，JSON 仅放统计量和哈希引用；超过 1 MiB 必须外置并验证哈希。审核过程的历史记录 append-only，不覆盖已审核决定，仲裁作为新版本关联原判断。
 
@@ -301,4 +301,4 @@ raw alias 归一化 entropy 可另作离线重复敏感性示例，但它不属�
 - 已明确两假设、八个 run 身份、三 seed、分区和候选生成、审核/GPU 上限、阈值规则、概率迁移边界、每项分母、统计单位与终态规则；A2 用存在输入 detach 而非冻结整个 matcher，以隔离梯度路径。
 - 已把当前 CLI、模式、校准身份和指标缺口列作启动前硬条件，没有虚构可运行命令、run ID、文件 SHA 或 GPU 资格。
 - 新数据面与 AGENTS.md 的冲突必须在 D0 裁决，不能通过本设计草案默默解除。
-- 本次设计文档可以审阅；后续实施计划、协议签署、预留和实验启动均尚未完成。
+- 设计审阅已通过；C1 实施计划另行审阅，协议签署、预留和实验启动尚未完成。
