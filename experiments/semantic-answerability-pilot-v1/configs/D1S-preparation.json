@@ -1,0 +1,22 @@
+{
+  "allowed_root": "/data2/hxj/data/MSRVTT",
+  "allowlist_csv": {
+    "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv",
+    "sha256": "0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3"
+  },
+  "annotation": null,
+  "candidate_orders": null,
+  "catalog": null,
+  "mode": "snapshot",
+  "protocol_id": "clip4clip-msrvtt-9k-train-pilot-v1",
+  "relevance_space": "benchmark_annotation",
+  "source_annotation": {
+    "path": "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json",
+    "sha256": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33"
+  },
+  "source_confirmation": {
+    "path": "/data2/hxj/project/UATVR/docs/maintenance/2026-10-01-msrvtt-source-confirmation.json",
+    "sha256": "722eaf027a34e9eebaa04778eae72acde35e57c13d46e9258a6b53fdf66b1ff1"
+  },
+  "video_directory": "/data2/hxj/data/MSRVTT/videos/all"
+}
