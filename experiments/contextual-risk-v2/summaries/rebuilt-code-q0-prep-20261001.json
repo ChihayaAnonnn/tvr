@@ -1,0 +1,33 @@
+{
+  "phase": "rebuilt-code-q0-prep-20261001",
+  "phase_path": "experiments/contextual-risk-v2/phases/rebuilt-code-q0-prep-20261001.json",
+  "runs": [
+    {
+      "manifest_sha256": "26a52951f54e8194dbb10cdc8086ba65d8bdf11dd10b296cef6c58edc6b76983",
+      "output_hashes": {
+        "arrays/random-clip.npz": "4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8",
+        "command.sh": "d5b9d358670255ba3a2336e6afc0591fdb9545e1d47e3b24a5b2b0079de16529",
+        "logs/worker.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "metrics/selected_validation.json": "508710a8b1c15abf5d350aa86a0c480041b42e18d68a9c895cf00a4cb979046c",
+        "metrics/val_eval_000.json": "7e9162dbed90f2706cd1975fea489330b266ee70b799f21a665a324fe8c6bb36",
+        "provenance/input-inventory.json": "cd0044679fe3c2bbc8805121c040ff3a701163f2688a100a948a9844897d9463",
+        "provenance/synthetic-inputs/train.json": "12d6fb9071def4ac731fa41ed3943d8343b9a721ffd8c8b88fdc2d227bc41d4e",
+        "provenance/synthetic-inputs/val_calibration.json": "f4c0d8efaac403c778438f6a23c566db5c04e998d1ae99b21ece024bb6a8ee91",
+        "provenance/synthetic-inputs/val_locked.json": "ab85bf45ee08808cf344c762f03521d4e4c8c7bf9c13c8b56b9847b538f3f6d3",
+        "provenance/synthetic-inputs/video-0.avi": "e08bf63fe39c11536232c3fd0ed1a40369c7f2035c1230f5efa51bf82e19dde4",
+        "provenance/synthetic-inputs/video-1.avi": "73042e537ab846163e555f91fa14c8de7e6a1204f5b2fbb7045d38d0e8a7dddd",
+        "provenance/synthetic-inputs/video-2.avi": "af276ff3396b96d2038fd41ae320e71b4c1989ccaf6b26553d07122c5f51a35c",
+        "provenance/system-template.json": "dc103c103bd932e4b33caedaea22c29464b3aa94363d4305366e023b7b49e56f"
+      },
+      "run_id": "synthetic-baseline-rebuilt-prod-prep-seed713-20261001T063403Z-3257882181aa",
+      "state": "completed",
+      "summary_metrics": {
+        "software_input_count": 7.0
+      }
+    }
+  ],
+  "study": "contextual-risk-v2",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
