@@ -10,7 +10,7 @@
 
 **Spec:** [修订后的实验设计](../specs/2026-10-01-semantic-retrieval-experiment-design.md)，重点为第 3、4、9、10 节。
 
-状态：2026-10-01 用户要求直接完成 C1–C4；Tasks 1–6 已实现并经独立审阅；真实 D1 尚待执行。合成验收与新增 Task 7 的真实 D1 准备分开，不启动科学 GPU。
+状态：2026-10-01 用户要求直接完成 C1–C4；Tasks 1–6 已实现并经独立审阅；真实 D1 已完成并归档（见 Task 7 与真实数据报告）。合成验收与新增 Task 7 的真实 D1 准备分开，不启动科学 GPU。
 
 ## Global Constraints
 
@@ -135,14 +135,16 @@ C2 再写 minibatch/DDP、K/panel 调度、A0–A4/P1 与父 checkpoint；C3 再
 **Interface:** preparation mode snapshot (source_inventory), inventory (source_inventory), compile (benchmark_compile); manifest evaluation qualification_scenario is `pilot_prepare:` + canonical preparation SHA. No arbitrary output path.
 
 - [x] 先编写并运行 allowlist-first 隐私守卫测试，排除记录的 caption decoder 调用为零；再实现严格字节选择器。
-- [ ] 提交用户新授权范围、源码、路径合同及快照配置；读取 ID-only CSV，哈希 9000 个允许训练视频及来源报告，不解析 test caption。
-- [ ] 将原始 v2、9k ID-only CSV、已提交核验报告、9000 视频全部绑定 phase 输入；reserve-phase 后提交整批 reserved，再从干净源码启动 CPU snapshot worker。
-- [ ] 导出180000条训练 caption和每视频最小稳定 caption ID的一条 pilot annotation；原视频哈希去重，核验实际帧数及8个均匀帧可解码；输出 train-only allowlist/source report/catalog。
-- [ ] worker终态后提交 terminal batch/摘要。另建 compile phase绑定快照和视频，以6500/500/500/1000与129/800数量门划分；输出 v2 episodes/gallery、独立关系/映射及hash。
-- [ ] 验证真实编译数量、source/component互斥、GT所属库与test未解码，提交D1结果。输入问题停止并保留证据，不静默重试。
+- [x] 提交用户新授权范围、源码、路径合同及快照配置；读取 ID-only CSV，哈希 9000 个允许训练视频及来源报告，不解析 test caption。
+- [x] 将原始 v2、9k ID-only CSV、已提交核验报告、9000 视频全部绑定 phase 输入；reserve-phase 后提交整批 reserved，再从干净源码启动 CPU snapshot worker。
+- [x] 导出180000条训练 caption和每视频最小稳定 caption ID的一条 pilot annotation；原视频哈希去重，核验实际帧数及8个均匀帧可解码；输出 train-only allowlist/source report/catalog。
+- [x] worker终态后提交 terminal batch/摘要。另建 compile phase绑定快照和视频，以6500/500/500/1000与129/800数量门划分；输出 v2 episodes/gallery、独立关系/映射及hash。
+- [x] 验证真实编译数量、source/component互斥、GT所属库与test未解码，提交D1结果。输入问题停止并保留证据，不静默重试。
 
 原 Tasks 1–6 的合成验收范围不改变。新 Task 7 的授权来自用户本次明确要求生成独立快照并直接完成，而非先前一次只读核验。
 
 2026-10-01 审查加固：catalog来源确认必须绑定独立Git-tracked study trust anchor；query annotation路径/SHA及allowlist/source-report指纹贯通，视频帧数逐帧解码确认。CPU准备variant不得携带科学模型/优化器配置。数量门失败仍保存结构化来源计数及stop reason。
 
 来源审查补充：独立审计CSV与导出allowlist必须逐ID相同，而非只比数量；导出另存train-only caption projection，catalog重算其完整训练关系指纹并与独立核验报告比对。选中annotation的caption/ID必须属于该已核验projection，source_annotation SHA透传到标签协议。compile/inventory将projection、原ID-only CSV和全部来源元数据绑定为输入，仍不解码混合源或test caption。
+
+真实 D1 验收：`fa189d1` 封存 9000 视频/180000 caption 的独立快照，`8fe109a` 封存 7000/500/500/1000 分区编译。两 run 均 completed/exit0，完整输出哈希与 terminal registry 已提交；详情见 [真实数据报告](../reports/2026-10-01-semantic-pilot-c1-real-data.md)。
