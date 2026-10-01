@@ -35,7 +35,8 @@ def test_agent_rules_cover_every_mandatory_archive_guardrail(repo_root: Path) ->
         "1 MiB",
         "validation",
         "terminal registry",
-        "不得静默重试",
+        "不再要求每次失败后人工审核和授权重试",
+        "不能证明身份、源码或输出完整性",
     ):
         assert rule in text
 
@@ -157,7 +158,7 @@ def test_study_readme_exposes_lifecycle_commands_and_stage_zero_gate(repo_root: 
 
 @pytest.mark.parametrize(
     "path",
-    ["AGENTS.md", "docs/agent/experiment-artifacts.md"],
+    ["docs/agent/experiment-artifacts.md"],
 )
 def test_docs_forbid_terminal_in_place_retry_and_describe_existing_lineage(
     repo_root: Path, path: str
@@ -166,7 +167,7 @@ def test_docs_forbid_terminal_in_place_retry_and_describe_existing_lineage(
     for required in (
         "failed/cancelled",
         "不可原地重试",
-        "新的唯一 run ID",
+        "新的 phase/run ID",
         "`parent_run_ids`",
         "`selection_lineage`",
         "`supersedes_sha256`",
@@ -242,3 +243,11 @@ def test_qualification_summary_supersedes_git_admin_lineage_for_future_runs(
     assert "`sdd/task-7-review.md`" in summary
     assert "Git-tracked report or commit" in normalized
     assert "must not cite worktree Git administrative state" in normalized
+
+
+def test_removed_manual_retry_rule_is_not_reintroduced(repo_root: Path) -> None:
+    text = (repo_root / "AGENTS.md").read_text(encoding="utf-8")
+    assert "不再要求每次失败后人工审核和授权重试" in text
+    assert "8. 保留失败运行" not in text
+    assert "只有人工审查和授权后" not in text
+    assert "不允许覆盖历史产物或绕过研究 gate" in text
