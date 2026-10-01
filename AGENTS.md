@@ -30,3 +30,12 @@ SOLID/CAVEATED/RETRACTED 标记）、`02-dead-ends.md`（已证伪方向，不�
 计划、预留或启动本 pilot 前还须读取其 study.yaml 与 registry.jsonl。
 上述规则 1–8 同样适用；新路径不复活旧 study，不授权 test。
 C1 仅授权 CPU 来源/编译；科学 GPU 仍由新增链路四卡资格与明确 gate 拒绝守卫控制。
+
+## 授权双卡软件预检路径（2026-10-01）
+
+用户批准 GPU 3、4 的梯度通路与断点恢复预检。独立控制面为
+`experiments/dual-gpu-preflight-v1/`，数据面为
+`artifacts/dual-gpu-preflight-v1/<dataset>/<stage>/<run-id>/`。
+执行前必读本 study 与 registry；规则 1–8 同样适用。
+仅合成数据、正式容量随机权重、FP32、两个 CUDA rank；不得替代四卡 Q0、
+不得科学训练或解封 test，不改变既有 Q0 预留。

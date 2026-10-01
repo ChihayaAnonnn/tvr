@@ -14,6 +14,15 @@ def assert_pilot_authorized(*, repo_root: Path, registry_path: Path, manifest: d
     registry = Path(registry_path)
     if not registry.is_absolute():
         registry = Path(repo_root) / registry
+    if (
+        manifest["study"] == "dual-gpu-preflight-v1"
+        or "dual-gpu-preflight-v1" in registry.parts
+        or "dual-gpu-preflight-v1" in Path(manifest["artifact_path"]).parts
+    ):
+        from .dual_gpu_preflight import validate_manifest
+
+        validate_manifest(Path(repo_root).resolve(), registry, manifest)
+        return
     root = Path(manifest["artifact_path"])
     relevant = manifest["study"] == PILOT or PILOT in registry.parts or PILOT in root.parts
     if not relevant:
