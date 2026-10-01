@@ -2,8 +2,10 @@
 
 from torch import nn
 
+from semantic_retrieval.models.answerability import AnswerabilityHead
 from semantic_retrieval.models.clip import ClipBackbone
 from semantic_retrieval.models.coarse import CoarseProjector
+from semantic_retrieval.models.pair_matcher import PairMatcher
 from semantic_retrieval.models.temporal import TemporalEncoder
 from semantic_retrieval.models.weights import load_clip_state
 from semantic_retrieval.types import EncodedFeatures, QueryFeatures, VideoFeatures
@@ -17,6 +19,8 @@ class SemanticRetrievalModel(nn.Module):
         load_clip_state(config.clip_weights, config.clip_sha256, self.clip)
         self.temporal = TemporalEncoder(config.dim, config.num_layers, config.num_heads, config.max_frames)
         self.coarse = CoarseProjector(config.dim, config.coarse_dim)
+        self.matcher = PairMatcher(config.dim)
+        self.answerability = AnswerabilityHead(self.matcher.feature_dim)
 
     def encode_query(self, inputs):
         tokens, pooled = self.clip.encode_text(inputs.input_ids, inputs.text_mask)
@@ -40,3 +44,9 @@ class SemanticRetrievalModel(nn.Module):
 
     def coarse_embeddings(self, features):
         return self.project_query(features), self.project_gallery(features)
+
+    def score_pairs(self, features, pair_indices, *, return_alignment=False):
+        return self.matcher(features, pair_indices, return_alignment=return_alignment)
+
+    def score_presence(self, pair_scores, query_offsets):
+        return self.answerability(pair_scores, query_offsets)
