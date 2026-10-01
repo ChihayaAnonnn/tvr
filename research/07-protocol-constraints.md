@@ -19,7 +19,7 @@ controller 会直接拒绝 Stage 2 的 reserve（predecessor gate 未通过）�
 `study.yaml` 是 frozen 的。换超参重跑 = post-hoc selection，直接毁掉整个 campaign 的统计有效性。
 Stage 1 已经 finalize（commit `eb2ee0b`），它的 FAIL 是**已注册的终态结论**，不是待改进的中间态。
 
-*出处：`todo.md:37`；AGENTS.md 规则 8（`failed/cancelled` 是不可变终态，不得原地重试或复用 run ID）。*
+*出处：`todo.md:37`。旧终态不可覆盖由生命周期/schema 保证；2026-10-01 用户删除第8条，取消逐次人工重试授权。*
 
 ---
 
@@ -106,7 +106,7 @@ study（新目录 + 新 protocol_version）重新建立授权路径。
 
 ---
 
-## PC-8 · AGENTS.md 的 Scheme A 归档规则 1–8（全文强制）
+## PC-8 · AGENTS.md 的 Scheme A 归档规则 1–7（全文强制）
 
 要点复述（**以 `AGENTS.md` 原文为准**）：
 
@@ -118,8 +118,8 @@ study（新目录 + 新 protocol_version）重新建立授权路径。
 5. >1 MiB 的数值数组外置为 NPY/NPZ 引用并校验哈希；JSON 里不得嵌张量 / 相似度矩阵 / 逐查询数组 / bootstrap 样本。
 6. 选择、消融、阈值、K、校准**只用 validation**；test 在 gate 授权前保持 sealed。（= PC-4）
 7. 同 phase 所有 worker 终态后，追加 terminal registry 记录 + 受跟踪摘要，再提交该批。
-8. 失败运行的日志/状态/命令/哈希证据必须保留；**不得静默重试**；`failed/cancelled` 不可变；
-   重试须人工授权后开新 run ID，用 `parent_run_ids` + `selection_lineage` 记录理由。
+
+2026-10-01 用户删除原第8条，不再要求逐次人工批准重试。恢复按 campaign 策略核验；现有生命周期/schema、历史产物和旧研究 gate 不变。
 
 > ⚠️ **已知违规现状：** Fix 1 v1/v2 与 SAP study 的产物写在 `WT/ckpts/` 与 `WT/logs/` 下，
 > `WT/artifacts/` 与 `registry.jsonl` 均不存在 —— 即**违反规则 2 与规则 7**。

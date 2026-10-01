@@ -124,7 +124,9 @@ commits the whole reserved registry batch. `run --phase CONTROL_PHASE` verifies 
 member before the first launch, injects exact immutable runtime config, executes the
 sealed argv once, enforces each GPU-hour ceiling, closes all workers and commits the
 whole terminal batch plus tracked summary. Failure cancels untouched siblings and stops
-with a manual-review requirement. Terminal state and bytes cannot be reused or rewritten.
+with successor review in the current implementation. On 2026-10-01 the user removed
+the blanket manual-approval rule; automatic policy-based recovery is designed but not
+yet implemented. Terminal state and bytes cannot be reused or rewritten.
 
 C0/V0 immutable bundle/config assembly and their CPU analysis commands use
 [the C3 handoff](semantic-pilot-analysis.md). The controller does not select settings,

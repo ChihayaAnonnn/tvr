@@ -40,9 +40,9 @@ legacy contract，也不得在当前 metrics schema 中静默增加字段。
 待提交 transition 的崩溃窗口；`failed/cancelled` 是不可变终态，不可原地重试，也不可复用相同
 run ID。
 
-如人工审查确认是基础设施问题并授权新的尝试，必须在后续 phase 预留新的唯一 run ID。新
-manifest 的既有 `parent_run_ids` 必须链接 predecessor，`selection_lineage` 必须保留人工审核的
-重试理由。对旧登记行的事实更正只可追加 `correction`，并以 `supersedes_sha256` 指向同一 run
+2026-10-01 用户删除第8条，不再要求逐次人工授权。后续尝试仍通过现有生命周期使用
+新的 phase/run ID；`parent_run_ids` 链接 predecessor，`selection_lineage` 记录策略、自动或
+人工审核报告和理由。自动恢复尚未实现；文档变更不代表当前代码支持自动重试。对旧登记行的事实更正只可追加 `correction`，并以 `supersedes_sha256` 指向同一 run
 的既有记录；当前 schema 不支持用 correction 将旧 run 跨 run 链接到新尝试。配置、命令、输入或
 source SHA 改变时也必须新预留 run。路径/哈希/审计无法验证时停止并请求人工处理，绝不静默重试
 或覆盖既有目录。
