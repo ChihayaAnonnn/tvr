@@ -15,6 +15,7 @@ class Gallery:
     canonical_ids: tuple[str, ...]
     aliases: dict[str, tuple[str, ...]]
     content_sha256: dict[str, str]
+    frame_counts: dict[str, int]
     video: torch.Tensor
     frame_mask: torch.Tensor
     preprocessing: EpisodePreprocessing
@@ -63,5 +64,39 @@ def read_gallery(path, *, gallery_version):
         video[j, : len(frames)] = frames
         mask[j, : len(frames)] = valid
     return Gallery(
-        ids, {i: tuple(sorted(v)) for i, v in aliases.items()}, {i: rows[i][1] for i in ids}, video, mask, pre
+        ids,
+        {i: tuple(sorted(v)) for i, v in aliases.items()},
+        {i: rows[i][1] for i in ids},
+        {i: rows[i][2] for i in ids},
+        video,
+        mask,
+        pre,
     )
+
+
+def audit_episode_gallery(episodes, gallery):
+    for e in episodes:
+        if e.preprocessing != gallery.preprocessing:
+            raise ValueError("query/gallery preprocessing mismatch")
+        for i, digest, count in zip(e.canonical_ids, e.content_sha256, e.frame_counts):
+            if i in gallery.content_sha256 and (
+                digest != gallery.content_sha256[i] or count != gallery.frame_counts[i]
+            ):
+                raise ValueError("canonical episode/gallery content or frame-count conflict")
+
+
+def preprocessing_sha256(preprocessing):
+    """Consumer implementation and parameters, independent of control-plane commits."""
+    import hashlib
+    from dataclasses import asdict
+
+    from experiment_artifacts import artifact_json_bytes
+
+    root = Path(__file__).parent
+    names = ("video.py", "tokenizer.py", "bpe_simple_vocab_16e6.txt.gz")
+    payload = dict(
+        schema_version=1,
+        parameters=asdict(preprocessing),
+        implementation={name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in names},
+    )
+    return hashlib.sha256(artifact_json_bytes(payload)).hexdigest()

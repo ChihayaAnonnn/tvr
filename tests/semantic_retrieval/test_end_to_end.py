@@ -122,3 +122,184 @@ def test_checkpoint_to_service(model, inputs, train_batch, training_context, tmp
     load_checkpoint(path, restored, expected_config_sha256=config_sha256(cfg))
     service, _ = make_service(restored, inputs, tmp_path)
     assert service.retrieve(QueryInputs(inputs.input_ids[:1], inputs.text_mask[:1]), budget=3).action == "abstain"
+
+
+def test_actual_train_calibrate_evaluate_entrypoints(tmp_path, monkeypatch):
+    import hashlib
+    import json
+    from types import SimpleNamespace
+
+    import cv2
+    import numpy as np
+    from test_runtime_artifacts import commit_reservation, reservation
+
+    from scripts import evaluate_semantic_retrieval as eval_cli
+    from scripts import train_semantic_retrieval as train_cli
+    from semantic_retrieval.config import (
+        ClipConfig,
+        DataConfig,
+        DeploymentConfig,
+        ModelConfig,
+        PolicyConfig,
+        SystemConfig,
+        TrainConfig,
+        config_payload,
+        effective_manifest_config,
+    )
+    from semantic_retrieval.models.clip import ClipBackbone
+    from semantic_retrieval.runtime.checkpoint import config_sha256
+
+    source = tmp_path / "inputs"
+    source.mkdir()
+
+    def digest(path):
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    clips = []
+    for i in range(2):
+        path = source / f"v{i}.avi"
+        writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 1, (16, 16))
+        writer.write(np.full((16, 16, 3), 40 + i * 80, dtype=np.uint8))
+        writer.release()
+        clips.append(path)
+    pre = dict(max_text_length=5, max_frames=4, image_size=8)
+    clip = ClipConfig(8, 8, 64, 1, 4, 5, 49408, 8, 1, 1, fixture=True)
+    weights = source / "clip.pt"
+    torch.save(ClipBackbone(clip).state_dict(), weights)
+    mc = ModelConfig(clip, weights, digest(weights), 8, 0, 2, 4, 6)
+    tc = TrainConfig(
+        0.001,
+        0.0,
+        7,
+        "constant",
+        1,
+        ("coarse.", "matcher.", "answerability."),
+        dict(coarse=1.0, match=1.0, pair=1.0, exist=1.0, align=0.0, group=0.0),
+    )
+    policy = PolicyConfig(0.5, 0.5, (2,), 2)
+
+    def episode_file(split):
+        rows = []
+        for j in range(2):
+            provenance = dict(source="synthetic audited fixture", reviewed=True, sha256="a" * 64)
+            if j == 1:
+                provenance["gallery_audit"] = dict(
+                    gallery_version="fixture", scope="complete", reviewed=True, source="synthetic complete library"
+                )
+            rows.append(
+                dict(
+                    query_id=f"{split}-q{j}",
+                    query_text="a video",
+                    gallery_version="fixture",
+                    candidate_ids=["a", "b"],
+                    canonical_ids=["a", "b"],
+                    relevance=["positive", "negative"] if j == 0 else ["negative", "negative"],
+                    answer_in_candidates="yes" if j == 0 else "no",
+                    answer_in_gallery="yes" if j == 0 else "no",
+                    annotation_provenance=provenance,
+                    split=split,
+                    video_paths=[str(x) for x in clips],
+                    content_sha256=[digest(x) for x in clips],
+                    frame_counts=[1, 1],
+                    source_ids=["s0", "s1"],
+                    caption_group_id=f"{split}-caption{j}",
+                )
+            )
+        path = source / f"{split}.json"
+        path.write_text(json.dumps(dict(schema_version=1, gallery_version="fixture", preprocessing=pre, episodes=rows)))
+        return path
+
+    gallery = source / "gallery.json"
+    gallery.write_text(
+        json.dumps(
+            dict(
+                schema_version=1,
+                gallery_version="fixture",
+                preprocessing=pre,
+                videos=[
+                    dict(canonical_id=i, alias_id=i, video_path=str(path), content_sha256=digest(path), frame_count=1)
+                    for i, path in zip(["a", "b"], clips)
+                ],
+            )
+        )
+    )
+
+    def run(split, dep=None):
+        path = episode_file(split)
+        dc = DataConfig(path, digest(path), "fixture", split)
+        cfg = SystemConfig(None, mc, tc, policy, dc, dep)
+        inputs = [dict(path=str(weights), sha256=digest(weights))]
+        refs = [dict(path=str(path), sha256=digest(path))]
+        if dep:
+            inputs.append(dict(path=str(dep.checkpoint_path), sha256=dep.checkpoint_sha256))
+            refs.append(dict(path=str(gallery), sha256=digest(gallery)))
+            if dep.calibration_path:
+                refs.append(dict(path=str(dep.calibration_path), sha256=dep.calibration_sha256))
+        phase = tmp_path / f"{split}-{dep.mode if dep else 'train'}"
+        phase.mkdir()
+        repo, rt = reservation.__wrapped__(
+            phase,
+            SimpleNamespace(
+                param=dict(
+                    config=effective_manifest_config(cfg, eval_split=split),
+                    input_checkpoints=inputs,
+                    dataset_splits=refs,
+                )
+            ),
+        )
+        rt = replace(rt, eval_split=split)
+        cfg = replace(cfg, runtime=rt)
+        commit_reservation(repo, rt)
+        config = rt.run_dir / "provenance" / "system-config.json"
+        config.write_text(json.dumps(config_payload(cfg)))
+        module = train_cli if dep is None else eval_cli
+        monkeypatch.setattr(module, "__file__", str(repo / "scripts" / "entry.py"))
+        assert module.main(["--config", str(config)]) == 0
+        status = json.loads((rt.run_dir / "status.json").read_text())
+        assert status["state"] == "validating"
+        return cfg, rt
+
+    train_cfg, train_rt = run("train")
+    checkpoint = next((train_rt.run_dir / "checkpoints").glob("*.pt"))
+    cal_input = episode_file("val_calibration")
+    dep = DeploymentConfig(
+        checkpoint,
+        digest(checkpoint),
+        config_sha256(train_cfg),
+        gallery,
+        digest(gallery),
+        None,
+        None,
+        digest(cal_input),
+        "calibrate",
+    )
+    _, cal_rt = run("val_calibration", dep)
+    calibration = cal_rt.run_dir / "provenance" / "calibration.json"
+    dep = replace(dep, mode="evaluate", calibration_path=calibration, calibration_sha256=digest(calibration))
+    _, eval_rt = run("val_locked", dep)
+    assert len(list((eval_rt.run_dir / "metrics").glob("*.json"))) == 1
+
+
+@pytest.mark.parametrize("defect", ["hash", "frame_count"])
+def test_episode_and_gallery_canonical_content_must_agree(defect):
+    from semantic_retrieval.data.gallery import audit_episode_gallery
+
+    pre = SimpleNamespace(max_text_length=5, max_frames=4, image_size=8)
+    gallery = SimpleNamespace(preprocessing=pre, content_sha256={"a": "a" * 64}, frame_counts={"a": 1})
+    episode = SimpleNamespace(
+        preprocessing=pre,
+        canonical_ids=("a",),
+        content_sha256=("b" * 64 if defect == "hash" else "a" * 64,),
+        frame_counts=(2 if defect == "frame_count" else 1,),
+    )
+    with pytest.raises(ValueError, match="content|frame-count"):
+        audit_episode_gallery([episode], gallery)
+
+
+def test_preprocessing_changes_parameters_not_control_commit():
+    from semantic_retrieval.data.episodes import EpisodePreprocessing
+    from semantic_retrieval.data.gallery import preprocessing_sha256
+
+    pre = EpisodePreprocessing(5, 4, 8)
+    assert preprocessing_sha256(pre) == preprocessing_sha256(pre)
+    assert preprocessing_sha256(pre) != preprocessing_sha256(replace(pre, max_frames=3))

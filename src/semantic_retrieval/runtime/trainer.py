@@ -1,5 +1,6 @@
 """Explicit FP32 training and known-relation distributed normalization."""
 
+import math
 import random
 
 import numpy as np
@@ -57,7 +58,26 @@ def global_coarse_relations(batch, video_embeddings):
             if (q, v) in known and known[q, v] != label:
                 raise ValueError("cross-rank annotation conflict")
             known[q, v] = label
-    gathered = gather_with_grad(video_embeddings)
+    if dist.is_initialized():
+        specs = [None] * dist.get_world_size()
+        dist.all_gather_object(
+            specs, (tuple(video_embeddings.shape), str(video_embeddings.dtype), video_embeddings.device.type)
+        )
+        if any(
+            len(shape) != 2
+            or shape[1] != video_embeddings.shape[1]
+            or dtype != str(video_embeddings.dtype)
+            or device != video_embeddings.device.type
+            for shape, dtype, device in specs
+        ):
+            raise ValueError("gallery embedding dimensions/dtypes must agree across ranks")
+        sizes = [shape[0] for shape, _, _ in specs]
+        capacity = max(1, max(sizes))
+        padded = torch.nn.functional.pad(video_embeddings, (0, 0, 0, capacity - len(video_embeddings)))
+        gathered_padded = gather_with_grad(padded)
+        gathered = torch.cat([gathered_padded[r * capacity : r * capacity + n] for r, n in enumerate(sizes)])
+    else:
+        gathered = video_embeddings
     # A canonical video appearing on more than one rank gets only one column.
     positions = {}
     for index, i in enumerate(gallery):
@@ -82,26 +102,18 @@ class Trainer:
         self.scheduler = scheduler
         self.context = context
         self.step = 0
-        desired = {
-            id(p)
-            for n, p in self.raw.named_parameters()
-            if n.startswith(context.system_config.train.trainable_prefixes)
-        }
-        trainable = {id(p) for p in self.raw.parameters() if p.requires_grad}
-        actual = [id(p) for group in optimizer.param_groups for p in group["params"]]
-        if desired != trainable or set(actual) != desired or len(actual) != len(desired):
-            raise ValueError("optimizer must cover exactly the declared trainable parameters")
-        if scheduler.optimizer is not optimizer:
-            raise ValueError("scheduler optimizer mismatch")
+        verify_training_contract(self.raw, optimizer, scheduler, context, self.step)
 
     def restore(self, state):
         self.optimizer.load_state_dict(state.optimizer_state)
         self.scheduler.load_state_dict(state.scheduler_state)
         restore_rng(state.rng_state)
         self.step = state.step
+        verify_training_contract(self.raw, self.optimizer, self.scheduler, self.context, self.step)
 
     def train_step(self, batch):
         assert_running(self.context)
+        verify_training_contract(self.raw, self.optimizer, self.scheduler, self.context, self.step)
         if torch.is_autocast_enabled() or torch.is_autocast_cpu_enabled():
             raise ValueError("training requires FP32")
         if len(set(batch.query_ids)) != len(batch.query_ids) or len(set(batch.canonical_ids)) != len(
@@ -189,10 +201,61 @@ class Trainer:
         active = any(weights[k] > 0 and global_counts[i] > 0 for i, k in enumerate(LOSS_NAMES))
         if active:
             loss.backward()
+        if active:
             self.optimizer.step()
             self.scheduler.step()
             self.step += 1
-        metrics = {k: float(value.detach()) for k, value in terms.items() if not k.startswith("valid_")}
+        numerators = torch.stack([terms[k].detach() * counts[i] for i, k in enumerate(LOSS_NAMES)])
+        if world > 1:
+            dist.all_reduce(numerators)
+        metrics = {
+            k: float(numerators[i] / global_counts[i]) if global_counts[i] else 0.0 for i, k in enumerate(LOSS_NAMES)
+        }
+        metrics["total"] = sum(weights[k] * metrics[k] for k in LOSS_NAMES)
         metrics.update({"valid_" + k + "_count": int(global_counts[i]) for i, k in enumerate(LOSS_NAMES)})
         metrics.update(stepped=int(active), step=self.step)
         return metrics
+
+
+def verify_training_contract(model, optimizer, scheduler, context, step):
+    assert_running(context)
+    config = context.system_config
+    if config is None or model.config != config.model:
+        raise ValueError("model config differs from bound reservation")
+    cfg = config.train
+    desired = {id(p) for n, p in model.named_parameters() if n.startswith(cfg.trainable_prefixes)}
+    trainable = {id(p) for p in model.parameters() if p.requires_grad}
+    actual = [id(p) for g in optimizer.param_groups for p in g["params"]]
+    if desired != trainable or set(actual) != desired or len(actual) != len(desired):
+        raise ValueError("optimizer must cover exactly declared trainable parameters")
+    if not isinstance(optimizer, torch.optim.AdamW) or any(
+        g["weight_decay"] != cfg.weight_decay
+        or g["betas"] != (0.9, 0.999)
+        or g["eps"] != 1e-8
+        or g["amsgrad"]
+        or g["maximize"]
+        for g in optimizer.param_groups
+    ):
+        raise ValueError("optimizer differs from registered AdamW settings")
+    if (
+        not isinstance(scheduler, torch.optim.lr_scheduler.LambdaLR)
+        or scheduler.optimizer is not optimizer
+        or scheduler.last_epoch != step
+        or any(lr != cfg.learning_rate for lr in scheduler.base_lrs)
+    ):
+        raise ValueError("scheduler differs from registered settings")
+
+    def factor(s):
+        return max(0.0, 1 - s / cfg.scheduler_steps) if cfg.scheduler_name == "linear" else 1.0
+
+    if any(
+        not math.isclose(fn(s), factor(s), rel_tol=1e-12, abs_tol=1e-12)
+        for fn in scheduler.lr_lambdas
+        for s in (0, step, step + 1, cfg.scheduler_steps)
+    ):
+        raise ValueError("scheduler strategy differs from registered configuration")
+    if any(
+        not math.isclose(g["lr"], cfg.learning_rate * factor(step), rel_tol=1e-12, abs_tol=1e-12)
+        for g in optimizer.param_groups
+    ):
+        raise ValueError("optimizer learning rate differs from registered scheduler")

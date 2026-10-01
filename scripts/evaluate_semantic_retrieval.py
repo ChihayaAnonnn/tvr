@@ -2,7 +2,6 @@
 """Reserved validation calibration/evaluation for the new retrieval system."""
 
 import argparse
-import hashlib
 import json
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -12,7 +11,7 @@ import torch
 from experiment_artifacts import artifact_json_bytes
 from semantic_retrieval.config import load_system_config
 from semantic_retrieval.data.episodes import file_sha256, read_episodes
-from semantic_retrieval.data.gallery import read_gallery
+from semantic_retrieval.data.gallery import audit_episode_gallery, preprocessing_sha256, read_gallery
 from semantic_retrieval.data.tokenizer import ClipTokenizer
 from semantic_retrieval.evaluation.calibration import CalibrationIdentity, CalibrationState, fit_calibration
 from semantic_retrieval.evaluation.episodes import evaluate_episodes
@@ -20,7 +19,7 @@ from semantic_retrieval.models.model import SemanticRetrievalModel
 from semantic_retrieval.retrieval.cache import FeatureCache
 from semantic_retrieval.retrieval.index import CanonicalIndex, IndexIdentity
 from semantic_retrieval.runtime.artifacts import complete_run, fail_run, prepare_run, publish_metrics, start_run
-from semantic_retrieval.runtime.checkpoint import load_checkpoint, model_sha256
+from semantic_retrieval.runtime.checkpoint import load_model_checkpoint, model_sha256
 from semantic_retrieval.runtime.inference import RetrievalService, policy_sha256
 from semantic_retrieval.types import EncodedFeatures, QueryInputs, VideoFeatures
 
@@ -54,15 +53,11 @@ def main(argv=None):
             cfg.data.episode_manifest, gallery_version=cfg.data.gallery_version, split=cfg.data.split
         )
         gallery = read_gallery(dep.gallery_manifest, gallery_version=cfg.data.gallery_version)
-        if any(e.preprocessing != gallery.preprocessing for e in episodes):
-            raise ValueError("query/gallery preprocessing mismatch")
+        audit_episode_gallery(episodes, gallery)
         model = SemanticRetrievalModel(cfg.model)
-        load_checkpoint(dep.checkpoint_path, model, expected_config_sha256=dep.checkpoint_config_sha256)
+        load_model_checkpoint(dep.checkpoint_path, model, expected_config_sha256=dep.checkpoint_config_sha256)
         model.eval().requires_grad_(False)
-        pre = asdict(gallery.preprocessing)
-        pre["schema_version"] = 1
-        pre["source_sha"] = cfg.runtime.source_sha
-        pre_sha = hashlib.sha256(artifact_json_bytes(pre)).hexdigest()
+        pre_sha = preprocessing_sha256(gallery.preprocessing)
         ident = IndexIdentity(model_sha256(model), cfg.data.gallery_version, pre_sha)
         with torch.no_grad():
             v = model.encode_gallery(gallery.video, gallery.frame_mask)
@@ -134,7 +129,7 @@ def main(argv=None):
                 ("presence_labels", presence_labels),
             ]:
                 context.array_store.write(name, values)
-            publish_metrics(context, dict(calibration=asdict(cal), index=index_ref), split=cfg.data.split)
+            publish_metrics(context, dict(calibration=asdict(cal), array_references=[index_ref]))
         else:
             if file_sha256(dep.calibration_path) != dep.calibration_sha256:
                 raise ValueError("calibration content changed")
@@ -154,7 +149,8 @@ def main(argv=None):
             metrics["budget_reference"] = context.array_store.write(
                 "candidate_budget", [p.budget_used for p in predictions]
             ).as_dict()
-            publish_metrics(context, metrics, split=cfg.data.split)
+            metrics["array_references"] = [index_ref, metrics["budget_reference"]]
+            publish_metrics(context, metrics)
         complete_run(context)
     except BaseException:
         fail_run(context, exit_code=1)

@@ -102,7 +102,7 @@ def main(argv=None):
         if world > 1:
             dist.barrier()
         if rank == 0:
-            publish_metrics(context, metrics, split="train")
+            publish_metrics(context, metrics)
             complete_run(context)
     except BaseException:
         if rank == 0:

@@ -9,8 +9,8 @@ import numpy as np
 import torch
 import torch.distributed as dist
 
-from experiment_artifacts import artifact_json_bytes, load_validated_run_lifecycle
-from semantic_retrieval.config import config_payload
+from experiment_artifacts import artifact_json_bytes, load_validated_run_lifecycle, verify_array_reference
+from semantic_retrieval.config import config_payload, effective_manifest_config
 
 
 def config_sha256(config):
@@ -58,6 +58,11 @@ class TrainingState:
 
 def assert_running(context):
     manifest, status, _ = load_validated_run_lifecycle(context.paths)
+    if context.system_config is not None and (
+        context.system_config.runtime != context.config
+        or manifest["config"] != effective_manifest_config(context.system_config, eval_split=context.config.eval_split)
+    ):
+        raise ValueError("effective worker config differs from reservation")
     if status["state"] != "running" or manifest != context.manifest:
         raise ValueError("worker must have exact running identity")
 
@@ -66,6 +71,9 @@ def save_checkpoint(context, model, optimizer, scheduler, config, step):
     assert_running(context)
     if context.system_config != config or type(step) is not int or step < 0:
         raise ValueError("checkpoint config/step mismatch")
+    from semantic_retrieval.runtime.trainer import verify_training_contract
+
+    verify_training_contract(model, optimizer, scheduler, context, step)
     path = context.paths.checkpoints / f"step-{step:08d}.pt"
     rng = [rng_state()]
     rank = dist.get_rank() if dist.is_initialized() else 0
@@ -83,6 +91,7 @@ def save_checkpoint(context, model, optimizer, scheduler, config, step):
         scheduler=scheduler.state_dict(),
         rng=rng,
     )
+    payload = _externalize_large_tensors(payload, context.array_store)
     with path.open("xb") as handle:
         torch.save(payload, handle)
     meta = dict(
@@ -96,7 +105,7 @@ def save_checkpoint(context, model, optimizer, scheduler, config, step):
     return path
 
 
-def load_checkpoint(path, model, *, expected_config_sha256):
+def _validated_checkpoint(path, model, *, expected_config_sha256):
     meta = json.loads(path.with_suffix(".json").read_text())
     if (
         set(meta) != {"schema_version", "sha256", "config_sha256", "model_sha256"}
@@ -114,6 +123,7 @@ def load_checkpoint(path, model, *, expected_config_sha256):
         or payload["step"] < 0
     ):
         raise ValueError("checkpoint state schema mismatch")
+    payload = _hydrate_array_references(payload, path.parent.parent)
     current = model.state_dict()
     saved = payload["model"]
     if set(current) != set(saved) or any(
@@ -126,7 +136,7 @@ def load_checkpoint(path, model, *, expected_config_sha256):
         raise ValueError("checkpoint model state mismatch")
     if (
         not isinstance(payload["rng"], list)
-        or len(payload["rng"]) != (dist.get_world_size() if dist.is_initialized() else 1)
+        or not payload["rng"]
         or any(not isinstance(rng, dict) or set(rng) != {"torch", "python", "numpy", "cuda"} for rng in payload["rng"])
         or not isinstance(payload["optimizer"], dict)
         or not isinstance(payload["scheduler"], dict)
@@ -141,10 +151,47 @@ def load_checkpoint(path, model, *, expected_config_sha256):
         digest.update(x.numpy().tobytes())
     if digest.hexdigest() != meta["model_sha256"]:
         raise ValueError("checkpoint model identity mismatch")
-    model.load_state_dict(saved, strict=True)
+    return payload
+
+
+def load_checkpoint(path, model, *, expected_config_sha256):
+    payload = _validated_checkpoint(path, model, expected_config_sha256=expected_config_sha256)
+    if len(payload["rng"]) != (dist.get_world_size() if dist.is_initialized() else 1):
+        raise ValueError("checkpoint training world size mismatch")
+    model.load_state_dict(payload["model"], strict=True)
     return TrainingState(
         payload["step"],
         payload["optimizer"],
         payload["scheduler"],
         payload["rng"][dist.get_rank() if dist.is_initialized() else 0],
     )
+
+
+def load_model_checkpoint(path, model, *, expected_config_sha256):
+    """Deploy a model from any training world size without restoring training state."""
+    payload = _validated_checkpoint(path, model, expected_config_sha256=expected_config_sha256)
+    model.load_state_dict(payload["model"], strict=True)
+
+
+def _externalize_large_tensors(value, store):
+    if isinstance(value, torch.Tensor) and value.numel() * value.element_size() > 1024**2:
+        return {"__array_reference__": store.write("checkpoint_tensor", value.detach().cpu().numpy()).as_dict()}
+    if isinstance(value, dict):
+        return {k: _externalize_large_tensors(v, store) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_externalize_large_tensors(v, store) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_externalize_large_tensors(v, store) for v in value)
+    return value
+
+
+def _hydrate_array_references(value, run_root):
+    if isinstance(value, dict):
+        if set(value) == {"__array_reference__"}:
+            return torch.from_numpy(verify_array_reference(run_root, value["__array_reference__"]).copy())
+        return {k: _hydrate_array_references(v, run_root) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_hydrate_array_references(v, run_root) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_hydrate_array_references(v, run_root) for v in value)
+    return value

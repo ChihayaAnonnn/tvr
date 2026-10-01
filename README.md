@@ -51,7 +51,7 @@ PYTHONPATH=. /home/xujie/.conda/envs/tvr/bin/python scripts/manage_experiment_ru
 
 A 阶段交付独立的 `src/semantic_retrieval/` 基础组件：输入合同、本地 CLIP/tokenizer、OpenCV 视频预处理、split 校验、masked WTI、可微 gather、检索/校准指标与归档生命周期。旧 HEAD/June UATVR、概率分支、训练入口和旧 launcher 已删除；历史复现需单独 checkout `ff8137c28039b2d8b61f7874538310825f3e3b21`，不得在当前代码上启动旧登记命令。
 
-本阶段尚无新研究模型、真实数据训练结果或 GPU 资格结论。B 阶段设计见 [研究模型计划](docs/superpowers/plans/2026-10-01-retrieval-rebuild-b-system.md)；A 阶段不提供科学训练 CLI。CPU qualification 只是归档保护测试，不能替代四卡 Stage 0 gate。
+B 阶段实现新编码器、共享匹配/候选存在头、多正例监督、canonical 索引缓存、有限扩检、validation 校准，以及新训练/评测入口。接口与显式数据格式见 [系统合同](docs/agent/semantic-retrieval-system.md)，设计见 [研究模型计划](docs/superpowers/plans/2026-10-01-retrieval-rebuild-b-system.md)。验证仅合成 CPU；尚无真实数据效果或 GPU 资格结论。语义分组/OT 默认关闭，CPU qualification 不能替代四卡 Stage 0 gate。
 
 ```bash
 CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 PYTHONPATH=src:. \
