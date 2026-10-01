@@ -54,9 +54,10 @@ def build_fixture_inputs(context, *, tiny=False):
         ClipConfig(8, 8, 64, 1, 4, 5, 49408, 8, 1, 1, fixture=True) if tiny
         else ClipConfig(512, 224, 768, 12, 32, 77, 49408, 512, 8, 12)
     )
-    weights = source / "random-clip.pt"
+    weights = context.paths.arrays / "random-clip.npz"
     backbone = ClipBackbone(clip)
-    torch.save(backbone.state_dict(), weights)
+    with weights.open("xb") as stream:
+        np.savez(stream, **{name: tensor.numpy() for name, tensor in backbone.state_dict().items()})
     del backbone
     refs = [dict(path=str(weights), sha256=file_sha256(weights))]
     videos = []
@@ -131,12 +132,38 @@ def _draw(device):
     return (random.random(), float(np.random.random()), float(torch.rand(())), float(torch.rand((), device=device)))
 
 
+def qualification_episodes(context, cfg, split):
+    if split not in {"train", "val_calibration", "val_locked"}:
+        raise ValueError("qualification test remains sealed")
+    path = cfg.data.episode_manifest if split == "train" else cfg.data.episode_manifest.parent / f"{split}.json"
+    refs = {r["path"]: r["sha256"] for r in context.manifest["dataset_splits"]}
+    if str(path) not in refs:
+        raise ValueError("qualification split must be reserved")
+    if file_sha256(path) != refs[str(path)]:
+        raise ValueError("qualification split hash changed")
+    return read_episodes(path, gallery_version=GALLERY, split=split)
+
+
+def validate_qualification_template(cfg, path, expected_sha256):
+    if file_sha256(path) != expected_sha256:
+        raise ValueError("qualification template hash differs")
+    expected = json.loads(path.read_text())
+    actual = config_payload(cfg)
+    expected.pop("runtime")
+    actual.pop("runtime")
+    if actual != expected:
+        raise ValueError("qualification config differs from complete core-chain template")
+
+
 def qualify_chain(context, cfg, *, device):
     """The CPU test calls this same chain with tiny capacity; only the CLI grants GPU PASS."""
     started = time.monotonic()
     rank = dist.get_rank() if dist.is_initialized() else 0
     world = dist.get_world_size() if dist.is_initialized() else 1
-    episodes = read_episodes(cfg.data.episode_manifest, gallery_version=GALLERY, split="train")
+    episodes = qualification_episodes(context, cfg, "train")
+    # Reject omitted or modified deployment inputs before doing any training.
+    qualification_episodes(context, cfg, "val_calibration")
+    qualification_episodes(context, cfg, "val_locked")
     batch = _move(collate_episodes(episodes[rank::world]), device)
     torch.manual_seed(cfg.train.seed)
     raw = SemanticRetrievalModel(cfg.model).to(device)
@@ -250,7 +277,7 @@ def qualify_chain(context, cfg, *, device):
 
 def _deployment(context, cfg, model, device):
     source = cfg.data.episode_manifest.parent
-    cal_episodes = read_episodes(source / "val_calibration.json", gallery_version=GALLERY, split="val_calibration")
+    cal_episodes = qualification_episodes(context, cfg, "val_calibration")
     batch = _move(collate_episodes(cal_episodes), device)
     with torch.no_grad():
         f, pairs, presence, _, _, _ = model(batch.inputs, batch.pair_indices, batch.query_offsets)
@@ -283,7 +310,7 @@ def _deployment(context, cfg, model, device):
     returning = RetrievalService(model, index, cache, return_calibration, return_policy, content_sha256=hashes)
     if set(returning.retrieve(query, budget=3).answer_ids) != set(batch.canonical_ids):
         raise ValueError("positive return path failed")
-    locked = read_episodes(source / "val_locked.json", gallery_version=GALLERY, split="val_locked")
+    locked = qualification_episodes(context, cfg, "val_locked")
     locked_batch = _move(collate_episodes(locked), device)
     predictions = []
     for i, episode in enumerate(locked):

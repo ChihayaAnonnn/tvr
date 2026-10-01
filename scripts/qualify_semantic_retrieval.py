@@ -2,11 +2,13 @@
 """Archived synthetic qualification; never a benchmark/scientific launcher."""
 
 import argparse
+import ctypes
 import datetime
 import json
 import os
 import signal
 import subprocess
+import uuid
 from pathlib import Path
 
 import torch
@@ -17,7 +19,31 @@ from experiment_artifacts import manifest_sha256, parse_registry_text, validate_
 from semantic_retrieval.config import RuntimeConfig, load_system_config
 from semantic_retrieval.runtime.artifacts import complete_run, fail_run, prepare_run, publish_metrics, start_run
 from semantic_retrieval.runtime.distributed import configure_fp32
-from semantic_retrieval.runtime.gpu_qualification import GALLERY, build_fixture_inputs, qualify_chain, require_four_gpu, write_json
+from semantic_retrieval.runtime.gpu_qualification import (
+    GALLERY, build_fixture_inputs, qualify_chain, require_four_gpu, validate_qualification_template, write_json,
+)
+
+
+def verify_visible_uuids(policy):
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")
+    if visible != policy["gpu_uuids"]:
+        raise ValueError("CUDA visibility must use the selected GPU UUID order")
+    return visible
+
+
+def local_device_uuid(local_rank):
+    """Ask the CUDA driver for the actual visible ordinal, independent of NVML."""
+    driver = ctypes.CDLL("libcuda.so.1")
+    driver.cuInit.argtypes, driver.cuInit.restype = [ctypes.c_uint], ctypes.c_int
+    driver.cuDeviceGet.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+    driver.cuDeviceGet.restype = ctypes.c_int
+    driver.cuDeviceGetUuid_v2.argtypes, driver.cuDeviceGetUuid_v2.restype = [ctypes.c_void_p, ctypes.c_int], ctypes.c_int
+    device = ctypes.c_int()
+    value = (ctypes.c_ubyte * 16)()
+    if (driver.cuInit(0) or driver.cuDeviceGet(ctypes.byref(device), local_rank)
+        or driver.cuDeviceGetUuid_v2(ctypes.byref(value), device)):
+        raise ValueError("cannot verify actual CUDA device UUID")
+    return "GPU-" + str(uuid.UUID(bytes=bytes(value)))
 
 
 def main(argv=None):
@@ -49,12 +75,14 @@ def main(argv=None):
         else:
             if args.config is None:
                 raise ValueError("qualification requires bound system config")
-            torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+            visible = verify_visible_uuids(policy)
+            if world != 4 or rank != int(os.environ.get("LOCAL_RANK", "-1")) or rank not in range(4):
+                raise ValueError("qualification requires one unique local device per rank")
+            if local_device_uuid(rank) != visible[rank]:
+                raise ValueError("actual CUDA device UUID differs from selected rank mapping")
+            torch.cuda.set_device(rank)
             dist.init_process_group("nccl", timeout=datetime.timedelta(minutes=8))
             require_four_gpu()
-            visible = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")
-            if visible != [str(i) for i in policy["physical_indices"]]:
-                raise ValueError("physical GPU mapping differs from frozen qualification policy")
             info = subprocess.run(["nvidia-smi", "--query-gpu=index,uuid,name", "--format=csv,noheader,nounits"],
                                   check=True, capture_output=True, text=True).stdout
             rows = {int(row.split(",")[0]): tuple(x.strip() for x in row.split(",")[1:]) for row in info.splitlines()}
@@ -78,7 +106,18 @@ def main(argv=None):
             if not any(r["run_id"] == pm["run_id"] and r["state"] == "completed"
                        and r["manifest_sha256"] == manifest_sha256(pm) for r in parse_registry_text(committed)):
                 raise ValueError("qualification parent terminal record must be committed")
-            for ref in manifest["input_checkpoints"] + manifest["dataset_splits"]:
+            validate_qualification_template(cfg, parent.provenance / "system-template.json",
+                                            ps["output_hashes"].get("provenance/system-template.json"))
+            from semantic_retrieval.data.episodes import file_sha256
+            inventory_path = parent.provenance / "input-inventory.json"
+            if file_sha256(inventory_path) != ps["output_hashes"].get("provenance/input-inventory.json"):
+                raise ValueError("synthetic parent input inventory hash differs")
+            inventory = json.loads(inventory_path.read_text())
+            declared = manifest["input_checkpoints"] + manifest["dataset_splits"]
+            if (inventory.get("software_only") is not True or inventory.get("random_weights") is not True
+                or {r["path"]: r["sha256"] for r in declared} != {r["path"]: r["sha256"] for r in inventory["inputs"]}):
+                raise ValueError("qualification must bind the complete synthetic parent input inventory")
+            for ref in declared:
                 path = Path(ref["path"])
                 if not path.is_relative_to(parent.root) or ps["output_hashes"].get(path.relative_to(parent.root).as_posix()) != ref["sha256"]:
                     raise ValueError("qualification input differs from archived parent inventory")

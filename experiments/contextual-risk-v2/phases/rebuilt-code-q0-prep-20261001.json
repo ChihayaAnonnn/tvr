@@ -1,0 +1,55 @@
+{
+  "phase": "rebuilt-code-q0-prep-20261001",
+  "study": "contextual-risk-v2",
+  "runs": [
+    {
+      "dataset": "synthetic",
+      "stage": "baseline",
+      "variant": "rebuilt-prod-prep",
+      "seed": 713,
+      "scheduled_timestamp_utc": "20261001T063403Z",
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "none",
+        "gpu_count": 0,
+        "precision": "fp32",
+        "distributed_topology": "single-process"
+      },
+      "input_checkpoints": [],
+      "dataset_splits": [],
+      "config": {
+        "model": {},
+        "loss": {},
+        "optimizer": {},
+        "scheduler": {},
+        "evaluation": {
+          "eval_split": "val",
+          "qualification_scenario": "production_fixture"
+        }
+      },
+      "parent_run_ids": [],
+      "selection_lineage": [],
+      "validation_authorized": true,
+      "test_authorized": false,
+      "expected_scalar_outputs": [
+        "software_input_count"
+      ],
+      "array_references": [],
+      "command": [
+        "env",
+        "CUDA_VISIBLE_DEVICES=",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "OMP_NUM_THREADS=1",
+        "PYTHONPATH=/data2/hxj/project/UATVR/src:/data2/hxj/project/UATVR",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "/data2/hxj/project/UATVR/scripts/qualify_semantic_retrieval.py",
+        "--mode",
+        "prepare-production",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ]
+    }
+  ]
+}

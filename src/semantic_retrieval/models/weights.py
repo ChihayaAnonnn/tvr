@@ -2,7 +2,9 @@
 
 import hashlib
 import zipfile
+from pathlib import Path
 
+import numpy as np
 import torch
 
 
@@ -18,11 +20,16 @@ def load_clip_state(path, expected_sha256, model):
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as archive:
             scripted = any("/code/" in name for name in archive.namelist())
-    state = (
-        torch.jit.load(str(path), map_location="cpu").state_dict()
-        if scripted
-        else torch.load(path, map_location="cpu", weights_only=True)
-    )
+    if Path(path).suffix == ".npz":
+        # Synthetic archived inputs keep numerical payloads in external NPZ.
+        with np.load(path, allow_pickle=False) as archive:
+            state = {name: torch.from_numpy(archive[name].copy()) for name in archive.files}
+    else:
+        state = (
+            torch.jit.load(str(path), map_location="cpu").state_dict()
+            if scripted
+            else torch.load(path, map_location="cpu", weights_only=True)
+        )
     if not isinstance(state, dict):
         raise ValueError("expected a CLIP state_dict")
     state = dict(state)

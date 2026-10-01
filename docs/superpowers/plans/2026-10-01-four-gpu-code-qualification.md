@@ -9,3 +9,5 @@
 验收上限 8 GPU 小时。报告记录源码/输入/manifest 哈希、UUID/rank 对应关系、耗时和峰值显存。PASS 只证明覆盖的代码链路；不证明正式预训练权重效果、完整数据集 minibatch 调度、科学 gate 或分组/OT 可选实验有效。真实已终态失败任务的跨 run CLI 恢复继续要求人工审批，本次不伪造该审批。
 
 Review focus: reserved 输入与合成来源约束、GPU/world/rank/precision 绑定、DDP 局部全 unknown 的 reducer 行为、checkpoint rank RNG 和精确比较、校准/锁定集与 test 封存、输出仅位于 canonical run、意外失败保留与无静默重试。
+
+实现与审阅记录：CPU 初始窄测 16 项通过；新增四 rank CPU 链路和 FP32 检查通过；完整初次回归 314 项通过。独立审阅发现的验证文件未强制预留、缩减训练模块仍可能声称完整 PASS、数值 CUDA ordinal 不能证明 UUID 映射均修复并有 RED→GREEN 回归。GPU 入口逐 rank 向 CUDA driver 核验实际 UUID，visibility 使用完整 UUID。新增随机输入权重使用 NPZ，保留已有 PT/JIT 读取。核心配置严格匹配已完成并归档的 prep 模板。CPU 恢复比较要求 bitwise，GPU 参数及优化器 moment 最大绝对差要求 ≤1e-6（报告实际差值），各 rank 同一步参数仍要求完全一致。
