@@ -218,6 +218,7 @@ class PairPredictiveScores:
     ranking_log_probability: Tensor
     pair_ids: tuple
     sampling_sha256: str
+    point_temperature: Tensor | None = None
 
     def __post_init__(self):
         require_digest(self.sampling_sha256)

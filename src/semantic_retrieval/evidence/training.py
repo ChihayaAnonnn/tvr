@@ -22,12 +22,13 @@ def freeze_reference(model):
 def build_stage_optimizer(model, config):
     stage = getattr(model, 'stage', 'value')
     allowed = {'reference': ('temporal.', 'matcher.base.'),
-               'matcher': ('temporal.', 'matcher.'), 'value': ('value_head.',)}
+               'matcher': ('temporal.', 'matcher.', 'log_temperature'), 'value': ('value_head.',)}
     if stage not in allowed:
         raise ValueError('no trainable optimizer for this stage')
     prefixes = config.trainable_prefixes
     names = dict(model.named_parameters())
-    selected = [n for n in names if n.startswith(prefixes)]
+    variant = getattr(getattr(model, 'config', None), 'variant', None)
+    selected = [n for n in names if n.startswith(prefixes) and not (variant in {'deterministic','fixed_scale','learned_temperature'} and n.startswith('matcher.scale_head.'))]
     if not selected or any(not n.startswith(allowed[stage]) for n in selected) or any(not any(n.startswith(p) for n in names) for p in prefixes):
         raise ValueError('stage parameter allowlist violation')
     for n, p in names.items():
@@ -71,13 +72,30 @@ def pair_offsets(pair_ids, device):
 
 def matcher_loss(student_scores, targets, *, noise, config):
     offsets = pair_offsets(student_scores.pair_ids, student_scores.loc.device)
-    pc = probabilistic_contrastive(student_scores.loc, student_scores.scale, offsets, targets.relevance, noise,
-                                  temperature=config.sampling.temperature)
+    if config.model.variant == 'standard_probabilistic' and config.train.loss_weights['score'] != 0:
+        raise ValueError('standard probabilistic baseline requires score weight zero')
+    if config.model.variant in {'deterministic', 'learned_temperature'}:
+        pc = deterministic_contrastive(student_scores.loc, offsets, targets.relevance,
+                                       temperature=student_scores.point_temperature)
+    else:
+        pc = probabilistic_contrastive(student_scores.loc, student_scores.scale, offsets, targets.relevance, noise,
+                                      temperature=config.sampling.temperature)
     score = gaussian_score_nll(student_scores.loc, student_scores.scale, targets.rich_scores, targets.rich_valid)
     return {'pc': pc, 'score': score}
 
 
 def deterministic_contrastive(logits, offsets, labels, *, temperature):
-    # Zero integration noise yields the point softmax while scale stays valid.
-    return probabilistic_contrastive(logits, torch.ones_like(logits), offsets, labels,
-                                    torch.zeros((1,len(logits)), device=logits.device), temperature=temperature)
+    from semantic_retrieval.models.pair_matcher import validate_offsets
+    validate_offsets(offsets,len(logits))
+    temperature = torch.as_tensor(temperature,device=logits.device)
+    if temperature.ndim or not torch.isfinite(temperature) or temperature <= 0 or labels.shape != logits.shape or labels.dtype != torch.long or not ((labels >= -1)&(labels <= 1)).all():
+        raise ValueError('invalid point contrastive inputs')
+    total = logits.sum()*0+temperature*0
+    count = 0
+    for a,b in zip(offsets[:-1].tolist(),offsets[1:].tolist()):
+        y = labels[a:b]
+        if (y == 1).any() and (y == 0).any():
+            known = y != -1
+            total = total-(logits[a:b][known]/temperature).log_softmax(0)[y[known] == 1].mean()
+            count += 1
+    return LossTerm(total,logits.new_tensor(float(count)))

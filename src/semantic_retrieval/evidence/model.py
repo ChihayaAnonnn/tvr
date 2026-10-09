@@ -12,7 +12,7 @@ from semantic_retrieval.types import QueryFeatures
 from semantic_retrieval.evidence.encoding import pack_observations
 from semantic_retrieval.evidence.frame_cache import FrameCacheIdentity
 from semantic_retrieval.evidence.matcher import GaussianPairMatcher
-from semantic_retrieval.evidence.types import digest
+from semantic_retrieval.evidence.types import digest, PairPredictiveScores
 from semantic_retrieval.config import config_payload
 
 
@@ -27,6 +27,10 @@ class EvidenceMatcherModel(nn.Module):
         self.clip.requires_grad_(False).eval()
         self.temporal = TemporalEncoder(base.dim, base.num_layers, base.num_heads, base.max_frames)
         self.matcher = GaussianPairMatcher(base.dim, scale_floor=config.scale_floor)
+        if config.variant in {'deterministic', 'fixed_scale', 'learned_temperature'}:
+            self.matcher.scale_head.requires_grad_(False)
+        if config.variant == 'learned_temperature':
+            self.log_temperature = nn.Parameter(torch.zeros(()))
 
     def train(self, mode=True):
         super().train(mode)
@@ -42,8 +46,22 @@ class EvidenceMatcherModel(nn.Module):
         return self.matcher.base(self.temporal_features(observed), observed.pair_indices)
 
     def forward(self, observed, *, sampling):
-        return self.matcher(self.temporal_features(observed), observed.pair_indices, observed.query_offsets,
-                            pair_ids=observed.pair_ids, coverage=observed.pair_coverage, sampling=sampling)
+        variant = self.config.variant
+        if variant in {'gaussian', 'standard_probabilistic'}:
+            return self.matcher(self.temporal_features(observed), observed.pair_indices, observed.query_offsets,
+                                pair_ids=observed.pair_ids, coverage=observed.pair_coverage, sampling=sampling)
+        point = self.point_scores(observed)
+        scale = torch.ones_like(point.logits)
+        if variant == 'fixed_scale':
+            from semantic_retrieval.evidence.matcher import mc_log_probabilities
+            noise = sampling.noise(observed.pair_ids,device=scale.device,dtype=scale.dtype)
+            lp = mc_log_probabilities(point.logits,scale,observed.query_offsets,noise,temperature=sampling.config.temperature)
+        else:
+            temperature = self.log_temperature.clamp(-10,10).exp() if variant == 'learned_temperature' else sampling.config.temperature
+            lp = torch.cat([(point.logits[a:b]/temperature).log_softmax(0)
+                            for a,b in zip(observed.query_offsets[:-1],observed.query_offsets[1:])])
+        return PairPredictiveScores(point.logits,scale,point.features,lp,observed.pair_ids,sampling.identity,
+                                    None if variant == "fixed_scale" else torch.as_tensor(temperature,device=scale.device))
 
     def encode_inputs(self, query, states, frame_source, cache):
         device = next(self.parameters()).device
