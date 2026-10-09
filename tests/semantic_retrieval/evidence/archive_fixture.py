@@ -17,7 +17,7 @@ from semantic_retrieval.evidence.config import evidence_manifest_config
 from test_runtime_artifacts import git, commit_reservation
 
 
-def reserve_evidence_fixture(tmp_path,cfg,*,copy_source=False,variant='cpu-fixture'):
+def reserve_evidence_fixture(tmp_path,cfg,*,copy_source=False,variant='cpu-fixture',world_size=1):
     repo = tmp_path/'repo'; repo.mkdir()
     control = repo/'experiments/evidence-conditioned-retrieval-v1'; control.mkdir(parents=True)
     (repo/'.gitignore').write_text('/artifacts/\n')
@@ -43,10 +43,12 @@ def reserve_evidence_fixture(tmp_path,cfg,*,copy_source=False,variant='cpu-fixtu
     checkpoints = [dict(path=k,sha256=v) for k,v in refs.items()]
     count = torch.cuda.device_count()
     command = [sys.executable,'scripts/qualify_evidence_retrieval.py','--config','{artifact_run_dir}/provenance/worker-config.json','--run-id','{run_id}']
+    if world_size != 1:
+        command = [sys.executable,'-m','torch.distributed.run','--standalone','--nproc_per_node='+str(world_size),*command[1:]]
     run = dict(dataset='synthetic',stage='baseline',variant=variant,seed=cfg.train.seed,
                scheduled_timestamp_utc=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
                environment=dict(python=platform.python_version(),pytorch=str(torch.__version__),cuda=str(torch.version.cuda or 'none'),
-                                gpu_model=torch.cuda.get_device_name(0) if count else 'none',gpu_count=count,precision='fp32',distributed_topology='single-process'),
+                                gpu_model=torch.cuda.get_device_name(0) if count else 'none',gpu_count=count,precision='fp32',distributed_topology='single-process' if world_size == 1 else 'torchrun-'+str(world_size)),
                input_checkpoints=checkpoints,dataset_splits=[],config=evidence_manifest_config(cfg,eval_split='val'),
                parent_run_ids=[],selection_lineage=[],validation_authorized=True,test_authorized=False,
                expected_scalar_outputs=[],array_references=[],command=command)

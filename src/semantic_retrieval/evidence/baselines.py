@@ -24,10 +24,10 @@ def build_initial_index(states, frame_reader, *, identity):
             raise ValueError('initial index gallery mismatch')
         for c in state.candidates:
             initial = view_frame_ids(c.pool_frame_ids,state.view_levels[0])
-            if c.observed_frame_ids != initial or c.attempted_frame_ids != initial:
+            if not c.observed_frame_ids or not set(c.observed_frame_ids) <= set(initial) or c.attempted_frame_ids != initial:
                 raise ValueError('index may only consume initial sparse observations')
-            feature = frame_reader(c,initial)
-            if feature.requires_grad or feature.ndim != 2 or len(feature) != len(initial) or not torch.isfinite(feature).all():
+            feature = frame_reader(c,c.observed_frame_ids)
+            if feature.requires_grad or feature.ndim != 2 or len(feature) != len(c.observed_frame_ids) or not torch.isfinite(feature).all():
                 raise ValueError('invalid frozen initial frame features')
             pooled = feature.mean(0)
             if pooled.norm() == 0:
@@ -74,7 +74,10 @@ def build_acquisition_baseline(name, *, seed, config):
                 return StopDecision('margin_stop')
         if name == 'entropy' and -(lp.exp()*lp).sum() <= config.policy.stop_threshold:
             return StopDecision('entropy_stop')
-        ordered = sorted(affordable,key=lambda a:a.candidate_id)
+        # Fixed views advance all candidates through the declared levels in rounds.
+        # Attempted frames, including decode failures, determine progress.
+        attempted = {c.canonical_id:len(c.attempted_frame_ids) for c in state.candidates}
+        ordered = sorted(affordable,key=lambda a:(attempted[a.candidate_id],a.candidate_id) if name == 'fixed_frames' else (0,a.candidate_id))
         identity = dict(seed=seed,query=state.query_id,observations=sorted((c.canonical_id,c.observed_frame_ids,c.attempted_frame_ids) for c in state.candidates))
         action = ordered[int(digest(identity),16)%len(ordered)] if name == 'random' else ordered[0]
         return reserve_action(state,action,predicted_counts=action.reservation)

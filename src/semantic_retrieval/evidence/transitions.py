@@ -145,16 +145,33 @@ def compile_transitions(states, actions, frozen_matcher, targets, *, store, prod
     refs = tuple(store.write(key, value) for key, value in (
         ('transition_features', torch.stack(features)), ('transition_class', torch.tensor(classes, dtype=torch.long)),
         ('transition_valid', torch.tensor(valid, dtype=torch.bool))))
-    # Keep only small provenance in JSON; partitioning large indices is required before writing.
-    payload = dict(schema_version='evidence-transitions-v1', producer=asdict(producer_identity),
-                   arrays=[asdict(r) for r in refs], records=[asdict(r) for r in records], component_ids=components)
-    from semantic_retrieval.evidence.schemas import validate_evidence_document
-    validate_evidence_document('transition_index',payload)
-    p = store.run_root/'provenance'/'transitions.json'
-    if p.exists():
-        raise ValueError('transition output already exists')
-    publish_json(p, payload)
+    p = write_transition_index(store,producer_identity,refs,records,components)
     return TransitionReferences(p, hashlib.sha256(p.read_bytes()).hexdigest(), producer_identity, refs)
+
+
+def write_transition_index(store,producer,arrays,records,components):
+    """Publish bounded metadata shards, then the hash-bound root as commit marker."""
+    from semantic_retrieval.evidence.schemas import validate_evidence_document
+    if not records or len(records) != len(components):
+        raise ValueError('transition record/component count mismatch')
+    path = store.run_root/'provenance'/'transitions.json'
+    if path.exists():
+        raise ValueError('transition output already exists')
+    shards = []
+    # A bounded row count plus byte validation prevents silent oversized metadata.
+    for start in range(0,len(records),128):
+        rows = records[start:start+128]; ids = components[start:start+128]
+        payload = dict(schema_version='evidence-transition-shard-v1',records=[asdict(r) for r in rows],component_ids=ids)
+        validate_evidence_document('transition_shard',payload)
+        shard = path.parent/'transition-shards'/f'{start:09d}.json'
+        if shard.exists():
+            raise ValueError('transition shard already exists')
+        publish_json(shard,payload)
+        shards.append(dict(path=shard.relative_to(store.run_root).as_posix(),sha256=hashlib.sha256(shard.read_bytes()).hexdigest(),count=len(rows)))
+    payload = dict(schema_version='evidence-transitions-v2',producer=asdict(producer),arrays=[asdict(r) for r in arrays],record_count=len(records),shards=shards)
+    validate_evidence_document('transition_index_v2',payload)
+    publish_json(path,payload)
+    return path
 
 
 def read_transitions(references, *, expected_producer):
@@ -164,12 +181,31 @@ def read_transitions(references, *, expected_producer):
     with references.index_path.open() as h:
         p = strict_json_load(h)
     from semantic_retrieval.evidence.schemas import validate_evidence_document
-    validate_evidence_document('transition_index',p)
-    if p['schema_version'] != 'evidence-transitions-v1' or p['producer'] != asdict(expected_producer):
+    validate_evidence_document('transition_index_v2' if p.get('schema_version') == 'evidence-transitions-v2' else 'transition_index',p)
+    if p['producer'] != asdict(expected_producer):
         raise ValueError('transition producer mismatch')
     if p['arrays'] != [dict(asdict(r), shape=list(r.shape)) for r in references.arrays]:
         raise ValueError('transition array binding mismatch')
     root = references.index_path.parent.parent
+    if p['schema_version'] == 'evidence-transitions-v2':
+        records,components = [],[]
+        seen = set()
+        for reference in p['shards']:
+            rel = Path(reference['path'])
+            if rel.is_absolute() or '..' in rel.parts or rel in seen:
+                raise ValueError('invalid transition shard path')
+            seen.add(rel); shard = root/rel; safe_path(shard)
+            if hashlib.sha256(shard.read_bytes()).hexdigest() != reference['sha256']:
+                raise ValueError('transition shard hash mismatch')
+            with shard.open() as handle:
+                part = strict_json_load(handle)
+            validate_evidence_document('transition_shard',part)
+            if len(part['records']) != reference['count'] or len(part['component_ids']) != reference['count']:
+                raise ValueError('transition shard count mismatch')
+            records.extend(part['records']);components.extend(part['component_ids'])
+        if len(records) != p['record_count']:
+            raise ValueError('transition shard total mismatch')
+        p = dict(p,records=records,component_ids=components)
     features, classes, valid = [torch.from_numpy(verify_array_reference(root, r).copy()) for r in references.arrays]
     if len(features) != len(p['records']) or len(p['component_ids']) != len(features):
         raise ValueError('transition record count mismatch')

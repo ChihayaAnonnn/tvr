@@ -48,3 +48,26 @@ def test_compile_real_frozen_matcher_and_verify_arrays(config_factory, state_fac
     p = tmp_path/refs.arrays[0].path; p.write_bytes(b'damaged')
     with pytest.raises(ValueError):
         read_transitions(refs, expected_producer=producer)
+
+
+def test_large_transition_index_is_sharded_and_every_shard_is_verified(tmp_path):
+    import hashlib
+    import pytest
+    import torch
+    from experiment_artifacts import ArtifactArrayStore,strict_json_load
+    from semantic_retrieval.evidence.transitions import TransitionProducerIdentity,TransitionRecord,TransitionReferences,write_transition_index,read_transitions
+    producer = TransitionProducerIdentity(*(['a'*64]*8))
+    store = ArtifactArrayStore(tmp_path/'arrays')
+    arrays = tuple(store.write(k,v) for k,v in (('features',torch.zeros(3000,23)),('classes',torch.ones(3000,dtype=torch.long)),('valid',torch.ones(3000,dtype=torch.bool))))
+    records = [TransitionRecord('b'*64,'c'*64,'candidate-before','candidate-after',('source-component'*8,))]*3000
+    path = write_transition_index(store,producer,arrays,records,['d'*64]*3000)
+    assert path.stat().st_size < 1048576
+    refs = TransitionReferences(path,hashlib.sha256(path.read_bytes()).hexdigest(),producer,arrays)
+    assert len(read_transitions(refs,expected_producer=producer).features) == 3000
+    import json
+    payload = json.loads(path.read_text())
+    shard = tmp_path/payload['shards'][0]['path']
+    assert shard.stat().st_size < 1048576
+    shard.write_bytes(shard.read_bytes()+b' ')
+    with pytest.raises(ValueError,match='shard'):
+        read_transitions(refs,expected_producer=producer)

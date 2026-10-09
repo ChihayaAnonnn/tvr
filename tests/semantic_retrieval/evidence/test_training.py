@@ -66,3 +66,14 @@ def test_real_clip_frame_encoding_and_cache(config_factory, state_factory, input
     assert out.features.frame_tokens.shape == (2,2,8)
     assert not out.features.frame_tokens.requires_grad
     assert out.pair_coverage.shape == (4,4)
+
+
+def test_inference_timings_cover_temporal_and_mc_without_changing_scores(config_factory,observed_features):
+    from semantic_retrieval.evidence.sampling import SamplingState
+    model = EvidenceMatcherModel(config_factory().model).eval()
+    sampling = SamplingState(config_factory().sampling,mode='eval',model_sha256='a'*64)
+    expected = model(observed_features,sampling=sampling)
+    timings = {}
+    measured = model(observed_features,sampling=sampling,timings=timings)
+    torch.testing.assert_close(expected.ranking_log_probability,measured.ranking_log_probability)
+    assert timings['temporal_seconds'] > 0 and timings['mc_seconds'] > 0

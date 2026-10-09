@@ -20,14 +20,14 @@ from semantic_retrieval.evidence.frame_cache import FrameFeatureCache,publish_js
 from semantic_retrieval.evidence.journal import ActionJournal
 from semantic_retrieval.evidence.matcher import mc_log_probabilities
 from semantic_retrieval.evidence.model import EvidenceMatcherModel
-from semantic_retrieval.evidence.objectives import value_nll
+from semantic_retrieval.evidence.objectives import value_nll,mean_gain_mse
 from semantic_retrieval.evidence.policy import acquire,apply_outcome,reserve_action
 from semantic_retrieval.evidence.runtime import run_policy_episode
 from semantic_retrieval.evidence.sampling import SamplingState
 from semantic_retrieval.evidence.training import EvidenceStepper,build_stage_optimizer,deterministic_contrastive,freeze_reference,matcher_loss,rich_score_targets
 from semantic_retrieval.evidence.transitions import FrozenTransitionModel,TransitionProducerIdentity,compile_transitions,label_transition,read_transitions
 from semantic_retrieval.evidence.types import EvidenceTargets,ResourceCounts,digest
-from semantic_retrieval.evidence.value import EvidenceValueModel,ValueHead,build_value_features
+from semantic_retrieval.evidence.value import EvidenceValueModel,ValueHead,build_value_head,build_value_features
 from semantic_retrieval.evidence.views import propose_actions
 from semantic_retrieval.runtime.checkpoint import model_sha256
 from semantic_retrieval.types import QueryInputs
@@ -190,6 +190,24 @@ def _exercise(context,cfg,device):
     output = vwrapped(transitions.features.to(device))
     EvidenceStepper(vwrapped,vopt,vsched,weights=value_train.loss_weights).step({'value':value_nll(output.logits,vtargets)})
     checks['value_gradient'] = _require(_grad(head),'value gradient')
+    value_kinds = {'distribution':checks['value_gradient']}
+    for kind in ('geometry','mean_regressor'):
+        probe_head = build_value_head(replace(cfg.value,kind=kind),model.matcher.feature_dim+19).to(device)
+        probe_model = EvidenceValueModel(model,probe_head)
+        probe_opt,probe_sched = build_stage_optimizer(probe_model,value_train)
+        probe_wrapped = _wrap(probe_model,device)
+        probe_output = probe_wrapped(transitions.features.to(device))
+        term = mean_gain_mse(probe_output,vtargets) if kind == 'mean_regressor' else value_nll(probe_output.logits,vtargets)
+        EvidenceStepper(probe_wrapped,probe_opt,probe_sched,weights=value_train.loss_weights).step({'value':term})
+        value_kinds[kind] = _require(_grad(probe_head),'value kind '+kind)
+        hashes = [None]*world
+        if dist.is_initialized():
+            dist.all_gather_object(hashes,model_sha256(probe_head))
+        else:
+            hashes = [model_sha256(probe_head)]
+        _require(len(set(hashes)) == 1,'value kind rank equality '+kind)
+        del probe_wrapped,probe_model,probe_head,probe_opt,probe_sched
+
     checks['three_classes'] = _require(tuple(label_transition(a,b,{'positive':1,'negative':0},producer_sha256=producer.sha256).outcome_class.item() for a,b in [('positive','negative'),('positive','positive'),('negative','positive')]) == (0,1,2),'three-class labels')
     head.eval();model.eval()
     policy = build_acquisition_baseline('random',seed=cfg.sampling.seed,config=cfg)
@@ -220,7 +238,7 @@ def _exercise(context,cfg,device):
         physical = os.environ['CUDA_VISIBLE_DEVICES'].split(',')[device.index]
         gpu_uuid = subprocess.run(['nvidia-smi','--query-gpu=uuid','--format=csv,noheader','--id='+physical],capture_output=True,text=True,check=True).stdout.strip()
     gathered = [None]*world
-    local = dict(checks=checks,variants=variants,gpu_uuid=gpu_uuid,continuous=_episode_payload(continuous,continuous_hash),resumed=_episode_payload(resumed,continuous_hash),video_sha256={k:v[1] for k,v in videos.items()},seconds=time.monotonic()-started,peak_cuda_bytes=torch.cuda.max_memory_allocated(device) if device.type == 'cuda' else 0)
+    local = dict(checks=checks,variants=variants,value_kinds=value_kinds,gpu_uuid=gpu_uuid,continuous=_episode_payload(continuous,continuous_hash),resumed=_episode_payload(resumed,continuous_hash),video_sha256={k:v[1] for k,v in videos.items()},seconds=time.monotonic()-started,peak_cuda_bytes=torch.cuda.max_memory_allocated(device) if device.type == 'cuda' else 0)
     if dist.is_initialized():
         dist.all_gather_object(gathered,local)
     else:
@@ -231,6 +249,7 @@ def _exercise(context,cfg,device):
                   source_sha=context.config.source_sha,manifest_sha256=context.config.manifest_sha256,
                   scientific_authorized=False,test_authorized=False,checks={k:all(x['checks'][k] for x in gathered) for k in checks},
                   qualified_variants=[v for v in variants if all(x['variants'][v] for x in gathered)],
+                  qualified_value_kinds=[v for v in value_kinds if all(x['value_kinds'][v] for x in gathered)],
                   continuous=gathered[0]['continuous'],resumed=gathered[0]['resumed'],ranks=gathered,
                   summary_metrics={'qualification_passed':1.,'elapsed_seconds':max(x['seconds'] for x in gathered),'peak_cuda_bytes':float(max(x['peak_cuda_bytes'] for x in gathered))})
     if rank == 0:

@@ -9,12 +9,13 @@ from semantic_retrieval.evidence.types import action_from_payload, digest, outco
 
 
 class ActionJournal:
-    def __init__(self, root, store):
+    def __init__(self, root, store, *, after_write=None):
         if root != store.run_root/'provenance'/'evidence-actions':
             raise ValueError('journal must be run-local evidence-actions')
         safe_path(root)
         self.root = root
         self.store = store
+        self.after_write = after_write
 
     def _path(self, action_id, event):
         if not re.fullmatch('[0-9a-f]{64}', action_id) or event not in {'prepare', 'execute', 'commit', 'predict', 'predict_prepare'}:
@@ -34,6 +35,8 @@ class ActionJournal:
                 raise ValueError('immutable journal event conflict')
             return
         publish_json(p,envelope)
+        if self.after_write is not None:
+            self.after_write()
 
     def _read(self, action_id, event):
         p = self._path(action_id,event)
@@ -121,6 +124,15 @@ class ActionJournal:
                 arrays = [torch.from_numpy(verify_array_reference(self.store.run_root,r).copy()) for r in p['arrays']]
                 return PairPredictiveScores(*arrays,tuple(tuple(x) for x in p['pair_ids']),p['sampling_sha256'])
         return None
+
+    def action_prediction_states(self,action_id):
+        before,after_action = self._next(action_id)
+        action = action_from_payload(self._read(action_id,'prepare')['action'])
+        for path in self.root.glob('*.predict.json'):
+            initial,metered,_ = self._prediction(path.name.split('.')[0])
+            if initial == after_action:
+                return before,metered,action
+        raise ValueError('selected action lacks a completed next prediction')
 
     def episode_history(self,query_id):
         predictions = [self._prediction(p.name.split('.')[0]) for p in self.root.glob('*.predict.json')]

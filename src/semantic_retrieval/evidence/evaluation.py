@@ -97,3 +97,61 @@ def paired_component_interval(before, after, component_ids, *, seed, samples, co
         boot[i] = units[rng.integers(len(units),size=len(units))].mean()
     alpha = (1-confidence_level)/2
     return dict(out,lower=float(np.quantile(boot,alpha)),upper=float(np.quantile(boot,1-alpha)))
+
+
+def prediction_evidence(*,store,population,selected,rich,before,after,components,seed):
+    """Publish numeric observations externally with explicit probability/label scopes."""
+    metrics,undefined,refs = {},{},[]
+    def save(name,value):
+        refs.append(store.write(name,value.detach().cpu() if isinstance(value,torch.Tensor) else np.asarray(value)))
+    for scope,batch in (('population',population),('selected',selected)):
+        if batch is None:
+            undefined[scope+'_outcomes'] = 'no bound outcome predictions/labels for this scope'
+            continue
+        logits,targets = batch
+        values = score_outcomes(logits,targets)
+        metrics.update({scope+'_'+k:v for k,v in values.items()})
+        save(scope+'_logits',logits);save(scope+'_class',targets.outcome_class);save(scope+'_valid',targets.valid_mask)
+        count = len(targets.valid_mask)
+        metrics[scope+'_valid_coverage'] = float(targets.valid_mask.sum())/count if count else 0.
+        valid = targets.valid_mask
+        if valid.any():
+            probability = logits[valid].double().softmax(-1)
+            for category,name in ((0,'worsen'),(2,'correct')):
+                p = probability[:,category];y = (targets.outcome_class[valid] == category).to(p)
+                error = p.new_zeros(())
+                # Fixed equal-width diagnostic bins, never fit on evaluation labels.
+                for i in range(10):
+                    mask = (p >= i/10)&((p <= 1.) if i == 9 else (p < (i+1)/10))
+                    if mask.any():
+                        error += mask.double().mean()*(p[mask].mean()-y[mask].mean()).abs()
+                metrics[scope+'_'+name+'_ece10'] = float(error)
+        else:
+            undefined[scope+'_proper_scores'] = 'no known action outcomes'
+    if rich is None:
+        undefined['rich_scores'] = 'no bound frozen rich-score reference'
+    else:
+        loc,scale,target,valid = rich
+        if loc.shape != scale.shape or target.shape != loc.shape or valid.shape != loc.shape or valid.dtype != torch.bool or not all(torch.isfinite(x).all() for x in (loc,scale,target)) or not (scale > 0).all():
+            raise ValueError('invalid rich-score evidence')
+        save('rich_loc',loc);save('rich_scale',scale);save('rich_target',target);save('rich_valid',valid)
+        metrics['rich_valid_count'] = float(valid.sum());metrics['rich_unknown_count'] = float((~valid).sum())
+        if valid.any():
+            error = (target[valid].double()-loc[valid].double())/scale[valid].double()
+            metrics['rich_gaussian_nll'] = float((.5*error.square()+scale[valid].double().log()+.5*math.log(2*math.pi)).mean())
+            metrics['rich_interval_coverage_95'] = float((error.abs() <= 1.959963984540054).double().mean())
+            metrics['rich_interval_width_95'] = float((2*1.959963984540054*scale[valid].double()).mean())
+        else:
+            undefined['rich_proper_scores'] = 'no valid rich-score targets'
+    if before:
+        interval = paired_component_interval(before,after,components,seed=seed,samples=2000,confidence_level=.95)
+        metrics.update({'paired_'+k:float(v) for k,v in interval.items() if k not in {'defined','reason'}})
+        save('paired_initial',before);save('paired_final',after)
+        # Stable numeric grouping metadata without embedding per-query arrays in JSON.
+        mapping = {key:i for i,key in enumerate(sorted(set(components)))}
+        save('paired_component',[mapping[key] for key in components])
+        if not interval['defined']:
+            undefined['paired_interval'] = interval['reason']
+    else:
+        undefined['paired_interval'] = 'no episodes with both initial and final known labels'
+    return EvidenceReport(metrics,tuple(refs),undefined,dict(relevance='explicit source role',bootstrap_unit='query source component',rich_scope='fixed-reference scalar score',outcome_scopes=['scripted population','policy-selected']))

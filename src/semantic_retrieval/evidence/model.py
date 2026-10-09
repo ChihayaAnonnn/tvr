@@ -14,6 +14,7 @@ from semantic_retrieval.evidence.frame_cache import FrameCacheIdentity
 from semantic_retrieval.evidence.matcher import GaussianPairMatcher
 from semantic_retrieval.evidence.types import digest, PairPredictiveScores
 from semantic_retrieval.config import config_payload
+from semantic_retrieval.evidence.timing import measure
 
 
 class EvidenceMatcherModel(nn.Module):
@@ -45,17 +46,20 @@ class EvidenceMatcherModel(nn.Module):
     def point_scores(self, observed):
         return self.matcher.base(self.temporal_features(observed), observed.pair_indices)
 
-    def forward(self, observed, *, sampling):
+    def forward(self, observed, *, sampling, timings=None):
+        with measure(timings,'temporal_seconds',observed.features.frame_tokens.device):
+            features = self.temporal_features(observed)
         variant = self.config.variant
         if variant in {'gaussian', 'standard_probabilistic'}:
-            return self.matcher(self.temporal_features(observed), observed.pair_indices, observed.query_offsets,
-                                pair_ids=observed.pair_ids, coverage=observed.pair_coverage, sampling=sampling)
-        point = self.point_scores(observed)
+            return self.matcher(features, observed.pair_indices, observed.query_offsets,
+                                pair_ids=observed.pair_ids, coverage=observed.pair_coverage, sampling=sampling,timings=timings)
+        with measure(timings,'pair_seconds',features.frame_tokens.device):
+            point = self.matcher.base(features,observed.pair_indices)
         scale = torch.ones_like(point.logits)
         if variant == 'fixed_scale':
             from semantic_retrieval.evidence.matcher import mc_log_probabilities
             noise = sampling.noise(observed.pair_ids,device=scale.device,dtype=scale.dtype)
-            lp = mc_log_probabilities(point.logits,scale,observed.query_offsets,noise,temperature=sampling.config.temperature)
+            lp = mc_log_probabilities(point.logits,scale,observed.query_offsets,noise,temperature=sampling.config.temperature,timings=timings)
         else:
             temperature = self.log_temperature.clamp(-10,10).exp() if variant == 'learned_temperature' else sampling.config.temperature
             lp = torch.cat([(point.logits[a:b]/temperature).log_softmax(0)

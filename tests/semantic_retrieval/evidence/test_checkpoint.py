@@ -53,3 +53,21 @@ def test_partial_sidecar_and_wrong_producer_rejected(checkpoint_context):
     path.with_suffix('.json').unlink()
     with pytest.raises(ValueError):
         load_evidence_checkpoint(path,{'matcher':model},expected_config_sha256=evidence_config_sha256(cfg),expected_parents=cfg.parents)
+
+
+def test_parent_contract_rejects_shape_compatible_wrong_science(config_factory):
+    import copy
+    import pytest
+    from semantic_retrieval.evidence.config import evidence_manifest_config
+    from semantic_retrieval.evidence.execution import validate_parent_contract
+    cfg = config_factory()
+    parent = {'config':evidence_manifest_config(cfg,eval_split='train')}
+    parent['config']['evaluation']['evidence_stage'] = 'matcher'
+    validate_parent_contract(cfg,'matcher',parent)
+    for field,value in (('scale_floor',.2),('variant','fixed_scale')):
+        wrong = copy.deepcopy(parent);wrong['config']['model'][field] = value
+        with pytest.raises(ValueError,match='parent'):
+            validate_parent_contract(cfg,'matcher',wrong)
+    wrong = copy.deepcopy(parent);wrong['config']['model']['base']['clip_sha256'] = 'f'*64
+    with pytest.raises(ValueError,match='parent'):
+        validate_parent_contract(cfg,'matcher',wrong)

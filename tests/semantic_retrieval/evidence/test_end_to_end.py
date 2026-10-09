@@ -64,3 +64,28 @@ def test_failed_worker_records_failure_without_terminal_overwrite(tmp_path,confi
     manager.transition_run(SimpleNamespace(**args,expected='running',next_state='validating',exit_code=None,output=[]))
     manager.transition_run(SimpleNamespace(**args,expected='validating',next_state='failed',exit_code=1,output=[]))
     assert json.loads((cfg.runtime.run_dir/'status.json').read_text())['state'] == 'failed'
+
+
+def test_protected_four_gloo_ranks_train_and_restore(tmp_path,config_factory):
+    cfg = config_factory(stage='cpu_fixture')
+    repo,cfg = reserve_evidence_fixture(tmp_path,cfg,copy_source=True,world_size=4)
+    path = cfg.runtime.run_dir/'provenance/worker-config.json';path.write_text(json.dumps(cfg.to_payload()))
+    proc = subprocess.run(shlex.split((cfg.runtime.run_dir/'command.sh').read_text()),cwd=repo,env={**os.environ,'CUDA_VISIBLE_DEVICES':'','PYTHONDONTWRITEBYTECODE':'1','OMP_NUM_THREADS':'1'},capture_output=True,text=True,timeout=120)
+    assert proc.returncode == 0,proc.stdout+proc.stderr
+    report = json.loads((cfg.runtime.run_dir/'provenance/evidence-qualification.json').read_text())
+    assert report['world_size'] == 4 and report['device_type'] == 'cpu'
+    assert report['production_capacity'] is False
+    assert all(report['checks'][k] for k in ('unknown_rank','rank_weights_equal','exact_resume','loc_gradient','scale_gradient','value_gradient','action_recovery'))
+    from semantic_retrieval.evidence.checkpoint import load_evidence_model_weights,evidence_config_sha256,load_evidence_checkpoint
+    from semantic_retrieval.evidence.model import EvidenceMatcherModel
+    from semantic_retrieval.runtime.checkpoint import model_sha256
+    import torch
+    checkpoint = next((cfg.runtime.run_dir/'checkpoints').glob('*.pt'))
+    model = EvidenceMatcherModel(cfg.model)
+    rng = torch.get_rng_state().clone()
+    load_evidence_model_weights(checkpoint,{'matcher':model},expected_config_sha256=evidence_config_sha256(cfg),expected_parents=cfg.parents)
+    sidecar = json.loads(checkpoint.with_suffix('.json').read_text())
+    assert model_sha256(model) == sidecar['model_sha256']['matcher']
+    assert torch.equal(rng,torch.get_rng_state())
+    with pytest.raises(ValueError,match='world size'):
+        load_evidence_checkpoint(checkpoint,{'matcher':model},expected_config_sha256=evidence_config_sha256(cfg),expected_parents=cfg.parents)

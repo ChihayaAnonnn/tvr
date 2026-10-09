@@ -18,3 +18,19 @@ def test_duplicate_captions_do_not_add_bootstrap_units():
     b = paired_component_interval([0.,0.], [1.,-1.], ('x','y'),seed=0,samples=100,confidence_level=.95)
     c = paired_component_interval([0.,0.,0.,0.], [1.,1.,-1.,-1.], ('x','x','y','y'),seed=0,samples=100,confidence_level=.95)
     assert b == c
+
+
+def test_report_externalizes_outcomes_and_scopes_calibration(tmp_path):
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.evidence.evaluation import prediction_evidence
+    targets = TransitionTargets(torch.tensor([0,2,1]),torch.tensor([True,True,False]),'a'*64)
+    logits = torch.tensor([[10.,-10.,-10.],[-10.,-10.,10.],[0.,0.,0.]])
+    report = prediction_evidence(store=ArtifactArrayStore(tmp_path/'arrays'),population=(logits,targets),selected=(logits,targets),
+        rich=(torch.tensor([0.,0.]),torch.ones(2),torch.zeros(2),torch.ones(2,dtype=torch.bool)),
+        before=[0.,1.],after=[1.,1.],components=('x','y'),seed=0)
+    assert report.summary_metrics['population_valid_count'] == 2
+    assert report.summary_metrics['selected_unknown_count'] == 1
+    assert report.summary_metrics['selected_brier'] < 1e-12
+    assert report.summary_metrics['rich_interval_coverage_95'] == 1
+    assert report.summary_metrics['paired_component_count'] == 2
+    assert len(report.array_references) >= 7

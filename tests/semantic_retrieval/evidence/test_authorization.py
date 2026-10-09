@@ -50,3 +50,17 @@ def test_gpu_qualification_requires_registered_random_weight_bytes(config_factor
     manifest['environment'].update(gpu_count=4,distributed_topology='torchrun-4')
     with pytest.raises(ValueError,match='registered random'):
         assert_evidence_authorized(repo_root=repo,registry_path=cfg.runtime.registry_path,manifest=manifest,operation='reserve')
+
+
+def test_value_qualification_binds_capacity_and_each_head(config_factory):
+    from dataclasses import replace
+    from semantic_retrieval.evidence.authorization import validate_value_qualification
+    from semantic_retrieval.config import config_payload
+    cfg = config_factory()
+    qualified = config_payload(cfg.value)
+    report = {'qualified_value_kinds':['distribution','geometry','mean_regressor']}
+    validate_value_qualification(qualified,config_payload(cfg.value),report)
+    with pytest.raises(ValueError,match='value'):
+        validate_value_qualification(qualified,config_payload(replace(cfg.value,hidden_dim=cfg.value.hidden_dim+1)),report)
+    with pytest.raises(ValueError,match='value'):
+        validate_value_qualification(qualified,config_payload(replace(cfg.value,kind='geometry')),{'qualified_value_kinds':['distribution']})

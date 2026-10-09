@@ -59,3 +59,28 @@ def _ddp_weight_worker(rank,rendezvous):
 
 def test_real_ddp_matches_global_effective_mean(tmp_path):
     mp.spawn(_ddp_weight_worker,args=('file://'+str(tmp_path/'ddp-rendezvous'),),nprocs=2,join=True)
+
+
+def _publisher_worker(rank,rendezvous,root):
+    from pathlib import Path
+    from semantic_retrieval.evidence.execution import single_publisher
+    from semantic_retrieval.evidence.frame_cache import publish_json
+    dist.init_process_group('gloo',init_method=rendezvous,rank=rank,world_size=2)
+    try:
+        def work():
+            path = Path(root)/'output.json'
+            assert not path.exists()
+            publish_json(path,{'rank':rank})
+            return {'published':rank}
+        assert single_publisher(work) == {'published':0}
+        def fail():
+            raise ValueError('intentional publisher failure')
+        import pytest
+        with pytest.raises(RuntimeError,match='intentional publisher failure'):
+            single_publisher(fail)
+    finally:
+        dist.destroy_process_group()
+
+
+def test_only_one_rank_publishes_and_errors_reach_all_ranks(tmp_path):
+    mp.spawn(_publisher_worker,args=('file://'+str(tmp_path/'publisher-rendezvous'),str(tmp_path)),nprocs=2,join=True)

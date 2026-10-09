@@ -75,3 +75,25 @@ def test_random_baseline_is_replayable_and_candidate_order_independent(config_fa
     assert policy(state,None).action.candidate_id == first
     other = replace(state,candidates=tuple(reversed(state.candidates)))
     assert policy(other,None).action.candidate_id == first
+
+
+def test_fixed_frames_advances_least_observed_candidate_first(config_factory,state_factory):
+    from semantic_retrieval.evidence.baselines import build_acquisition_baseline
+    state = state_factory()
+    policy = build_acquisition_baseline('fixed_frames',seed=19,config=config_factory())
+    first = policy(state,None).action
+    candidate = next(c for c in state.candidates if c.canonical_id == first.candidate_id)
+    updated = replace(candidate, observed_frame_ids=tuple(sorted(set(candidate.observed_frame_ids+first.frame_ids))),
+                      attempted_frame_ids=tuple(sorted(set(candidate.attempted_frame_ids+first.frame_ids))))
+    state = replace(state,candidates=tuple(updated if c.canonical_id == updated.canonical_id else c for c in state.candidates),version=state.version+1)
+    assert policy(state,None).action.candidate_id != first.candidate_id
+
+
+def test_initial_index_accepts_only_successful_initial_subset(state_factory,frame_reader):
+    state = state_factory()
+    initial = view_frame_ids(state.candidates[0].pool_frame_ids,4)
+    candidates = tuple(replace(c,observed_frame_ids=initial[1:],attempted_frame_ids=initial) for c in state.candidates)
+    state = replace(state,candidates=candidates)
+    index = build_initial_index((state,),frame_reader,identity=IndexIdentity('a'*64,'fixture-v1','b'*64))
+    assert len(index.ids) == 2
+    assert all(ids == initial[1:] for _,ids in frame_reader.requests)

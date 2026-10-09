@@ -13,7 +13,7 @@ from semantic_retrieval.config import config_payload
 from semantic_retrieval.data.episodes import file_sha256
 from semantic_retrieval.data.video import decode_video
 from semantic_retrieval.evidence.calibration import ValueCalibration, fit_value_temperature
-from semantic_retrieval.evidence.checkpoint import EvidenceProgress, evidence_config_sha256, load_evidence_checkpoint, save_evidence_checkpoint
+from semantic_retrieval.evidence.checkpoint import EvidenceProgress, evidence_config_sha256, load_evidence_checkpoint, load_evidence_model_weights, save_evidence_checkpoint
 from semantic_retrieval.evidence.config import InputReference
 from semantic_retrieval.evidence.data import read_split_binding
 from semantic_retrieval.evidence.encoding import pack_observations
@@ -27,6 +27,7 @@ from semantic_retrieval.evidence.training import EvidenceStepper, build_stage_op
 from semantic_retrieval.evidence.transitions import FrozenTransitionModel, TransitionProducerIdentity, TransitionReferences, compile_transitions, read_transitions, sample_states
 from semantic_retrieval.evidence.types import ActionOutcome, BudgetLedger, CandidateObservation, EvidenceTargets, ExecutionProfile, ObservationState, ResourceCounts, ZERO, digest
 from semantic_retrieval.evidence.value import ValueHead, build_value_head, build_value_features
+from semantic_retrieval.evidence.timing import measure,synchronize
 from semantic_retrieval.evidence.views import build_frame_pool, propose_actions, view_frame_ids
 from semantic_retrieval.runtime.checkpoint import model_sha256
 from semantic_retrieval.runtime.input_bindings import context_input_references
@@ -61,8 +62,9 @@ class VideoFrameSource:
 
 
 class EpisodeAdapter:
-    def __init__(self,model,query,source,cache,sampling):
+    def __init__(self,model,query,source,cache,sampling,*,timings=None):
         self.model,self.query,self.source,self.cache,self.sampling = model,query,source,cache,sampling
+        self.timings = timings
         self.clip_identity = digest(config_payload(model.config.base)['clip'])
 
     def features(self,state):
@@ -70,7 +72,9 @@ class EpisodeAdapter:
 
     def predict(self,state):
         with torch.no_grad():
-            return self.model(self.features(state),sampling=self.sampling)
+            with measure(self.timings,'query_cache_seconds',next(self.model.parameters()).device):
+                features = self.features(state)
+            return self.model(features,sampling=self.sampling,timings=self.timings)
 
     def prediction_counts(self,state):
         m = 1 if self.model.config.variant in {'deterministic','learned_temperature'} else self.sampling.config.eval_samples
@@ -84,10 +88,11 @@ class EpisodeAdapter:
         identity = FrameCacheIdentity(c.content_sha256,self.model.config.base.clip_sha256,self.clip_identity,self.source.preprocessing_sha256)
         for i in action.frame_ids:
             try:
-                image = self.source(c,(i,)).to(device)
+                with measure(self.timings,'decode_seconds',device):
+                    image = self.source(c,(i,)).to(device)
             except DecodeFailure:
                 failed.append(i); continue
-            with torch.no_grad():
+            with torch.no_grad(),measure(self.timings,'clip_seconds',device):
                 feature = self.model.clip.encode_frames(image[None],torch.ones((1,1),dtype=torch.bool,device=device))[0,0]
             refs.append(self.cache.write(c.canonical_id,i,feature,identity=identity)); succeeded.append(i)
         return ActionOutcome(action.action_id,tuple(succeeded),tuple(failed),ResourceCounts(len(action.frame_ids),len(succeeded),0,0),time.monotonic()-started,tuple(refs))
@@ -97,6 +102,37 @@ class EpisodeAdapter:
         updated = apply_outcome(state,action,outcome)
         counts = self.prediction_counts(updated)
         return replace(updated,budget=updated.budget.reserve(counts).settle(counts,counts))
+
+
+def validate_parent_contract(cfg,kind,parent_manifest):
+    """Check semantics against the committed producer manifest, not its sidecar claims."""
+    from semantic_retrieval.evidence.config import evidence_manifest_config
+    parent = parent_manifest['config']; expected = evidence_manifest_config(cfg,eval_split='train')
+    pe = parent['evaluation']; ce = expected['evaluation']
+    if pe.get('config_kind') != 'evidence-retrieval-v1' or pe.get('evidence_stage') != kind:
+        raise ValueError('parent stage/protocol mismatch')
+    def model_contract(model):
+        model = dict(model); base = dict(model['base']);base.pop('clip_weights')
+        model['base'] = base
+        return base if kind == 'reference' else model
+    if model_contract(parent['model']) != model_contract(expected['model']):
+        raise ValueError('parent model/CLIP/variant/floor mismatch')
+    if pe['views'] != ce['views'] or pe['splits'] != ce['splits'] or pe['index'] != ce['index']:
+        raise ValueError('parent views/source-role/index mismatch')
+    if kind != 'reference' and pe['sampling'] != ce['sampling']:
+        raise ValueError('parent integration protocol mismatch')
+    if kind in {'value','calibration'}:
+        if pe['value'] != ce['value'] or pe['parents']['matcher'] != ce['parents']['matcher']:
+            raise ValueError('parent value capacity/schema/frozen matcher mismatch')
+    if kind == 'calibration' and pe['parents']['value'] != ce['parents']['value']:
+        raise ValueError('parent calibration belongs to a different value model')
+
+
+def _manifest_evidence_config_sha256(manifest):
+    c = manifest['config'];e = c['evaluation']
+    p = {k:e[k] for k in ('schema_version','synthetic','views','sampling','splits','index','parents','transitions','value','policy')}
+    p.update(stage=e['evidence_stage'],model=c['model'],train=dict(c['optimizer'],**c['scheduler'],loss_weights=c['loss']))
+    return digest(p)
 
 
 def validate_parent_lineage(repository,manifest,cfg):
@@ -122,6 +158,25 @@ def validate_parent_lineage(repository,manifest,cfg):
                 raise ValueError('model/input parent is not completed')
             if status['output_hashes'].get(reference.path.relative_to(root).as_posix()) != reference.sha256:
                 raise ValueError('parent input differs from terminal artifact')
+            if cfg.resume and reference == cfg.resume.checkpoint and cfg.stage == 'evaluation':
+                with reference.path.open() as handle:
+                    recovery = strict_json_load(handle)
+                if recovery.get('config_sha256') != evidence_config_sha256(cfg) or recovery.get('source_sha') != pm['git_sha']:
+                    raise ValueError('evaluation recovery differs from terminal producer identity')
+                changed = subprocess.run(['git','diff','--name-only',pm['git_sha'],manifest['git_sha'],'--','src/semantic_retrieval','scripts','experiment_artifacts.py','experiment_tracking.py'],cwd=repository,check=True,capture_output=True,text=True).stdout.strip()
+                if changed:
+                    raise ValueError('evaluation recovery executable source changed')
+            kind = next((name for name in ('reference','matcher','value','calibration') if getattr(cfg.parents,name) == reference),None)
+            if kind is not None:
+                validate_parent_contract(cfg,kind,pm)
+                if reference.path.suffix == '.pt' and reference.path.with_suffix('.json').exists():
+                    sidecar = reference.path.with_suffix('.json')
+                    if status['output_hashes'].get(sidecar.relative_to(root).as_posix()) != file_sha256(sidecar):
+                        raise ValueError('parent checkpoint sidecar is not terminal evidence')
+                    with sidecar.open() as handle:
+                        metadata = strict_json_load(handle)
+                    if metadata['config_sha256'] != _manifest_evidence_config_sha256(pm) or metadata['stage'] != kind or metadata['source_sha'] != pm['git_sha'] or metadata['manifest_sha256'] != record['manifest_sha256']:
+                        raise ValueError('parent checkpoint configuration differs from committed producer')
             matched = True
         if not matched:
             raise ValueError('every scientific parent must have committed terminal lineage')
@@ -133,7 +188,7 @@ def _load_model(reference,models):
         raise ValueError('parent checkpoint hash mismatch')
     with reference.path.with_suffix('.json').open() as h:
         meta = strict_json_load(h)
-    return load_evidence_checkpoint(reference.path,models,expected_config_sha256=meta['config_sha256'],expected_parents=meta['parents'])
+    return load_evidence_model_weights(reference.path,models,expected_config_sha256=meta['config_sha256'],expected_parents=meta['parents'])
 
 
 def _read_transition_input(cfg,*,matcher_sha256):
@@ -147,7 +202,7 @@ def _read_transition_input(cfg,*,matcher_sha256):
         raise ValueError('transition producer differs from config')
     if producer.matcher_sha256 != matcher_sha256:
         raise ValueError('transitions do not belong to the loaded frozen matcher')
-    role = 'V_calibration' if cfg.stage == 'calibration' else 'T_value'
+    role = ('V_calibration' if cfg.stage == 'calibration' else {'val_development':'V_development','val_locked':'V_locked'}[cfg.runtime.eval_split] if cfg.stage == 'evaluation' else 'T_value')
     bindings = [s for s in cfg.splits if s.role == role]
     if not cfg.synthetic:
         if len(bindings) != 1 or producer.label_sha256 != bindings[0].manifest.sha256:
@@ -164,7 +219,7 @@ def _query(model,text):
     return QueryInputs(ids,mask)
 
 
-def initial_episode_state(episode,cfg,source,*,cache=None,model=None):
+def initial_episode_state(episode,cfg,source,*,cache=None,model=None,timings=None):
     candidates = []
     requests = successes = 0
     initial_requests = sum(len(view_frame_ids(build_frame_pool(n,cfg.views.pool_size),cfg.views.levels[0])) for n in episode.frame_counts)
@@ -178,13 +233,14 @@ def initial_episode_state(episode,cfg,source,*,cache=None,model=None):
         for i in requested:
             requests += 1
             try:
-                image = source(provisional,(i,))
+                with measure(timings,'decode_seconds',next(model.parameters()).device if model is not None else 'cpu'):
+                    image = source(provisional,(i,))
             except DecodeFailure:
                 continue
             valid.append(i); successes += 1
             if cache is not None and model is not None:
                 device = next(model.parameters()).device
-                with torch.no_grad():
+                with torch.no_grad(),measure(timings,'clip_seconds',device):
                     feature = model.clip.encode_frames(image.to(device)[None],torch.ones((1,1),device=device,dtype=torch.bool))[0,0]
                 identity = FrameCacheIdentity(content,cfg.model.base.clip_sha256,digest(config_payload(cfg.model.base)['clip']),cfg.views.preprocessing_sha256)
                 cache.write(canonical,i,feature,identity=identity)
@@ -234,7 +290,10 @@ def _episodes_and_sources(cfg,role,model,context):
     if role not in index_spec['roles'] or tuple(index_spec['roles'][role]) != tuple(sorted(inventory)):
         raise ValueError('role gallery must equal the declared label-independent inventory')
     source = VideoFrameSource(videos,cfg.model.base.clip.image_size,cfg.views.preprocessing_sha256)
-    cache = FrameFeatureCache(context.array_store)
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    distributed_training = dist.is_initialized() and cfg.stage in {'reference','matcher'}
+    index_store = ArtifactArrayStore(context.paths.provenance/f'index-rank-{rank}'/'arrays') if distributed_training else context.array_store
+    cache = FrameFeatureCache(index_store)
     candidates = tuple(CandidateObservation(c,h,count,build_frame_pool(count,cfg.views.pool_size),
                       view_frame_ids(build_frame_pool(count,cfg.views.pool_size),cfg.views.levels[0]),
                       view_frame_ids(build_frame_pool(count,cfg.views.pool_size),cfg.views.levels[0]))
@@ -256,6 +315,51 @@ def _episodes_and_sources(cfg,role,model,context):
                 cache.write(candidate.canonical_id,i,feature,identity=identity)
             rows.append(feature)
         return torch.stack(rows)
+    # Persist the successful/attempted sparse inventory so a successor does not
+    # retry failed index decodes before recovering its online observations.
+    from semantic_retrieval.evidence.types import state_from_payload
+    gallery_dir = index_store.run_root/'provenance'/'evidence-gallery'/digest(role)
+    gallery_path = gallery_dir/'state.json'
+    binding = digest(dict(index=ref.sha256,views=config_payload(cfg.views),clip=cfg.model.base.clip_sha256,role=role))
+    safe_path(gallery_path)
+    if gallery_path.exists():
+        with gallery_path.open() as handle:
+            payload = strict_json_load(handle)
+        if set(payload) != {'binding_sha256','state','candidate_count','candidates_sha256'} or payload['binding_sha256'] != binding:
+            raise ValueError('recovered initial gallery binding mismatch')
+        rows = []
+        for candidate in candidates:
+            path = gallery_dir/(digest(candidate.canonical_id)+'.json');safe_path(path)
+            with path.open() as handle:
+                rows.append(strict_json_load(handle))
+        if payload['candidate_count'] != len(rows) or payload['candidates_sha256'] != digest(rows):
+            raise ValueError('recovered gallery candidate metadata hash mismatch')
+        restored = state_from_payload(dict(payload['state'],candidates=rows))
+        original = replace(restored,candidates=tuple(replace(c,observed_frame_ids=c.attempted_frame_ids) for c in restored.candidates))
+        if original != gallery_state:
+            raise ValueError('recovered initial gallery source inventory mismatch')
+        gallery_state = restored
+    else:
+        successful = []
+        for candidate in candidates:
+            valid = []
+            for frame_id in candidate.attempted_frame_ids:
+                try:
+                    reader(candidate,(frame_id,))
+                except DecodeFailure:
+                    continue
+                valid.append(frame_id)
+            if not valid:
+                raise DecodeFailure('candidate has empty initial index observation: '+candidate.canonical_id)
+            successful.append(replace(candidate,observed_frame_ids=tuple(valid)))
+        gallery_state = replace(gallery_state,candidates=tuple(successful))
+        payload = asdict(gallery_state);rows = payload.pop('candidates')
+        for row in rows:
+            path = gallery_dir/(digest(row['canonical_id'])+'.json')
+            if path.exists():
+                raise ValueError('partial initial gallery publication')
+            publish_json(path,row)
+        publish_json(gallery_path,dict(binding_sha256=binding,state=payload,candidate_count=len(rows),candidates_sha256=digest(rows)))
     index_identity = IndexIdentity(cfg.model.base.clip_sha256,cfg.index.gallery_version,
                                   digest(dict(preprocessing=cfg.views.preprocessing_sha256,view=digest(config_payload(cfg.views)))))
     started = time.monotonic()
@@ -273,8 +377,8 @@ def _episodes_and_sources(cfg,role,model,context):
                   video_paths=tuple(inventory[c][0] for c in order),content_sha256=tuple(inventory[c][1] for c in order),
                   frame_counts=tuple(inventory[c][2] for c in order),source_ids=tuple(inventory[c][3] for c in order))
         result.append(replace(w,episode=selected_episode))
-    context.array_store.write('initial_index_embeddings',index.embeddings.detach().cpu())
-    publish_json(context.paths.provenance/('initial-index-'+role+'.json'),dict(schema_version='evidence-initial-index-report-v1',
+    index_store.write('initial_index_embeddings',index.embeddings.detach().cpu())
+    publish_json(index_store.run_root/'provenance'/('initial-index-'+role+'.json'),dict(schema_version='evidence-initial-index-report-v1',
                  identity=asdict(index_identity),candidate_count=cfg.index.candidate_count,gallery_count=len(index.ids),
                  elapsed_seconds=time.monotonic()-started,role=role,specification_sha256=ref.sha256))
     return tuple(result),{w.episode.query_id:w for w in result},source,cache
@@ -386,7 +490,32 @@ def _training(context,cfg,model,device):
     return dict(summary_metrics=summary)
 
 
+def single_publisher(work):
+    """Run non-training publication once and propagate its result or error to every rank."""
+    if not dist.is_initialized():
+        return work()
+    envelope = [None]
+    if dist.get_rank() == 0:
+        try:
+            envelope[0] = dict(result=work(),error=None)
+        except Exception as error:
+            envelope[0] = dict(result=None,error=f'{type(error).__name__}: {error}')
+    dist.broadcast_object_list(envelope,src=0)
+    if envelope[0]['error'] is not None:
+        raise RuntimeError('scientific publisher failed: '+envelope[0]['error'])
+    return envelope[0]['result']
+
+
 def execute_scientific_stage(context,cfg):
+    # All ranks validate authorization; only training stages run distributed work.
+    from semantic_retrieval.evidence.authorization import assert_evidence_authorized
+    assert_evidence_authorized(repo_root=context.repo_root,registry_path=context.config.registry_path,manifest=context.manifest,operation='start')
+    if cfg.stage in {'transitions','calibration','evaluation'}:
+        return single_publisher(lambda:_execute_scientific_stage(context,cfg))
+    return _execute_scientific_stage(context,cfg)
+
+
+def _execute_scientific_stage(context,cfg):
     from semantic_retrieval.evidence.authorization import assert_evidence_authorized
     manifest,status,_ = load_validated_run_lifecycle(context.paths)
     if manifest != context.manifest or status['state'] != 'running':
@@ -432,11 +561,21 @@ def execute_scientific_stage(context,cfg):
         identity = dict(producer_sha256=batch.targets.producer_sha256,model_sha256=model_sha256(head),role='V_calibration',
                         relevance_space=next(s.relevance_space for s in cfg.splits if s.role == 'V_calibration'),feature_schema_sha256=digest('observable-action-v1'))
         targets = replace(batch.targets,outcome_class=batch.targets.outcome_class.to(device),valid_mask=batch.targets.valid_mask.to(device))
-        calibration = fit_value_temperature(head(batch.features.to(device)).logits,targets,split='V_calibration',identity=identity)
+        with torch.no_grad():
+            raw_logits = head(batch.features.to(device)).logits
+        calibration = fit_value_temperature(raw_logits,targets,split='V_calibration',identity=identity)
         from semantic_retrieval.evidence.schemas import validate_evidence_document
         payload = asdict(calibration); validate_evidence_document('calibration',payload)
         publish_json(context.paths.provenance/'value-calibration.json',payload)
-        return dict(summary_metrics={'calibration_temperature':calibration.temperature,'calibration_count':float(calibration.count)})
+        from semantic_retrieval.evidence.evaluation import prediction_evidence
+        evidence = prediction_evidence(store=context.array_store,population=(raw_logits,targets),
+            selected=(calibration.apply(raw_logits,expected_identity=identity),targets),rich=None,before=[],after=[],components=(),seed=cfg.sampling.seed)
+        names = {'population':'uncalibrated_population','selected':'calibrated_population'}
+        metrics = {names.get(k.split('_',1)[0],k.split('_',1)[0])+'_'+k.split('_',1)[1]:v for k,v in evidence.summary_metrics.items()}
+        metrics.update(calibration_temperature=calibration.temperature,calibration_count=float(calibration.count))
+        evidence = replace(evidence,summary_metrics=metrics,undefined_reasons={},identity=dict(identity,scope='scripted calibration population; no policy-selected actions'))
+        publish_json(context.paths.provenance/'calibration-evidence.json',asdict(evidence))
+        return dict(summary_metrics=metrics)
     if cfg.stage == 'evaluation':
         return _evaluation(context,cfg,model,head)
     raise ValueError('unsupported scientific evidence stage')
@@ -449,7 +588,16 @@ def _evaluation(context,cfg,model,head):
     role = {'val_development':'V_development','val_locked':'V_locked'}.get(context.config.eval_split)
     if role is None:
         raise ValueError('evaluation must explicitly select development or locked validation')
+    from semantic_retrieval.evidence.recovery import import_recovery,export_recovery,read_initial_state,save_initial_state
+    if cfg.resume is not None:
+        with cfg.resume.checkpoint.path.open() as handle:
+            snapshot = strict_json_load(handle)
+        # Terminal lineage and executable equivalence have already been checked at prepare/start.
+        import_recovery(cfg.resume.checkpoint,context.array_store,config_sha256=evidence_config_sha256(cfg),source_sha=snapshot['source_sha'])
     episodes,lookup,source,cache = _episodes_and_sources(cfg,role,model,context)
+    def snapshot_progress():
+        return export_recovery(context.array_store,config_sha256=evidence_config_sha256(cfg),source_sha=context.config.source_sha)
+    journal = ActionJournal(context.array_store.run_root/'provenance'/'evidence-actions',context.array_store,after_write=snapshot_progress)
     calibration = None
     if cfg.policy.baseline == 'distribution':
         with cfg.parents.calibration.path.open() as h:
@@ -461,27 +609,108 @@ def _evaluation(context,cfg,model,head):
         if calibration.identity['model_sha256'] != model_sha256(head) or calibration.identity['role'] != 'V_calibration' or calibration.identity['relevance_space'] != relevance or calibration.identity['feature_schema_sha256'] != digest(cfg.value.feature_schema):
             raise ValueError('calibration model/role/relevance/schema differs from evaluation')
     sampling = SamplingState(cfg.sampling,mode='eval',model_sha256=model_sha256(model))
-    records,components = [],[]
+    records,components,completed = [],[],[]
     for w in episodes:
         e = w.episode
-        state = initial_episode_state(e,cfg,source,cache=cache,model=model)
-        adapter = EpisodeAdapter(model,_query(model,e.query_text),source,cache,sampling)
+        timings = {}
+        synchronize(next(model.parameters()).device);episode_started = time.monotonic()
+        state = read_initial_state(context.array_store,e.query_id)
+        if state is None:
+            state = initial_episode_state(e,cfg,source,cache=cache,model=model,timings=timings)
+            save_initial_state(context.array_store,state);snapshot_progress()
+        elif tuple(c.canonical_id for c in state.candidates) != e.canonical_ids:
+            raise ValueError('recovered initial candidate selection differs from fixed index')
+        adapter = EpisodeAdapter(model,_query(model,e.query_text),source,cache,sampling,timings=timings)
         def predict(s):
             return adapter.predict(s),adapter.prediction_counts(s)
         def value(features):
-            out = head(features)
+            with measure(timings,'value_seconds',features.device):
+                out = head(features)
             return replace(out,logits=calibration.apply(out.logits,expected_identity=calibration.identity)) if calibration is not None else out
         from semantic_retrieval.evidence.baselines import build_acquisition_baseline
         policy = build_acquisition_baseline(cfg.policy.baseline,seed=cfg.sampling.seed,config=cfg)
         models = SimpleNamespace(device=next(model.parameters()).device,predict=predict,prediction_counts=adapter.prediction_counts,sampling_sha256=sampling.identity,value_head=value,policy=policy,stop_threshold=cfg.policy.stop_threshold)
         # Each query has its own cache/journal cost account; cross-query feature reuse grants no free actions.
-        journal = ActionJournal(context.array_store.run_root/'provenance'/'evidence-actions',context.array_store)
         result = run_policy_episode(context,state,models,adapter.acquire,journal=journal)
+        synchronize(next(model.parameters()).device)
+        timings['total_seconds'] = time.monotonic()-episode_started
+        result = replace(result,timings=timings)
         initial_id = result.initial_ranking[0]
         truth = dict(zip(e.canonical_ids,e.relevance))
         records.append(EvidenceEvaluationRecord(e.query_id,truth[initial_id],truth[result.ranking[0]],e.answer_in_candidates,result.costs,result.timings['total_seconds']))
         components.append(e.query_component_id)
+        completed.append((e,result))
     report = evaluate_evidence(records,relevance_space=next(s.relevance_space for s in cfg.splits if s.role == role),source_components=components)
+    # Diagnostics run after every online episode, with separate storage and accounting.
+    # Counterfactual evidence never enters the online cache or policy state.
+    from semantic_retrieval.evidence.evaluation import prediction_evidence
+    from semantic_retrieval.evidence.transitions import label_transition
+    from semantic_retrieval.evidence.types import TransitionTargets
+    population = selected = rich = None
+    if cfg.transitions.reference is not None and cfg.value.kind != 'mean_regressor' and cfg.parents.value is not None:
+        batch = _read_transition_input(cfg,matcher_sha256=model_sha256(model))
+        with torch.no_grad():
+            out = head(batch.features.to(next(head.parameters()).device)).logits
+            if calibration is not None:
+                out = calibration.apply(out,expected_identity=calibration.identity)
+        population = (out.cpu(),batch.targets)
+    selected_logits,selected_classes,selected_valid = [],[],[]
+    if cfg.value.kind != 'mean_regressor' and cfg.parents.value is not None:
+        for episode,result in completed:
+            truth = dict(zip(episode.canonical_ids,episode.relevance))
+            for action_id in result.action_ids:
+                before,after,action = journal.action_prediction_states(action_id)
+                prior = journal.prediction_for(before,expected_sampling=sampling.identity)
+                following = journal.prediction_for(after,expected_sampling=sampling.identity)
+                with torch.no_grad():
+                    logits = head(build_value_features(before,(action,),prior).to(next(head.parameters()).device)).logits
+                    if calibration is not None:
+                        logits = calibration.apply(logits,expected_identity=calibration.identity)
+                target = label_transition(rank_candidates(prior.ranking_log_probability,tuple(c for _,c in prior.pair_ids))[0],
+                    rank_candidates(following.ranking_log_probability,tuple(c for _,c in following.pair_ids))[0],truth,producer_sha256=model_sha256(model))
+                selected_logits.append(logits.cpu());selected_classes.append(target.outcome_class);selected_valid.append(target.valid_mask)
+        if selected_logits:
+            selected = (torch.cat(selected_logits),TransitionTargets(torch.cat(selected_classes),torch.cat(selected_valid),model_sha256(model)))
+    diagnostics_started = time.monotonic()
+    if cfg.parents.reference is not None and cfg.model.variant in {'gaussian','fixed_scale','standard_probabilistic'}:
+        reference = EvidenceMatcherModel(cfg.model).to(next(model.parameters()).device)
+        load_reference_parts(cfg.parents.reference.path,reference,expected_sha256=cfg.parents.reference.sha256);freeze_reference(reference)
+        diagnostic_cache = FrameFeatureCache(ArtifactArrayStore(context.paths.provenance/'rich-diagnostics'/'arrays'))
+        locs,scales,targets,masks = [],[],[],[]
+        for episode,result in completed:
+            state = result.final_state
+            rows = []
+            for candidate in state.candidates:
+                valid = []
+                for frame_id in candidate.pool_frame_ids:
+                    try:
+                        source(candidate,(frame_id,))
+                    except DecodeFailure:
+                        continue
+                    valid.append(frame_id)
+                if not valid:
+                    raise DecodeFailure('rich diagnostic has no decodable frames')
+                rows.append(replace(candidate,observed_frame_ids=tuple(valid),attempted_frame_ids=candidate.pool_frame_ids))
+            rich_state = replace(state,candidates=tuple(rows))
+            with torch.no_grad():
+                query = _query(model,episode.query_text)
+                observed = model.encode_inputs(query,(state,),source,diagnostic_cache)
+                rich_observed = reference.encode_inputs(query,(rich_state,),source,diagnostic_cache)
+                scores,valid = rich_score_targets(reference,rich_observed,current_observed=observed)
+            predicted = journal.prediction_for(state,expected_sampling=sampling.identity)
+            locs.append(predicted.loc.cpu());scales.append(predicted.scale.cpu());targets.append(scores.cpu());masks.append(valid.cpu())
+        rich = tuple(torch.cat(x) for x in (locs,scales,targets,masks))
+    known = [(r,c) for r,c in zip(records,components) if r.initial_top1_label != -1 and r.final_top1_label != -1]
+    evidence = prediction_evidence(store=context.array_store,population=population,selected=selected,rich=rich,
+        before=[r.initial_top1_label for r,c in known],after=[r.final_top1_label for r,c in known],components=tuple(c for r,c in known),seed=cfg.sampling.seed)
+    for name in ('decode_seconds','clip_seconds','query_cache_seconds','temporal_seconds','pair_seconds','scale_seconds','mc_seconds','value_seconds'):
+        report.summary_metrics[name] = sum(result.timings.get(name,0.) for episode,result in completed)
+    episode_arrays = (('episode_labels',torch.tensor([[r.initial_top1_label,r.final_top1_label,r.candidate_presence] for r in records])),
+        ('episode_costs',torch.tensor([r.costs.values() for r in records])),('episode_seconds',torch.tensor([r.elapsed_seconds for r in records],dtype=torch.float64)))
+    refs = tuple(context.array_store.write(key,value) for key,value in episode_arrays)
+    report = replace(report,summary_metrics=dict(report.summary_metrics,**evidence.summary_metrics,offline_diagnostic_seconds=time.monotonic()-diagnostics_started),
+        array_references=refs+evidence.array_references,undefined_reasons=dict(report.undefined_reasons,**evidence.undefined_reasons),
+        identity=dict(report.identity,latency_scope='current worker segment including initial acquisition; prior segment latency excluded on successor recovery' if cfg.resume else 'online query including initial acquisition; shared index and offline diagnostics excluded',probability_scopes=evidence.identity,episode_order_sha256=digest([e.query_id for e,result in completed])))
     from semantic_retrieval.evidence.schemas import validate_evidence_document
     payload = asdict(report); validate_evidence_document('report',payload)
     publish_json(context.paths.provenance/'evidence-report.json',payload)

@@ -57,3 +57,27 @@ def test_unfinished_prediction_fails_closed_for_its_query_only(journal_case):
         c.journal.recover(c.state)
     other = replace(c.state,query_id='other-query')
     assert c.journal.recover(other) == other
+
+
+def test_successor_import_restores_executed_action_without_repeating_io(journal_case,tmp_path):
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.evidence.journal import ActionJournal
+    from semantic_retrieval.evidence.recovery import export_recovery,import_recovery,save_initial_state,read_initial_state
+    from semantic_retrieval.evidence.config import InputReference
+    from semantic_retrieval.data.episodes import file_sha256
+    c = journal_case
+    save_initial_state(c.journal.store,c.state)
+    c.journal.prepare(c.state,c.decision)
+    c.journal.record_execution(c.decision.action.action_id,c.outcome)
+    path = export_recovery(c.journal.store,config_sha256='a'*64,source_sha='b'*40)
+    successor = ArtifactArrayStore(tmp_path/'successor'/'arrays')
+    ref = InputReference(path,file_sha256(path))
+    import_recovery(ref,successor,config_sha256='a'*64,source_sha='b'*40)
+    journal = ActionJournal(successor.run_root/'provenance'/'evidence-actions',successor)
+    initial = read_initial_state(successor,c.state.query_id)
+    assert initial == c.state
+    assert journal.recover(initial) == c.next_state
+    assert journal.recover(initial).budget.spent == c.next_state.budget.spent
+    import_recovery(ref,successor,config_sha256='a'*64,source_sha='b'*40)
+    with pytest.raises(ValueError,match='identity'):
+        import_recovery(ref,successor,config_sha256='d'*64,source_sha='b'*40)

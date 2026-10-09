@@ -100,6 +100,17 @@ def save_evidence_checkpoint(context, models, optimizer, scheduler, config, prog
 
 
 def load_evidence_checkpoint(path, models, *, expected_config_sha256, expected_parents):
+    return _load_checkpoint(path, models, expected_config_sha256=expected_config_sha256,
+                            expected_parents=expected_parents, resume=True)
+
+
+def load_evidence_model_weights(path, models, *, expected_config_sha256, expected_parents):
+    """Validate and load immutable model weights without changing RNG or training state."""
+    return _load_checkpoint(path, models, expected_config_sha256=expected_config_sha256,
+                            expected_parents=expected_parents, resume=False)
+
+
+def _load_checkpoint(path, models, *, expected_config_sha256, expected_parents, resume):
     safe_path(path); safe_path(path.with_suffix('.json'))
     if not path.is_file() or not path.with_suffix('.json').is_file():
         raise ValueError('partial checkpoint publication')
@@ -116,10 +127,11 @@ def load_evidence_checkpoint(path, models, *, expected_config_sha256, expected_p
         raise ValueError('checkpoint payload identity mismatch')
     world = dist.get_world_size() if dist.is_initialized() else 1
     rank = dist.get_rank() if dist.is_initialized() else 0
-    if payload['world_size'] != world or meta['world_size'] != world or len(payload['ranks']) != world or set(payload['models']) != set(models) or set(meta['model_sha256']) != set(models):
+    stored_world = payload['world_size']
+    if type(stored_world) is not int or stored_world < 1 or meta['world_size'] != stored_world or len(payload['ranks']) != stored_world or (resume and stored_world != world) or set(payload['models']) != set(models) or set(meta['model_sha256']) != set(models):
         raise ValueError('checkpoint world size/model set mismatch')
     payload = _hydrate_array_references(payload,path.parent.parent)
-    progress = EvidenceProgress(**payload['ranks'][rank]['progress'])
+    progress = EvidenceProgress(**payload['ranks'][rank if resume else 0]['progress'])
     if progress.stage != meta['stage'] or progress.producer_sha256 != meta['producer_sha256']:
         raise ValueError('checkpoint progress producer/stage mismatch')
     # Validate every model before mutating any destination module.
@@ -134,6 +146,8 @@ def load_evidence_checkpoint(path, models, *, expected_config_sha256, expected_p
             raise ValueError('checkpoint model digest mismatch')
     for key,model in models.items():
         model.load_state_dict(payload['models'][key],strict=True)
+    if not resume:
+        return None
     states = tuple(p['rng'] for p in payload['ranks'])
     restore_rng(states[rank])
     return EvidenceTrainingState(progress,payload['optimizer'],payload['scheduler'],states)

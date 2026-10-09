@@ -23,6 +23,11 @@ def _committed(repo, path):
     return raw
 
 
+def validate_value_qualification(qualified,requested,report):
+    if any(qualified[k] != requested[k] for k in ('hidden_dim','feature_schema')) or requested['kind'] not in report.get('qualified_value_kinds',()):
+        raise ValueError('science value capacity/schema/kind differs from qualified value path')
+
+
 def validate_qualification(repo, study, manifest):
     q = study.get('four_gpu_qualification')
     if not isinstance(q,dict) or set(q) != {'run_id','manifest_sha256','report_sha256'}:
@@ -57,6 +62,7 @@ def validate_qualification(repo, study, manifest):
         return dict(base=base,scale_floor=m['scale_floor'])
     if capacity(qm['config']['model']) != capacity(manifest['config']['model']) or manifest['config']['model']['variant'] not in report.get('qualified_variants',()):
         raise ValueError('science model capacity/variant differs from qualified model')
+    validate_value_qualification(qm['config']['evaluation']['value'],manifest['config']['evaluation']['value'],report)
 
 
 def assert_evidence_authorized(*, repo_root, registry_path, manifest, operation, command=None):
