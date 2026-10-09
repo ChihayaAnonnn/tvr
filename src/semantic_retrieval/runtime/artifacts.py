@@ -229,6 +229,9 @@ def prepare_run(config, *, repo_root, system_config=None):
     from .pilot_policy import assert_pilot_authorized
 
     assert_pilot_authorized(repo_root=repository, registry_path=registry, manifest=manifest, operation="start")
+    from semantic_retrieval.evidence.authorization import assert_evidence_authorized
+    assert_evidence_authorized(repo_root=repository,registry_path=registry,manifest=manifest,operation="start",
+                               command=shlex.split(paths.command.read_text()))
     verify_committed_reservation(repository, manifest["registry_path"], manifest)
     sealed = shlex.split(paths.command.read_text())
     if not sealed:
@@ -239,48 +242,56 @@ def prepare_run(config, *, repo_root, system_config=None):
         raise ValueError("manifest does not authorize test evaluation")
     if config.eval_split != "test" and not manifest["validation_authorized"]:
         raise ValueError("manifest does not authorize validation")
-    if system_config is not None:
-        if system_config.runtime != config or manifest["config"] != effective_manifest_config(
-            system_config, eval_split=config.eval_split
-        ):
-            raise ValueError("effective system config mismatch")
-        refs = {str(r["path"]): r["sha256"] for r in manifest["input_checkpoints"]}
-        if refs.get(str(system_config.model.clip_weights)) != system_config.model.clip_sha256:
-            raise ValueError("CLIP input is not reserved")
-        if system_config.model.grouping is not None:
-            group = system_config.model.grouping
-            refs = {str(r["path"]): r["sha256"] for r in manifest["dataset_splits"]}
-            if refs.get(str(group.validation_report)) != group.validation_report_sha256:
-                raise ValueError("grouping validation report is not reserved")
-        if system_config.deployment is not None:
-            deployment = system_config.deployment
-            refs = {
-                str(r["path"]): r["sha256"]
-                for field in ("input_checkpoints", "dataset_splits")
-                for r in manifest[field]
-            }
-            for path, digest in (
-                (deployment.checkpoint_path, deployment.checkpoint_sha256),
-                (deployment.gallery_manifest, deployment.gallery_sha256),
-                (deployment.calibration_path, deployment.calibration_sha256),
-            ):
-                if path is not None and refs.get(str(path)) != digest:
-                    raise ValueError("deployment input is not reserved")
-        if system_config.data is not None:
-            data = system_config.data
-            refs = {str(r["path"]): r["sha256"] for r in manifest["dataset_splits"]}
-            if refs.get(str(data.episode_manifest)) != data.episode_sha256:
-                raise ValueError("episode input is not reserved")
+    from semantic_retrieval.evidence.config import EvidenceSystemConfig
+    is_evidence = isinstance(system_config,EvidenceSystemConfig)
+    if is_evidence:
+        from semantic_retrieval.evidence.runtime import validate_evidence_binding
+        validate_evidence_binding(repository,manifest,system_config,config)
+    elif manifest['config']['evaluation'].get('config_kind') == 'evidence-retrieval-v1':
+        raise ValueError('evidence configuration requires its typed consumer')
     else:
-        # Stage A has no scientific model consumer: reject unconsumed settings rather than pretending to bind them.
-        for category, values in manifest["config"].items():
-            if category != "evaluation" and values:
-                raise ValueError(f"effective config has no stage-A consumer: {category}")
-        evaluation = manifest["config"]["evaluation"]
-        if set(evaluation) - {"eval_split", "qualification_scenario"}:
-            raise ValueError("effective config has unsupported evaluation fields")
-        if evaluation.get("eval_split") != config.eval_split:
-            raise ValueError("effective config eval_split mismatch")
+        if system_config is not None:
+            if system_config.runtime != config or manifest["config"] != effective_manifest_config(
+                system_config, eval_split=config.eval_split
+            ):
+                raise ValueError("effective system config mismatch")
+            refs = {str(r["path"]): r["sha256"] for r in manifest["input_checkpoints"]}
+            if refs.get(str(system_config.model.clip_weights)) != system_config.model.clip_sha256:
+                raise ValueError("CLIP input is not reserved")
+            if system_config.model.grouping is not None:
+                group = system_config.model.grouping
+                refs = {str(r["path"]): r["sha256"] for r in manifest["dataset_splits"]}
+                if refs.get(str(group.validation_report)) != group.validation_report_sha256:
+                    raise ValueError("grouping validation report is not reserved")
+            if system_config.deployment is not None:
+                deployment = system_config.deployment
+                refs = {
+                    str(r["path"]): r["sha256"]
+                    for field in ("input_checkpoints", "dataset_splits")
+                    for r in manifest[field]
+                }
+                for path, digest in (
+                    (deployment.checkpoint_path, deployment.checkpoint_sha256),
+                    (deployment.gallery_manifest, deployment.gallery_sha256),
+                    (deployment.calibration_path, deployment.calibration_sha256),
+                ):
+                    if path is not None and refs.get(str(path)) != digest:
+                        raise ValueError("deployment input is not reserved")
+            if system_config.data is not None:
+                data = system_config.data
+                refs = {str(r["path"]): r["sha256"] for r in manifest["dataset_splits"]}
+                if refs.get(str(data.episode_manifest)) != data.episode_sha256:
+                    raise ValueError("episode input is not reserved")
+        else:
+            # Stage A has no scientific model consumer: reject unconsumed settings rather than pretending to bind them.
+            for category, values in manifest["config"].items():
+                if category != "evaluation" and values:
+                    raise ValueError(f"effective config has no stage-A consumer: {category}")
+            evaluation = manifest["config"]["evaluation"]
+            if set(evaluation) - {"eval_split", "qualification_scenario"}:
+                raise ValueError("effective config has unsupported evaluation fields")
+            if evaluation.get("eval_split") != config.eval_split:
+                raise ValueError("effective config eval_split mismatch")
     if torch.is_autocast_enabled() or torch.is_autocast_cpu_enabled():
         raise ValueError("runtime precision must be FP32 without ambient autocast")
     if torch.get_float32_matmul_precision() != "highest":
@@ -312,7 +323,7 @@ def prepare_run(config, *, repo_root, system_config=None):
     for name, digest in references.items():
         if _hash_input(repository, {"path": name, "sha256": digest}) != digest:
             raise ValueError("input SHA-256 mismatch")
-    if system_config is not None:
+    if system_config is not None and not is_evidence:
         _validate_resume(repository, manifest, system_config)
         _validate_pilot(repository, manifest, system_config)
     return RunContext(

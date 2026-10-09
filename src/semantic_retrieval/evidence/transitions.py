@@ -114,8 +114,10 @@ def compile_transitions(states, actions, frozen_matcher, targets, *, store, prod
             prediction = frozen_matcher.predict(state)
             before = _top1(prediction)
             # The fixed candidate set and all legal actions are compulsory.
-            legal = propose_actions(state)
+            affordable = lambda a:(state.budget.spent+state.budget.reserved+a.reservation).fits(state.budget.limits)
+            legal = tuple(a for a in propose_actions(state) if affordable(a))
             supplied = actions(state) if callable(actions) else tuple(a for a in actions if a.state_sha256 == state.state_sha256)
+            supplied = tuple(a for a in supplied if affordable(a))
             if {a.action_id for a in supplied} != {a.action_id for a in legal}:
                 raise ValueError('transition actions must enumerate all legal actions')
             relevance, source_components = targets[state.query_id]
@@ -146,6 +148,8 @@ def compile_transitions(states, actions, frozen_matcher, targets, *, store, prod
     # Keep only small provenance in JSON; partitioning large indices is required before writing.
     payload = dict(schema_version='evidence-transitions-v1', producer=asdict(producer_identity),
                    arrays=[asdict(r) for r in refs], records=[asdict(r) for r in records], component_ids=components)
+    from semantic_retrieval.evidence.schemas import validate_evidence_document
+    validate_evidence_document('transition_index',payload)
     p = store.run_root/'provenance'/'transitions.json'
     if p.exists():
         raise ValueError('transition output already exists')
@@ -159,6 +163,8 @@ def read_transitions(references, *, expected_producer):
         raise ValueError('transition identity/index mismatch')
     with references.index_path.open() as h:
         p = strict_json_load(h)
+    from semantic_retrieval.evidence.schemas import validate_evidence_document
+    validate_evidence_document('transition_index',p)
     if p['schema_version'] != 'evidence-transitions-v1' or p['producer'] != asdict(expected_producer):
         raise ValueError('transition producer mismatch')
     if p['arrays'] != [dict(asdict(r), shape=list(r.shape)) for r in references.arrays]:

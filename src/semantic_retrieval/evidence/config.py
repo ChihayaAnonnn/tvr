@@ -148,12 +148,15 @@ class ValueConfig:
     hidden_dim: int
     feature_schema: str
     temperature: float
+    kind: str
 
     def __post_init__(self):
         positive(self.hidden_dim, integer=True)
         positive(self.temperature)
         if self.feature_schema != 'observable-action-v1':
             raise ValueError('unknown value feature schema')
+        if self.kind not in {'distribution','geometry','mean_regressor'}:
+            raise ValueError('unknown value head kind')
 
 
 @dataclass(frozen=True)
@@ -161,9 +164,12 @@ class EvidencePolicyConfig:
     stop_threshold: float
     limits: ResourceCounts
     cost_weights: tuple[float, ...]
+    baseline: str
 
     def __post_init__(self):
         positive(self.stop_threshold, zero=True)
+        if self.baseline not in {'distribution','mean_regressor','fixed_frames','random','margin','entropy'}:
+            raise ValueError('unknown acquisition policy')
         if len(self.cost_weights) != 4:
             raise ValueError('four explicit cost weights required')
         for v in self.cost_weights:
@@ -200,15 +206,23 @@ class EvidenceSystemConfig:
     def __post_init__(self):
         if type(self.schema_version) is not int or self.schema_version != 1 or type(self.synthetic) is not bool:
             raise ValueError('invalid config version or synthetic marker')
+        if (self.policy.baseline == 'distribution' and self.value.kind == 'mean_regressor') or (self.policy.baseline == 'mean_regressor' and self.value.kind != 'mean_regressor'):
+            raise ValueError('policy/value kind mismatch')
+        if self.stage == 'calibration' and self.value.kind == 'mean_regressor':
+            raise ValueError('direct mean has no class-probability calibration')
         if self.stage not in {'cpu_fixture', 'reference', 'matcher', 'transitions', 'value', 'calibration', 'evaluation', 'gpu_qualification'}:
             raise ValueError('unknown evidence stage')
         if self.views.pool_size > self.model.base.max_frames:
             raise ValueError('frame pool exceeds temporal capacity')
         if len({s.role for s in self.splits}) != len(self.splits):
             raise ValueError('duplicate split role')
-        if self.model.base.clip.fixture != self.synthetic:
+        if self.stage != 'gpu_qualification' and self.model.base.clip.fixture != self.synthetic:
             raise ValueError('synthetic/CLIP fixture mismatch')
-        required = {'matcher': ('reference',), 'transitions': ('matcher',), 'value': ('matcher',), 'calibration': ('matcher', 'value'), 'evaluation': ('matcher', 'value', 'calibration')}.get(self.stage, ())
+        required = {'matcher': ('reference',), 'transitions': ('matcher',), 'value': ('matcher',), 'calibration': ('matcher', 'value'), 'evaluation': ('matcher',)}.get(self.stage, ())
+        if self.stage == 'evaluation' and self.policy.baseline in {'distribution','mean_regressor'}:
+            required += ('value',)
+            if self.policy.baseline == 'distribution':
+                required += ('calibration',)
         if any(getattr(self.parents, k) is None for k in required):
             raise ValueError('missing stage parent model')
         if self.stage in {'value', 'calibration'} and (self.transitions.reference is None or self.transitions.producer_sha256 is None):

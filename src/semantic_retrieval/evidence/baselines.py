@@ -6,7 +6,7 @@ from torch.nn import functional as F
 
 from semantic_retrieval.evidence.model import EvidenceMatcherModel
 from semantic_retrieval.evidence.policy import decide, reserve_action
-from semantic_retrieval.evidence.types import StopDecision, ActionValueDistribution
+from semantic_retrieval.evidence.types import StopDecision, ActionValueDistribution, digest
 from semantic_retrieval.evidence.value import build_value_features
 from semantic_retrieval.evidence.views import propose_actions, view_frame_ids
 from semantic_retrieval.retrieval.index import CanonicalIndex
@@ -48,7 +48,6 @@ def search_initial_candidates(query_features,index,k,*,expected_identity):
 def build_acquisition_baseline(name, *, seed, config):
     if name not in {'fixed_frames','random','margin','entropy','mean_regressor','distribution'}:
         raise ValueError('unknown acquisition baseline')
-    generator = torch.Generator().manual_seed(seed)
     def policy(state, scores, *, value_model=None):
         actions = propose_actions(state)
         affordable = tuple(a for a in actions if (state.budget.spent+state.budget.reserved+a.reservation).fits(state.budget.limits))
@@ -68,13 +67,15 @@ def build_acquisition_baseline(name, *, seed, config):
                 action = min(ranked,key=lambda x:x[:3])[3]
                 return reserve_action(state,action,predicted_counts=action.reservation)
             return decide(state,actions,values,state.budget,stop_threshold=config.policy.stop_threshold)
-        lp = scores.ranking_log_probability.detach()
+        lp = scores.ranking_log_probability.detach() if name in {'margin','entropy'} else None
         if name == 'margin':
             ordered = lp.sort(descending=True).values
             if len(ordered) == 1 or ordered[0]-ordered[1] >= config.policy.stop_threshold:
                 return StopDecision('margin_stop')
         if name == 'entropy' and -(lp.exp()*lp).sum() <= config.policy.stop_threshold:
             return StopDecision('entropy_stop')
-        action = affordable[int(torch.randint(len(affordable),(),generator=generator))] if name == 'random' else min(affordable,key=lambda a:(a.candidate_id,a.action_id))
+        ordered = sorted(affordable,key=lambda a:a.candidate_id)
+        identity = dict(seed=seed,query=state.query_id,observations=sorted((c.canonical_id,c.observed_frame_ids,c.attempted_frame_ids) for c in state.candidates))
+        action = ordered[int(digest(identity),16)%len(ordered)] if name == 'random' else ordered[0]
         return reserve_action(state,action,predicted_counts=action.reservation)
     return policy

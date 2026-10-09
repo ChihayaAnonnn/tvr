@@ -9,21 +9,12 @@ from semantic_retrieval.evidence.checkpoint import EvidenceProgress, evidence_co
 
 @pytest.fixture
 def checkpoint_context(tmp_path,config_factory):
-    from semantic_retrieval.evidence.config import evidence_manifest_config
-    from semantic_retrieval.runtime.artifacts import prepare_run,start_run
-    cfg = config_factory()
-    repo, rt = reservation.__wrapped__(tmp_path,SimpleNamespace(param=dict(config=evidence_manifest_config(cfg,eval_split='val'))))
-    commit_reservation(repo,rt)
-    # Low-level serialization test uses the real archive lifecycle directly.
-    # Protected worker entry and authorization are separate Task 10/11 integration tests.
-    from experiment_artifacts import ArtifactArrayStore, make_run_paths, load_validated_run_lifecycle, transition_run_status, verify_committed_reservation
-    from semantic_retrieval.runtime.artifacts import RunContext
-    paths = make_run_paths(rt.run_dir.parents[3], 'fixture-study', rt.run_id)
-    manifest,_,_ = load_validated_run_lifecycle(paths)
-    verify_committed_reservation(repo,manifest['registry_path'],manifest)
-    transition_run_status(paths,'reserved','running')
-    cfg = replace(cfg,runtime=rt)
-    context = RunContext(paths,manifest,ArtifactArrayStore(paths.arrays),rt,repo,system_config=cfg)
+    from evidence.archive_fixture import reserve_evidence_fixture
+    from semantic_retrieval.evidence.runtime import prepare_evidence_run
+    from semantic_retrieval.runtime.artifacts import start_run
+    repo,cfg = reserve_evidence_fixture(tmp_path,config_factory(stage='cpu_fixture'))
+    context = prepare_evidence_run(cfg,repo_root=repo)
+    start_run(context)
     return context,cfg
 
 
@@ -38,7 +29,7 @@ def test_resume_next_noise_sampler_and_parameters_exact(checkpoint_context):
     def step():
         opt.zero_grad(); loss = model(torch.randn(2,2)).square().sum(); loss.backward(); opt.step(); sched.step()
     step()
-    progress = EvidenceProgress('matcher',1,0,1,{'order':(0,1),'cursor':1},sampling.state_dict(),'a'*64,None,None)
+    progress = EvidenceProgress('cpu_fixture',1,0,1,{'order':(0,1),'cursor':1},sampling.state_dict(),'a'*64,None,None)
     path = save_evidence_checkpoint(context,{'matcher':model},opt,sched,cfg,progress)
     step()
     expected = {k:v.clone() for k,v in model.state_dict().items()}
@@ -55,7 +46,7 @@ def test_resume_next_noise_sampler_and_parameters_exact(checkpoint_context):
 def test_partial_sidecar_and_wrong_producer_rejected(checkpoint_context):
     context,cfg = checkpoint_context
     model = torch.nn.Linear(2,1); opt = torch.optim.AdamW(model.parameters()); sched = torch.optim.lr_scheduler.StepLR(opt,1)
-    progress = EvidenceProgress('matcher',0,0,0,{'cursor':0},{'identity':'a'*64},'a'*64,None,None)
+    progress = EvidenceProgress('cpu_fixture',0,0,0,{'cursor':0},{'identity':'a'*64},'a'*64,None,None)
     path = save_evidence_checkpoint(context,{'matcher':model},opt,sched,cfg,progress)
     with pytest.raises(ValueError):
         load_evidence_checkpoint(path,{'matcher':model},expected_config_sha256='b'*64,expected_parents=cfg.parents)

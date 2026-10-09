@@ -46,3 +46,32 @@ def test_learned_temperature_receives_matching_gradient(config_factory, observed
     terms = matcher_loss(output,target,noise=torch.zeros(4,4),config=cfg)
     terms['pc'].numerator.backward()
     assert model.log_temperature.grad is not None and model.log_temperature.grad.abs() > 0
+
+def test_candidate_selection_does_not_insert_annotated_positive():
+    from semantic_retrieval.evidence.execution import bind_candidate_order
+    from types import SimpleNamespace
+    episode = SimpleNamespace(canonical_ids=('good','bad'),relevance=(1,0),relevance_space='reviewed_semantic',benchmark_positive_ids=())
+    labels,presence = bind_candidate_order(episode,('bad',))
+    assert labels == (0,) and presence == 0
+    labels,presence = bind_candidate_order(episode,('unreviewed',))
+    assert labels == (-1,) and presence == -1
+
+
+def test_config_selects_real_value_head_and_rejects_mismatched_policy(config_factory):
+    from semantic_retrieval.evidence.value import build_value_head,MeanRegressor,GeometryValue
+    cfg = config_factory()
+    mean = replace(cfg.value,kind='mean_regressor')
+    assert isinstance(build_value_head(mean,23),MeanRegressor)
+    assert isinstance(build_value_head(replace(cfg.value,kind='geometry'),23),GeometryValue)
+    with pytest.raises(ValueError,match='policy/value'):
+        replace(cfg,value=mean)
+
+
+def test_random_baseline_is_replayable_and_candidate_order_independent(config_factory,state_factory):
+    from semantic_retrieval.evidence.baselines import build_acquisition_baseline
+    cfg = config_factory(); state = state_factory()
+    policy = build_acquisition_baseline('random',seed=19,config=cfg)
+    first = policy(state,None).action.candidate_id
+    assert policy(state,None).action.candidate_id == first
+    other = replace(state,candidates=tuple(reversed(state.candidates)))
+    assert policy(other,None).action.candidate_id == first

@@ -24,8 +24,8 @@ def config_factory(model_config):
             SamplingConfig(4, 4, 1., 17, 'identity-normal-v1'),
             StageTrainConfig(.001, 0., 7, 'constant', 4, 1, ('temporal.', 'matcher.'), {'pc': 1., 'score': 1., 'value': 0.}),
             (), IndexConfig(None, 2, 'fixture-v1'), ParentConfig(ref, ref, ref, ref),
-            TransitionConfig(ref, 'a'*64, 3, 2), ValueConfig(16, 'observable-action-v1', 1.),
-            EvidencePolicyConfig(0., ResourceCounts(32, 32, 1024, 4096), (1., 1., 1., 1.)), None,
+            TransitionConfig(ref, 'a'*64, 3, 2), ValueConfig(16, 'observable-action-v1', 1., 'distribution'),
+            EvidencePolicyConfig(0., ResourceCounts(32, 32, 1024, 4096), (1., 1., 1., 1.), 'distribution'), None,
         )
         return replace(cfg, **overrides)
     return make

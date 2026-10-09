@@ -79,6 +79,11 @@ class EvidenceValueModel(nn.Module):
         return self.value_head(features)
 
 
+def build_value_head(config,input_dim):
+    cls = {'distribution':ValueHead,'geometry':GeometryValue,'mean_regressor':MeanRegressor}[config.kind]
+    return cls(input_dim,config.hidden_dim)
+
+
 @dataclass(frozen=True)
 class ValueTrainingBatch:
     features: torch.Tensor

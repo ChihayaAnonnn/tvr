@@ -68,7 +68,9 @@ class FrameFeatureCache:
             if not torch.equal(old, feature.cpu()):
                 raise ValueError('conflicting frame cache contents')
             with p.open() as h:
-                return strict_json_load(h)['reference']
+                from experiment_artifacts import ArrayReference
+                value = strict_json_load(h)['reference']
+                return ArrayReference(**{**value,'shape':tuple(value['shape'])})
         ref = self.store.write('frame_'+p.stem, feature.detach().cpu())
         publish_json(p, dict(identity=asdict(identity), candidate=candidate_id, frame=frame_id, reference=asdict(ref)))
         return ref

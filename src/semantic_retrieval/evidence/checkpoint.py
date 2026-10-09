@@ -85,6 +85,8 @@ def save_evidence_checkpoint(context, models, optimizer, scheduler, config, prog
                         config_sha256=payload['config_sha256'],parents=payload['parents'],model_sha256=hashes,
                         stage=progress.stage,producer_sha256=progress.producer_sha256,world_size=len(ranks),
                         source_sha=context.config.source_sha,manifest_sha256=context.config.manifest_sha256)
+            from semantic_retrieval.evidence.schemas import validate_evidence_document
+            validate_evidence_document('checkpoint_sidecar',meta)
             _publish_file(path.with_suffix('.json'),lambda handle:handle.write(artifact_json_bytes(meta)))
         except Exception as exc:
             if not dist.is_initialized():
@@ -103,8 +105,10 @@ def load_evidence_checkpoint(path, models, *, expected_config_sha256, expected_p
         raise ValueError('partial checkpoint publication')
     with path.with_suffix('.json').open() as h:
         meta = strict_json_load(h)
+    from semantic_retrieval.evidence.schemas import validate_evidence_document
+    validate_evidence_document('checkpoint_sidecar',meta)
     keys = {'schema_version','sha256','config_sha256','parents','model_sha256','stage','producer_sha256','world_size','source_sha','manifest_sha256'}
-    parents = config_payload(expected_parents)
+    parents = expected_parents if isinstance(expected_parents,dict) else config_payload(expected_parents)
     if set(meta) != keys or meta['schema_version'] != SCHEMA or meta['config_sha256'] != expected_config_sha256 or meta['parents'] != parents or meta['sha256'] != hashlib.sha256(path.read_bytes()).hexdigest():
         raise ValueError('checkpoint schema/hash/config/parents mismatch')
     payload = torch.load(path,map_location='cpu',weights_only=True)

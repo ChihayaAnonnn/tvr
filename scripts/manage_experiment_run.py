@@ -370,8 +370,10 @@ def reserve_phase(args: argparse.Namespace) -> dict[str, object]:
         for spec in phase["runs"]  # type: ignore[union-attr]
     ]
     from semantic_retrieval.runtime.pilot_policy import assert_pilot_authorized
-    for manifest in manifests:
+    from semantic_retrieval.evidence.authorization import assert_evidence_authorized
+    for manifest, spec in zip(manifests,phase['runs']):
         assert_pilot_authorized(repo_root=repo, registry_path=registry, manifest=manifest, operation="reserve")
+        assert_evidence_authorized(repo_root=repo,registry_path=registry,manifest=manifest,operation="reserve",command=spec['command'])
     run_ids = [str(manifest["run_id"]) for manifest in manifests]
     if len(run_ids) != len(set(run_ids)):
         raise ValueError("phase contains duplicate run identities")
