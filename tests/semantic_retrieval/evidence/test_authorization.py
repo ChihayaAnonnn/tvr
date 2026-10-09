@@ -32,3 +32,21 @@ def test_true_test_flag_still_rejected(config_factory,tmp_path):
     manifest = {**context.manifest,'test_authorized':True}
     with pytest.raises(ValueError,match='sealed'):
         assert_evidence_authorized(repo_root=repo,registry_path=cfg.runtime.registry_path,manifest=manifest,operation='start')
+
+
+def test_gpu_qualification_requires_registered_random_weight_bytes(config_factory,tmp_path):
+    import json
+    import yaml
+    from evidence.archive_fixture import reserve_evidence_fixture
+    from test_runtime_artifacts import git
+    from semantic_retrieval.evidence.authorization import assert_evidence_authorized
+    repo,cfg = reserve_evidence_fixture(tmp_path,config_factory(stage='cpu_fixture'))
+    study_path = cfg.runtime.study_path
+    study = yaml.safe_load(study_path.read_text());study['software_authorization']['four_gpu'] = True
+    study_path.write_text(yaml.safe_dump(study));git(repo,'add',str(study_path));git(repo,'commit','-qm','authorize synthetic GPU qualification')
+    manifest = json.loads((cfg.runtime.run_dir/'manifest.json').read_text())
+    manifest['config']['evaluation']['evidence_stage'] = 'gpu_qualification'
+    manifest['config']['model']['base']['clip']['fixture'] = False
+    manifest['environment'].update(gpu_count=4,distributed_topology='torchrun-4')
+    with pytest.raises(ValueError,match='registered random'):
+        assert_evidence_authorized(repo_root=repo,registry_path=cfg.runtime.registry_path,manifest=manifest,operation='reserve')

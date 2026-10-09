@@ -20,7 +20,10 @@ def main(argv, *, allowed_stages, repo_root):
     parser.add_argument('--manifest-sha256')
     parser.add_argument('--source-sha')
     args = parser.parse_args(argv)
+    os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
     configure_fp32()
+    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.benchmark = False
     cfg = load_evidence_config(args.config)
     if cfg.runtime is None or cfg.stage not in allowed_stages:
         raise ValueError('wrong evidence entry stage or missing runtime')
@@ -51,7 +54,10 @@ def main(argv, *, allowed_stages, repo_root):
         return 0
     except BaseException:
         if rank == 0 and context is not None:
-            fail_run(context,exit_code=1)
+            from experiment_artifacts import load_validated_run_lifecycle
+            _,status,_ = load_validated_run_lifecycle(context.paths)
+            if status['state'] in {'running','validating'}:
+                fail_run(context,exit_code=1)
         raise
     finally:
         if dist.is_initialized():

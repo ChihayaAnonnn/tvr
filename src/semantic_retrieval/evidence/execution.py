@@ -136,7 +136,7 @@ def _load_model(reference,models):
     return load_evidence_checkpoint(reference.path,models,expected_config_sha256=meta['config_sha256'],expected_parents=meta['parents'])
 
 
-def _read_transition_input(cfg):
+def _read_transition_input(cfg,*,matcher_sha256):
     ref = cfg.transitions.reference
     if ref is None or file_sha256(ref.path) != ref.sha256:
         raise ValueError('bound transition input required')
@@ -145,6 +145,8 @@ def _read_transition_input(cfg):
     producer = TransitionProducerIdentity(**p['producer'])
     if producer.sha256 != cfg.transitions.producer_sha256:
         raise ValueError('transition producer differs from config')
+    if producer.matcher_sha256 != matcher_sha256:
+        raise ValueError('transitions do not belong to the loaded frozen matcher')
     role = 'V_calibration' if cfg.stage == 'calibration' else 'T_value'
     bindings = [s for s in cfg.splits if s.role == role]
     if not cfg.synthetic:
@@ -311,7 +313,7 @@ def _training(context,cfg,model,device):
     sampling = SamplingState(cfg.sampling,mode='train',model_sha256=model_sha256(model))
     start = 0
     if cfg.stage == 'value':
-        transition_batch = _read_transition_input(cfg)
+        transition_batch = _read_transition_input(cfg,matcher_sha256=model_sha256(model.matcher))
         if transition_batch.targets.producer_sha256 != cfg.transitions.producer_sha256:
             raise ValueError('value transition producer mismatch')
         features = transition_batch.features.to(device)
@@ -426,7 +428,7 @@ def execute_scientific_stage(context,cfg):
     if cfg.parents.value is not None:
         _load_model(cfg.parents.value,{'value':head})
     if cfg.stage == 'calibration':
-        batch = _read_transition_input(cfg)
+        batch = _read_transition_input(cfg,matcher_sha256=model_sha256(model))
         identity = dict(producer_sha256=batch.targets.producer_sha256,model_sha256=model_sha256(head),role='V_calibration',
                         relevance_space=next(s.relevance_space for s in cfg.splits if s.role == 'V_calibration'),feature_schema_sha256=digest('observable-action-v1'))
         targets = replace(batch.targets,outcome_class=batch.targets.outcome_class.to(device),valid_mask=batch.targets.valid_mask.to(device))

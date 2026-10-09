@@ -57,3 +57,19 @@ def test_prediction_budget_reserved_before_computation(state_factory,tmp_path):
     with pytest.raises(ValueError):
         run_policy_episode(None,state,models,None,journal=journal)
     assert calls == []
+
+
+def test_transition_input_rejects_different_frozen_matcher(config_factory,tmp_path):
+    from dataclasses import replace,asdict
+    from hashlib import sha256
+    import json
+    from semantic_retrieval.evidence.config import InputReference
+    from semantic_retrieval.evidence.transitions import TransitionProducerIdentity
+    from semantic_retrieval.evidence.execution import _read_transition_input
+    producer = TransitionProducerIdentity(*(['a'*64]*8))
+    path = tmp_path/'transitions.json'
+    path.write_text(json.dumps(dict(producer=asdict(producer))))
+    cfg = config_factory(stage='value')
+    cfg = replace(cfg,transitions=replace(cfg.transitions,reference=InputReference(path,sha256(path.read_bytes()).hexdigest()),producer_sha256=producer.sha256))
+    with pytest.raises(ValueError,match='frozen matcher'):
+        _read_transition_input(cfg,matcher_sha256='b'*64)

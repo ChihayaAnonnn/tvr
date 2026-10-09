@@ -42,7 +42,7 @@ def reserve_evidence_fixture(tmp_path,cfg,*,copy_source=False,variant='cpu-fixtu
         refs[str(cfg.transitions.reference.path)] = cfg.transitions.reference.sha256
     checkpoints = [dict(path=k,sha256=v) for k,v in refs.items()]
     count = torch.cuda.device_count()
-    command = [sys.executable,'scripts/qualify_evidence_retrieval.py','--config','{run_dir}/provenance/worker-config.json','--run-id','{run_id}']
+    command = [sys.executable,'scripts/qualify_evidence_retrieval.py','--config','{artifact_run_dir}/provenance/worker-config.json','--run-id','{run_id}']
     run = dict(dataset='synthetic',stage='baseline',variant=variant,seed=cfg.train.seed,
                scheduled_timestamp_utc=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
                environment=dict(python=platform.python_version(),pytorch=str(torch.__version__),cuda=str(torch.version.cuda or 'none'),

@@ -51,7 +51,11 @@ def validate_qualification(repo, study, manifest):
     changed = subprocess.run(['git','diff','--name-only',qm['git_sha'],manifest['git_sha'],'--','src/semantic_retrieval','scripts','experiment_artifacts.py','experiment_tracking.py'],cwd=repo,check=True,capture_output=True,text=True).stdout.strip()
     if changed:
         raise ValueError('executable source changed since four-rank qualification')
-    if qm['config']['model'] != manifest['config']['model']:
+    def capacity(m):
+        base = dict(m['base'])
+        base.pop('clip_weights');base.pop('clip_sha256')
+        return dict(base=base,scale_floor=m['scale_floor'])
+    if capacity(qm['config']['model']) != capacity(manifest['config']['model']) or manifest['config']['model']['variant'] not in report.get('qualified_variants',()):
         raise ValueError('science model capacity/variant differs from qualified model')
 
 
@@ -97,6 +101,10 @@ def assert_evidence_authorized(*, repo_root, registry_path, manifest, operation,
             raise ValueError('GPU qualification requires authorized production capacity random weights, four CUDA ranks')
         if manifest['dataset'] != 'synthetic':
             raise ValueError('qualification cannot consume scientific data')
+        if model['base']['clip_sha256'] != software.get('random_clip_sha256'):
+            raise ValueError('qualification requires registered random CLIP weight bytes')
+        from semantic_retrieval.models.clip import ClipConfig
+        ClipConfig(**model['base']['clip'])
         return
     if stage not in {'reference','matcher','transitions','value','calibration','evaluation'}:
         raise ValueError('unregistered evidence stage')

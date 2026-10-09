@@ -852,3 +852,11 @@ CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/
 执行前请用户审阅本计划并选择执行方式。推荐**Native（本会话执行）**：11项任务对观测/预测/进度类型有连续依赖，在同一上下文按任务验收便于保持合同一致；最后做一次独立整分支审阅。
 
 也可选**Subagent-driven**：每任务新执行agent与新reviewer，按Superpowers相应技能执行。当前未选择执行方式，不启动agent或实现。本计划批准不授权科学运行，新链路四卡资格、独立study与研究gate仍分别生效。
+
+## 2026-10-10 Native 执行记录
+
+用户已明确选择本会话 Native 并确认设计与计划；最新执行指令另外授权新 study、全机 GPU 软件资格，以及通过研究 gate 后的训练/validation。原文中的 CPU-only、不得建立 study 与未选择执行方式是批准前的历史边界，由该明确指令替代；旧 study、sealed test 和研究定义保持不变。
+
+任务 1–10 已按依赖顺序提交；任务 11 已实现真实临时源码 CLI 闭环、成功及失败归档、精确 checkpoint 和动作日志恢复，以及独立四卡资格入口。CPU 闭环覆盖 tiny 随机 CLIP、合成视频、教师/概率匹配/收益训练和采集/停止。新 study 控制面明确保持 science gates 关闭；四卡资格和来源完整性审计分别验收，不以 CPU 成功替代。
+
+实际验证：任务 10 指定新旧路径回归 53 passed；扩展相关集 64 passed；新 evidence 集在任务 10 结束前 73 passed；CPU 真实 CLI 成功及失败闭环 2 passed。更晚的验证以执行报告及归档摘要为准。
