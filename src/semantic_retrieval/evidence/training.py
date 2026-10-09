@@ -99,3 +99,68 @@ def deterministic_contrastive(logits, offsets, labels, *, temperature):
             total = total-(logits[a:b][known]/temperature).log_softmax(0)[y[known] == 1].mean()
             count += 1
     return LossTerm(total,logits.new_tensor(float(count)))
+
+
+@dataclass(frozen=True)
+class StepMetrics:
+    loss_sums: dict
+    weight_sums: dict
+    step: int
+    stepped: bool
+
+
+def global_loss(terms, weights):
+    import torch.distributed as dist
+    from semantic_retrieval.evidence.types import positive
+    if not terms or set(terms)-set(weights):
+        raise ValueError('explicit nonempty loss terms and weights required')
+    for value in weights.values():
+        positive(value,zero=True)
+    identity = (tuple(sorted(terms)),tuple(sorted(weights.items())))
+    world = dist.get_world_size() if dist.is_initialized() else 1
+    if world > 1:
+        gathered = [None]*world
+        dist.all_gather_object(gathered,identity)
+        if any(x != identity for x in gathered):
+            raise ValueError('rank loss keys/weights differ')
+    total = sum(term.numerator*0 for term in terms.values())
+    active = False
+    for key in sorted(terms):
+        term = terms[key]
+        count = term.denominator.detach().clone()
+        if world > 1:
+            dist.all_reduce(count)
+        if count > 0 and weights[key] > 0:
+            total = total+weights[key]*term.numerator*(world/count)
+            active = True
+    return total, active
+
+
+class EvidenceStepper:
+    def __init__(self, model, optimizer, scheduler, *, weights, loss_builder=None):
+        self.model, self.optimizer, self.scheduler = model, optimizer, scheduler
+        self.weights, self.loss_builder = weights, loss_builder
+        self.steps = 0
+
+    def step(self, batch):
+        import torch.distributed as dist
+        if dist.is_initialized():
+            stage = getattr(self.model.module if hasattr(self.model,'module') else self.model,'stage',None)
+            stages = [None]*dist.get_world_size()
+            dist.all_gather_object(stages,stage)
+            if any(x != stage for x in stages):
+                raise ValueError('rank stages differ')
+        self.optimizer.zero_grad(set_to_none=True)
+        terms = self.loss_builder(self.model,batch) if self.loss_builder is not None else batch
+        loss,active = global_loss(terms,self.weights)
+        if active:
+            loss.backward()
+            parameters = [p for group in self.optimizer.param_groups for p in group['params']]
+            finite = torch.tensor(int(all(p.grad is None or torch.isfinite(p.grad).all() for p in parameters)),device=loss.device)
+            if dist.is_initialized():
+                dist.all_reduce(finite,op=dist.ReduceOp.MIN)
+            if not finite:
+                raise ValueError('nonfinite evidence gradient')
+            self.optimizer.step(); self.scheduler.step(); self.steps += 1
+        return StepMetrics({k:float(t.numerator.detach()) for k,t in terms.items()},
+                           {k:float(t.denominator) for k,t in terms.items()},self.steps,active)
