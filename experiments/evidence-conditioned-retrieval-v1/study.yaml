@@ -19,7 +19,10 @@ software_authorization:
   physical_indices: [0, 2, 3, 4]
   topology_reason: preserve_known_four_card_topology_if_fresh_device_inspection_confirms_idle
   scientific_data: forbidden
-four_gpu_qualification: null
+four_gpu_qualification:
+  run_id: synthetic-baseline-evidence-q0-four-gpu-seed713-20261009T175208Z-b9d5d2fb3adb
+  manifest_sha256: f481e259a2d2240b2322948a47088cf29af676bdf8780e539090703fdb509c80
+  report_sha256: 8ed5b1ea14c51ccb67bec6268f65bc9a20feec27a73afc8fd799623b7e7cb17f
 campaign:
   software:
     max_run_wall_seconds: 1800

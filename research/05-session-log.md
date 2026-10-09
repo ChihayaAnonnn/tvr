@@ -698,3 +698,7 @@ seed 0 winner = ep3，V2T A3 AUROC 0.7230，CI95 [0.6300, 0.8097]。
 
 **下一步。** <一句话。若是新实验，指出它对应 04-open-questions.md 的哪个 OQ。>
 ```
+
+### 2026-10-10 — evidence-conditioned retrieval Native implementation and new Q0
+
+Independent development branch `codex/evidence-conditioned-retrieval` implements the approved evidence design; review repairs are `1db61d2` / `00f3656`. CPU affected regression: 614 passed; final evidence suite: 92 passed. New independent study `experiments/evidence-conditioned-retrieval-v1/`; production four-A800 FP32 Q0 completed and terminal evidence committed `a0bb35a`, all 13 checks, 5 matcher variants and 3 value heads passed; 0.07994 allocated GPU-hours. This does not prove scientific effectiveness. Science remains closed because the approved near-duplicate-source relation is undefined/unaudited; user clarification is pending. See the study's `reports/science-gate-status.md` and the tracked Superpowers review. No old study was resumed and no MSRVTT/MSVD test was evaluated.
