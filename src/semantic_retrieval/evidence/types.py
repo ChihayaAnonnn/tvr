@@ -175,10 +175,13 @@ class ObservedFeatures:
     query_offsets: Tensor
     pair_ids: tuple[tuple[str, str], ...]
     observation_keys: tuple
+    pair_coverage: Tensor
 
     def __post_init__(self):
         p = len(self.pair_ids)
         f = self.features
+        if self.pair_coverage.shape != (p, 4) or not torch.isfinite(self.pair_coverage).all():
+            raise ValueError("invalid observed coverage")
         if self.position_ids.dtype != torch.long or self.position_ids.shape != f.frame_mask.shape:
             raise ValueError('invalid observed positions')
         if f.text_mask.dtype != torch.bool or f.frame_mask.dtype != torch.bool or not f.frame_mask.any(-1).all():

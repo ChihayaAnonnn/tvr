@@ -2,12 +2,14 @@
 import torch
 from semantic_retrieval.types import EncodedFeatures
 from semantic_retrieval.evidence.types import ObservedFeatures
+from semantic_retrieval.evidence.views import coverage_vector
 
 
 def pack_observations(states, queries, frame_reader):
     if len(states) != len(queries.text_tokens):
         raise ValueError('one query feature row required per observation state')
     keys, rows, positions, pairs, ids, offsets = [], [], [], [], [], [0]
+    coverage = []
     d = queries.pooled_text.shape[-1]
     for q, state in enumerate(states):
         for c in state.candidates:
@@ -20,6 +22,7 @@ def pack_observations(states, queries, frame_reader):
                     raise ValueError('reader must return detached finite observed CLIP vectors')
                 keys.append(key); rows.append(row.to(queries.pooled_text.device))
                 positions.append(tuple(c.pool_frame_ids.index(i) for i in c.observed_frame_ids))
+            coverage.append(coverage_vector(c))
             pairs.append((q, keys.index(key))); ids.append((state.query_id, c.canonical_id))
         offsets.append(len(pairs))
     device = queries.pooled_text.device
@@ -33,7 +36,7 @@ def pack_observations(states, queries, frame_reader):
     pooled = frames.sum(1)/mask.sum(1, keepdim=True)
     f = EncodedFeatures(queries.text_tokens, queries.pooled_text, frames, pooled, queries.text_mask, mask)
     return ObservedFeatures(f, pos, torch.tensor(pairs, dtype=torch.long, device=device),
-                            torch.tensor(offsets, dtype=torch.long, device=device), tuple(ids), tuple(keys))
+                            torch.tensor(offsets, dtype=torch.long, device=device), tuple(ids), tuple(keys), torch.stack(coverage).to(device))
 
 
 def encode_observations(state, frame_cache, *, query_features):

@@ -54,3 +54,16 @@ def frame_reader():
         return torch.tensor([[float(i), float(ord(candidate.canonical_id[0])), 1., 2., 3., 4., 5., 6.] for i in frame_ids])
     read.requests = []
     return read
+
+
+@pytest.fixture
+def observed_features(state_factory, query_features, frame_reader):
+    from semantic_retrieval.evidence.encoding import pack_observations
+    return pack_observations((state_factory(query_id='q0'), state_factory(query_id='q1')), query_features, frame_reader)
+
+
+@pytest.fixture
+def rich_features(state_factory, query_features, frame_reader):
+    from semantic_retrieval.evidence.encoding import pack_observations
+    return pack_observations((state_factory(query_id='q0', observed=tuple(range(16))),
+                              state_factory(query_id='q1', observed=tuple(range(16)))), query_features, frame_reader)
