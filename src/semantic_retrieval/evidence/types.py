@@ -67,6 +67,15 @@ class BudgetLedger:
             raise ValueError('budget exceeded')
 
 
+    def reserve(self, counts):
+        return BudgetLedger(self.limits, self.spent, self.reserved+counts)
+
+    def settle(self, reservation, actual):
+        if not actual.fits(reservation) or not reservation.fits(self.reserved):
+            raise ValueError('invalid budget settlement')
+        return BudgetLedger(self.limits, self.spent+actual, self.reserved-reservation)
+
+
 @dataclass(frozen=True)
 class CandidateObservation:
     canonical_id: str
@@ -279,3 +288,28 @@ class AcquireDecision:
 @dataclass(frozen=True)
 class StopDecision:
     reason: str
+
+
+def state_from_payload(payload):
+    p = dict(payload)
+    p['candidates'] = tuple(CandidateObservation(**{**c, **{k: tuple(c[k]) for k in ('pool_frame_ids', 'observed_frame_ids', 'attempted_frame_ids')}}) for c in p['candidates'])
+    p['view_levels'] = tuple(p['view_levels'])
+    p['profile'] = ExecutionProfile(p['profile']['mc_samples'], tuple(p['profile']['cost_weights']))
+    p['budget'] = BudgetLedger(**{k: ResourceCounts(**v) for k,v in p['budget'].items()})
+    return ObservationState(**p)
+
+
+def action_from_payload(payload):
+    p = dict(payload)
+    p['frame_ids'] = tuple(p['frame_ids']); p['position_ids'] = tuple(p['position_ids'])
+    p['reservation'] = ResourceCounts(**p['reservation'])
+    return EvidenceAction(**p)
+
+
+def outcome_from_payload(payload):
+    from experiment_artifacts import ArrayReference
+    p = dict(payload)
+    p['succeeded_ids'] = tuple(p['succeeded_ids']); p['failed_ids'] = tuple(p['failed_ids'])
+    p['actual_counts'] = ResourceCounts(**p['actual_counts'])
+    p['feature_references'] = tuple(ArrayReference(**{**r, 'shape': tuple(r['shape'])}) for r in p['feature_references'])
+    return ActionOutcome(**p)

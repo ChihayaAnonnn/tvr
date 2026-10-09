@@ -67,3 +67,22 @@ def rich_features(state_factory, query_features, frame_reader):
     from semantic_retrieval.evidence.encoding import pack_observations
     return pack_observations((state_factory(query_id='q0', observed=tuple(range(16))),
                               state_factory(query_id='q1', observed=tuple(range(16)))), query_features, frame_reader)
+
+
+@pytest.fixture
+def journal_case(state_factory, tmp_path):
+    from types import SimpleNamespace
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.evidence.views import propose_actions
+    from semantic_retrieval.evidence.policy import reserve_action, apply_outcome
+    from semantic_retrieval.evidence.journal import ActionJournal
+    from semantic_retrieval.evidence.types import ActionOutcome
+    state = state_factory()
+    action = propose_actions(state)[0]
+    decision = reserve_action(state, action, predicted_counts=action.reservation)
+    store = ArtifactArrayStore(tmp_path/'arrays')
+    refs = tuple(store.write('frame_'+str(i), torch.arange(8.)+i) for i in action.frame_ids)
+    outcome = ActionOutcome(action.action_id, action.frame_ids, (), action.reservation, .01, refs)
+    return SimpleNamespace(state=state, decision=decision, outcome=outcome,
+                           next_state=apply_outcome(state, action, outcome),
+                           journal=ActionJournal(store.run_root/'provenance'/'evidence-actions', store))
