@@ -52,3 +52,10 @@ def test_state_rejects_union_duplicates_and_overspend(state_factory):
 def test_sampling_rejects_invalid_numbers(config_factory, field, value):
     with pytest.raises(ValueError):
         replace(config_factory().sampling, **{field: value})
+
+
+@pytest.mark.parametrize('stage,weights',[('reference',{'pc':0.,'score':1.,'value':0.}),('value',{'pc':1.,'score':0.,'value':0.}),('matcher',{'pc':0.,'score':0.,'value':1.})])
+def test_training_stage_rejects_unused_only_loss(config_factory,stage,weights):
+    cfg = config_factory()
+    with pytest.raises(ValueError,match='stage.*loss'):
+        replace(cfg,stage=stage,train=replace(cfg.train,loss_weights=weights))

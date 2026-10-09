@@ -22,7 +22,7 @@ def config_factory(model_config):
             1, None, stage, True, EvidenceModelConfig(replace(model_config, max_frames=16), 'gaussian', .01),
             ViewConfig(16, (4, 8, 16), 'b'*64, 'opencv-rgb-v1'),
             SamplingConfig(4, 4, 1., 17, 'identity-normal-v1'),
-            StageTrainConfig(.001, 0., 7, 'constant', 4, 1, ('temporal.', 'matcher.'), {'pc': 1., 'score': 1., 'value': 0.}),
+            StageTrainConfig(.001, 0., 7, 'constant', 4, 1, ('value_head.',) if stage == 'value' else ('temporal.', 'matcher.'), {'pc': 0. if stage == 'value' else 1., 'score': 0. if stage in {'reference','value'} else 1., 'value': 1. if stage == 'value' else 0.}),
             (), IndexConfig(None, 2, 'fixture-v1'), ParentConfig(ref, ref, ref, ref),
             TransitionConfig(ref, 'a'*64, 3, 2), ValueConfig(16, 'observable-action-v1', 1., 'distribution'),
             EvidencePolicyConfig(0., ResourceCounts(32, 32, 1024, 4096), (1., 1., 1., 1.), 'distribution'), None,

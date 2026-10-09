@@ -212,6 +212,16 @@ class EvidenceSystemConfig:
             raise ValueError('direct mean has no class-probability calibration')
         if self.stage not in {'cpu_fixture', 'reference', 'matcher', 'transitions', 'value', 'calibration', 'evaluation', 'gpu_qualification'}:
             raise ValueError('unknown evidence stage')
+        active = {'reference':{'pc'},'matcher':{'pc','score'},'value':{'value'}}.get(self.stage)
+        if active is not None and (not any(self.train.loss_weights[k] > 0 for k in active) or any(v > 0 for k,v in self.train.loss_weights.items() if k not in active)):
+            raise ValueError('training stage has inactive or unused loss weights')
+        if self.resume is not None:
+            if self.stage not in {'reference','matcher','value','evaluation'}:
+                raise ValueError('resume is unsupported for this stage')
+            if self.stage == 'evaluation' and (self.resume.checkpoint.path.suffix != '.json' or self.resume.cumulative_steps != 0):
+                raise ValueError('evaluation resume requires an action snapshot; costs are carried in its states')
+            if self.stage != 'evaluation' and self.resume.checkpoint.path.suffix != '.pt':
+                raise ValueError('training resume requires a checkpoint')
         if self.views.pool_size > self.model.base.max_frames:
             raise ValueError('frame pool exceeds temporal capacity')
         if len({s.role for s in self.splits}) != len(self.splits):

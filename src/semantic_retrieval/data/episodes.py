@@ -74,15 +74,18 @@ def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episo
     payload = json.loads(path.read_text())
     base_fields = {"schema_version", "gallery_version", "preprocessing", "episodes"}
     benchmark = isinstance(payload, dict) and payload.get("schema_version") == 2
-    fields = base_fields | {"relevance_space", "label_protocol", "label_references"} if benchmark else base_fields
+    reviewed_sources = isinstance(payload, dict) and payload.get('schema_version') == 3
+    fields = base_fields | {"relevance_space", "label_protocol", "label_references"} if benchmark else (base_fields | {'relevance_space'} if reviewed_sources else base_fields)
     if (
         not isinstance(payload, dict)
         or set(payload) != fields
         or type(payload["schema_version"]) is not int
-        or payload["schema_version"] not in (1, 2)
+        or payload["schema_version"] not in (1, 2, 3)
         or payload["gallery_version"] != gallery_version
     ):
         raise ValueError("episode manifest schema/gallery mismatch")
+    if reviewed_sources and payload['relevance_space'] != 'reviewed_semantic':
+        raise ValueError('schema v3 requires reviewed semantic labels')
     protocol = None
     relations = id_map = None
     if benchmark:
@@ -128,7 +131,7 @@ def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episo
         "source_ids",
         "caption_group_id",
     }
-    if benchmark:
+    if benchmark or reviewed_sources:
         required |= {"query_source_ids", "query_component_id"}
     episodes = []
     query_ids = set()
@@ -148,6 +151,8 @@ def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episo
         if row["query_id"] in query_ids:
             raise ValueError("duplicate query identity")
         query_ids.add(row["query_id"])
+        if reviewed_sources and (not isinstance(row['query_source_ids'],list) or not row['query_source_ids'] or any(not isinstance(v,str) or not v for v in row['query_source_ids']) or not _digest(row['query_component_id'])):
+            raise ValueError('reviewed query source/component identity required')
         columns = (
             "candidate_ids",
             "canonical_ids",
@@ -310,8 +315,8 @@ def read_episodes(path: Path, *, gallery_version: str, split: str) -> list[Episo
                 tuple(groups),
                 "benchmark_annotation" if benchmark else "reviewed_semantic",
                 MappingProxyType(protocol) if benchmark else None,
-                tuple(sorted(set(row["query_source_ids"]))) if benchmark else (),
-                row["query_component_id"] if benchmark else "",
+                tuple(sorted(set(row["query_source_ids"]))) if benchmark or reviewed_sources else (),
+                row["query_component_id"] if benchmark or reviewed_sources else "",
                 tuple(sorted(positives)) if benchmark else (),
             )
         )
