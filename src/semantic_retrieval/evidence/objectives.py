@@ -32,3 +32,30 @@ def gaussian_score_nll(loc, scale, target, valid_mask):
     mu, sigma, y = loc[valid_mask], scale[valid_mask], target.detach()[valid_mask]
     loss = sigma.log()+.5*((y-mu)/sigma).square()
     return LossTerm(loss.sum()+loc.sum()*0+scale.sum()*0, valid_mask.sum().to(loc.dtype))
+
+
+def _effective_weights(values, targets, importance_weights):
+    if len(values) != len(targets.outcome_class):
+        raise ValueError('value target count mismatch')
+    weights = torch.ones(len(values), device=values.device, dtype=values.dtype) if importance_weights is None else importance_weights.detach().to(values)
+    if weights.shape != targets.valid_mask.shape or not torch.isfinite(weights).all() or (weights < 0).any():
+        raise ValueError('invalid importance weights')
+    return weights[targets.valid_mask]
+
+
+def value_nll(logits, targets, *, importance_weights=None):
+    if logits.ndim != 2 or logits.shape[1] != 3 or not torch.isfinite(logits).all():
+        raise ValueError('finite [A,3] outcome logits required')
+    w = _effective_weights(logits, targets, importance_weights)
+    valid = targets.valid_mask
+    nll = -logits[valid].log_softmax(-1).gather(1, targets.outcome_class[valid,None]).squeeze(-1)
+    return LossTerm((w*nll).sum()+logits.sum()*0, w.sum())
+
+
+def mean_gain_mse(predictions, targets, *, importance_weights=None):
+    if predictions.ndim != 1 or not torch.isfinite(predictions).all():
+        raise ValueError('finite mean gain vector required')
+    w = _effective_weights(predictions, targets, importance_weights)
+    valid = targets.valid_mask
+    gain = targets.outcome_class[valid].to(predictions.dtype)-1
+    return LossTerm((w*(predictions[valid]-gain).square()).sum()+predictions.sum()*0, w.sum())
