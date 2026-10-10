@@ -32,6 +32,9 @@ def gather_metadata(values):
     detached = values.detach()
     if not _distributed(detached):
         return detached
+    # NCCL requires contiguous send and receive buffers; encoder outputs may
+    # be transposed views. Preserve logical values without mutating the caller.
+    detached = detached.contiguous()
     gathered = [torch.empty_like(detached) for _ in range(dist.get_world_size())]
     dist.all_gather(gathered, detached)
     return torch.cat(gathered, dim=0)

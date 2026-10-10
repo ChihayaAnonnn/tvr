@@ -9,3 +9,6 @@ Current authorization (2026-10-11): the user explicitly approved replacing this 
 Amendment verification:248 affected CPU regression tests passed in161.38s; independent bounded review found no Critical/Important/Minor issue and independently passed18 tests in8.42s. Live two-card GPU qualification, actual memory fit and throughput remain pending at this commit; science remains closed until authenticated Q0 completion. No full-data R@1 exists yet.
 
 All scientific runs remain validation-only; test is sealed. Official paper test1k numbers cannot be directly compared with our source-isolated train8246/val500/all10000-caption protocol. Full-data baseline establishment alone cannot establish novelty or the proposed evidence/uncertainty hypothesis. Any new-method change to the approved frozen backbone/teacher/value scientific definitions remains a separate ruling; no such change was silently introduced.
+
+
+Live execution update: first two-rank Q0 failed on non-contiguous NCCL metadata buffers, was archived in a56a6cb (83.415507s,0.04634195GPUh), and did not open science. The shared gather correction passed91 affected CPU tests and independent follow-up review. A new Q0 will qualify the corrected committed source; full-data training/R@1 remain pending at this commit.
