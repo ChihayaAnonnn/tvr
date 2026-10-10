@@ -1,5 +1,6 @@
 import hashlib
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -98,16 +99,65 @@ def test_complete_export_decodes_real_short_videos_and_roundtrips_all_records(tm
     (videos/'v.mp4').write_bytes((videos/'b.mp4').read_bytes())
     content['v'] = content['b']
     result = compile_sources(raw, allowed, trusted, content)
-    exported = export_complete(tmp_path/'export', result, videos, image_size=16)
+    (tmp_path/'provenance').mkdir()
+    out = tmp_path/'provenance/inputs'
+    exported = export_complete(out, result, videos, image_size=16)
     assert exported['decoded_video_count'] == 2
     assert exported['caption_count'] == 6
-    records = json.loads((tmp_path/'export/videos-000.json').read_bytes())['rows']
+    records = json.loads((out/'videos-000.json').read_bytes())['rows']
     assert {r['split'] for r in records} == {'train', 'val'}
     assert all(r['frame_count'] == 3 and r['fps'] == 5 for r in records)
-    captions = json.loads((tmp_path/'export/captions-000.json').read_bytes())['rows']
+    captions = json.loads((out/'captions-000.json').read_bytes())['rows']
     assert captions == result['captions']
+    from semantic_retrieval.data.video import decode_video
+    standard, valid = decode_video(videos/'c.mp4', [0, 2], 16)
+    bounded, bounded_valid = decode_video(videos/'c.mp4', [0, 2], 16, decoder_threads=1)
+    np.testing.assert_array_equal(standard.numpy(), bounded.numpy())
+    np.testing.assert_array_equal(valid.numpy(), bounded_valid.numpy())
+    from semantic_retrieval.evidence.frame_cache import publish_json
+    from semantic_retrieval.full_data.loader import read_complete, CaptionDataset
+    from semantic_retrieval.runtime.input_bindings import manifest_input_references
+    from semantic_retrieval.full_data.models import BaselineModel
+    from semantic_retrieval.models.clip import ClipConfig, ClipBackbone
+    import torch
+    report = tmp_path/'provenance/complete-preparation.json'
+    publish_json(report, exported)
+    refs = manifest_input_references(tmp_path, dict(input_checkpoints=[], dataset_splits=exported['input_indices']))
+    refs.update({str(report): file_sha256(report), **{str(videos/(i+'.mp4')): h for i, h in content.items()}})
+    loaded, splits = read_complete(report, file_sha256(report), refs, expected_train=1, expected_val=1, captions_per_video=3)
+    dataset = CaptionDataset(loaded, splits['train']+splits['val'], frames=3, image_size=16, text_length=8)
+    left, right = dataset[0], dataset[3]
+    batch = tuple(torch.stack([left[i], right[i]]) for i in range(5))
+    assert batch[3].sum().item() == 2  # Actual 1 FPS decode + padding of two short videos.
+    base = ClipBackbone(ClipConfig(64, 16, 64, 1, 4, 32, 49408, 64, 1, 1, fixture=True))
+    model = BaselineModel('clip4clip', base.config, base.state_dict())
+    loss = model(*batch)['loss']; loss.backward()
+    assert torch.isfinite(loss) and model.clip.text_projection.grad.abs().sum() > 0
+    # Even a re-authenticated source shard must satisfy its cross-record contract.
+    source = out/'sources-000.json'
+    payload = json.loads(source.read_bytes())
+    for row in payload['rows']:
+        if row['video_id'] == 'c': row['source_component'] = '0'*64
+    source.write_text(json.dumps(payload)); refs[str(source)] = file_sha256(source)
+    index_path = Path(exported['input_indices'][0]['path'])
+    index = json.loads(index_path.read_bytes())
+    for row in index['files']:
+        if row['path'] == str(source): row['sha256'] = refs[str(source)]
+    index_path.write_text(json.dumps(index)); refs[str(index_path)] = file_sha256(index_path)
+    exported['input_indices'][0]['sha256'] = refs[str(index_path)]
+    report.write_text(json.dumps(exported)); refs[str(report)] = file_sha256(report)
+    with pytest.raises(ValueError, match='source'):
+        read_complete(report, file_sha256(report), refs, expected_train=1, expected_val=1, captions_per_video=3)
     with pytest.raises(FileExistsError):
-        export_complete(tmp_path/'export', result, videos, image_size=16)
+        export_complete(out, result, videos, image_size=16)
     (videos/'c.mp4').write_bytes(b'corrupt')
     with pytest.raises(ValueError, match='video'):
         export_complete(tmp_path/'failure', result, videos, image_size=16)
+
+
+def test_official_one_fps_then_uniform_frame_policy():
+    from semantic_retrieval.full_data.loader import official_frame_indices
+    assert official_frame_indices(9, 5.0, 12) == [0, 5]
+    assert official_frame_indices(50, 5.0, 3) == [0, 20, 45]
+    with pytest.raises(ValueError):
+        official_frame_indices(1, 0.5, 12)

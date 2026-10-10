@@ -7,6 +7,7 @@ cache_dir/
 # experiments/contextual-risk-v2/ remains tracked.
 /artifacts/
 /experiments/contextual-risk-v2/registry.jsonl.lock
+/experiments/full-data-retrieval-v1/registry.jsonl.lock
 
 /deploy_qwen/
 /ckpts/

@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "upstream": "https://github.com/bofang98/UATVR",
+  "commit": "db0062a77d9e7ab6eed801fa5e27c3085939d182",
+  "files": [
+    {
+      "upstream": "modules/modeling.py",
+      "vendored": "modeling.py",
+      "original_sha256": "65a126d41ce2828ce818857fdd2581ef951ab61dd0c58feb6734b6bd54ab1707",
+      "adapted_sha256": "dbebe9b38b8896bdc971a0f38ae1ce080fe6b3afeafb70c2d977d7ce74679744"
+    },
+    {
+      "upstream": "modules/until_module.py",
+      "vendored": "nn_components/until_module.py",
+      "original_sha256": "fd3d063fc9bd9e63e76c316e705c2a87662076bea941744b9ab4f8ac8824d15c",
+      "adapted_sha256": "e4aa98de869531db1df953d891d97e8177cdc2c64d62d9a42a44d3cb3b2a1270"
+    },
+    {
+      "upstream": "modules/module_cross.py",
+      "vendored": "nn_components/module_cross.py",
+      "original_sha256": "5d109edc3f2fd150d4c3db91912d4c220fa594e2e4708bf313fcf55968195d5d",
+      "adapted_sha256": "5d109edc3f2fd150d4c3db91912d4c220fa594e2e4708bf313fcf55968195d5d"
+    },
+    {
+      "upstream": "modules/module_clip.py",
+      "vendored": "nn_components/module_clip.py",
+      "original_sha256": "0f4f5d2e98d2237a349e59629ecac8141695a70f929a42b199f89e67b41df775",
+      "adapted_sha256": "0f4f5d2e98d2237a349e59629ecac8141695a70f929a42b199f89e67b41df775"
+    },
+    {
+      "upstream": "modules/until_config.py",
+      "vendored": "nn_components/until_config.py",
+      "original_sha256": "a410fb06ad08e3a7b5b9cb2f9b598148990f9d2005919f8ac964e0e80c231bf0",
+      "adapted_sha256": "a410fb06ad08e3a7b5b9cb2f9b598148990f9d2005919f8ac964e0e80c231bf0"
+    },
+    {
+      "upstream": "modules/file_utils.py",
+      "vendored": "nn_components/file_utils.py",
+      "original_sha256": "9bbc073d4ac83c28e8c17d745daac1c6b70c5c3b2581c7541cd66c888bdb5679",
+      "adapted_sha256": "9bbc073d4ac83c28e8c17d745daac1c6b70c5c3b2581c7541cd66c888bdb5679"
+    },
+    {
+      "upstream": "modules/optimization.py",
+      "vendored": "nn_components/optimization.py",
+      "original_sha256": "7dab5de2bbd1398e07ddbb18667544caae385d8ef9c17c55e0358303ed28b4b8",
+      "adapted_sha256": "7dab5de2bbd1398e07ddbb18667544caae385d8ef9c17c55e0358303ed28b4b8"
+    },
+    {
+      "upstream": "prob_models/pie_model.py",
+      "vendored": "probability/pie_model.py",
+      "original_sha256": "dc5e093009f26f418c7a7a8aa455c4b9219d6c20e84ef8ca9e01602913d8a284",
+      "adapted_sha256": "dc5e093009f26f418c7a7a8aa455c4b9219d6c20e84ef8ca9e01602913d8a284"
+    },
+    {
+      "upstream": "prob_models/uncertainty_module.py",
+      "vendored": "probability/uncertainty_module.py",
+      "original_sha256": "4bb2da90b068c9c3245a805676cb9f8c3e61b68592f1a7375ecde4d92d27967a",
+      "adapted_sha256": "4774375f7a5cd5af251c458fff639b4a413f8fe1f567bb1da3d1aa6ef183f1be"
+    },
+    {
+      "upstream": "prob_models/tensor_utils.py",
+      "vendored": "probability/tensor_utils.py",
+      "original_sha256": "e142d95951cff6761303b5781ee6b1e24bea074a040e901f521332a83315e4b4",
+      "adapted_sha256": "e142d95951cff6761303b5781ee6b1e24bea074a040e901f521332a83315e4b4"
+    }
+  ],
+  "patches": [
+    "Namespace absolute imports; preserve upstream copyright headers",
+    "Remove unused MCSoftContrastiveLoss import and blanket import exception; keep original exception diagnostics",
+    "Replace slice-only AllGather backward with shared standard autograd collective to avoid DDP world-size under-scaling",
+    "Guard the training barrier for single-process CPU execution",
+    "Use boolean mask conversions on existing device instead of torch.tensor copy constructors"
+  ]
+}

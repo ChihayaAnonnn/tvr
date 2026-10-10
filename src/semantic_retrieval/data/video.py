@@ -18,7 +18,7 @@ def sample_frame_indices(frame_count, max_frames):
     return np.linspace(0, frame_count - 1, min(frame_count, max_frames)).astype(int).tolist()
 
 
-def decode_video(path, frame_indices, image_size):
+def decode_video(path, frame_indices, image_size, *, decoder_threads=None):
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(path)
@@ -30,7 +30,10 @@ def decode_video(path, frame_indices, image_size):
         or image_size <= 0
     ):
         raise ValueError("indices must be nonempty nonnegative integers; image_size must be positive")
-    capture = cv2.VideoCapture(str(path))
+    if decoder_threads is not None and (type(decoder_threads) is not int or not 1 <= decoder_threads <= 16):
+        raise ValueError('decoder_threads must be an integer in [1,16]')
+    capture = (cv2.VideoCapture(str(path)) if decoder_threads is None else
+               cv2.VideoCapture(str(path), cv2.CAP_FFMPEG, [cv2.CAP_PROP_N_THREADS, decoder_threads]))
     transform = Compose([Resize(image_size, interpolation=Image.BICUBIC), CenterCrop(image_size), ToTensor()])
     frames = torch.zeros((len(indices), 3, image_size, image_size))
     mask = torch.zeros(len(indices), dtype=torch.bool)
