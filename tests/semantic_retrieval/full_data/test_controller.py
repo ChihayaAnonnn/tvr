@@ -45,3 +45,33 @@ def test_active_campaign_lock_is_atomic_between_real_processes(tmp_path):
         release.set(); process.join(10)
     assert process.exitcode == 0
     with campaign_lock(tmp_path/'campaign.lock'): pass
+
+
+def test_real_torchrun_rank_groups_and_elastic_logs_are_owned(tmp_path):
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+    from semantic_retrieval.full_data.controller import _stop_owned_group, _group_alive
+    script = tmp_path/'rank.py'
+    script.write_text('import os,sys,time\nfrom pathlib import Path\n'
+                      'Path(sys.argv[1],os.environ["RANK"]+".pid").write_text(str(os.getpid()))\ntime.sleep(60)\n')
+    logs = tmp_path/'logs/elastic'
+    process = subprocess.Popen([sys.executable, '-m', 'torch.distributed.run', '--standalone',
+                                '--nnodes=1', '--nproc_per_node=2', '--log-dir', str(logs), str(script), str(tmp_path)],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
+    stopped = False
+    try:
+        deadline = time.monotonic()+20
+        while not all((tmp_path/f'{rank}.pid').exists() for rank in range(2)) and time.monotonic() < deadline:
+            assert process.poll() is None
+            time.sleep(.05)
+        ranks = [int((tmp_path/f'{rank}.pid').read_text()) for rank in range(2)]
+        assert all(os.getpgid(pid) == process.pid for pid in ranks)
+        assert len(list(logs.glob('*/attempt_0'))) == 1
+        _stop_owned_group(process); stopped = True
+        assert not _group_alive(process.pid)
+    finally:
+        if not stopped: _stop_owned_group(process)
+        process.communicate(timeout=5)

@@ -43,6 +43,19 @@ def check_successors(failed_attempts, max_successors):
 
 
 @contextmanager
+def termination_signals():
+    """Normal scheduler/session termination must enter owned-worker cleanup."""
+    def interrupt(signum, _frame):
+        raise KeyboardInterrupt(f'controller received termination signal {signum}')
+    previous = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGHUP)}
+    try:
+        for signum in previous: signal.signal(signum, interrupt)
+        yield
+    finally:
+        for signum, handler in previous.items(): signal.signal(signum, handler)
+
+
+@contextmanager
 def campaign_lock(path):
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0), 0o600)
@@ -253,7 +266,7 @@ def run_phase(repo, phase_path, artifact_root):
     from scripts import manage_experiment_run as manager
     repo = Path(repo).resolve(); phase_path = Path(phase_path)
     registry = repo/CONTROL/'registry.jsonl'
-    with campaign_lock(registry.with_name('registry.jsonl.campaign.lock')):
+    with termination_signals(), campaign_lock(registry.with_name('registry.jsonl.campaign.lock')):
         manager._require_clean(repo)
         study = yaml.safe_load(_committed(repo, repo/CONTROL/'study.yaml'))
         if study['study'] != STUDY: raise ValueError('wrong campaign study')

@@ -5,6 +5,8 @@ import platform
 import shutil
 import subprocess
 import sys
+import signal
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -118,3 +120,30 @@ def test_launch_guard_authenticates_real_process_lock_and_sealed_plan(tmp_path):
     import pytest
     with pytest.raises(ValueError, match='active locked'):
         controller.validate_controller_launch(repo, root, manifest)
+
+
+def test_controller_sigterm_stops_owned_worker_before_terminal_inventory(tmp_path):
+    from semantic_retrieval.full_data.controller import _group_alive
+    repo, identity, _ = reserve_cpu_worker(tmp_path)
+    root = Path(identity.run_dir)
+    process = subprocess.Popen([sys.executable, 'scripts/run_full_data_phase.py', '--phase',
+                               'experiments/full-data-retrieval-v1/phase.json'], cwd=repo,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    launch = root/'provenance/controller-launch.json'; worker = None
+    try:
+        deadline = time.monotonic()+15
+        while not launch.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(.02)
+        assert launch.exists()
+        worker = json.loads(launch.read_bytes())['pid']
+        process.send_signal(signal.SIGTERM)
+        output = process.communicate(timeout=30)[0]
+        assert not _group_alive(worker), output
+        _, status = manager._load_run(root)
+        assert status['state'] in {'failed', 'cancelled'}
+        assert file_sha256(root/'logs/worker.log') == status['output_hashes']['logs/worker.log']
+        receipt = json.loads((root/'provenance/controller-result.json').read_bytes())
+        assert receipt['spawned'] is True and receipt['reason'] == 'controller_or_launch_failure'
+    finally:
+        if process.poll() is None: process.kill(); process.wait(timeout=5)
+        if worker is not None and _group_alive(worker): os.killpg(worker, signal.SIGKILL)

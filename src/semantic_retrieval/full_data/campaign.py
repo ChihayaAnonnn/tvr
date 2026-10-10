@@ -45,6 +45,7 @@ def _spec(settings, devices, inputs, parents):
     command = ['/usr/bin/env', 'CUDA_VISIBLE_DEVICES='+','.join(devices), 'OMP_NUM_THREADS=1',
                'OPENBLAS_NUM_THREADS=1', 'PYTHONDONTWRITEBYTECODE=1', 'CUBLAS_WORKSPACE_CONFIG=:4096:8',
                sys.executable, '-m', 'torch.distributed.run', '--standalone', '--nnodes=1', '--nproc_per_node=4',
+               '--log-dir', '{artifact_run_dir}/logs/elastic',
                'scripts/'+script, '--run-dir', '{artifact_run_dir}']
     return dict(dataset='synthetic' if settings.stage == 'gpu_qualification' else 'msrvtt', stage='baseline',
                 variant='full-data-q0' if settings.stage == 'gpu_qualification' else settings.method, seed=settings.seed,
