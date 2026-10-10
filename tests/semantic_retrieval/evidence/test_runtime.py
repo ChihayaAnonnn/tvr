@@ -206,6 +206,88 @@ def test_real_video_two_query_evaluation_with_rich_reference(config_factory,epis
         assert (context.paths.provenance/'evidence-actions'/digest(query)).is_dir()
 
 
+@pytest.mark.parametrize('compiled_population',[False,True])
+def test_real_video_mean_policy_exports_selected_gain(config_factory,episode_manifest,tmp_path,compiled_population,monkeypatch):
+    import copy,json
+    variant='gaussian'
+    from semantic_retrieval.evidence.value import build_value_head
+    from dataclasses import replace
+    from types import SimpleNamespace
+    import torch
+    from experiment_artifacts import ArtifactArrayStore,verify_array_reference
+    from semantic_retrieval.config import config_payload
+    from semantic_retrieval.models.clip import ClipBackbone
+    from semantic_retrieval.evidence.config import SplitBinding,InputReference,ParentConfig
+    from semantic_retrieval.evidence.model import EvidenceMatcherModel
+    from semantic_retrieval.evidence.execution import _evaluation,_write_reference_parts
+    from semantic_retrieval.evidence.types import digest
+    from semantic_retrieval.data.episodes import file_sha256
+    cfg=config_factory(stage='evaluation');clip=replace(cfg.model.base.clip,vocab_size=49408)
+    weights=tmp_path/'bpe-clip.pt';torch.save(ClipBackbone(clip).state_dict(),weights)
+    cfg=replace(cfg,model=replace(cfg.model,variant=variant,base=replace(cfg.model.base,clip=clip,clip_weights=weights,clip_sha256=file_sha256(weights))),value=replace(cfg.value,kind='mean_regressor'),policy=replace(cfg.policy,baseline='mean_regressor'),transitions=replace(cfg.transitions,reference=None,producer_sha256=None))
+    payload,write,_=episode_manifest;payload.update(schema_version=3,relevance_space='reviewed_semantic')
+    row=payload['episodes'][0];row.update(split='val_development',query_source_ids=['query-source'],query_component_id='d'*64,frame_counts=[8,8])
+    other=copy.deepcopy(row);other.update(query_id='q1',query_text='another video query',caption_group_id='caption-1');payload['episodes'].append(other)
+    path=write();binding=SplitBinding('V_development',InputReference(path,file_sha256(path)),'reviewed_semantic')
+    index=tmp_path/'index.json';index.write_text(json.dumps(dict(schema_version='evidence-initial-index-v1',clip_sha256=cfg.model.base.clip_sha256,preprocessing_sha256=cfg.views.preprocessing_sha256,view_sha256=digest(config_payload(cfg.views)),gallery_version='g1',roles={'V_development':['a','b']})))
+    cfg=replace(cfg,splits=(binding,),index=replace(cfg.index,reference=InputReference(index,file_sha256(index)),gallery_version='g1'))
+    model=EvidenceMatcherModel(cfg.model).eval();reference_store=ArtifactArrayStore(tmp_path/'reference'/'arrays');reference_store.run_root.joinpath('checkpoints').mkdir()
+    reference_context=SimpleNamespace(array_store=reference_store,paths=SimpleNamespace(checkpoints=reference_store.run_root/'checkpoints'))
+    _write_reference_parts(reference_context,model);reference_path=reference_context.paths.checkpoints/'reference-parts.pt'
+    head=build_value_head(cfg.value,model.matcher.feature_dim+19).eval()
+    with torch.no_grad():head.network[-1].weight.zero_();head.network[-1].bias.fill_(1.)
+    head_path=tmp_path/'mean-head.pt';torch.save(head.state_dict(),head_path)
+    cfg=replace(cfg,parents=ParentConfig(InputReference(reference_path,file_sha256(reference_path)),cfg.parents.matcher,InputReference(head_path,file_sha256(head_path)),None))
+    store=ArtifactArrayStore(tmp_path/'evaluation'/'arrays');context=SimpleNamespace(array_store=store,paths=SimpleNamespace(root=store.run_root,provenance=store.run_root/'provenance'),config=SimpleNamespace(eval_split='val_development',source_sha='b'*40))
+    if compiled_population:
+        from semantic_retrieval.evidence.training import freeze_reference
+        freeze_reference(model)
+        from semantic_retrieval.config import RuntimeConfig
+        from semantic_retrieval.evidence.execution import _episodes_and_sources,initial_episode_state,EpisodeAdapter,_query,_producer
+        from semantic_retrieval.evidence.transitions import FrozenTransitionModel,compile_transitions
+        from semantic_retrieval.evidence.sampling import SamplingState
+        from semantic_retrieval.evidence.value import build_value_features
+        from semantic_retrieval.evidence.views import propose_actions
+        cfg=replace(cfg,runtime=RuntimeConfig(tmp_path/'study.yaml',tmp_path/'registry.jsonl',store.run_root,'mean-population','a'*64,'b'*40,'val_development'))
+        episodes,_,source,cache=_episodes_and_sources(cfg,'V_development',model,context)
+        producer=_producer(cfg,model,'V_development');sampling=SamplingState(cfg.sampling,mode='eval',model_sha256=producer.matcher_sha256)
+        states=[];adapters={}
+        for wrapper in episodes:
+            state=initial_episode_state(wrapper.episode,cfg,source,cache=cache,model=model,failure_context=context)
+            adapter=EpisodeAdapter(model,_query(model,wrapper.episode.query_text),source,cache,sampling)
+            counts=adapter.prediction_counts(state)
+            state=replace(state,budget=state.budget.reserve(counts).settle(counts,counts))
+            states.append(state);adapters[state.query_id]=adapter
+        frozen=FrozenTransitionModel(model,lambda state:adapters[state.query_id].predict(state),lambda state,action:adapters[state.query_id].observe(state,action),build_value_features)
+        truth={w.episode.query_id:(dict(zip(w.episode.canonical_ids,w.episode.relevance)),(w.episode.query_component_id,)) for w in episodes}
+        refs=compile_transitions(states,propose_actions,frozen,truth,store=ArtifactArrayStore(tmp_path/'population'/'arrays'),producer_identity=producer)
+        cfg=replace(cfg,transitions=replace(cfg.transitions,reference=InputReference(refs.index_path,refs.index_sha256),producer_sha256=producer.sha256))
+    if compiled_population:
+        # Deterministic timing oracle: actual head calls each consume ten virtual seconds.
+        # All decoding, transition compilation, model calls and journal I/O remain real.
+        clock={'seconds':0.}
+        monkeypatch.setattr('semantic_retrieval.evidence.execution.time.monotonic',lambda:clock['seconds'])
+        def charge_head_time(module,args):clock['seconds']+=10.
+        head.register_forward_pre_hook(charge_head_time)
+    result=_evaluation(context,cfg,model,head);report=json.loads((context.paths.provenance/'evidence-report.json').read_text())
+    assert result['summary_metrics']['rich_valid_count'] == 0
+    assert report['undefined_reasons']['rich_proper_scores'] == 'no valid rich-score targets'
+    arrays={a['key']:verify_array_reference(store.run_root,a) for a in report['array_references']}
+    assert arrays['episode_labels'].shape==(2,3)
+    assert result['summary_metrics']['selected_valid_count']==4
+    assert result['summary_metrics']['frame_requests']==32
+    assert result['summary_metrics']['selected_gain_mse']==pytest.approx(1.)
+    assert 'selected_nll' not in result['summary_metrics']
+    assert (arrays['selected_mean_gain']==1.).all()
+    if compiled_population:
+        assert result['summary_metrics']['offline_diagnostic_seconds']==50.
+        assert result['summary_metrics']['population_valid_count']==4
+        assert result['summary_metrics']['population_gain_mse']==pytest.approx(1.)
+        assert (arrays['population_mean_gain']==1.).all()
+    for query in ['q0','q1']:
+        assert (context.paths.provenance/'evidence-actions'/digest(query)).is_dir()
+
+
 @pytest.mark.parametrize('scope', ['episode','index'])
 def test_initial_input_failure_preserves_real_requests_without_prediction(config_factory,episode_manifest,tmp_path,scope):
     import json

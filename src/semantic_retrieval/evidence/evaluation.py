@@ -99,12 +99,34 @@ def paired_component_interval(before, after, component_ids, *, seed, samples, co
     return dict(out,lower=float(np.quantile(boot,alpha)),upper=float(np.quantile(boot,1-alpha)))
 
 
-def prediction_evidence(*,store,population,selected,rich,before,after,components,seed):
+def prediction_evidence(*,store,population,selected,rich,before,after,components,seed,mean_population=None,mean_selected=None):
     """Publish numeric observations externally with explicit probability/label scopes."""
     metrics,undefined,refs = {},{},[]
     def save(name,value):
         refs.append(store.write(name,value.detach().cpu() if isinstance(value,torch.Tensor) else np.asarray(value)))
+    mean_batches = dict(population=mean_population,selected=mean_selected)
     for scope,batch in (('population',population),('selected',selected)):
+        mean_batch = mean_batches[scope]
+        if batch is not None and mean_batch is not None:
+            raise ValueError('ambiguous classification/regression evidence scope')
+        if mean_batch is not None:
+            gain,targets = mean_batch
+            if gain.shape != (len(targets.valid_mask),) or not torch.isfinite(gain).all():
+                raise ValueError('invalid finite mean-gain predictions')
+            valid = targets.valid_mask
+            metrics[scope+'_valid_count'] = float(valid.sum())
+            metrics[scope+'_unknown_count'] = float((~valid).sum())
+            metrics[scope+'_valid_coverage'] = float(valid.sum())/len(valid) if len(valid) else 0.
+            save(scope+'_mean_gain',gain);save(scope+'_class',targets.outcome_class);save(scope+'_valid',valid)
+            undefined[scope+'_categorical_scores'] = 'mean regression does not provide categorical probabilities'
+            if valid.any():
+                value = (gain[valid].double()-(targets.outcome_class[valid].to(gain).double()-1)).square().mean()
+                if not torch.isfinite(value):
+                    raise ValueError('nonfinite mean-gain MSE')
+                metrics[scope+'_gain_mse'] = float(value)
+            else:
+                undefined[scope+'_gain_mse'] = 'no known action outcomes'
+            continue
         if batch is None:
             undefined[scope+'_outcomes'] = 'no bound outcome predictions/labels for this scope'
             continue
@@ -117,6 +139,8 @@ def prediction_evidence(*,store,population,selected,rich,before,after,components
         valid = targets.valid_mask
         if valid.any():
             probability = logits[valid].double().softmax(-1)
+            gain = probability[:,2]-probability[:,0]
+            metrics[scope+'_gain_mse'] = float((gain-(targets.outcome_class[valid].to(gain)-1)).square().mean())
             for category,name in ((0,'worsen'),(2,'correct')):
                 p = probability[:,category];y = (targets.outcome_class[valid] == category).to(p)
                 error = p.new_zeros(())
@@ -128,6 +152,7 @@ def prediction_evidence(*,store,population,selected,rich,before,after,components
                 metrics[scope+'_'+name+'_ece10'] = float(error)
         else:
             undefined[scope+'_proper_scores'] = 'no known action outcomes'
+            undefined[scope+'_gain_mse'] = 'no known action outcomes'
     if rich is None:
         undefined['rich_scores'] = 'no bound frozen rich-score reference'
     else:

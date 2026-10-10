@@ -736,19 +736,24 @@ def _evaluation(context,cfg,model,head):
     report = evaluate_evidence(records,relevance_space=next(s.relevance_space for s in cfg.splits if s.role == role),source_components=components)
     # Diagnostics run after every online episode, with separate storage and accounting.
     # Counterfactual evidence never enters the online cache or policy state.
+    diagnostics_started = time.monotonic()
     from semantic_retrieval.evidence.evaluation import prediction_evidence
     from semantic_retrieval.evidence.transitions import label_transition
     from semantic_retrieval.evidence.types import TransitionTargets
-    population = selected = rich = None
-    if cfg.transitions.reference is not None and cfg.value.kind != 'mean_regressor' and cfg.parents.value is not None:
+    population = selected = rich = mean_population = mean_selected = None
+    if cfg.transitions.reference is not None and cfg.parents.value is not None:
         batch = _read_transition_input(cfg,matcher_sha256=model_sha256(model))
         with torch.no_grad():
-            out = head(batch.features.to(next(head.parameters()).device)).logits
+            predicted = head(batch.features.to(next(head.parameters()).device))
+            out = predicted if cfg.value.kind == 'mean_regressor' else predicted.logits
             if calibration is not None:
                 out = calibration.apply(out,expected_identity=calibration.identity)
-        population = (out.cpu(),batch.targets)
-    selected_logits,selected_classes,selected_valid = [],[],[]
-    if cfg.value.kind != 'mean_regressor' and cfg.parents.value is not None:
+        if cfg.value.kind == 'mean_regressor':
+            mean_population = (out.cpu(),batch.targets)
+        else:
+            population = (out.cpu(),batch.targets)
+    selected_values,selected_classes,selected_valid = [],[],[]
+    if cfg.parents.value is not None:
         for episode,result in completed:
             journal = journals[episode.query_id]
             truth = dict(zip(episode.canonical_ids,episode.relevance))
@@ -757,15 +762,19 @@ def _evaluation(context,cfg,model,head):
                 prior = journal.prediction_for(before,expected_sampling=sampling.identity)
                 following = journal.prediction_for(after,expected_sampling=sampling.identity)
                 with torch.no_grad():
-                    logits = head(build_value_features(before,(action,),prior).to(next(head.parameters()).device)).logits
+                    predicted = head(build_value_features(before,(action,),prior).to(next(head.parameters()).device))
+                    values = predicted if cfg.value.kind == 'mean_regressor' else predicted.logits
                     if calibration is not None:
-                        logits = calibration.apply(logits,expected_identity=calibration.identity)
+                        values = calibration.apply(values,expected_identity=calibration.identity)
                 target = label_transition(rank_candidates(prior.ranking_log_probability,tuple(c for _,c in prior.pair_ids))[0],
                     rank_candidates(following.ranking_log_probability,tuple(c for _,c in following.pair_ids))[0],truth,producer_sha256=model_sha256(model))
-                selected_logits.append(logits.cpu());selected_classes.append(target.outcome_class);selected_valid.append(target.valid_mask)
-        if selected_logits:
-            selected = (torch.cat(selected_logits),TransitionTargets(torch.cat(selected_classes),torch.cat(selected_valid),model_sha256(model)))
-    diagnostics_started = time.monotonic()
+                selected_values.append(values.cpu());selected_classes.append(target.outcome_class);selected_valid.append(target.valid_mask)
+        if selected_values:
+            batch = (torch.cat(selected_values),TransitionTargets(torch.cat(selected_classes),torch.cat(selected_valid),model_sha256(model)))
+            if cfg.value.kind == 'mean_regressor':
+                mean_selected = batch
+            else:
+                selected = batch
     if cfg.parents.reference is not None and cfg.model.variant in {'gaussian','fixed_scale','standard_probabilistic'}:
         reference = EvidenceMatcherModel(cfg.model).to(next(model.parameters()).device)
         load_reference_parts(cfg.parents.reference.path,reference,expected_sha256=cfg.parents.reference.sha256);freeze_reference(reference)
@@ -796,7 +805,7 @@ def _evaluation(context,cfg,model,head):
             locs.append(predicted.loc.cpu());scales.append(predicted.scale.cpu());targets.append(scores.cpu());masks.append(valid.cpu())
         rich = tuple(torch.cat(x) for x in (locs,scales,targets,masks))
     known = [(r,c) for r,c in zip(records,components) if r.initial_top1_label != -1 and r.final_top1_label != -1]
-    evidence = prediction_evidence(store=context.array_store,population=population,selected=selected,rich=rich,
+    evidence = prediction_evidence(store=context.array_store,population=population,selected=selected,rich=rich,mean_population=mean_population,mean_selected=mean_selected,
         before=[r.initial_top1_label for r,c in known],after=[r.final_top1_label for r,c in known],components=tuple(c for r,c in known),seed=cfg.sampling.seed)
     for name in ('decode_seconds','clip_seconds','query_cache_seconds','temporal_seconds','pair_seconds','scale_seconds','mc_seconds','value_seconds'):
         report.summary_metrics[name] = sum(result.timings.get(name,0.) for episode,result in completed)

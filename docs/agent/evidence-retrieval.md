@@ -57,3 +57,20 @@ val_locked 还必须有独立、已提交且哈希匹配的 locked_validation ga
 新动作日志使用 `evidence-query-journal-layout-v1` marker，事件存放在 canonical JSON 查询 ID 的 SHA-256 子目录。恢复必须指定查询 ID；保留旧平铺 v1 事件读取，重复布局冲突、外来查询事件或未知 marker 拒绝。每次恢复仍校验所依赖数组的实际字节 SHA-256，缓存不替代完整性检查。
 
 转移编译成功后发布 `provenance/transition-coverage.json`（`evidence-transition-coverage-v1`），绑定 producer、原角色 manifest、完整查询及来源顺序、gallery 与实际 top-K 索引。candidate presence 和候选索引为外置数组；无合法动作的查询仍计入完整 cohort，未知标签保留 -1。该记录用于审计候选缺失与样本覆盖，不参与标签或模型输入。
+
+## 共同收益误差诊断
+
+动作类别 0/1/2 对应实际收益 -1/0/+1。`population_gain_mse` 与
+`selected_gain_mse` 在同一 valid mask 下，以 FP64 计算分类头的
+`p(correct)-p(worsen)` 或 MeanRegressor 实际输出对该收益的均方误差。
+分类预测先应用已冻结的合法 V_calibration 温度；均值头无温度。unknown 单列，
+不进分母；没有有效标签时指标明确 undefined。均值头不生成分类 NLL/Brier。
+
+population 使用绑定且验证的 transition 文件；selected 使用该查询真实动作日志中
+执行前后的预测及实际标签，包括补帧失败后的结果。数组继续外置并绑定 SHA-256。
+此为 v1 报告的可选新增标量/数组，不改变配置或 checkpoint schema；历史报告缺失
+这些字段时不能据此补造 MSE。基线无 value parent 时保持原有诊断行为。
+
+`offline_diagnostic_seconds` 覆盖全部 episode 结束后的 population、selected-action
+和 rich-score 诊断及其外置数组写入，排除最终报告发布。历史源码的计时起点位于
+population/selected 之后；不得据历史字段补造这些头的耗时或直接比较不一致范围。
