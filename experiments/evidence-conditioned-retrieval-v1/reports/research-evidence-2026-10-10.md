@@ -60,7 +60,7 @@ B3价值学习、科学校准、dev阈值选择和B4八种锁定策略对照均�
 
 全部终态run：{'completed': 25, 'failed': 6, 'cancelled': 4}。科学分配GPU wall hours=12.108477896449，软件资格=0.469454636127，总计=12.577932532576；含所有失败和未启动取消，CPU准备GPUh=0。未超科学32/软件8 GPUh，单次科学7200s/软件1800s上限。逐run的source SHA、manifest SHA、controller时间与完整终态输出清单核验见final-resource-accounting.json。
 
-控制面：experiments/evidence-conditioned-retrieval-v1/{registry.jsonl,phases,summaries,reports}；数据面：/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/<dataset>/<stage>/<run-id>/。各run的manifest.json/command.sh/worker-config/输入与checkpoint/外置数组哈希、status及append-only audit保留。保留原B1五个超时失败、R1一次软件预停和四个未启动取消；修复后新身份R2五臂全部完成，未覆盖历史。
+控制面：experiments/evidence-conditioned-retrieval-v1/{registry.jsonl,phases,summaries,reports}；数据面：/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/<dataset>/<stage>/<run-id>/。各run的manifest.json/command.sh/worker-config/输入与checkpoint/外置数组哈希、status及append-only audit保留。保留原B1五个经诊断后主动终止的软件失败（SIGTERM/143，约1282秒，未达到7200秒上限）、R1一次软件预停和四个未启动取消；修复后新身份R2五臂全部完成，未覆盖历史。
 
 ## 协议偏差和限制
 
