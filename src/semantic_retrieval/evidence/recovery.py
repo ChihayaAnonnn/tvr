@@ -1,7 +1,10 @@
 """Immutable, hash-bound evaluation snapshots imported into unique successor runs."""
 from dataclasses import asdict
 from pathlib import Path
+import hashlib
+import os
 import shutil
+import stat
 
 from experiment_artifacts import strict_json_load
 from semantic_retrieval.data.episodes import file_sha256
@@ -40,20 +43,74 @@ def _allowed(relative):
         ('provenance','frame-cache'),('provenance','evidence-actions'),('provenance','evidence-initial'),('provenance','evidence-gallery')))
 
 
+def _directory_inventory(directory,run_root):
+    """Hash every leaf through a checked directory descriptor, without ancestor rescans."""
+    safe_path(directory)
+    if not directory.exists():
+        return []
+    files = []
+    def identity(value):
+        return value.st_dev,value.st_ino,value.st_mode,value.st_nlink,value.st_size,value.st_mtime_ns,value.st_ctime_ns
+    def visit(parent,descriptor):
+        before_directory = os.fstat(descriptor)
+        for name in os.listdir(descriptor):
+            path = Path(parent)/name
+            expected = os.stat(name,dir_fd=descriptor,follow_symlinks=False)
+            if stat.S_ISDIR(expected.st_mode):
+                child = os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=descriptor)
+                try:
+                    if identity(expected) != identity(os.fstat(child)):
+                        raise ValueError('unsafe recovery directory changed')
+                    visit(path,child)
+                finally:
+                    os.close(child)
+                if identity(expected) != identity(os.stat(name,dir_fd=descriptor,follow_symlinks=False)):
+                    raise ValueError('unsafe recovery directory changed')
+                continue
+            if not stat.S_ISREG(expected.st_mode) or expected.st_nlink != 1:
+                raise ValueError('unsafe or nonprivate recovery artifact')
+            if path.suffix not in {'.npy','.json'}:
+                raise ValueError('partial recovery publication')
+            try:
+                fd = os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=descriptor)
+            except OSError as error:
+                raise ValueError('unsafe recovery artifact') from error
+            with os.fdopen(fd,'rb') as handle:
+                before = os.fstat(handle.fileno())
+                if identity(before) != identity(expected):
+                    raise ValueError('unsafe recovery artifact changed')
+                hasher = hashlib.sha256()
+                for block in iter(lambda: handle.read(1024*1024),b''):
+                    hasher.update(block)
+                after = os.fstat(handle.fileno())
+                if identity(before) != identity(after):
+                    raise ValueError('recovery artifact changed during hashing')
+            if identity(expected) != identity(os.stat(name,dir_fd=descriptor,follow_symlinks=False)):
+                raise ValueError('unsafe recovery artifact changed')
+            files.append(dict(path=path.relative_to(run_root).as_posix(),sha256=hasher.hexdigest()))
+        if identity(before_directory) != identity(os.fstat(descriptor)):
+            raise ValueError('unsafe recovery directory changed')
+    expected_root = os.stat(directory,follow_symlinks=False)
+    descriptor = os.open(directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        if identity(expected_root) != identity(os.fstat(descriptor)):
+            raise ValueError('unsafe recovery directory changed')
+        visit(directory,descriptor)
+    finally:
+        os.close(descriptor)
+    safe_path(directory)
+    if identity(expected_root) != identity(os.stat(directory,follow_symlinks=False)):
+        raise ValueError('unsafe recovery directory changed')
+    return sorted(files,key=lambda item: Path(item['path']))
+
+
 def export_recovery(store,*,config_sha256,source_sha):
     require_digest(config_sha256)
     if len(source_sha) != 40 or any(c not in '0123456789abcdef' for c in source_sha):
         raise ValueError('recovery source identity malformed')
     files = []
     for directory in (store.root,*(store.run_root/'provenance'/name for name in ('frame-cache','evidence-actions','evidence-initial','evidence-gallery'))):
-        safe_path(directory)
-        if directory.exists():
-            for path in sorted(directory.rglob('*')):
-                safe_path(path)
-                if path.is_file():
-                    if path.suffix not in {'.npy','.json'}:
-                        raise ValueError('partial recovery publication')
-                    files.append(dict(path=path.relative_to(store.run_root).as_posix(),sha256=file_sha256(path)))
+        files.extend(_directory_inventory(directory,store.run_root))
     if not files:
         raise ValueError('empty evaluation recovery snapshot')
     shards = []

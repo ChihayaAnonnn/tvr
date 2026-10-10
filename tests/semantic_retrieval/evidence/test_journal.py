@@ -81,3 +81,54 @@ def test_successor_import_restores_executed_action_without_repeating_io(journal_
     import_recovery(ref,successor,config_sha256='a'*64,source_sha='b'*40)
     with pytest.raises(ValueError,match='identity'):
         import_recovery(ref,successor,config_sha256='d'*64,source_sha='b'*40)
+
+
+def test_recovery_export_rejects_nonprivate_hardlinked_artifact(tmp_path):
+    import os
+    import torch
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.evidence.recovery import export_recovery
+    store=ArtifactArrayStore(tmp_path/'run'/'arrays')
+    reference=store.write('private',torch.arange(4.))
+    os.link(store.run_root/reference.path,tmp_path/'external-alias.npy')
+    with pytest.raises(ValueError,match='private|unsafe'):
+        export_recovery(store,config_sha256='a'*64,source_sha='b'*40)
+
+
+@pytest.mark.parametrize('kind',['file-symlink','directory-symlink','fifo'])
+def test_recovery_export_rejects_unsafe_tree_leaves(tmp_path,kind):
+    import os
+    import torch
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.evidence.recovery import export_recovery
+    store = ArtifactArrayStore(tmp_path/'run'/'arrays')
+    reference = store.write('private',torch.arange(4.))
+    if kind == 'file-symlink':
+        (store.root/'alias.npy').symlink_to(store.run_root/reference.path)
+    elif kind == 'directory-symlink':
+        (store.root/'alias').symlink_to(tmp_path,target_is_directory=True)
+    else:
+        os.mkfifo(store.root/'pipe.npy')
+    with pytest.raises(ValueError,match='unsafe'):
+        export_recovery(store,config_sha256='a'*64,source_sha='b'*40)
+
+
+def test_recovery_export_rejects_directory_swap_during_inventory(tmp_path,monkeypatch):
+    import os
+    from semantic_retrieval.evidence.recovery import _directory_inventory
+    root = tmp_path/'run'; directory = root/'arrays'; sub = directory/'sub'
+    sub.mkdir(parents=True); (sub/'lost.npy').write_bytes(b'content')
+    (directory/'keep.npy').write_bytes(b'other')
+    original = os.stat; swapped = False
+    def stat_then_swap(path,*args,**kwargs):
+        nonlocal swapped
+        value = original(path,*args,**kwargs)
+        if path == 'sub' and kwargs.get('dir_fd') is not None and not swapped:
+            swapped = True
+            sub.rename(tmp_path/'moved')
+            sub.symlink_to(tmp_path/'moved',target_is_directory=True)
+        return value
+    monkeypatch.setattr(os,'stat',stat_then_swap)
+    with pytest.raises((ValueError,OSError)):
+        _directory_inventory(directory,root)
+    assert swapped

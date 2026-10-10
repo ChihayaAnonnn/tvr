@@ -1,0 +1,99 @@
+{
+  "schema_version": "evidence-software-review-fix-report-v1",
+  "stage": "B1",
+  "reason": "Proactive software preemption after per-query time increased from roughly 60s to 85-90s over the first15queries; preserve7200s run cap and32GPUh campaign cap.",
+  "runs": [
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-deterministic-seed713-20261010T012227Z-2a0fcdb28b2f",
+      "manifest_sha256": "01bd753651bc9786dd0a3b3ecf278c5a14f707c154edbbeb8c0c206366d6fb5f",
+      "elapsed_seconds": 1282.7295490490505,
+      "exit_code": 143,
+      "scientific_outputs_used": false
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-fixed-scale-seed713-20261010T012227Z-2a0fcdb28b2f",
+      "manifest_sha256": "795d1f0e2fbe88fa05eaa3c3c390e90cb2f291db2294c336c2380045bbeb8692",
+      "elapsed_seconds": 1282.7848555570235,
+      "exit_code": 143,
+      "scientific_outputs_used": false
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-learned-temperature-seed713-20261010T012227Z-2a0fcdb28b2f",
+      "manifest_sha256": "cadf99cf9785e26bde36121367ae0cce26e80b30ac05c240cca36a5180a52d91",
+      "elapsed_seconds": 1282.4834962909808,
+      "exit_code": 143,
+      "scientific_outputs_used": false
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-standard-probabilistic-seed713-20261010T012227Z-2a0fcdb28b2f",
+      "manifest_sha256": "257d251a02f07d4990f8c46c988716ca48feb61a76227a692f460cf3eb5254a5",
+      "elapsed_seconds": 1282.8560699080117,
+      "exit_code": 143,
+      "scientific_outputs_used": false
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-gaussian-seed713-20261010T012227Z-2a0fcdb28b2f",
+      "manifest_sha256": "80f0dd76f84ee46ec2919b8b813ff2d416237f6306171a629a7b82dd3256b604",
+      "elapsed_seconds": 1282.938231452019,
+      "exit_code": 143,
+      "scientific_outputs_used": false
+    }
+  ],
+  "allocated_gpu_hours": 1.7816089450714128,
+  "scientific_parameters_changed": false,
+  "intermediate_outcomes_inspected": false,
+  "partial_overall_metrics_defined": false,
+  "changes": [
+    "explicit stage_eval_splits and independent locked_validation gate",
+    "initial decode failure counters and affected-cohort failure record",
+    "descriptor-safe full-hash recovery inventory"
+  ],
+  "recovery_benchmark": {
+    "schema_version": "evidence-recovery-software-benchmark-v1",
+    "files": 2500,
+    "bytes_identical": true,
+    "real_hashing": true,
+    "timings": {
+      "before": {
+        "samples_seconds": [
+          0.4556449989322573,
+          0.4060666359728202,
+          0.40510488604195416
+        ],
+        "median_seconds": 0.4060666359728202
+      },
+      "after": {
+        "samples_seconds": [
+          0.20475450507365167,
+          0.20834990707226098,
+          0.20950805605389178
+        ],
+        "median_seconds": 0.20834990707226098
+      }
+    },
+    "speedup": 1.948964804827036
+  },
+  "verification": {
+    "root_scope_and_failure_tests": {
+      "passed": 17,
+      "seconds": 11.45
+    },
+    "temporary_full_evidence_suite": {
+      "passed": 116,
+      "seconds": 76.62
+    },
+    "independent_recovery_tests": {
+      "passed": 11,
+      "seconds": 0.52
+    },
+    "independent_compatibility": {
+      "real_files": 35,
+      "snapshot_root_bytes_identical": true
+    }
+  },
+  "successor_policy": "Fresh unique runs after committed source and new four CUDA rank qualification; restart evaluation from identical S2 matcher checkpoints, never import incomplete snapshots across executable sources.",
+  "limitations": [
+    "Microbenchmark observed under concurrent local workload; not scientific online latency evidence.",
+    "System ptrace policy denied read-only profiling attachment; no settings changed."
+  ]
+}
