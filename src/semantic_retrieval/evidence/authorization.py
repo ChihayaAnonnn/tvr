@@ -72,12 +72,14 @@ def assert_evidence_authorized(*, repo_root, registry_path, manifest, operation,
     entry = any(Path(str(a)).name in ENTRYPOINTS for a in argv)
     weight_entry = any(Path(str(a)).name == 'prepare_evidence_weights.py' for a in argv)
     weight_marker = str(evaluation.get('qualification_scenario','')).startswith('evidence_weights:')
+    source_entry = any(Path(str(a)).name == 'prepare_evidence_sources.py' for a in argv)
+    source_marker = str(evaluation.get('qualification_scenario','')).startswith('evidence_sources:')
     model = manifest.get('config',{}).get('model',{})
     structural = isinstance(model,dict) and {'base','variant','scale_floor'} <= set(model)
     named = manifest.get('study') == STUDY or STUDY in str(registry_path or '')
-    if not (marker or entry or structural or named or weight_entry or weight_marker):
+    if not (marker or entry or structural or named or weight_entry or weight_marker or source_entry or source_marker):
         return
-    if (not marker and not (weight_entry and weight_marker)) or manifest.get('study') != STUDY or operation not in {'reserve','start'} or repo_root is None or registry_path is None:
+    if (not marker and not (weight_entry and weight_marker) and not (source_entry and source_marker)) or manifest.get('study') != STUDY or operation not in {'reserve','start'} or repo_root is None or registry_path is None:
         raise ValueError('evidence entry/config requires its independent study and explicit marker')
     repo = Path(repo_root).resolve()
     registry = Path(registry_path)
@@ -99,6 +101,17 @@ def assert_evidence_authorized(*, repo_root, registry_path, manifest, operation,
     env = manifest['environment']
     if env['precision'] != 'fp32':
         raise ValueError('evidence execution requires FP32')
+    if source_entry or source_marker:
+        from semantic_retrieval.evidence.source_preparation import preparation_spec, preparation_scenario
+        permission = study.get('source_preparation',{})
+        if (marker or entry or structural or weight_entry or weight_marker or env['gpu_count'] != 0
+                or env['distributed_topology'] != 'single-process' or manifest['dataset'] != 'msrvtt'
+                or manifest['stage'] != 'baseline' or manifest['variant'] != 'source-role-input'
+                or any(manifest['config'].get(k) for k in ('model','loss','optimizer','scheduler'))
+                or evaluation != dict(eval_split='val',qualification_scenario=preparation_scenario())
+                or permission != dict(authorized=True,scope='cpu_training_allowlist_export_and_source_roles',spec=preparation_spec())):
+            raise ValueError('source preparation requires its exact CPU-only allowlist-export permission')
+        return
     if weight_entry or weight_marker:
         from semantic_retrieval.evidence.weight_preparation import preparation_spec, preparation_scenario
         permission = study.get('weight_preparation',{})

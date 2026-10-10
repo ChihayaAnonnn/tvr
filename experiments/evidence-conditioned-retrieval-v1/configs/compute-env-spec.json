@@ -1,0 +1,45 @@
+{
+  "base": "existing conda tvr: python 3.10.0 cuda 12.1",
+  "system_pkgs": [],
+  "pip_phases": [
+    [
+      "torch==2.1.2+cu121"
+    ],
+    [
+      "numpy==1.26.4",
+      "pytest==9.0.3",
+      "PyYAML==6.0.2",
+      "opencv-python==4.11.0"
+    ]
+  ],
+  "env": {
+    "OMP_NUM_THREADS": "1",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "run_commands": [],
+  "weight_dirs": {
+    "clip": {
+      "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+      "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+      "source": "hash-pinned official CLIP loader; archived W0",
+      "gated": false
+    }
+  },
+  "smoke": {
+    "import_names": [
+      "torch",
+      "numpy",
+      "cv2",
+      "yaml"
+    ],
+    "gpu_tests": [
+      {
+        "cmd": "Use the sealed Q0-R1 manifest command in this study; GPU execution must remain archived",
+        "expect": "13 production four-rank qualification checks true"
+      }
+    ],
+    "cli_checks": [
+      "nvidia-smi"
+    ]
+  }
+}

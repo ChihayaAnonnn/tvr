@@ -144,3 +144,32 @@ source_definition:
   training_eligible_count: 8246
   unknown_cross_url_visual_duplicates: not_excluded_by_this_operational_definition_report_as_limitation
   report: experiments/evidence-conditioned-retrieval-v1/reports/source-audit-2026-10-10.md
+source_preparation:
+  authorized: true
+  scope: cpu_training_allowlist_export_and_source_roles
+  spec:
+    schema_version: evidence-source-input-v1
+    source_policy: youtube-id-content-sha256-v1
+    role_seed: 0
+    pilot_seed: 713
+    pilot_components_per_role: 64
+    expected_excluded_train: 254
+    expected_eligible_train: 8246
+    annotation: /data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json
+    annotation_sha256: 8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33
+    allowlist: /data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv
+    allowlist_sha256: 0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3
+    trusted_split: dataloaders/splits/msrvtt_trusted_v1_seed0.json
+    trusted_split_sha256: a0e5a82dddec34fa76753c2323cf560c2afc36f3683b231ccd24db2c268be882
+    video_directory: /data2/hxj/data/MSRVTT/videos/compressed_videos/msrvtt_224_12fps
+    caption_relation_sha256: bc2c06cbbe833d4e504700430a8a96c23bb7a79f2a5418e1a137ab0fe32b123d
+    gallery_version: evidence-msrvtt-source-pilot-v1
+    clip_sha256: 40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af
+    views:
+      pool_size: 16
+      levels:
+      - 4
+      - 8
+      - 16
+      preprocessing_sha256: 8fddcf29db23466cb3d33d41a83510b8b6d9ad29bc56f4da634d02d6993a7972
+      decode_protocol: opencv-rgb-v1
