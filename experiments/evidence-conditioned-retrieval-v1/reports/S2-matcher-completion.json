@@ -1,0 +1,113 @@
+{
+  "schema_version": "evidence-stage-gate-v1",
+  "stage": "matcher",
+  "runs": [
+    {
+      "variant": "deterministic",
+      "run_id": "msrvtt-baseline-evidence-matcher-deterministic-seed713-20261010T005437Z-1606bfc9898f",
+      "manifest_sha256": "7d9502cba0f9e32fdd2bba4ec9ee85675ec23f4a100468c0ab4b3c9752b0e411",
+      "checkpoint": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-deterministic-seed713-20261010T005437Z-1606bfc9898f/checkpoints/evidence-step-00000110-cursor-00000128.pt",
+        "sha256": "f99241589a48f9610918ad4c7c709be6c811df50125d2edd9a714b2ed548c9fe"
+      },
+      "cursor": 128,
+      "training_summary": {
+        "optimizer_steps": 110.0,
+        "pc_sum": 1.9416801929473877,
+        "score_sum": 0.4399752914905548
+      },
+      "controller_seconds": 958.0125123140169,
+      "allocated_gpu_hours": 0.2661145867538936,
+      "array_references_verified": 1224
+    },
+    {
+      "variant": "fixed_scale",
+      "run_id": "msrvtt-baseline-evidence-matcher-fixed-scale-seed713-20261010T005437Z-1606bfc9898f",
+      "manifest_sha256": "5e67838565c50e662c61078a49c27e5d369ddc9f61b405878746b04753488df9",
+      "checkpoint": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-fixed-scale-seed713-20261010T005437Z-1606bfc9898f/checkpoints/evidence-step-00000121-cursor-00000128.pt",
+        "sha256": "54fcde3327d2063a4e83c28772547673810e3c3a1b893647d44f8b5285fb6e90"
+      },
+      "cursor": 128,
+      "training_summary": {
+        "optimizer_steps": 121.0,
+        "pc_sum": 2.442692756652832,
+        "score_sum": 0.19436827301979065
+      },
+      "controller_seconds": 975.6851018610178,
+      "allocated_gpu_hours": 0.2710236394058383,
+      "array_references_verified": 1224
+    },
+    {
+      "variant": "learned_temperature",
+      "run_id": "msrvtt-baseline-evidence-matcher-learned-temperature-seed713-20261010T005437Z-1606bfc9898f",
+      "manifest_sha256": "8cf2e268b4ef302f9c8b238024a38fdd16584a622ea614a84336b99c5bb6f93f",
+      "checkpoint": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-learned-temperature-seed713-20261010T005437Z-1606bfc9898f/checkpoints/evidence-step-00000110-cursor-00000128.pt",
+        "sha256": "3a1003327c7e97a0eb9a2a130197e12ab204809cdfda640e8a44c40acd92c938"
+      },
+      "cursor": 128,
+      "training_summary": {
+        "optimizer_steps": 110.0,
+        "pc_sum": 1.9419591426849365,
+        "score_sum": 0.4372941851615906
+      },
+      "controller_seconds": 993.4202336659655,
+      "allocated_gpu_hours": 0.27595006490721263,
+      "array_references_verified": 1224
+    },
+    {
+      "variant": "standard_probabilistic",
+      "run_id": "msrvtt-baseline-evidence-matcher-standard-probabilistic-seed713-20261010T005437Z-1606bfc9898f",
+      "manifest_sha256": "df4275f2536cd8808efaff0b7e3ebc556ca62fe71328c03eca569d36ddd7314c",
+      "checkpoint": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-standard-probabilistic-seed713-20261010T005437Z-1606bfc9898f/checkpoints/evidence-step-00000110-cursor-00000128.pt",
+        "sha256": "643cd6e8964641f82a750f856b218df76e1972cde635b20627c7dec46b6769eb"
+      },
+      "cursor": 128,
+      "training_summary": {
+        "optimizer_steps": 110.0,
+        "pc_sum": 1.9657952785491943,
+        "score_sum": 0.1352076530456543
+      },
+      "controller_seconds": 979.8982182939071,
+      "allocated_gpu_hours": 0.27219394952608533,
+      "array_references_verified": 1228
+    },
+    {
+      "variant": "gaussian",
+      "run_id": "msrvtt-baseline-evidence-matcher-gaussian-seed713-20261010T005437Z-1606bfc9898f",
+      "manifest_sha256": "989d7d99579c1a4a55db2db8c18140178d5e4a3e0e92b735e0af981e73db9df0",
+      "checkpoint": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-gaussian-seed713-20261010T005437Z-1606bfc9898f/checkpoints/evidence-step-00000121-cursor-00000128.pt",
+        "sha256": "fe3d9167827cd89978bc3e9a5f07ed00f6fcb87a0936ae05d75d5a81d5c05412"
+      },
+      "cursor": 128,
+      "training_summary": {
+        "optimizer_steps": 121.0,
+        "pc_sum": 2.1123344898223877,
+        "score_sum": 158.63214111328125
+      },
+      "controller_seconds": 987.8805548140081,
+      "allocated_gpu_hours": 0.27441126522611337,
+      "array_references_verified": 1228
+    }
+  ],
+  "summary_scope": "training final visited query losses; not validation performance or model selection",
+  "matched_controls": [
+    "source roles and initial gallery",
+    "reference checkpoint",
+    "128 visited training queries",
+    "frame-pool and MC protocol",
+    "learning rate and scheduler"
+  ],
+  "known_difference": "Gaussian and fixed_scale use preregistered rich-score supervision: 121 valid optimizer steps; others 110. Does not isolate uncertainty causally.",
+  "training_total_gpu_hours": 1.359693505819143,
+  "test_authorized": false,
+  "four_gpu_qualification": {
+    "run_id": "synthetic-baseline-evidence-q0-r2-four-gpu-seed713-20261010T011840Z-46164d43a40c",
+    "manifest_sha256": "a3af740efe1284617b926ac62f345f395718afbfbe4700ea5a9b75cae16cc3a6",
+    "report_sha256": "eace7e257f9812575cb5bf88fadad608e2f0b92f6dd5f6d7fc854cf51f0bef27"
+  },
+  "validation_comparison_opened": "V_development fixed_frames for all five preregistered matchers only; no value training or locked validation"
+}

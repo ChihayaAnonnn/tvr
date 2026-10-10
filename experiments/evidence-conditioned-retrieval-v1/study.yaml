@@ -24,9 +24,9 @@ software_authorization:
   topology_reason: preserve_known_four_card_topology_if_fresh_device_inspection_confirms_idle
   scientific_data: forbidden
 four_gpu_qualification:
-  run_id: synthetic-baseline-evidence-q0-r1-four-gpu-seed713-20261010T003728Z-c636d81e8d8e
-  manifest_sha256: 278bae47dbf3c37a403cadddcbb884b4ab465de3fcedb866ad82dc0dd6b9d6e2
-  report_sha256: 7daa037fff0df8a32bf00ed4b2a1d56aa7a464d33c81a7ad5b38f22032fa311b
+  run_id: synthetic-baseline-evidence-q0-r2-four-gpu-seed713-20261010T011840Z-46164d43a40c
+  manifest_sha256: a3af740efe1284617b926ac62f345f395718afbfbe4700ea5a9b75cae16cc3a6
+  report_sha256: eace7e257f9812575cb5bf88fadad608e2f0b92f6dd5f6d7fc854cf51f0bef27
 campaign:
   software:
     max_run_wall_seconds: 1800
@@ -55,6 +55,7 @@ science:
   authorized_stages:
   - reference
   - matcher
+  - evaluation
   gates:
     reference:
       passed: true
@@ -76,8 +77,10 @@ science:
       passed: false
       reports: []
     evaluation:
-      passed: false
-      reports: []
+      passed: true
+      reports:
+      - path: experiments/evidence-conditioned-retrieval-v1/reports/S2-matcher-completion.json
+        sha256: 3c5975d252e5138759c78a09d534450b5a984933195edd88ffbeabb001cd610e
   required_before_first_training:
   - committed_new_chain_production_four_cuda_rank_qualification
   - five_source_disjoint_roles_and_query_connected_components_audited
