@@ -97,3 +97,11 @@ source_inventory / benchmark_compile，不授权科学 GPU 或 test。
 每片小于 1 MiB；路径须为绝对规范路径，不允许嵌套索引或重复身份。worker 先核验索引
 SHA，再逐一核验全部子文件 SHA，消费方复用同一个已认证的输入映射。索引不削弱逐文件
 绑定，不能只校验索引而跳过原视频。`write_input_indices` 默认每片最多 900 个引用。
+
+阶段摘要的完整输出哈希优先内联；若整批摘要达到 1 MiB，则使用可选的
+`output_hashes_format: terminal-status-reference-v1`，各 run 以
+`output_hashes_reference` 的绝对 `path`、文件 `sha256`、
+`json_pointer: /output_hashes` 和 `entry_count` 绑定既有终态 status 清单。
+读取方必须先验证 status 文件哈希再读取全部条目。manifest、registry、
+status 与 audit schema、终态生命周期及 1 MiB 限制不变；旧内联摘要不变。
+管理器在追加 terminal registry 前验证完整摘要；精确待提交追加的恢复仍适用。

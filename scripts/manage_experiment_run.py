@@ -30,6 +30,7 @@ from experiment_artifacts import (  # noqa: E402
     RunPaths,
     StrictJSONError,
     append_registry_records,
+    artifact_json_bytes,
     build_run_id,
     hash_run_outputs,
     load_registry,
@@ -325,7 +326,7 @@ def _all_output_hashes(
 
 
 def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
-    validate_artifact_json_payload(payload)
+    validate_artifact_json_payload(payload, ensure_ascii=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
@@ -635,6 +636,22 @@ def finalize_phase(args: argparse.Namespace) -> dict[str, object]:
         "phase_path": phase_path.as_posix(),
         "terminal_counts": dict(sorted(states.items())), "runs": summary_runs,
     }
+    # The authoritative complete inventories already live in immutable terminal
+    # status documents. Keep small historical summaries byte-compatible; large
+    # batches bind those documents instead of duplicating their inventories.
+    if len(artifact_json_bytes(summary, ensure_ascii=True)) >= 1024**2:
+        for row, spec in zip(summary_runs, phase["runs"]):
+            reservation = _reservation_for_spec(spec, committed_records, artifact_root)
+            status_path = Path(str(reservation["artifact_path"])) / "status.json"
+            inventory = row.pop("output_hashes")
+            row["output_hashes_reference"] = {
+                "path": str(status_path),
+                "sha256": hashlib.sha256(status_path.read_bytes()).hexdigest(),
+                "json_pointer": "/output_hashes", "entry_count": len(inventory),
+            }
+        summary["output_hashes_format"] = "terminal-status-reference-v1"
+    # Validate before appending registry events, including non-size failures.
+    validate_artifact_json_payload(summary, ensure_ascii=True)
     committed_terminal_records = [
         record for record in terminal_records if record in committed_records
     ]

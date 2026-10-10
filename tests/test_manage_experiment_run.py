@@ -1221,3 +1221,69 @@ def _runtime_config(repo, run, *, split="val"):
         manifest["git_sha"],
         split,
     )
+
+
+@pytest.mark.parametrize('suffix,count', [('x' * 140, 2500), ('中' * 40, 2000)])
+def test_large_phase_summary_binds_every_hash_without_partial_publication(campaign_repo, monkeypatch, suffix, count):
+    """Real inventories exceed the phase cap while each terminal status remains bounded."""
+    import scripts.manage_experiment_run as manage
+    repo, phase, artifact_root = campaign_repo
+    declaration = json.loads((repo / phase).read_text())
+    second = dict(declaration['runs'][0], variant='second', timestamp_utc='20260814T020305Z')
+    declaration['runs'].append(second)
+    (repo / phase).write_text(json.dumps(declaration))
+    subprocess.run(['git', 'add', phase], cwd=repo, check=True)
+    subprocess.run(['git', 'commit', '-qm', 'two runs'], cwd=repo, check=True)
+    _, _, _, reserved = _reserve(campaign_repo)
+    subprocess.run(['git', 'add', REGISTRY], cwd=repo, check=True)
+    subprocess.run(['git', 'commit', '-qm', 'reservations'], cwd=repo, check=True)
+    for run in reserved['runs']:
+        root = Path(run['artifact_path'])
+        identity = ['--repo-root', repo, '--registry', REGISTRY, '--run-dir', root,
+                    '--run-id', run['run_id'], '--manifest-sha256', run['manifest_sha256']]
+        _run(repo, 'start-run', *identity)
+        for i in range(count):
+            (root / 'provenance' / (str(i).zfill(4) + suffix)).write_bytes(b'bound output')
+        _run(repo, 'transition-run', *identity, '--expected', 'running', '--next', 'validating')
+        _run(repo, 'transition-run', *identity, '--expected', 'validating', '--next', 'completed', '--exit-code', '0')
+    summary = Path('experiments/contextual-risk-v2/summaries/large.json')
+    args = SimpleNamespace(repo_root=repo, phase=phase, registry=REGISTRY,
+                           artifact_root=artifact_root, summary=summary)
+    before = (repo / REGISTRY).read_bytes()
+    original = manage.validate_artifact_json_payload
+    def reject_summary(value, **kwargs):
+        if isinstance(value, dict) and 'terminal_counts' in value:
+            raise ValueError('publication rejected')
+        return original(value, **kwargs)
+    monkeypatch.setattr(manage, 'validate_artifact_json_payload', reject_summary)
+    with pytest.raises(ValueError, match='publication rejected'):
+        manage.finalize_phase(args)
+    assert (repo / REGISTRY).read_bytes() == before
+    monkeypatch.setattr(manage, 'validate_artifact_json_payload', original)
+    result = manage.finalize_phase(args)
+    assert (repo / summary).stat().st_size < 1024**2
+    assert result['output_hashes_format'] == 'terminal-status-reference-v1'
+    for row, run in zip(result['runs'], reserved['runs']):
+        assert 'output_hashes' not in row
+        reference = row['output_hashes_reference']
+        path = Path(reference['path'])
+        assert path == Path(run['artifact_path']) / 'status.json'
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == reference['sha256']
+        assert reference['json_pointer'] == '/output_hashes'
+        inventory = json.loads(path.read_text())['output_hashes']
+        assert len(inventory) == reference['entry_count']
+        for relative, expected in inventory.items():
+            assert hashlib.sha256((path.parent / relative).read_bytes()).hexdigest() == expected
+    assert manage.finalize_phase(args) == result
+    subprocess.run(['git', 'add', REGISTRY, summary], cwd=repo, check=True)
+    subprocess.run(['git', 'commit', '-qm', 'terminal batch and summary'], cwd=repo, check=True)
+    assert manage.finalize_phase(args) == result
+
+
+def test_atomic_json_enforces_limit_on_actual_unicode_writer_bytes(tmp_path):
+    import scripts.manage_experiment_run as manage
+    payload = {'outputs': {'provenance/' + str(i).zfill(4) + '中' * 40: 'a' * 64 for i in range(4000)}}
+    path = tmp_path / 'oversized.json'
+    with pytest.raises(ValueError, match='below 1 MiB'):
+        manage._atomic_json(path, payload)
+    assert not path.exists()
