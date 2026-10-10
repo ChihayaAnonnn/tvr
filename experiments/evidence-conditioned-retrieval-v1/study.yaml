@@ -24,9 +24,9 @@ software_authorization:
   topology_reason: preserve_known_four_card_topology_if_fresh_device_inspection_confirms_idle
   scientific_data: forbidden
 four_gpu_qualification:
-  run_id: synthetic-baseline-evidence-q0-r2-four-gpu-seed713-20261010T011840Z-46164d43a40c
-  manifest_sha256: a3af740efe1284617b926ac62f345f395718afbfbe4700ea5a9b75cae16cc3a6
-  report_sha256: eace7e257f9812575cb5bf88fadad608e2f0b92f6dd5f6d7fc854cf51f0bef27
+  run_id: synthetic-baseline-evidence-q0-r3-four-gpu-seed713-20261010T014530Z-748be745f0df
+  manifest_sha256: 89092284c79cbe7b84f9108e15e2ebab20e76896b00bce5a137a0cfdcf977b32
+  report_sha256: 3b38af658427f1c48f60b239d30e06ed16d72bf2978c9338aaca964af88bd62a
 campaign:
   software:
     max_run_wall_seconds: 1800
