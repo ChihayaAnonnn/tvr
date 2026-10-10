@@ -54,6 +54,7 @@ science:
   authorized: true
   authorized_stages:
   - reference
+  - matcher
   gates:
     reference:
       passed: true
@@ -61,8 +62,10 @@ science:
       - path: experiments/evidence-conditioned-retrieval-v1/reports/prerequisites-2026-10-10.json
         sha256: 97c92ee00db6e2f0e162946540705b2999f5a75d2badaa42ecea0f848aeba71c
     matcher:
-      passed: false
-      reports: []
+      passed: true
+      reports:
+      - path: experiments/evidence-conditioned-retrieval-v1/reports/S1-reference-completion.json
+        sha256: a0f5837146b1aa8f6076844bff207db7044e3ad877490a638308588930698e54
     transitions:
       passed: false
       reports: []
