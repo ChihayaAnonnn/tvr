@@ -1,0 +1,27 @@
+# Full-data baseline protocol v1 — 2026-10-10
+
+Authorization: the user agrees to full-dataset experiments after the acknowledged lack of official strong baselines. Existing Native development/GPU autonomy continues. This is a new study, not a rescue or expansion of the failed frozen64-source pilot. Its B2 gate and negative result remain unchanged. No test authorization is inferred.
+
+## Question and scope
+
+First establish official UATVR and CLIP4Clip implementations under an authenticated complete allowed dataset, then assess new-chain models against credible same-protocol baselines. Strong-baseline establishment is the first independent stage; it does not claim C1/C2 support or automatically authorize a redesigned value-learning experiment.
+
+MSRVTT original trusted-v1 train8500/validation500; apply the approved transitive YouTube-ID OR identical-file-SHA source isolation, excluding254 training videos. Train on all8246 eligible videos and all their captions; evaluate all500 validation videos and every associated caption. No64-component subsampling or top8 candidate truncation. Unknown cross-URL visual duplicates remain outside the operational definition. Test1000 IDs/captions remain sealed and are excluded before caption/URL decoding. CPU preparation must verify every input video hash and actual decode coverage, preserve all caption relations and report exact cardinalities; any incomplete cohort stops dependent work.
+
+Both baselines fine-tune their CLIP backbone using official algorithms, not the preceding frozen-CLIP custom matcher. Pin UATVR upstream db0062a77d9e7ab6eed801fa5e27c3085939d182 and CLIP4Clip508ffa3de39ba0563a03199c440ab602a72e9b6f. Namespace-only upstream adaptation must be recorded with original/adapted hashes and patch. Reuse the authenticated official B/32 checkpoint bytes; never load a previously trained retrieval checkpoint with unknown train/validation overlap. CLIP4Clip meanP and UATVR WTI/DSA/DUA are named separately. B/16 numbers must not be compared as matched B/32 results.
+
+Frozen baseline schedules: UATVR5epochs,batch64,lr5e-5,CLIP coefficient1e-3; CLIP4Clip meanP5epochs,batch128,lr1e-4,CLIP coefficient1e-3. Both12frames,32text tokens,FP32; upstream optimizer/warmup details and exact decoder policy must be frozen before any scientific reservation. Seeds713/714/715, with seed713 first for software feasibility, no winner-driven retuning. Training may not silently reduce epochs, captions or batch to fit a time limit. Required changes receive explicit protocol-difference records before launch; scientific definition ambiguity stops the dependent stage.
+
+## Evaluation
+
+Calculate a full all-caption×500-video similarity matrix in FP32, externalize it with hashes and use deterministic canonical tie-breaking. T2V ranks the official positive video among all500. V2T ranks all captions and takes the best-ranked official positive caption; never group-max across video IDs and relabel the result as caption retrieval. Report query/video counts, R@1/5/10, MdR/MnR for both directions. Epoch selection uses validation raw T2V R@1, earliest epoch on ties; DSL=false is primary. Any registered DSL diagnostic must be separately labelled and cannot silently replace primary scores. Uncertainty intervals resample source components, preserving their captions; seed variability and sampling intervals remain separate.
+
+Paper main-table values are external reference values, never measurements of this validation split. A500-video validation score cannot establish matching or exceeding the official1k-test main table. Training8246 rather than9000 is a further disclosed difference. Official test comparison requires a later explicit test-unsealing instruction plus a new allowed gate; this study presently has no such route.
+
+## Gates and stop conditions
+
+P0 CPU source compilation → Q0 new production-capacity four-CUDA-rank synthetic qualification → full-data baseline training and validation. Four-card qualification must exercise actual baseline forward/backward, all-gather gradients, finite FP32, strict checkpoint reload, exact resume and actual metric path. Previous qualifications cannot substitute. If four GPUs are occupied, continue independent CPU work and wait; do not use scientific GPU inference as an unofficial preflight.
+
+Baseline validity requires complete trained/evaluated cohort, finite losses/gradients, nonzero intended parameter updates, authenticated weights/checkpoints, fresh source identity and passing gates. A low but valid result is reported, not silently retrained with new hyperparameters. No threshold from a different validation split is used as a paper-reproduction pass criterion. New-method comparison remains dependent on establishing this baseline and resolving its exact full-data training protocol; no full-distribution necessity claim follows from expected-mean decisions.
+
+Software1800s/run and8GPUh cumulative; science86400s/run and512GPUh cumulative, with conservative GPU-count-aware reservation including active phases under a lock. At most2 diagnosed software successors per failed chain. Failed/cancelled directories never reused. Scheme A source/command/config/input/checkpoint/manifest identities, full output inventories, external array hashes, committed reservations and terminal batches are mandatory. Worker activity forbids tracked-file changes. GPU processes owned by others are never interrupted. All arms and failures are archived.

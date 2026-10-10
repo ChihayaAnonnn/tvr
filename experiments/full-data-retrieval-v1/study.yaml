@@ -1,0 +1,76 @@
+study: full-data-retrieval-v1
+kind: full-data-retrieval-v1
+protocol_version: 1
+status: registered
+control_plane: experiments/full-data-retrieval-v1
+data_plane: artifacts/full-data-retrieval-v1
+registry: experiments/full-data-retrieval-v1/registry.jsonl
+user_authorization: 2026-10-10_user_agrees_full_dataset_experiments_and_existing_native_gpu_autonomy
+test_authorized: false
+scope:
+  dataset: msrvtt
+  training_videos: 8246
+  validation_videos: 500
+  captions: all_allowlisted_captions
+  source_policy: youtube-id-content-sha256-v1
+  excluded_train_videos: 254
+  validation_gallery: all_500_no_topk_truncation
+  bootstrap_unit: source_component
+  paper_comparison: protocol_difference_disclosed_validation_not_official_test
+  old_studies: never_reactivated
+cpu_preparation:
+  authorized: true
+  scenario: full_data_prepare:v1
+software_authorization:
+  cpu_fixture: true
+  four_gpu: true
+  synthetic_only: true
+  precision: fp32
+  world_size: 4
+  random_clip_sha256: 4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8
+four_gpu_qualification: null
+science:
+  authorized: false
+  authorized_stages: []
+  reason: pending_new_chain_four_cuda_rank_qualification_and_complete_input_certification
+  test: sealed_no_implicit_authorization
+campaign:
+  software:
+    max_run_wall_seconds: 1800
+    max_cumulative_gpu_hours: 8
+  scientific:
+    max_run_wall_seconds: 86400
+    max_cumulative_gpu_hours: 512
+  max_successors_per_failure: 2
+  active_phase_accounting: atomic_lock_and_gpu_count_aware_worst_case_reservations
+  retry: diagnose_software_failures_only_new_run_identity_never_overwrite
+  model_selection: validation_only_earliest_best_raw_t2v_r1
+  external_jobs: never_terminate_or_interfere
+methods:
+  uatvr:
+    upstream: https://github.com/bofang98/UATVR
+    commit: db0062a77d9e7ab6eed801fa5e27c3085939d182
+    epochs: 5
+    effective_batch: 64
+    learning_rate: 0.00005
+    clip_learning_rate_coefficient: 0.001
+    frames: 12
+    text_length: 32
+    backbone: ViT-B/32
+  clip4clip:
+    upstream: https://github.com/ArrowLuo/CLIP4Clip
+    commit: 508ffa3de39ba0563a03199c440ab602a72e9b6f
+    sim_header: meanP
+    epochs: 5
+    effective_batch: 128
+    learning_rate: 0.0001
+    clip_learning_rate_coefficient: 0.001
+    frames: 12
+    text_length: 32
+    backbone: ViT-B/32
+seeds: [713, 714, 715]
+archive:
+  source_config_command_input_checkpoint_manifest_bound: true
+  arrays_over_1MiB_external: true
+  terminal_batch_commit: true
+  clean_source_only: true
