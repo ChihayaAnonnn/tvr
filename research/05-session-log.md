@@ -712,3 +712,7 @@ Final whole-repository CPU regression for the evidence implementation: `python -
 MSRVTT trusted-v1 Vdev pilot、T2V、DSL=false、seed713、64组件/gallery64/top8：B1 gauss17/64、det14/64、fixed18/64，gauss−det CI跨0；Gaussian B2 corrected=4、worsened=4组件，未达到8/4，停止B3/B4/扩展并关闭本study science授权。没有改参追门，不把小pilot不足当全局方向证伪。C1/C2未证明；V_locked清单参与完整性校验但未用于模型评价/选择，test sealed。
 
 EC-01…05登记本轮事实。报告：experiments/evidence-conditioned-retrieval-v1/reports/research-evidence-2026-10-10.md；完整资源：final-resource-accounting.json（科学12.108477896449、软件0.469454636127 GPUh，含所有失败/取消）。S2更新121/110步与冻结skip文字不一致，外层临时脚本启动源码绑定/并发预算强制范围有限，均明确披露，不补造历史。独立实验审计及claim verdict另存该study/reports。
+
+### 2026-10-10 — final evidence-conditioned pilot reviews
+
+Independent whole-study integrity audit archived as WARN (same-family/provisional); verified9156 transitions, all384 repeated-matcher component rows,35 terminal runs and resource totals. Fresh claim review archived as no for C1/C2 efficacy: untested/unproved after frozen B2 failure. Software qualification complete, B3/B4/scaling stopped; no scientific value/calibration checkpoint. Test sealed, science closed. Historical optimizer-budget/locked-input wording and administrative-controller provenance/enforcement limitations retained. Reports: experiments/evidence-conditioned-retrieval-v1/reports/{EXPERIMENT_AUDIT,CLAIM_VERDICT}.{md,json}; complete prompts/responses retained locally in ignored .aris/traces.

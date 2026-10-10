@@ -40,3 +40,7 @@ Final whole-repository CPU validation: `CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEB
 来源修订已获用户批准；真实科学pilot已运行。最终产品1d16e57：受影响回归690 passed（306.44s），独立最终窄测试9 passed（5.51s），无剩余阻塞。最终Q0-R5四CUDA rank、13/13检查、五matcher/三head及578数组引用全部通过。W0/D0/S1/S2/B1与六个S3生产者均终态归档；B2可检验性门槛不足，停止B3/B4/扩展。V_locked未用于模型评价或选择，test sealed。
 
 最新事实、协议偏差、审查限制及全部资源见experiments/evidence-conditioned-retrieval-v1/reports/research-evidence-2026-10-10.md；独立实验审计/claim verdict另存同目录。早期段落的无科学运行、未定义来源和旧测试计数不再表示当前状态。
+
+## Final research reviews — 2026-10-10
+
+Source review: no remaining blockers, independent9-pass narrow verification. Whole-study experiment audit: WARN, same-family/provisional; full evidence and limitations in experiments/evidence-conditioned-retrieval-v1/reports/EXPERIMENT_AUDIT.md/json. Fresh claim review: C1/C2 efficacy claim_supported=no, untested/unproved after failed frozen B2, not universally refuted; see CLAIM_VERDICT.md/json. No further scientific work is authorized by either review. Full review traces are retained locally under ignored .aris/traces (not committed). Historical protocol/controller qualifications remain expressly unresolved for prospective general reuse; no observed campaign breach.

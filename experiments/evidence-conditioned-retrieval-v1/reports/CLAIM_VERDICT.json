@@ -1,0 +1,88 @@
+{
+  "claim_supported": "no",
+  "per_claim": {
+    "C1": {
+      "claim_supported": "no",
+      "tested": false,
+      "tested_status": "Descriptive matcher comparisons and transition feasibility were tested; the decisive incremental prediction and matched-budget acquisition comparisons were not executed.",
+      "support_status": "unproved_not_universally_refuted",
+      "reason": "B1 is not a conditional-information test, its Gaussian-minus-deterministic interval includes zero, supervision and optimizer updates differ, and actual MC counts differ. DistributionValue versus GeometryValue, the deterministic acquisition-learning control and locked policy comparisons were not run."
+    },
+    "C2": {
+      "claim_supported": "no",
+      "tested": false,
+      "tested_status": "No scientific same-feature DistributionValue versus MeanRegressor comparison, calibration or locked acquisition evaluation was executed.",
+      "support_status": "unproved_not_universally_refuted",
+      "reason": "Software implements the heads, but the policy consumes only expected gain. Equal means imply equal decisions under identical other inputs; mean-estimation improvement or class calibration alone would not establish full-distribution decision necessity."
+    }
+  },
+  "what_results_support": [
+    "Implemented software behavior within the 690-test regression and 13-check four-GPU Q0-R5 scopes, including tested gradients, observation isolation and checkpoint/action resume.",
+    "Descriptive B1 results for MSRVTT trusted-v1 V_development, T2V, DSL=false, seed713, 64 source components, 64-video gallery and top8 candidates.",
+    "Complete six-producer B2 coverage and the correctly failed frozen gate: Gaussian development has 4 corrected and 4 worsened components against thresholds 8 and 4.",
+    "Stopping B3, B4 and scaling without changing the frozen pilot to pursue a pass.",
+    "Source separation under the approved YouTube-ID-or-identical-SHA256 definition and reported all-history allocated GPU wall-hour accounting, with their stated limitations."
+  ],
+  "what_results_dont_support": [
+    "Incremental uncertainty information beyond score geometry or an isolated causal effect of learned sigma.",
+    "Matched-actual-budget acquisition superiority, calibrated transition prediction, locked-policy gains or calibrated semantic uncertainty.",
+    "Independent scientific benefit or decision necessity of the full three-class gain distribution over the same-feature MeanRegressor.",
+    "Robust multiseed effectiveness, larger-gallery or cross-dataset generalization, official test benchmark performance or novelty.",
+    "Universal refutation of evidence-conditioned retrieval, absence of all visual duplicates, completely unread V_locked data, arbitrary-crash recovery or complete concurrent-campaign enforcement."
+  ],
+  "missing_evidence": [
+    "Adequate independent-source correction and worsening coverage under a separately justified frozen protocol; this pilot failed its existing requirement.",
+    "C1: same-matcher DistributionValue versus GeometryValue proper-score and gain-prediction comparisons, with geometry understood as the current retained feature partition.",
+    "C1: deterministic matcher with the same value-learning process and controlled supervision/training exposure, plus locked acquisition comparisons accounting for actual frame requests, CLIP frames, temporal pair-frames and MC pair-samples.",
+    "C2: same-feature MeanRegressor versus categorical head prediction and policy results, separating scalar gain error, proper class-probability scores and decision utility.",
+    "Validation-only calibration and threshold selection followed by an untouched-for-model-selection locked evaluation; independent-source uncertainty estimates and replication appropriate to any asserted scope."
+  ],
+  "suggested_claim_revision": "An evidence-conditioned retrieval and acquisition pipeline was implemented and software-verified. A single preregistered source-separated MSRVTT validation pilot yielded descriptive matcher observations but insufficient component-level transition variation to proceed. B3/B4/scaling were stopped. Neither uncertainty information beyond geometry nor independent decision benefit or necessity of a full gain distribution has been established.",
+  "next_experiments_needed": {
+    "authorized": false,
+    "executed": false,
+    "current_study_action": "Remain closed; preserve all negative results and unexecuted stages. No automatic pivot, ablation, supplementary science, scaling or test access.",
+    "scope": "Future evidence gaps only, requiring a separate explicit authorization and preregistered protocol; this review does not reopen the present campaign.",
+    "evidence_requirements": [
+      "An independently justified transition population with sufficient source-level outcome variation, without relaxing or retuning this study's frozen gate after seeing its result.",
+      "The missing C1 controlled feature, matcher and actual-budget comparisons, with scientific calibration and locked evaluation.",
+      "The missing C2 same-feature output-head comparison, with any forecast and decision claims evaluated separately; the current expected-mean policy cannot by itself demonstrate structural necessity of a full distribution.",
+      "Independent-source precision and replication commensurate with any intended generalization claim."
+    ]
+  },
+  "confidence": "high",
+  "confidence_scope": "High confidence that the present evidence does not support the intended efficacy claims and that B2 requires stopping. This is not confidence that the underlying research hypotheses are universally false.",
+  "integrity_status": "warn",
+  "review_independence": "same-family",
+  "acceptance_status": "provisional",
+  "evidence_precheck": {
+    "verified_values": 19,
+    "path_missing": 0,
+    "value_not_found": 0,
+    "meaning": "Cited values exist in verified committed bytes; this does not confer semantic claim acceptance."
+  },
+  "science_reopening_authorized": false,
+  "test_authorized": false,
+  "review_record": {
+    "reviewer_agent_id": "/root/final_claim_review",
+    "model": "gpt-6-astra",
+    "reasoning_effort": "ultra",
+    "raw_response_sha256": "1c123ff56d8ffe316976f99fcde7c1c07b0fbfb8681b6f1e787aa2475d8415de",
+    "local_trace": ".aris/traces/result-to-claim/2026-10-10_run01",
+    "evidence_snapshot_sha": "541dd67f39044d4c9de73a660426283901c343fd",
+    "audit_archive_commit": "eac1ef1",
+    "input_hashes": {
+      "reports/EXPERIMENT_AUDIT.json": "334e4db2b92b721a9dcb2ada405a8f84928c56021fcc0ba25793defa99ba4c82",
+      "reports/EXPERIMENT_AUDIT.md": "163c14ccfb319a21d6a6c7db6dbd79868103fd2f0d990f8e395ce91d0d317424",
+      "reports/evidence-precheck.json": "a32bf1975da5737e12b27a33222e6dab7d16b95f33a0a13cdce2c1c59bfe914b",
+      "reports/research-evidence-2026-10-10.md": "dd9b995ef7e3446d9bf8d992e86530960717bc03701bc7a222bb82e063cad049",
+      "reports/B1-development-comparison.json": "50896dc40fd854a96d116b9e2f3efeee6c6f865eb93c5c838de5f65da37d13ea",
+      "reports/B2-transition-gate.json": "3b047ce8fa2709a239b1a8520525ab29c8c9b2119482e4b457103a79dce3029a",
+      "reports/B2-component-coverage.md": "7748954b07840bfbbe4b59d56536b3f0572bed4e0b24cd7992959782d1a24c22",
+      "reports/final-resource-accounting.json": "4f8b3b56b7b7897a9b43d108a2c749715c0821624f3e102ce0f7bdf097ccf961",
+      "study.yaml": "a999381789a7b7e9668abe0a046aaab59ba737399186cda8ba4282a5128f9755",
+      "registry.jsonl": "0ec91c9f37e1a626be143e42e7855859428b897f0fb2057bab8be0b745c38719",
+      "PREREGISTRATION.md": "30b31722dcd4eebdad3f5bbf73f75c5e701e214ba367e5d64fa3c9f0a908f639"
+    }
+  }
+}
