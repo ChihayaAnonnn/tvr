@@ -51,12 +51,8 @@ campaign:
   recovery_first: verify-run
   repeated_failure_policy: diagnose_before_retry_stop_if_no_new_information
 science:
-  authorized: true
-  authorized_stages:
-  - reference
-  - matcher
-  - evaluation
-  - transitions
+  authorized: false
+  authorized_stages: []
   gates:
     reference:
       passed: true
@@ -75,7 +71,10 @@ science:
         sha256: 50896dc40fd854a96d116b9e2f3efeee6c6f865eb93c5c838de5f65da37d13ea
     value:
       passed: false
-      reports: []
+      reports:
+      - &id001
+        path: experiments/evidence-conditioned-retrieval-v1/reports/B2-transition-gate.json
+        sha256: 3b047ce8fa2709a239b1a8520525ab29c8c9b2119482e4b457103a79dce3029a
     calibration:
       passed: false
       reports: []
@@ -143,6 +142,13 @@ science:
     - val_calibration
     evaluation:
     - val_development
+  pilot_outcome:
+    status: stopped_insufficient_transition_variation
+    gate: *id001
+    criteria_unchanged: true
+    reason: Frozen B2 threshold not met; B3/B4/scaling stopped by preregistration.
+    V_locked_used_for_model_evaluation_or_selection: false
+    test_authorized: false
 weight_preparation:
   authorized: true
   scope: cpu_public_pretrained_input_only
