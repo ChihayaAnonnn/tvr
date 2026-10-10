@@ -1,0 +1,427 @@
+{
+  "schema_version": "evidence-stage-gate-v1",
+  "stage": "development-matcher-comparison",
+  "sample_scope": "64 unique source components, one query each, 64-video gallery and frozen top8 candidates; not official test benchmark",
+  "runs": [
+    {
+      "variant": "deterministic",
+      "run_id": "msrvtt-baseline-evidence-b1-deterministic-r2-seed713-20261010T021512Z-e79c2a24afdd",
+      "manifest_sha256": "cede434bf1a969ebb7c004dd766b87f444827379a598baf26515b5ba3a1cd550",
+      "report": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-deterministic-r2-seed713-20261010T021512Z-e79c2a24afdd/provenance/evidence-report.json",
+        "sha256": "ac937c7295510cecb8a07c1726dff1229d4ea790d4a686ff4373de91714b0e0d"
+      },
+      "summary_metrics": {
+        "clip_frames": 4096.0,
+        "clip_seconds": 67.35145939269569,
+        "component_count": 64.0,
+        "corrections": 1.0,
+        "decode_seconds": 95.32562414568383,
+        "elapsed_seconds": 4738.583339371136,
+        "episode_count": 64.0,
+        "frame_requests": 4096.0,
+        "initial_miss_count": 4.0,
+        "known_count": 64.0,
+        "known_top1_accuracy": 0.21875,
+        "mc_elements": 4608.0,
+        "mc_seconds": 0.0,
+        "offline_diagnostic_seconds": 0.6216828860342503,
+        "overall_top1_accuracy": 0.21875,
+        "pair_seconds": 2.3301834012381732,
+        "paired_component_count": 64.0,
+        "paired_lower": -0.09375,
+        "paired_mean_delta": -0.03125,
+        "paired_upper": 0.03125,
+        "query_cache_seconds": 52.10007550602313,
+        "scale_seconds": 0.0,
+        "temporal_seconds": 2.3197373842122033,
+        "temporal_tokens": 27648.0,
+        "unknown_count": 0.0,
+        "value_seconds": 0.0,
+        "worsenings": 3.0
+      },
+      "initial_correct": 16,
+      "final_correct": 14,
+      "candidate_present": 60,
+      "initial_to_final_interval": {
+        "component_count": 64,
+        "mean_delta": -0.03125,
+        "defined": true,
+        "lower": -0.09375,
+        "upper": 0.03125
+      },
+      "index_cost": {
+        "build_search_publish_seconds": 6.372664807946421,
+        "candidate_count": 8,
+        "elapsed_seconds": 104.02040540392045,
+        "gallery_count": 64,
+        "identity": {
+          "gallery_version": "evidence-msrvtt-source-pilot-v1",
+          "model_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "preprocessing_sha256": "0175531703d539f5b14bd84807c7bd39d863fa03a86ec78bd1796a42f7b20bcf"
+        },
+        "preparation_seconds": 97.64774059597403,
+        "resource_counts": {
+          "clip_frames": 256,
+          "frame_requests": 256,
+          "mc_elements": 0,
+          "temporal_tokens": 0
+        },
+        "role": "V_development",
+        "schema_version": "evidence-initial-index-report-v2",
+        "specification_sha256": "9d916043772b2a2cb39ebf5c710b63dd14c06371787449da9cdd2a6dd5c06c85",
+        "timing_scope": "current_worker_gallery_preparation_build_query_search_embedding_publication"
+      },
+      "controller_seconds": 4857.876436537947,
+      "allocated_gpu_hours": 1.3494101212605407,
+      "final_delta_vs_deterministic_interval": {
+        "component_count": 64,
+        "mean_delta": 0.0,
+        "defined": true,
+        "lower": 0.0,
+        "upper": 0.0
+      }
+    },
+    {
+      "variant": "fixed-scale",
+      "run_id": "msrvtt-baseline-evidence-b1-fixed-scale-r2-seed713-20261010T021512Z-e79c2a24afdd",
+      "manifest_sha256": "0630b3894d467ebcf86d4298caf163d02116d9e0c584bfb0ad034c763170fc4d",
+      "report": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-fixed-scale-r2-seed713-20261010T021512Z-e79c2a24afdd/provenance/evidence-report.json",
+        "sha256": "2ce123367dd8b8ce5d6d1781b2680865ea5644e506081eea2a11601a7e1c4c7f"
+      },
+      "summary_metrics": {
+        "clip_frames": 4096.0,
+        "clip_seconds": 69.16103791410569,
+        "component_count": 64.0,
+        "corrections": 1.0,
+        "decode_seconds": 94.81526313256472,
+        "elapsed_seconds": 4732.608532177401,
+        "episode_count": 64.0,
+        "frame_requests": 4096.0,
+        "initial_miss_count": 4.0,
+        "known_count": 64.0,
+        "known_top1_accuracy": 0.28125,
+        "mc_elements": 36864.0,
+        "mc_seconds": 0.5605017334455624,
+        "offline_diagnostic_seconds": 455.74216534302104,
+        "overall_top1_accuracy": 0.28125,
+        "pair_seconds": 2.3761030699824914,
+        "paired_component_count": 64.0,
+        "paired_lower": -0.046875,
+        "paired_mean_delta": 0.0,
+        "paired_upper": 0.046875,
+        "query_cache_seconds": 52.31812681641895,
+        "rich_gaussian_nll": 0.9322144571512565,
+        "rich_interval_coverage_95": 1.0,
+        "rich_interval_width_95": 3.9199279690801068,
+        "rich_unknown_count": 0.0,
+        "rich_valid_count": 512.0,
+        "scale_seconds": 0.0,
+        "temporal_seconds": 2.338294393150136,
+        "temporal_tokens": 27648.0,
+        "unknown_count": 0.0,
+        "value_seconds": 0.0,
+        "worsenings": 1.0
+      },
+      "initial_correct": 18,
+      "final_correct": 18,
+      "candidate_present": 60,
+      "initial_to_final_interval": {
+        "component_count": 64,
+        "mean_delta": 0.0,
+        "defined": true,
+        "lower": -0.046875,
+        "upper": 0.046875
+      },
+      "index_cost": {
+        "build_search_publish_seconds": 6.442888495977968,
+        "candidate_count": 8,
+        "elapsed_seconds": 103.68931815295946,
+        "gallery_count": 64,
+        "identity": {
+          "gallery_version": "evidence-msrvtt-source-pilot-v1",
+          "model_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "preprocessing_sha256": "0175531703d539f5b14bd84807c7bd39d863fa03a86ec78bd1796a42f7b20bcf"
+        },
+        "preparation_seconds": 97.24642965698149,
+        "resource_counts": {
+          "clip_frames": 256,
+          "frame_requests": 256,
+          "mc_elements": 0,
+          "temporal_tokens": 0
+        },
+        "role": "V_development",
+        "schema_version": "evidence-initial-index-report-v2",
+        "specification_sha256": "9d916043772b2a2cb39ebf5c710b63dd14c06371787449da9cdd2a6dd5c06c85",
+        "timing_scope": "current_worker_gallery_preparation_build_query_search_embedding_publication"
+      },
+      "controller_seconds": 5306.578983959975,
+      "allocated_gpu_hours": 1.4740497177666596,
+      "final_delta_vs_deterministic_interval": {
+        "component_count": 64,
+        "mean_delta": 0.0625,
+        "defined": true,
+        "lower": -0.015625,
+        "upper": 0.15625
+      }
+    },
+    {
+      "variant": "learned-temperature",
+      "run_id": "msrvtt-baseline-evidence-b1-learned-temperature-r2-seed713-20261010T021512Z-e79c2a24afdd",
+      "manifest_sha256": "bd50bd4d232d78765cd2b39a3f882a935db3ca21b337659cffa2d4fb158e2237",
+      "report": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-learned-temperature-r2-seed713-20261010T021512Z-e79c2a24afdd/provenance/evidence-report.json",
+        "sha256": "d7ed4af1497719c06842e66e7318e831b6f854697712e8c8a7569e05c5ba1e21"
+      },
+      "summary_metrics": {
+        "clip_frames": 4096.0,
+        "clip_seconds": 67.17857703915797,
+        "component_count": 64.0,
+        "corrections": 1.0,
+        "decode_seconds": 94.88511080364697,
+        "elapsed_seconds": 4749.3572747132275,
+        "episode_count": 64.0,
+        "frame_requests": 4096.0,
+        "initial_miss_count": 4.0,
+        "known_count": 64.0,
+        "known_top1_accuracy": 0.21875,
+        "mc_elements": 4608.0,
+        "mc_seconds": 0.0,
+        "offline_diagnostic_seconds": 0.8975641970755532,
+        "overall_top1_accuracy": 0.21875,
+        "pair_seconds": 2.3368767158826813,
+        "paired_component_count": 64.0,
+        "paired_lower": -0.09375,
+        "paired_mean_delta": -0.03125,
+        "paired_upper": 0.03125,
+        "query_cache_seconds": 52.27358666190412,
+        "scale_seconds": 0.0,
+        "temporal_seconds": 2.2563373144948855,
+        "temporal_tokens": 27648.0,
+        "unknown_count": 0.0,
+        "value_seconds": 0.0,
+        "worsenings": 3.0
+      },
+      "initial_correct": 16,
+      "final_correct": 14,
+      "candidate_present": 60,
+      "initial_to_final_interval": {
+        "component_count": 64,
+        "mean_delta": -0.03125,
+        "defined": true,
+        "lower": -0.09375,
+        "upper": 0.03125
+      },
+      "index_cost": {
+        "build_search_publish_seconds": 6.6377473620232195,
+        "candidate_count": 8,
+        "elapsed_seconds": 104.45752391999122,
+        "gallery_count": 64,
+        "identity": {
+          "gallery_version": "evidence-msrvtt-source-pilot-v1",
+          "model_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "preprocessing_sha256": "0175531703d539f5b14bd84807c7bd39d863fa03a86ec78bd1796a42f7b20bcf"
+        },
+        "preparation_seconds": 97.819776557968,
+        "resource_counts": {
+          "clip_frames": 256,
+          "frame_requests": 256,
+          "mc_elements": 0,
+          "temporal_tokens": 0
+        },
+        "role": "V_development",
+        "schema_version": "evidence-initial-index-report-v2",
+        "specification_sha256": "9d916043772b2a2cb39ebf5c710b63dd14c06371787449da9cdd2a6dd5c06c85",
+        "timing_scope": "current_worker_gallery_preparation_build_query_search_embedding_publication"
+      },
+      "controller_seconds": 4869.575595287955,
+      "allocated_gpu_hours": 1.3526598875799876,
+      "final_delta_vs_deterministic_interval": {
+        "component_count": 64,
+        "mean_delta": 0.0,
+        "defined": true,
+        "lower": 0.0,
+        "upper": 0.0
+      }
+    },
+    {
+      "variant": "standard-probabilistic",
+      "run_id": "msrvtt-baseline-evidence-b1-standard-probabilistic-r2-seed713-20261010T021512Z-e79c2a24afdd",
+      "manifest_sha256": "6a1fb90cb42e16bf575b23c10b28a8769669f9f843388505296c00bbfa808d38",
+      "report": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-standard-probabilistic-r2-seed713-20261010T021512Z-e79c2a24afdd/provenance/evidence-report.json",
+        "sha256": "3f4a73bb2b3c75f1e73aea767ec0c510d9dedbfe2beae98f7eac5a0e224a409a"
+      },
+      "summary_metrics": {
+        "clip_frames": 4096.0,
+        "clip_seconds": 68.89018931554165,
+        "component_count": 64.0,
+        "corrections": 1.0,
+        "decode_seconds": 96.63319067156408,
+        "elapsed_seconds": 4926.965514739626,
+        "episode_count": 64.0,
+        "frame_requests": 4096.0,
+        "initial_miss_count": 4.0,
+        "known_count": 64.0,
+        "known_top1_accuracy": 0.234375,
+        "mc_elements": 36864.0,
+        "mc_seconds": 0.5690380671294406,
+        "offline_diagnostic_seconds": 426.42997792502865,
+        "overall_top1_accuracy": 0.234375,
+        "pair_seconds": 2.400437350384891,
+        "paired_component_count": 64.0,
+        "paired_lower": -0.078125,
+        "paired_mean_delta": -0.015625,
+        "paired_upper": 0.03125,
+        "query_cache_seconds": 52.677514971699566,
+        "rich_gaussian_nll": -0.28139390562901767,
+        "rich_interval_coverage_95": 0.984375,
+        "rich_interval_width_95": 0.8995279931225824,
+        "rich_unknown_count": 0.0,
+        "rich_valid_count": 512.0,
+        "scale_seconds": 0.2661508893361315,
+        "temporal_seconds": 2.368261033203453,
+        "temporal_tokens": 27648.0,
+        "unknown_count": 0.0,
+        "value_seconds": 0.0,
+        "worsenings": 2.0
+      },
+      "initial_correct": 16,
+      "final_correct": 15,
+      "candidate_present": 60,
+      "initial_to_final_interval": {
+        "component_count": 64,
+        "mean_delta": -0.015625,
+        "defined": true,
+        "lower": -0.078125,
+        "upper": 0.03125
+      },
+      "index_cost": {
+        "build_search_publish_seconds": 6.594307377003133,
+        "candidate_count": 8,
+        "elapsed_seconds": 101.7435759480577,
+        "gallery_count": 64,
+        "identity": {
+          "gallery_version": "evidence-msrvtt-source-pilot-v1",
+          "model_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "preprocessing_sha256": "0175531703d539f5b14bd84807c7bd39d863fa03a86ec78bd1796a42f7b20bcf"
+        },
+        "preparation_seconds": 95.14926857105456,
+        "resource_counts": {
+          "clip_frames": 256,
+          "frame_requests": 256,
+          "mc_elements": 0,
+          "temporal_tokens": 0
+        },
+        "role": "V_development",
+        "schema_version": "evidence-initial-index-report-v2",
+        "specification_sha256": "9d916043772b2a2cb39ebf5c710b63dd14c06371787449da9cdd2a6dd5c06c85",
+        "timing_scope": "current_worker_gallery_preparation_build_query_search_embedding_publication"
+      },
+      "controller_seconds": 5468.882406695979,
+      "allocated_gpu_hours": 1.5191340018599941,
+      "final_delta_vs_deterministic_interval": {
+        "component_count": 64,
+        "mean_delta": 0.015625,
+        "defined": true,
+        "lower": 0.0,
+        "upper": 0.046875
+      }
+    },
+    {
+      "variant": "gaussian",
+      "run_id": "msrvtt-baseline-evidence-b1-gaussian-r2-seed713-20261010T021512Z-e79c2a24afdd",
+      "manifest_sha256": "6c608577784a6c65db89af925f3d1e4470a1b25668aba865b66271851ea816c2",
+      "report": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-gaussian-r2-seed713-20261010T021512Z-e79c2a24afdd/provenance/evidence-report.json",
+        "sha256": "91fd3419662a79efed3252c0f51617aa6f872c9bfa69c005263dea313206e0b9"
+      },
+      "summary_metrics": {
+        "clip_frames": 4096.0,
+        "clip_seconds": 68.52024498733226,
+        "component_count": 64.0,
+        "corrections": 2.0,
+        "decode_seconds": 96.22102993470617,
+        "elapsed_seconds": 4922.953457023483,
+        "episode_count": 64.0,
+        "frame_requests": 4096.0,
+        "initial_miss_count": 4.0,
+        "known_count": 64.0,
+        "known_top1_accuracy": 0.265625,
+        "mc_elements": 36864.0,
+        "mc_seconds": 0.5509054914582521,
+        "offline_diagnostic_seconds": 430.8842473400291,
+        "overall_top1_accuracy": 0.265625,
+        "pair_seconds": 2.364527417579666,
+        "paired_component_count": 64.0,
+        "paired_lower": -0.03125,
+        "paired_mean_delta": 0.015625,
+        "paired_upper": 0.0625,
+        "query_cache_seconds": 51.88507738802582,
+        "rich_gaussian_nll": -0.578366819947636,
+        "rich_interval_coverage_95": 0.921875,
+        "rich_interval_width_95": 0.49458565193524234,
+        "rich_unknown_count": 0.0,
+        "rich_valid_count": 512.0,
+        "scale_seconds": 0.2669262569397688,
+        "temporal_seconds": 2.332098220125772,
+        "temporal_tokens": 27648.0,
+        "unknown_count": 0.0,
+        "value_seconds": 0.0,
+        "worsenings": 1.0
+      },
+      "initial_correct": 16,
+      "final_correct": 17,
+      "candidate_present": 60,
+      "initial_to_final_interval": {
+        "component_count": 64,
+        "mean_delta": 0.015625,
+        "defined": true,
+        "lower": -0.03125,
+        "upper": 0.0625
+      },
+      "index_cost": {
+        "build_search_publish_seconds": 6.71798493003007,
+        "candidate_count": 8,
+        "elapsed_seconds": 104.47436378104612,
+        "gallery_count": 64,
+        "identity": {
+          "gallery_version": "evidence-msrvtt-source-pilot-v1",
+          "model_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "preprocessing_sha256": "0175531703d539f5b14bd84807c7bd39d863fa03a86ec78bd1796a42f7b20bcf"
+        },
+        "preparation_seconds": 97.75637885101605,
+        "resource_counts": {
+          "clip_frames": 256,
+          "frame_requests": 256,
+          "mc_elements": 0,
+          "temporal_tokens": 0
+        },
+        "role": "V_development",
+        "schema_version": "evidence-initial-index-report-v2",
+        "specification_sha256": "9d916043772b2a2cb39ebf5c710b63dd14c06371787449da9cdd2a6dd5c06c85",
+        "timing_scope": "current_worker_gallery_preparation_build_query_search_embedding_publication"
+      },
+      "controller_seconds": 5473.375484035001,
+      "allocated_gpu_hours": 1.5203820788986113,
+      "final_delta_vs_deterministic_interval": {
+        "component_count": 64,
+        "mean_delta": 0.046875,
+        "defined": true,
+        "lower": -0.015625,
+        "upper": 0.125
+      }
+    }
+  ],
+  "allocated_gpu_hours": 7.215635807365793,
+  "bootstrap": {
+    "unit": "query source component",
+    "samples": 2000,
+    "seed": 713,
+    "confidence": 0.95
+  },
+  "model_selection": "none: preregistered Gaussian and deterministic transition producers retained regardless of B1 accuracy",
+  "latency_caveat": "Five concurrent workers share host CPU and I/O; timings are actual concurrent-run observations, not isolated method latency comparisons.",
+  "test_authorized": false
+}
