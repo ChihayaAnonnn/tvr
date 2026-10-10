@@ -10,7 +10,7 @@
 
 **Spec:** [已批准设计v1](../specs/2026-10-10-evidence-conditioned-retrieval-design.md)，用户于2026-10-10回复“通过”。
 
-状态：实施计划待审阅、待选择执行方式；本文件中的代码块是待编写测试，不是已执行结果。检查基线为设计提交 `1c257d2`，当前只更新设计批准状态与本计划。
+状态更新（2026-10-10）：用户已确认计划并选择 Native 执行。任务1–11与独立审查修复已实现，实际验证见 [开发与资格审查记录](../reviews/2026-10-10-evidence-conditioned-retrieval-review.md)。下文复选框和代码块保留原实施步骤，不作为运行结果。独立科学授权、来源修订、预注册、分阶段 gate 和实际运行记录位于 `experiments/evidence-conditioned-retrieval-v1/`；软件实现成功不代表研究假设成立。
 
 ## Global Constraints
 

@@ -1,0 +1,67 @@
+{
+  "schema_version": "evidence-journal-isolation-review-v1",
+  "phase_preempted": "B1-R1",
+  "terminals": {
+    "failed": 1,
+    "cancelled": 4
+  },
+  "gpu_seconds": 832.9750628490001,
+  "gpu_hours": 0.23138196190250002,
+  "scientific_outcomes_inspected": false,
+  "scientific_parameters_changed": false,
+  "successor_number": 2,
+  "benchmark": {
+    "schema_version": "evidence-query-journal-software-benchmark-v1",
+    "query_count": 64,
+    "predictions_per_query": 1,
+    "same_video_observations": true,
+    "real_array_hash_verification": true,
+    "outputs_equal": true,
+    "timings": {
+      "before": {
+        "samples_seconds": [
+          1.2590831629931927,
+          1.2576873459620401,
+          1.268984665046446
+        ],
+        "median_seconds": 1.2590831629931927
+      },
+      "after": {
+        "samples_seconds": [
+          0.04626726300921291,
+          0.04673419799655676,
+          0.045964765013195574
+        ],
+        "median_seconds": 0.04626726300921291
+      }
+    },
+    "speedup": 27.21326227450453
+  },
+  "independent_review": {
+    "initial_P1": "rich diagnostics retained final query journal",
+    "fix": "rebind journals[episode.query_id] for each rich diagnostic",
+    "red": "3 failed with journal query identity mismatch",
+    "green": "3 passed in 3.79s; real OpenCV + CLIP + externalized reference",
+    "other_blockers": [],
+    "final_disposition": "No remaining blockers; independent real-video three-arm regression 3 passed 3.76s."
+  },
+  "test_assertion_correction": "The one-frame synthetic fixture has zero rich targets. Corrected nonexistent rich_nll assertion to rich_valid_count=0 and explicit undefined reason; no production metric or valid correctness assertion weakened.",
+  "prelaunch_recovery": {
+    "source_commit_rejected_before_any_worker": "791fa3a",
+    "exact_tree_restored": "3225959",
+    "outputs_overwritten": false
+  },
+  "queue_preemption": {
+    "pause_own_controller": 4166144,
+    "terminate_own_verified_worker": 4166393,
+    "temporary_queue_guard_commit": "6635bee",
+    "exact_tree_restored_before_archive": "078ab35",
+    "terminal_archive_commit": "c92c980"
+  },
+  "root_evidence_regression": {
+    "command": "CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/.conda/envs/tvr/bin/python -m pytest -p no:cacheprovider tests/semantic_retrieval/evidence -q",
+    "passed": 126,
+    "seconds": 49.77,
+    "warnings": "existing PyTorch TypedStorage deprecation"
+  }
+}
