@@ -240,7 +240,7 @@ class MILNCELoss_BoF(nn.Module):
         mm_mask = np.kron(mm_mask, la)     # 克罗克内积
         mm_mask = torch.tensor(mm_mask).float().bool()
         mm_mask = mm_mask.to(sim_matrix.device)
-        
+
         sim_loss = - (F.log_softmax(sim_matrix, dim=1) * mm_mask).sum(1) / mm_mask.sum(1)
         sim_loss = sim_loss.mean()
         return sim_loss
@@ -248,10 +248,10 @@ class MILNCELoss_BoF(nn.Module):
 class KLdivergence(nn.Module):
     def __init__(self):
         super(KLdivergence, self).__init__()
-    
+
     def kl_divergence(self, mu, logsigma):
         return -0.5 * (1 + logsigma - mu.pow(2) - logsigma.exp()).sum()
-    
+
     def forward(self, sampled_video_features, video_logsigma, sampled_text_features, text_logsigma):
         vib_loss = self.kl_divergence(sampled_video_features.mean(dim=1), video_logsigma) + \
             self.kl_divergence(sampled_text_features.mean(dim=1), text_logsigma)
@@ -312,9 +312,9 @@ class AllGather(torch.autograd.Function):
 class dual_softmax_loss(nn.Module):
     def __init__(self,):
         super(dual_softmax_loss, self).__init__()
-        
+
     def forward(self, sim_matrix, temp=1000):
-        sim_matrix = sim_matrix * F.softmax(sim_matrix/temp, dim=0)*len(sim_matrix) 
+        sim_matrix = sim_matrix * F.softmax(sim_matrix/temp, dim=0)*len(sim_matrix)
         #With an appropriate temperature parameter, the model achieves higher performance
         logpt = F.log_softmax(sim_matrix, dim=-1)
         logpt = torch.diag(logpt)

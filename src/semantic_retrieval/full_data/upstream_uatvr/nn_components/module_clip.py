@@ -138,7 +138,7 @@ class AttentionPool2d(nn.Module):
         self.v_proj = nn.Linear(embed_dim, embed_dim)
         self.c_proj = nn.Linear(embed_dim, output_dim or embed_dim)
         self.num_heads = num_heads
-        
+
 
 
     def forward(self, x):
@@ -203,7 +203,7 @@ class ModifiedResNet(nn.Module):
         self.layer4 = self._make_layer(width * 8, layers[3], stride=2)
 
         embed_dim = width * 32  # the ResNet feature dimension
-        
+
         self.attnpool = AttentionPool2d(input_resolution // 32, embed_dim, heads, output_dim)
 
     def _make_layer(self, planes, blocks, stride=1):
@@ -230,7 +230,7 @@ class ModifiedResNet(nn.Module):
         x = self.layer4(x)
         # BS*T C: R50-2048  R50x4-2560
         x = self.attnpool(x)
-        
+
 
         return x
 
@@ -253,7 +253,7 @@ class ResidualAttentionBlock(nn.Module):
     def __init__(self, d_model: int, n_head: int, attn_mask=None):
         super().__init__()
 
-        self.attn = nn.MultiheadAttention(d_model, n_head)      # rewrite it? check 
+        self.attn = nn.MultiheadAttention(d_model, n_head)      # rewrite it? check
         self.ln_1 = LayerNorm(d_model)
         self.mlp = nn.Sequential(OrderedDict([
             ("c_fc", nn.Linear(d_model, d_model * 4)),
@@ -314,7 +314,7 @@ class VisualTransformer(nn.Module):
         if self.linear_patch == '3d':
             self.conv2 = nn.Conv3d(in_channels=3, out_channels=width, kernel_size=(3, patch_size, patch_size),
                                    stride=(1, patch_size, patch_size), padding=(1, 0, 0), bias=False)
-        
+
     def forward(self, x: torch.Tensor, video_frame=-1):     # bs * 12, 3, 224, 224
 
         if self.linear_patch == '3d':
@@ -329,7 +329,7 @@ class VisualTransformer(nn.Module):
 
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
-        
+
         x = torch.cat([self.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
         x = x + self.positional_embedding.to(x.dtype)
         x = self.ln_pre(x)
@@ -492,7 +492,7 @@ class CLIP(nn.Module):
 
     def encode_image(self, image, return_hidden=False, video_frame=-1):
 
- 
+
         # hidden = self.visual(image.type(self.dtype), video_frame=video_frame) # vit
         # hidden = self.visual.ln_post(hidden) @ self.visual.proj
         # x = hidden[:, 0, :]
@@ -503,7 +503,7 @@ class CLIP(nn.Module):
         # return x
 
         x = self.visual(image.type(self.dtype), video_frame=video_frame)
-        
+
         return  x
 
     def encode_text(self, text, return_hidden=False):
@@ -579,7 +579,7 @@ def build_model(state_dict: dict):
     else:
         counts: list = [len(set(k.split(".")[2] for k in state_dict if k.startswith(f"visual.layer{b}"))) for b in [1, 2, 3, 4]]
         vision_layers = tuple(counts)
-        vision_width = state_dict["visual.layer1.0.conv1.weight"].shape[0] 
+        vision_width = state_dict["visual.layer1.0.conv1.weight"].shape[0]
         output_width = round((state_dict["visual.attnpool.positional_embedding"].shape[0] - 1) ** 0.5)
         vision_patch_size = None
         assert output_width ** 2 + 1 == state_dict["visual.attnpool.positional_embedding"].shape[0]
@@ -606,5 +606,5 @@ def build_model(state_dict: dict):
 
     model.load_state_dict(state_dict)
 
-    
+
     return model.eval()

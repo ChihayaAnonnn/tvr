@@ -61,7 +61,7 @@ class CLIP4ClipPreTrainedModel(PreTrainedModel, nn.Module):
         # import pdb; pdb.set_trace()
 
         model = cls(cross_config, clip_state_dict, *inputs, **kwargs) # -----------
-        
+
 
         ## ===> Initialization trick [HARD CODE]
         if model.linear_patch == "3d":
@@ -192,7 +192,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
             vision_patch_size = None
             assert output_width ** 2 + 1 == clip_state_dict["visual.attnpool.positional_embedding"].shape[0]
             image_resolution = output_width * 32
-        
+
         embed_dim = clip_state_dict["text_projection"].shape[1]
         context_length = clip_state_dict["positional_embedding"].shape[0]
         vocab_size = clip_state_dict["token_embedding.weight"].shape[0]
@@ -260,11 +260,11 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         self.pie_net_video = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
         self.uncertain_net_video = UncertaintyModuleImage(embed_dim, embed_dim, embed_dim // 2)
-        
+
         self.pie_net_text = PIENet(1, embed_dim, embed_dim, embed_dim // 2)
         self.uncertain_net_text = UncertaintyModuleImage(embed_dim, embed_dim, embed_dim // 2)
-        
-        self.n_video_samples = self.task_config.n_video_embeddings        # numbers sampling from video distribution 
+
+        self.n_video_samples = self.task_config.n_video_embeddings        # numbers sampling from video distribution
         self.n_text_samples = self.task_config.n_text_embeddings        # numbers sampling from text distribution
 
         # head
@@ -312,7 +312,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         if self.training:
             loss = 0.
-            sim_matrix, mcsoft_loss, vib_loss = self.get_similarity_logits(sequence_output, text_token, visual_output, attention_mask, video_mask, 
+            sim_matrix, mcsoft_loss, vib_loss = self.get_similarity_logits(sequence_output, text_token, visual_output, attention_mask, video_mask,
                                                             shaped=True, loose_type=self.loose_type)
 
             sim_loss1 = self.loss_fct(sim_matrix)
@@ -321,13 +321,13 @@ class UATVR(CLIP4ClipPreTrainedModel):
             loss += sim_loss    # token-wise DRL (extra v & t cls token)
             loss += mcsoft_loss  # superNCE
             loss += vib_loss    # kl divergence
-            
+
             # show_log(self.task_config, "sim_loss:{}\t MILloss:{}\t vib_loss:{}".format(sim_loss, mcsoft_loss, vib_loss))
 
             return loss
         else:       # for inference
             return None
-    
+
     def forward_eval(self, input_ids, token_type_ids, attention_mask, video, video_mask=None):
         # (B 1 32)  (B 1 132) (B 1 32)
         input_ids = input_ids.view(-1, input_ids.shape[-1])
@@ -344,7 +344,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         sequence_output, text_token = self.get_sequence_output(input_ids, token_type_ids, attention_mask, shaped=True)
         visual_output = self.get_visual_output(video, video_mask, shaped=True, video_frame=video_frame)
 
-        sim_matrix, temp_logits = self.get_similarity_logits(sequence_output, text_token, visual_output, attention_mask, video_mask, 
+        sim_matrix, temp_logits = self.get_similarity_logits(sequence_output, text_token, visual_output, attention_mask, video_mask,
                                                         shaped=True, loose_type=self.loose_type)
 
         return sim_matrix, temp_logits
@@ -354,9 +354,9 @@ class UATVR(CLIP4ClipPreTrainedModel):
             input_ids = input_ids.view(-1, input_ids.shape[-1])     # B*num 32
             token_type_ids = token_type_ids.view(-1, token_type_ids.shape[-1])  # B*num 32
             attention_mask = attention_mask.view(-1, attention_mask.shape[-1])  # B*num 32
-        
+
         bs_pair = input_ids.size(0)     # B 2 32
-        sequence_output, text_token = self.clip.encode_text(input_ids, return_hidden=True)     
+        sequence_output, text_token = self.clip.encode_text(input_ids, return_hidden=True)
         sequence_output = sequence_output.float()
         text_token = text_token.float()
 
@@ -432,7 +432,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
     def _loose_similarity(self, sequence_output, text_token, visual_output, attention_mask, video_mask, sim_header="seqTransf"):
         sequence_output, visual_output = sequence_output.contiguous(), visual_output.contiguous()
         frame_num = visual_output.size(1)   # 12 / 64
-        word_num = text_token.size(1)       # 32 / 
+        word_num = text_token.size(1)       # 32 /
 
         if sim_header == "meanP":
             # Default: Parameter-free type
@@ -497,7 +497,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
             attention_mask = allgather(attention_mask, self.task_config)
             if torch.distributed.is_initialized():
                 torch.distributed.barrier()
-        
+
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
         visual_pooled = self._mean_pooling_for_similarity_visual(visual_output[:, 0:frame_num, :].contiguous(), video_mask[:, 0:frame_num].contiguous())
         visual_pooled = visual_pooled / visual_pooled.norm(dim=-1, keepdim=True)
@@ -510,7 +510,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         # ti_logits = self.token_wise_interaction(text_token=text_token, frame_token=visual_output, attention_mask=attention_mask, video_mask=video_mask)
         wti_logits = self.weighted_token_wise_intersection(text_token, visual_output, attention_mask, video_mask)
-        
+
         ####################################################################
         ############### probabilistic embedding modeling part ##############
         ####################################################################
@@ -523,7 +523,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         prob_text_embedding = prob_text['embedding']       # b n 512
         prob_text_logsigma = prob_text['logsigma']   # bs 512
         prob_text_mean = prob_text['mean']       # bs 512
-        
+
         if self.training:
             ####################################################################
             ############### MILNCELoss_(Supervised Contrastice Loss) ##############
@@ -555,7 +555,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         retrieve_logits = logit_scale * wti_logits      # sim_matrix
         if self.training:
             return retrieve_logits, 1e-2 * MIL_loss, 1e-4 * vib_loss
-        else:   # for inference 
+        else:   # for inference
             return retrieve_logits
 
 
@@ -605,17 +605,17 @@ class UATVR(CLIP4ClipPreTrainedModel):
 
         out, attn, residual = self.pie_net_video(video_pooled, videos)        # (B 512) (B 12 512)   multiheadatt + fc + sigmoid + (residual) + laynorm
         output['attention'] = attn
-        output['residual'] = residual       # B 512    
+        output['residual'] = residual       # B 512
 
-        uncertain_out = self.uncertain_net_video(video_pooled, videos)        # (B 512) (B 12 512)   multiheadatt + fc + (residual)         
+        uncertain_out = self.uncertain_net_video(video_pooled, videos)        # (B 512) (B 12 512)   multiheadatt + fc + (residual)
         logsigma = uncertain_out['logsigma']
         output['logsigma'] = logsigma       # B 512     可以看作是方差
         output['uncertainty_attention'] = uncertain_out['attention']
 
         out = l2_normalize(out)     # B 512     l2 normalization后 均值
-        output['mean'] = out   
+        output['mean'] = out
 
-        output['embedding'] = sample_gaussian_tensors(out, logsigma, self.n_video_samples)      # B 7 512    从高斯分布中采样N个embedding  
+        output['embedding'] = sample_gaussian_tensors(out, logsigma, self.n_video_samples)      # B 7 512    从高斯分布中采样N个embedding
 
         return output
 
@@ -627,7 +627,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         output['attention'] = attn
         output['residual'] = residual
 
-        uncertain_out = self.uncertain_net_text(text_pooled, text_token)     # (B 512) (B 32 512)   multiheadatt + fc + (residual)   
+        uncertain_out = self.uncertain_net_text(text_pooled, text_token)     # (B 512) (B 32 512)   multiheadatt + fc + (residual)
         logsigma = uncertain_out['logsigma']
         output['logsigma'] = logsigma
         output['uncertainty_attention'] = uncertain_out['attention']
@@ -644,7 +644,7 @@ class UATVR(CLIP4ClipPreTrainedModel):
         if shaped is False:
             attention_mask = attention_mask.view(-1, attention_mask.shape[-1])
             video_mask = video_mask.view(-1, video_mask.shape[-1])
-        
+
         if self.training:
             retrieve_logits, mcsoft_loss, vib_loss = self._loose_similarity(sequence_output, text_token, visual_output, attention_mask, video_mask, sim_header=self.sim_header)
             return retrieve_logits, mcsoft_loss, vib_loss
