@@ -1,12 +1,119 @@
 """Fail-closed independent study dispatch at reservation and worker startup."""
 from pathlib import Path
 import subprocess
+import hashlib
 
 import yaml
+from experiment_artifacts import (parse_registry_text, make_run_paths, load_validated_run_lifecycle,
+                                  strict_json_load, manifest_sha256)
+from semantic_retrieval.data.episodes import file_sha256
+from semantic_retrieval.evidence.frame_cache import safe_path
 
 STUDY = 'full-data-retrieval-v1'
 CONTROL = 'experiments/' + STUDY
 ENTRIES = {'prepare_full_data_retrieval.py', 'train_full_data_retrieval.py', 'qualify_full_data_retrieval.py'}
+PRETRAINED_SHA = '40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af'
+
+
+def _committed(repo, path):
+    safe_path(path)
+    raw = subprocess.run(['git', 'show', 'HEAD:'+path.relative_to(repo).as_posix()], cwd=repo,
+                         check=True, capture_output=True).stdout
+    if raw != path.read_bytes():
+        raise ValueError('full-data protocol must match committed control file')
+    return raw
+
+
+def _terminal_report(repo, permission, filename):
+    if not isinstance(permission, dict) or set(permission) != {'run_id', 'manifest_sha256', 'report_sha256'}:
+        raise ValueError('missing full-data prerequisite evidence')
+    records = parse_registry_text(_committed(repo, repo/CONTROL/'registry.jsonl').decode())
+    matches = [r for r in records if r['event'] == 'completed' and r['run_id'] == permission['run_id']
+               and r['manifest_sha256'] == permission['manifest_sha256']]
+    if len(matches) != 1:
+        raise ValueError('prerequisite requires one committed completed full-data run')
+    root = Path(matches[0]['artifact_path'])
+    paths = make_run_paths(root.parents[3], STUDY, permission['run_id'])
+    manifest, status, _ = load_validated_run_lifecycle(paths)
+    if (manifest['study'] != STUDY or status['state'] != 'completed'
+            or manifest_sha256(manifest) != permission['manifest_sha256']):
+        raise ValueError('prerequisite run/manifest identity mismatch')
+    for name, sha in status['output_hashes'].items():
+        path = paths.root/name; safe_path(path)
+        if file_sha256(path) != sha:
+            raise ValueError('prerequisite terminal output changed')
+    path = paths.provenance/filename
+    rel = path.relative_to(paths.root).as_posix()
+    if (status['output_hashes'].get(rel) != permission['report_sha256']
+            or file_sha256(path) != permission['report_sha256']):
+        raise ValueError('prerequisite report is not authenticated terminal evidence')
+    with path.open() as stream:
+        report = strict_json_load(stream)
+    if report.get('source_sha') != manifest['git_sha'] or report.get('manifest_sha256') != permission['manifest_sha256']:
+        raise ValueError('prerequisite report source/manifest mismatch')
+    return manifest, report, path
+
+
+def validate_prerequisites(repo, study, manifest, settings):
+    if not isinstance(study.get('four_gpu_qualification'), dict):
+        raise ValueError('new full-data four-GPU qualification has not passed')
+    qm, report, _ = _terminal_report(repo, study['four_gpu_qualification'], 'full-data-qualification.json')
+    checks = ('actual_forward_backward', 'intended_gradients', 'global_gradient_normalization', 'exact_resume',
+              'rank_weights_equal', 'finite_fp32', 'metric_permutation', 'eval_rng_preserved', 'strict_checkpoint_rejection')
+    if (report.get('schema_version') != 'full-data-qualification-v1' or report.get('world_size') != 4
+            or report.get('device_type') != 'cuda' or report.get('production_capacity') is not True
+            or report.get('test_authorized') is not False or set(report.get('qualified_methods', ())) != {'uatvr', 'clip4clip'}
+            or not all(report.get('checks', {}).get(k) is True for k in checks)):
+        raise ValueError('incomplete production four-CUDA-rank qualification')
+    changed = subprocess.run(['git', 'diff', '--name-only', qm['git_sha'], manifest['git_sha'], '--',
+                              'src/semantic_retrieval', 'scripts', 'experiment_artifacts.py', 'experiment_tracking.py'],
+                             cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+    if changed:
+        raise ValueError('executable source changed since full-data qualification')
+    pm, certificate, path = _terminal_report(repo, study.get('input_certification'), 'complete-preparation.json')
+    if (certificate.get('schema_version') != 'full-data-preparation-v1'
+            or certificate.get('train_video_count') != 8246 or certificate.get('validation_video_count') != 500
+            or certificate.get('train_caption_count') != 164920 or certificate.get('validation_caption_count') != 10000
+            or certificate.get('decoded_video_count') != 8746 or certificate.get('excluded_train_count') != 254
+            or certificate.get('test_authorized') is not False or certificate.get('test_caption_values_decoded') != 0
+            or settings.source_report != path or settings.source_report_sha256 != study['input_certification']['report_sha256']):
+        raise ValueError('scientific worker does not bind complete approved source certificate')
+
+
+def validate_resume_parent(repo, manifest, settings):
+    ref = settings.resume
+    if ref is None: return
+    if ref.parent_run_id not in manifest['parent_run_ids'] or ref.parent_run_id == manifest['run_id']:
+        raise ValueError('resume requires a distinct declared parent run')
+    records = parse_registry_text(_committed(repo, repo/CONTROL/'registry.jsonl').decode())
+    terminals = [r for r in records if r['run_id'] == ref.parent_run_id and r['event'] == 'failed']
+    if len(terminals) != 1: raise ValueError('resume parent must have one committed failed terminal record')
+    root = Path(terminals[0]['artifact_path'])
+    paths = make_run_paths(root.parents[3], STUDY, ref.parent_run_id)
+    parent, status, _ = load_validated_run_lifecycle(paths)
+    if (status['state'] != 'failed' or manifest_sha256(parent) != terminals[0]['manifest_sha256']
+            or parent['study'] != STUDY or ref.checkpoint.parent != paths.checkpoints):
+        raise ValueError('resume parent checkpoint ownership/identity mismatch')
+    for name, sha in status['output_hashes'].items():
+        path = paths.root/name; safe_path(path)
+        if file_sha256(path) != sha: raise ValueError('resume parent terminal output changed')
+    for path, sha in ((ref.checkpoint, ref.checkpoint_sha256), (ref.checkpoint.with_suffix('.json'), ref.sidecar_sha256)):
+        if status['output_hashes'].get(path.relative_to(root).as_posix()) != sha or file_sha256(path) != sha:
+            raise ValueError('resume checkpoint is not authenticated parent output')
+    def recipe(m):
+        import copy
+        cfg = copy.deepcopy(m['config']); cfg['evaluation'].pop('resume')
+        return cfg
+    if recipe(parent) != recipe(manifest): raise ValueError('resume scientific recipe/input identity changed')
+    with ref.checkpoint.with_suffix('.json').open() as stream: meta = strict_json_load(stream)
+    origin = meta['identity']['source_sha']
+    if subprocess.run(['git', 'merge-base', '--is-ancestor', origin, parent['git_sha']], cwd=repo, capture_output=True).returncode:
+        raise ValueError('resume origin is not the recorded source lineage')
+    for source in (parent['git_sha'], origin):
+        changed = subprocess.run(['git', 'diff', '--name-only', source, manifest['git_sha'], '--',
+                                  'src/semantic_retrieval', 'scripts', 'experiment_artifacts.py', 'experiment_tracking.py'],
+                                 cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+        if changed: raise ValueError('resume executable compatibility cannot be proven; fresh run required')
 
 
 def assert_full_data_authorized(*, repo_root, registry_path, manifest, operation, command=None):
@@ -30,10 +137,7 @@ def assert_full_data_authorized(*, repo_root, registry_path, manifest, operation
             or Path(manifest['artifact_path']).parents[2].name != STUDY):
         raise ValueError('full-data control/data namespace mismatch')
     study_path = registry.with_name('study.yaml')
-    raw = subprocess.run(['git', 'show', 'HEAD:'+CONTROL+'/study.yaml'], cwd=repo,
-                         check=True, capture_output=True).stdout
-    if raw != study_path.read_bytes():
-        raise ValueError('full-data protocol must match committed study')
+    raw = _committed(repo, study_path)
     study = yaml.safe_load(raw)
     required = dict(study=STUDY, kind=STUDY, protocol_version=1, status='registered',
                     control_plane=CONTROL, data_plane='artifacts/'+STUDY, registry=CONTROL+'/registry.jsonl')
@@ -55,4 +159,36 @@ def assert_full_data_authorized(*, repo_root, registry_path, manifest, operation
                 or evaluation != dict(eval_split='val', qualification_scenario=scenario)):
             raise ValueError('full-data preparation requires exact CPU-only permission')
         return
-    raise ValueError('full-data execution lacks implemented qualified stage authorization')
+    from .runtime import settings_from_manifest, KIND
+    if evaluation.get('config_kind') != KIND:
+        raise ValueError('full-data execution requires explicit typed config marker')
+    settings = settings_from_manifest(manifest)
+    if manifest.get('seed') != settings.seed or manifest['stage'] != 'baseline':
+        raise ValueError('full-data stage/seed mismatch')
+    inputs = {r['path']: r['sha256'] for r in manifest['input_checkpoints']}
+    if inputs.get(str(settings.clip_weights)) != settings.clip_sha256:
+        raise ValueError('full-data CLIP identity is not reserved')
+    if settings.stage in {'cpu_fixture', 'gpu_qualification'}:
+        if (entries != {'qualify_full_data_retrieval.py'} or manifest['dataset'] != 'synthetic'
+                or manifest['dataset_splits'] or len(manifest['input_checkpoints']) != 1):
+            raise ValueError('qualification is synthetic only with exactly its CLIP input')
+        permission = study['software_authorization']
+        if settings.stage == 'cpu_fixture':
+            if (permission.get('cpu_fixture') is not True or env['gpu_count'] != 0
+                    or env['distributed_topology'] != 'single-process' or manifest['variant'] != 'full-data-cpu-fixture'):
+                raise ValueError('CPU fixture requires authorized single-process synthetic execution')
+        elif (permission.get('four_gpu') is not True or env['gpu_count'] != 4
+              or env['distributed_topology'] != 'torchrun-4' or manifest['variant'] != 'full-data-q0'
+              or settings.clip_sha256 != permission.get('random_clip_sha256')):
+            raise ValueError('GPU qualification requires four CUDA ranks and registered random formal CLIP')
+        return
+    if (entries != {'train_full_data_retrieval.py'} or manifest['dataset'] != 'msrvtt'
+            or env['gpu_count'] != 4 or env['distributed_topology'] != 'torchrun-4'
+            or manifest['variant'] != settings.method or settings.seed not in study['seeds']
+            or settings.clip_sha256 != PRETRAINED_SHA):
+        raise ValueError('scientific baseline requires frozen full-data four-rank recipe')
+    validate_prerequisites(repo, study, manifest, settings)
+    science = study['science']
+    if science.get('authorized') is not True or 'baseline' not in science.get('authorized_stages', ()):
+        raise ValueError('full-data scientific baseline gate is closed')
+    validate_resume_parent(repo, manifest, settings)

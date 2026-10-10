@@ -29,6 +29,10 @@ software_authorization:
   world_size: 4
   random_clip_sha256: 4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8
 four_gpu_qualification: null
+input_certification:
+  run_id: msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b
+  manifest_sha256: 8e3932a4e5f2d954153be58132af2a3621c27dfb1dbaf38cd8066d1eb40ed545
+  report_sha256: e99bada8bfdb5e11e7337c91884754893a5bae1db8971a04c0d6a5ae92bbd497
 science:
   authorized: false
   authorized_stages: []
@@ -42,6 +46,7 @@ campaign:
     max_run_wall_seconds: 86400
     max_cumulative_gpu_hours: 512
   max_successors_per_failure: 2
+  max_resource_wait_seconds: 21600
   active_phase_accounting: atomic_lock_and_gpu_count_aware_worst_case_reservations
   retry: diagnose_software_failures_only_new_run_identity_never_overwrite
   model_selection: validation_only_earliest_best_raw_t2v_r1

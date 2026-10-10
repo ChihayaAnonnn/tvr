@@ -246,8 +246,14 @@ def prepare_run(config, *, repo_root, system_config=None):
     if config.eval_split != "test" and not manifest["validation_authorized"]:
         raise ValueError("manifest does not authorize validation")
     from semantic_retrieval.evidence.config import EvidenceSystemConfig
+    from semantic_retrieval.full_data.runtime import FullDataSystemConfig
     is_evidence = isinstance(system_config,EvidenceSystemConfig)
-    if is_evidence:
+    if isinstance(system_config, FullDataSystemConfig):
+        from semantic_retrieval.full_data.runtime import validate_full_data_binding
+        validate_full_data_binding(repository, manifest, system_config, config)
+    elif manifest['config']['evaluation'].get('config_kind') == 'full-data-retrieval-v1':
+        raise ValueError('full-data configuration requires its typed consumer')
+    elif is_evidence:
         from semantic_retrieval.evidence.runtime import validate_evidence_binding
         validate_evidence_binding(repository,manifest,system_config,config)
     elif manifest['config']['evaluation'].get('config_kind') == 'evidence-retrieval-v1':
@@ -326,7 +332,7 @@ def prepare_run(config, *, repo_root, system_config=None):
     for name, digest in references.items():
         if _hash_input(repository, {"path": name, "sha256": digest}) != digest:
             raise ValueError("input SHA-256 mismatch")
-    if system_config is not None and not is_evidence:
+    if system_config is not None and not is_evidence and not isinstance(system_config, FullDataSystemConfig):
         _validate_resume(repository, manifest, system_config)
         _validate_pilot(repository, manifest, system_config)
     return RunContext(

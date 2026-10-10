@@ -133,6 +133,16 @@ def test_complete_export_decodes_real_short_videos_and_roundtrips_all_records(tm
     model = BaselineModel('clip4clip', base.config, base.state_dict())
     loss = model(*batch)['loss']; loss.backward()
     assert torch.isfinite(loss) and model.clip.text_projection.grad.abs().sum() > 0
+    from semantic_retrieval.full_data.baseline import train_epoch, evaluate_complete
+    from semantic_retrieval.full_data.training import make_optimizer, unique_video_batches
+    batches = unique_video_batches([r['official_video_id'] for r in dataset.captions],
+                                  global_batch=2, world_size=1, seed=713, epoch=0)
+    optimizer = make_optimizer(model, learning_rate=1e-4, total_steps=len(batches))
+    losses = train_epoch(model, model, optimizer, dataset, batches, torch.device('cpu'))
+    assert losses.shape == (3, 4) and np.isfinite(losses).all()
+    validation = CaptionDataset(loaded, splits['val'], frames=3, image_size=16, text_length=8)
+    scores, measured = evaluate_complete(model, validation, torch.device('cpu'))
+    assert scores.shape == (3, 1) and measured['t2v']['R1'] == measured['v2t']['R1'] == 100
     # Even a re-authenticated source shard must satisfy its cross-record contract.
     source = out/'sources-000.json'
     payload = json.loads(source.read_bytes())

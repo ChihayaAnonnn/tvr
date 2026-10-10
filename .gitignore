@@ -8,6 +8,8 @@ cache_dir/
 /artifacts/
 /experiments/contextual-risk-v2/registry.jsonl.lock
 /experiments/full-data-retrieval-v1/registry.jsonl.lock
+/experiments/full-data-retrieval-v1/registry.jsonl.campaign.lock
+/.aris/
 
 /deploy_qwen/
 /ckpts/

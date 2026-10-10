@@ -61,3 +61,31 @@ def test_missing_marker_and_unqualified_science_fail_closed(permission_fixture):
 def test_unrelated_study_is_untouched():
     from semantic_retrieval.full_data.authorization import assert_full_data_authorized
     assert_full_data_authorized(repo_root=None, registry_path=None, manifest={'study': 'unrelated'}, operation='reserve')
+
+
+@pytest.mark.parametrize('operation', ['reserve', 'start'])
+def test_synthetic_fixture_permission_and_formal_four_card_identity(permission_fixture, operation):
+    from semantic_retrieval.full_data.authorization import assert_full_data_authorized
+    from semantic_retrieval.full_data.runtime import FullDataSettings, manifest_config
+    from full_data.test_runtime import fixture_clip
+    from semantic_retrieval.models.clip import ClipConfig
+    repo, registry, manifest = permission_fixture
+    cfg = FullDataSettings('cpu_fixture', 'both', repo/'tiny.npz', 'a'*64, fixture_clip(), 713)
+    candidate = dict(manifest, dataset='synthetic', variant='full-data-cpu-fixture', seed=713,
+                     input_checkpoints=[dict(path=str(cfg.clip_weights), sha256=cfg.clip_sha256)], dataset_splits=[],
+                     config=manifest_config(cfg))
+    command = ['python', 'scripts/qualify_full_data_retrieval.py']
+    def check(m):
+        return assert_full_data_authorized(repo_root=repo, registry_path=registry, manifest=m, operation=operation, command=command)
+    check(candidate)
+    with pytest.raises(ValueError): check(dict(candidate, dataset='msrvtt'))
+    formal = ClipConfig(512, 224, 768, 12, 32, 77, 49408, 512, 8, 12)
+    q = FullDataSettings('gpu_qualification', 'both', repo/'random.npz',
+                        '4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8', formal, 713)
+    four = dict(candidate, variant='full-data-q0', config=manifest_config(q),
+                input_checkpoints=[dict(path=str(q.clip_weights), sha256=q.clip_sha256)],
+                environment=dict(precision='fp32', gpu_count=4, distributed_topology='torchrun-4'))
+    check(four)
+    with pytest.raises(ValueError): check(dict(four, environment=dict(four['environment'], gpu_count=2)))
+    bad = copy.deepcopy(four); bad['config']['model']['clip_sha256'] = 'b'*64
+    with pytest.raises(ValueError): check(bad)

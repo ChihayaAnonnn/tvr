@@ -1,0 +1,21 @@
+base: existing-conda-tvr-python3.10.0-cuda12.1
+system_pkgs: [git, nvidia-smi]
+pip_phases:
+  - [torch==2.1.2+cu121, torchvision==0.16.2+cu121, numpy==1.26.4]
+  - [opencv-python==4.11.0.86, PyYAML==6.0.2, Pillow==11.0.0, ftfy==6.3.1, regex==2024.11.6, tqdm==4.67.1, boto3==1.38.5, botocore==1.38.5, requests==2.32.3]
+env:
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  CUBLAS_WORKSPACE_CONFIG: ':4096:8'
+  PYTHONDONTWRITEBYTECODE: '1'
+run_commands: []
+weight_dirs:
+  clip:
+    source: authenticated existing official OpenAI ViT-B-32.pt
+    gated: false
+smoke:
+  import_names: [torch, torchvision, numpy, cv2, yaml, PIL, ftfy, regex, tqdm, boto3, requests]
+  cli_checks: [nvidia-smi]
+  gpu_tests:
+    - cmd: qualify_full_data_retrieval.py via sealed four-rank Q0 manifest only
+      expect: all nine production-capacity qualification checks true

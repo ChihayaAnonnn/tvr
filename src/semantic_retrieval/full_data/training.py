@@ -11,7 +11,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 
-from experiment_artifacts import artifact_json_bytes, strict_json_load
+from experiment_artifacts import artifact_json_bytes, strict_json_load, verify_array_reference
 from semantic_retrieval.evidence.frame_cache import safe_path
 from semantic_retrieval.runtime.checkpoint import (
     _publish_file, _externalize_large_tensors, _hydrate_array_references, model_sha256,
@@ -208,7 +208,37 @@ def restore_state(path, model, optimizer, identity):
         np.random.RandomState().set_state((ns[0], ns[1].numpy().astype(np.uint32), ns[2], ns[3], ns[4]))
         if len(rng['cuda']) != torch.cuda.device_count():
             raise ValueError('checkpoint CUDA RNG device count mismatch')
+        for index, state_tensor in enumerate(rng['cuda']):
+            # Validate with a private generator before mutating the live model/RNG.
+            torch.Generator(device=torch.device('cuda', index)).set_state(state_tensor)
     model.load_state_dict(saved, strict=True)
     optimizer.load_state_dict(state)
     restore_rng(payload['rng'][rank])
     return payload['progress']
+
+
+def carry_checkpoint(source, target, store):
+    """Copy authenticated historical state and all arrays into a new run, exclusively."""
+    source, target = Path(source), Path(target)
+    safe_path(source); safe_path(source.with_suffix('.json')); safe_path(target)
+    if target.parent.parent != store.run_root:
+        raise ValueError('historical checkpoint must share successor array store root')
+    with source.with_suffix('.json').open() as stream: meta = strict_json_load(stream)
+    data = source.read_bytes()
+    if hashlib.sha256(data).hexdigest() != meta['sha256']:
+        raise ValueError('historical checkpoint content hash mismatch')
+    payload = torch.load(source, map_location='cpu', weights_only=True)
+    def copy_arrays(value):
+        if isinstance(value, dict):
+            if set(value) == {'__array_reference__'}:
+                reference = value['__array_reference__']
+                copied = store.write(reference['key'], verify_array_reference(source.parent.parent, reference)).as_dict()
+                if copied != reference: raise ValueError('historical array identity changed during carry')
+            else:
+                for item in value.values(): copy_arrays(item)
+        elif isinstance(value, (tuple, list)):
+            for item in value: copy_arrays(item)
+    copy_arrays(payload)
+    _publish_file(target, lambda stream: stream.write(data))
+    _publish_file(target.with_suffix('.json'), lambda stream: stream.write(artifact_json_bytes(meta)))
+    return target

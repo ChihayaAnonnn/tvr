@@ -177,6 +177,25 @@ def test_checkpoint_exact_rng_optimizer_resume_and_identity_tamper(tmp_path):
         restore_state(path, model, optimizer, identity)
 
 
+def test_checkpoint_carry_is_self_contained_across_two_successors(tmp_path):
+    import shutil
+    from semantic_retrieval.full_data.training import save_state, restore_state, carry_checkpoint
+    from experiment_artifacts import ArtifactArrayStore
+    model = torch.nn.Linear(513, 513)
+    optimizer = torch.optim.AdamW(model.parameters())
+    model(torch.ones(1, 513)).sum().backward(); optimizer.step()
+    identity = dict(source_sha='a'*40, recipe_sha256='b'*64, input_sha256='c'*64, method='clip4clip', world_size=1)
+    original = tmp_path/'first/checkpoints/epoch-01.pt'; original.parent.mkdir(parents=True)
+    save_state(original, model, optimizer, identity, dict(epoch=1, batch_cursor=0, update=1), ArtifactArrayStore(tmp_path/'first/arrays'))
+    previous = original
+    for name in ('second', 'third'):
+        target = tmp_path/name/'checkpoints/epoch-01.pt'; target.parent.mkdir(parents=True)
+        carry_checkpoint(previous, target, ArtifactArrayStore(tmp_path/name/'arrays'))
+        shutil.rmtree(previous.parent.parent)
+        assert restore_state(target, model, optimizer, identity)['epoch'] == 1
+        previous = target
+
+
 @pytest.mark.parametrize('defect', ['nonfinite', 'shape', 'param_order'])
 def test_checkpoint_rejects_invalid_optimizer_before_mutating_model(tmp_path, defect):
     import hashlib
