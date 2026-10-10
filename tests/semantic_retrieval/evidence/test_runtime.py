@@ -117,7 +117,18 @@ def test_real_video_evaluation_partial_initial_decode_and_successor(config_facto
     training_path = tmp_path/'index-training-config.json';training_path.write_text(json.dumps(training_cfg.to_payload()))
     spawn(_real_index_worker,args=('file://'+str(tmp_path/'index-rendezvous'),str(training_path),str(tmp_path/'distributed-index')),nprocs=2,join=True)
     first = context('first'); model = EvidenceMatcherModel(cfg.model).eval()
+    import time
+    original_encode = model.clip.encode_frames
+    def timed_real_encode(*args, **kwargs):
+        time.sleep(.02)
+        return original_encode(*args, **kwargs)
+    monkeypatch.setattr(model.clip, 'encode_frames', timed_real_encode)
     result = _evaluation(first,cfg,model,None)
+    index_report = json.loads((first.paths.provenance/'initial-index-V_development.json').read_text())
+    assert index_report['schema_version'] == 'evidence-initial-index-report-v2'
+    assert index_report['resource_counts'] == dict(frame_requests=4, clip_frames=2, temporal_tokens=0, mc_elements=0)
+    assert index_report['preparation_seconds'] >= .04
+    assert index_report['elapsed_seconds'] == pytest.approx(index_report['preparation_seconds'] + index_report['build_search_publish_seconds'])
     assert result['summary_metrics']['frame_requests'] == 4
     assert result['summary_metrics']['clip_frames'] == 2
     assert result['summary_metrics']['elapsed_seconds'] >= result['summary_metrics']['decode_seconds']
@@ -134,6 +145,8 @@ def test_real_video_evaluation_partial_initial_decode_and_successor(config_facto
     assert actual['summary_metrics']['frame_requests'] == 4
     assert actual['summary_metrics']['clip_frames'] == 2
     assert actual['summary_metrics']['decode_seconds'] == 0
+    successor_index = json.loads((second.paths.provenance/'initial-index-V_development.json').read_text())
+    assert successor_index['resource_counts'] == dict(frame_requests=0, clip_frames=0, temporal_tokens=0, mc_elements=0)
 
 
 def _real_index_worker(rank,rendezvous,config_path,run_root):

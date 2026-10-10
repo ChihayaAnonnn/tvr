@@ -32,3 +32,9 @@
 研究阶段还需对应 study 的已提交 gate 证据；CPU 科学路径同样受 gate 约束。test 永不由本入口解封。所有阈值、K、校准及模型选择只能使用 validation，locked validation 只用于冻结后的评估。通过软件资格不能自动把科学 gate 标为通过。
 
 CPU 端到端测试在临时已提交源码上运行真实 CLI、合成视频及 CLIP，验证教师训练与冻结、Gaussian 梯度、转移与收益训练、获取/停止、checkpoint 精确继续，以及执行后 commit 前恢复。三类标签检查为明确的 toy 语义变化，只证明标签程序。GPU 资格结果另行归档，不得将 CPU 报告冒充四卡资格。
+
+初始索引成本报告 `evidence-initial-index-report-v2` 从 gallery 准备前开始计时，
+包含稀疏帧解码、CLIP 编码、索引组装、query 搜索和 embedding 发布；输入校验及
+报告自身写入不计入。`resource_counts` 仅记录当前 worker 实际新执行的请求和
+编码，失败请求计数，恢复缓存不重复计数。该离线成本与逐查询在线预算分开报告。
+历史 v1 只计准备后的组装/搜索时间，不可与 v2 的总索引时间直接比较。

@@ -1,0 +1,178 @@
+{
+  "phase": "Q0-R2-archive-cost-final-source-four-gpu",
+  "study": "evidence-conditioned-retrieval-v1",
+  "runs": [
+    {
+      "dataset": "synthetic",
+      "stage": "baseline",
+      "variant": "evidence-q0-r2-four-gpu",
+      "seed": 713,
+      "scheduled_timestamp_utc": "20261010T011840Z",
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "gpu_count": 4,
+        "precision": "fp32",
+        "distributed_topology": "torchrun-4"
+      },
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/arrays/random-pilot-clip.npz",
+          "sha256": "4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8"
+        }
+      ],
+      "dataset_splits": [],
+      "config": {
+        "model": {
+          "base": {
+            "clip": {
+              "embed_dim": 512,
+              "image_size": 224,
+              "vision_width": 768,
+              "vision_layers": 12,
+              "patch_size": 32,
+              "context_length": 77,
+              "vocab_size": 49408,
+              "text_width": 512,
+              "text_heads": 8,
+              "text_layers": 12,
+              "fixture": false
+            },
+            "clip_weights": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/arrays/random-pilot-clip.npz",
+            "clip_sha256": "4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8",
+            "dim": 512,
+            "num_layers": 1,
+            "num_heads": 8,
+            "max_frames": 16,
+            "coarse_dim": 256,
+            "grouping": null,
+            "alignment": null,
+            "pilot_arm": null
+          },
+          "variant": "gaussian",
+          "scale_floor": 0.01
+        },
+        "loss": {
+          "pc": 1.0,
+          "score": 1.0,
+          "value": 0.0
+        },
+        "optimizer": {
+          "learning_rate": 0.0001,
+          "weight_decay": 0.01,
+          "seed": 713,
+          "trainable_prefixes": [
+            "temporal.",
+            "matcher."
+          ]
+        },
+        "scheduler": {
+          "scheduler_name": "constant",
+          "scheduler_steps": 2,
+          "checkpoint_interval": 1
+        },
+        "evaluation": {
+          "config_kind": "evidence-retrieval-v1",
+          "evidence_stage": "gpu_qualification",
+          "eval_split": "val",
+          "schema_version": 1,
+          "synthetic": true,
+          "views": {
+            "pool_size": 16,
+            "levels": [
+              4,
+              8,
+              16
+            ],
+            "preprocessing_sha256": "8fddcf29db23466cb3d33d41a83510b8b6d9ad29bc56f4da634d02d6993a7972",
+            "decode_protocol": "opencv-rgb-v1"
+          },
+          "sampling": {
+            "train_samples": 8,
+            "eval_samples": 8,
+            "temperature": 1.0,
+            "seed": 713,
+            "protocol": "identity-normal-v1"
+          },
+          "splits": [],
+          "index": {
+            "reference": null,
+            "candidate_count": 3,
+            "gallery_version": "evidence-q0-synthetic-v1"
+          },
+          "parents": {
+            "reference": null,
+            "matcher": null,
+            "value": null,
+            "calibration": null
+          },
+          "transitions": {
+            "reference": null,
+            "producer_sha256": null,
+            "state_seed": 713,
+            "trajectories": 2
+          },
+          "value": {
+            "hidden_dim": 128,
+            "feature_schema": "observable-action-v1",
+            "temperature": 1.0,
+            "kind": "distribution"
+          },
+          "policy": {
+            "stop_threshold": 0.0,
+            "limits": {
+              "frame_requests": 96,
+              "clip_frames": 96,
+              "temporal_tokens": 4096,
+              "mc_elements": 8192
+            },
+            "cost_weights": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "baseline": "distribution"
+          },
+          "resume": null
+        }
+      },
+      "parent_run_ids": [],
+      "selection_lineage": [
+        "docs/superpowers/reviews/2026-10-10-evidence-conditioned-retrieval-review.md: independent review repairs and CPU validation; synthetic software qualification only.",
+        "User 2026-10-10 authorization and experiments/evidence-conditioned-retrieval-v1/study.yaml software campaign: 1800-second wall cap, 8 cumulative GPU-hour cap, at most two diagnosed successors; no scientific data or test.",
+        "Verified archived random CLIP NPZ is reused as an input only; old study GPU/scientific permissions are not inherited. Physical GPUs 0/2/3/4 require fresh occupancy inspection.",
+        "experiments/evidence-conditioned-retrieval-v1/PREREGISTRATION.md",
+        "experiments/evidence-conditioned-retrieval-v1/summaries/D0.json",
+        "experiments/evidence-conditioned-retrieval-v1/configs/Q0-template.json",
+        "R2: requalify executable archive and index-cost fixes; no scientific data."
+      ],
+      "validation_authorized": true,
+      "test_authorized": false,
+      "expected_scalar_outputs": [
+        "qualification_passed",
+        "elapsed_seconds",
+        "peak_cuda_bytes"
+      ],
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=0,2,3,4",
+        "OMP_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nproc_per_node=4",
+        "scripts/qualify_evidence_retrieval.py",
+        "--config",
+        "{artifact_run_dir}/provenance/worker-config.json",
+        "--run-id",
+        "{run_id}"
+      ]
+    }
+  ]
+}

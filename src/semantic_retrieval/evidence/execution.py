@@ -293,6 +293,8 @@ def _episodes_and_sources(cfg,role,model,context):
         raise ValueError('initial index protocol/encoder binding mismatch')
     if role not in index_spec['roles'] or tuple(index_spec['roles'][role]) != tuple(sorted(inventory)):
         raise ValueError('role gallery must equal the declared label-independent inventory')
+    started = time.monotonic()
+    index_requests = index_encodes = 0
     source = VideoFrameSource(videos,cfg.model.base.clip.image_size,cfg.views.preprocessing_sha256)
     rank = dist.get_rank() if dist.is_initialized() else 0
     distributed_training = dist.is_initialized() and cfg.stage in {'reference','matcher'}
@@ -306,6 +308,7 @@ def _episodes_and_sources(cfg,role,model,context):
                        ExecutionProfile(cfg.sampling.eval_samples,cfg.policy.cost_weights),BudgetLedger(cfg.policy.limits,ZERO,ZERO),0)
     device = next(model.parameters()).device
     def reader(candidate,ids):
+        nonlocal index_requests, index_encodes
         identity = FrameCacheIdentity(candidate.content_sha256,cfg.model.base.clip_sha256,digest(config_payload(cfg.model.base)['clip']),cfg.views.preprocessing_sha256)
         rows = []
         for i in ids:
@@ -313,9 +316,11 @@ def _episodes_and_sources(cfg,role,model,context):
             if path.exists():
                 feature = cache.read(candidate.canonical_id,i,identity=identity).to(device)
             else:
+                index_requests += 1
                 image = source(candidate,(i,)).to(device)
                 with torch.no_grad():
                     feature = model.clip.encode_frames(image[None],torch.ones((1,1),device=device,dtype=torch.bool))[0,0]
+                index_encodes += 1
                 cache.write(candidate.canonical_id,i,feature,identity=identity)
             rows.append(feature)
         return torch.stack(rows)
@@ -366,7 +371,7 @@ def _episodes_and_sources(cfg,role,model,context):
         publish_json(gallery_path,dict(binding_sha256=binding,state=payload,candidate_count=len(rows),candidates_sha256=digest(rows)))
     index_identity = IndexIdentity(cfg.model.base.clip_sha256,cfg.index.gallery_version,
                                   digest(dict(preprocessing=cfg.views.preprocessing_sha256,view=digest(config_payload(cfg.views)))))
-    started = time.monotonic()
+    prepared = time.monotonic()
     index = build_initial_index((gallery_state,),reader,identity=index_identity)
     result = []
     for w in wrapped:
@@ -383,9 +388,13 @@ def _episodes_and_sources(cfg,role,model,context):
                   source_ids=tuple(sorted({s for c in order for s in inventory[c][3]})))
         result.append(replace(w,episode=selected_episode))
     index_store.write('initial_index_embeddings',index.embeddings.detach().cpu())
-    publish_json(index_store.run_root/'provenance'/('initial-index-'+role+'.json'),dict(schema_version='evidence-initial-index-report-v1',
+    finished = time.monotonic()
+    publish_json(index_store.run_root/'provenance'/('initial-index-'+role+'.json'),dict(schema_version='evidence-initial-index-report-v2',
                  identity=asdict(index_identity),candidate_count=cfg.index.candidate_count,gallery_count=len(index.ids),
-                 elapsed_seconds=time.monotonic()-started,role=role,specification_sha256=ref.sha256))
+                 elapsed_seconds=finished-started,preparation_seconds=prepared-started,build_search_publish_seconds=finished-prepared,
+                 resource_counts=asdict(ResourceCounts(index_requests,index_encodes,0,0)),
+                 timing_scope='current_worker_gallery_preparation_build_query_search_embedding_publication',
+                 role=role,specification_sha256=ref.sha256))
     return tuple(result),{w.episode.query_id:w for w in result},source,cache
 
 
