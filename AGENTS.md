@@ -18,6 +18,11 @@
 不能证明身份、源码或输出完整性时停止并人工处理，不得新建同名覆盖目录。Stage 0 的
 四卡资格测试通过并记录前，不得启动任何 GPU 科学实验。
 
+2026-10-11 用户明确批准仅 `full-data-retrieval-v1` 的修订：正式容量双卡资格
+（含梯度、数值、精确恢复）替代该 study 未完成的四卡 gate，双卡训练全局 batch
+保持 UATVR64 / CLIP4Clip128；允许共享显存较空的两卡，保留显存余量，不停止或
+修改其他任务。其他 study 的四卡要求不变，test 仍 sealed。详见本 study.yaml。
+
 详细命令和事故恢复步骤见 [docs/agent/experiment-artifacts.md](docs/agent/experiment-artifacts.md)。
 
 任何 Agent 或新 session 在提出实验方案前，必须先读 [research/README.md](research/README.md)：

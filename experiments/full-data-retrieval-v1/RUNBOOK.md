@@ -1,5 +1,7 @@
 # Native full-data campaign
 
+2026-10-11 explicit user amendment supersedes original four-card/exclusive-resource wording below: this study now requires new production-capacity **two-rank Q0**, then two-card science. Shared-card execution is permitted; choose least-used cards with >=68GiB free (60GiB PyTorch allocator cap +8GiB additional headroom). Never stop/modify external tasks. Global batches64/128 stay frozen; local batches32/64, one backward and optimizer update per global batch. The sealed manifest binds rank count and memory cap; a mismatched-topology qualification cannot authorize science. Old studies/test sealing are unchanged. The campaign invocation remains the same.
+
 Use the linked worktree `/home/xujie/.codex/worktrees/ad3a/UATVR` and existing `/home/xujie/.conda/envs/tvr/bin/python`. Read study.yaml and registry.jsonl first. The environment contract is environment.yaml (canonical parsed hash78c6fc62); no environment rebuild is needed. All source must be committed and tracked-clean before launch.
 
 Independent documentation/CPU validation (safe without free GPUs):

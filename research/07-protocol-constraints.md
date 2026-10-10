@@ -135,6 +135,10 @@ study（新目录 + 新 protocol_version）重新建立授权路径。
 
 *出处：`AGENTS.md:16-17`。*
 
+2026-10-11 显式用户修订仅适用于 `full-data-retrieval-v1`：正式容量双卡 Q0
+替代该 study 四卡 gate，保持全局 batch64/128；允许共享两卡并保留显存余量。
+其他 study 不变；test 仍封存。见对应 study 的 protocol_amendment/resource_policy。
+
 ---
 
 ## PC-10 · GPU 拓扑：冻结值是 `{0,2,3,4}`，但现实与之冲突

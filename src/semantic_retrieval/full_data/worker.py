@@ -58,9 +58,11 @@ def main(repo, mode, argv=None):
                                 (('WORLD_SIZE', '1'), ('RANK', '0'), ('LOCAL_RANK', '0')))
     device = torch.device('cpu') if settings.stage == 'cpu_fixture' else torch.device('cuda', local_rank)
     if device.type == 'cuda':
-        if world != 4 or os.environ.get('CUBLAS_WORKSPACE_CONFIG') != ':4096:8':
-            raise ValueError('CUDA worker requires four ranks and deterministic cuBLAS workspace')
+        if world != settings.world_size or os.environ.get('CUBLAS_WORKSPACE_CONFIG') != ':4096:8':
+            raise ValueError('CUDA worker requires sealed ranks and deterministic cuBLAS workspace')
         torch.cuda.set_device(device)
+        total = torch.cuda.get_device_properties(device).total_memory
+        torch.cuda.set_per_process_memory_fraction(settings.memory_limit_gib*1024**3/total, device)
     if world > 1:
         dist.init_process_group('nccl' if device.type == 'cuda' else 'gloo', timeout=datetime.timedelta(seconds=180))
     runtime = RuntimeConfig(registry.with_name('study.yaml'), registry, args.run_dir, manifest['run_id'],

@@ -10,6 +10,8 @@
 
 **Spec:** docs/superpowers/specs/2026-10-10-full-data-baselines-design.md
 
+2026-10-11 explicit amendment: user approved matching two-CUDA-rank Q0 instead of this study's pending four-card requirement, then two-card science with unchanged global batches64/128. Sharing two cards is explicitly authorized with60GiB allocator cap and8GiB additional headroom; no external process stopped/modified. Apply the same tests/lifecycle/review requirements to the revised topology. Historical four-card wording below describes the original plan, superseded only for this study.
+
 ## Global Constraints
 
 8246training/500validation videos, every caption,12frames/32tokens,FP32. Test sealed. New chain four CUDA ranks required. New study independent; negative prior B2 unchanged. No tracked edits during workers; all runs reserved/committed/verified/archived. Software8GPUh/science512GPUh;1800/86400seconds per run; at most2 software successors. Active-phase count-aware atomic quota. Complete cohort and strict load; no prior trained retrieval checkpoint.

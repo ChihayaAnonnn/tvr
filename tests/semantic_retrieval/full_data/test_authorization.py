@@ -64,7 +64,7 @@ def test_unrelated_study_is_untouched():
 
 
 @pytest.mark.parametrize('operation', ['reserve', 'start'])
-def test_synthetic_fixture_permission_and_formal_four_card_identity(permission_fixture, operation):
+def test_synthetic_fixture_permission_and_formal_approved_two_card_identity(permission_fixture, operation):
     from semantic_retrieval.full_data.authorization import assert_full_data_authorized
     from semantic_retrieval.full_data.runtime import FullDataSettings, manifest_config
     from full_data.test_runtime import fixture_clip
@@ -81,11 +81,11 @@ def test_synthetic_fixture_permission_and_formal_four_card_identity(permission_f
     with pytest.raises(ValueError): check(dict(candidate, dataset='msrvtt'))
     formal = ClipConfig(512, 224, 768, 12, 32, 77, 49408, 512, 8, 12)
     q = FullDataSettings('gpu_qualification', 'both', repo/'random.npz',
-                        '4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8', formal, 713)
+                        '4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8', formal, 713, world_size=2)
     four = dict(candidate, variant='full-data-q0', config=manifest_config(q),
                 input_checkpoints=[dict(path=str(q.clip_weights), sha256=q.clip_sha256)],
-                environment=dict(precision='fp32', gpu_count=4, distributed_topology='torchrun-4'))
+                environment=dict(precision='fp32', gpu_count=2, distributed_topology='torchrun-2'))
     check(four)
-    with pytest.raises(ValueError): check(dict(four, environment=dict(four['environment'], gpu_count=2)))
+    with pytest.raises(ValueError): check(dict(four, environment=dict(four['environment'], gpu_count=4)))
     bad = copy.deepcopy(four); bad['config']['model']['clip_sha256'] = 'b'*64
     with pytest.raises(ValueError): check(bad)

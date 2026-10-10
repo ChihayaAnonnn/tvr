@@ -55,16 +55,17 @@ def _terminal_report(repo, permission, filename):
 
 
 def validate_prerequisites(repo, study, manifest, settings):
-    if not isinstance(study.get('four_gpu_qualification'), dict):
-        raise ValueError('new full-data four-GPU qualification has not passed')
-    qm, report, _ = _terminal_report(repo, study['four_gpu_qualification'], 'full-data-qualification.json')
+    if not isinstance(study.get('gpu_qualification'), dict):
+        raise ValueError('new full-data matching-topology GPU qualification has not passed')
+    qm, report, _ = _terminal_report(repo, study['gpu_qualification'], 'full-data-qualification.json')
     checks = ('actual_forward_backward', 'intended_gradients', 'global_gradient_normalization', 'exact_resume',
               'rank_weights_equal', 'finite_fp32', 'metric_permutation', 'eval_rng_preserved', 'strict_checkpoint_rejection')
-    if (report.get('schema_version') != 'full-data-qualification-v1' or report.get('world_size') != 4
+    if (report.get('schema_version') != 'full-data-qualification-v1' or report.get('world_size') != settings.world_size
+            or settings.world_size != study['software_authorization']['world_size']
             or report.get('device_type') != 'cuda' or report.get('production_capacity') is not True
             or report.get('test_authorized') is not False or set(report.get('qualified_methods', ())) != {'uatvr', 'clip4clip'}
             or not all(report.get('checks', {}).get(k) is True for k in checks)):
-        raise ValueError('incomplete production four-CUDA-rank qualification')
+        raise ValueError('incomplete production matching-CUDA-rank qualification')
     changed = subprocess.run(['git', 'diff', '--name-only', qm['git_sha'], manifest['git_sha'], '--',
                               'src/semantic_retrieval', 'scripts', 'experiment_artifacts.py', 'experiment_tracking.py'],
                              cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
@@ -163,6 +164,9 @@ def assert_full_data_authorized(*, repo_root, registry_path, manifest, operation
     if evaluation.get('config_kind') != KIND:
         raise ValueError('full-data execution requires explicit typed config marker')
     settings = settings_from_manifest(manifest)
+    if settings.stage != 'cpu_fixture' and (settings.world_size != study['software_authorization']['world_size']
+            or settings.memory_limit_gib != study['resource_policy']['memory_limit_gib']):
+        raise ValueError('GPU topology/memory settings differ from approved study')
     if manifest.get('seed') != settings.seed or manifest['stage'] != 'baseline':
         raise ValueError('full-data stage/seed mismatch')
     inputs = {r['path']: r['sha256'] for r in manifest['input_checkpoints']}
@@ -177,16 +181,16 @@ def assert_full_data_authorized(*, repo_root, registry_path, manifest, operation
             if (permission.get('cpu_fixture') is not True or env['gpu_count'] != 0
                     or env['distributed_topology'] != 'single-process' or manifest['variant'] != 'full-data-cpu-fixture'):
                 raise ValueError('CPU fixture requires authorized single-process synthetic execution')
-        elif (permission.get('four_gpu') is not True or env['gpu_count'] != 4
-              or env['distributed_topology'] != 'torchrun-4' or manifest['variant'] != 'full-data-q0'
+        elif (permission.get('gpu') is not True or env['gpu_count'] != settings.world_size
+              or env['distributed_topology'] != f'torchrun-{settings.world_size}' or manifest['variant'] != 'full-data-q0'
               or settings.clip_sha256 != permission.get('random_clip_sha256')):
-            raise ValueError('GPU qualification requires four CUDA ranks and registered random formal CLIP')
+            raise ValueError('GPU qualification requires approved CUDA ranks and registered random formal CLIP')
         return
     if (entries != {'train_full_data_retrieval.py'} or manifest['dataset'] != 'msrvtt'
-            or env['gpu_count'] != 4 or env['distributed_topology'] != 'torchrun-4'
+            or env['gpu_count'] != settings.world_size or env['distributed_topology'] != f'torchrun-{settings.world_size}'
             or manifest['variant'] != settings.method or settings.seed not in study['seeds']
             or settings.clip_sha256 != PRETRAINED_SHA):
-        raise ValueError('scientific baseline requires frozen full-data four-rank recipe')
+        raise ValueError('scientific baseline requires frozen full-data approved-rank recipe')
     validate_prerequisites(repo, study, manifest, settings)
     science = study['science']
     if science.get('authorized') is not True or 'baseline' not in science.get('authorized_stages', ()):

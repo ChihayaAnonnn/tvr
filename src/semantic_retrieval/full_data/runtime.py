@@ -36,8 +36,15 @@ class FullDataSettings:
     source_report: Path | None = None
     source_report_sha256: str | None = None
     resume: ResumeReference | None = None
+    world_size: int | None = None
+    memory_limit_gib: int = 60
 
     def __post_init__(self):
+        if self.world_size is None:
+            object.__setattr__(self, 'world_size', 1 if self.stage == 'cpu_fixture' else 4)
+        if (type(self.world_size) is not int or self.world_size not in ({1} if self.stage == 'cpu_fixture' else {2, 4})
+                or type(self.memory_limit_gib) is not int or self.memory_limit_gib != 60):
+            raise ValueError('invalid sealed topology/memory limit')
         if (self.stage not in {'cpu_fixture', 'gpu_qualification', 'baseline'}
                 or self.method not in {'both', 'uatvr', 'clip4clip'}
                 or not isinstance(self.clip_weights, Path) or not self.clip_weights.is_absolute()
@@ -110,6 +117,7 @@ def manifest_config(settings):
                         text_length=settings.text_length, source_report=source, dsl=False,
                         checkpoint_selection='earliest_raw_t2v_r1', qualification_steps=3 if settings.stage != 'baseline' else 0,
                         loader_workers=0,
+                        world_size=settings.world_size, memory_limit_gib=settings.memory_limit_gib,
                         deterministic_algorithms=True, resume=resume))
 
 
@@ -122,7 +130,8 @@ def settings_from_manifest(manifest):
                                                               resumed['checkpoint_sha256'], resumed['sidecar_sha256'])
         settings = FullDataSettings(ev['full_data_stage'], model['method'], Path(model['clip_weights']), model['clip_sha256'],
                                     ClipConfig(**model['clip']), ev['seed'],
-                                    None if source is None else Path(source['path']), None if source is None else source['sha256'], resume)
+                                    None if source is None else Path(source['path']), None if source is None else source['sha256'], resume,
+                                    ev['world_size'], ev['memory_limit_gib'])
         if source is not None and set(source) != {'path', 'sha256'}:
             raise ValueError('source input configuration has unconsumed fields')
         if cfg != manifest_config(settings):

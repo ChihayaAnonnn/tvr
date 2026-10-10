@@ -48,3 +48,19 @@ def test_resume_is_explicit_bound_and_never_allowed_for_software_fixture(tmp_pat
     cfg = FullDataSettings('baseline', 'uatvr', tmp_path/'clip.pt', 'a'*64, clip, 713,
                            tmp_path/'source.json', 'd'*64, reference)
     assert settings_from_manifest({'config': manifest_config(cfg)}) == cfg
+
+
+def test_two_rank_topology_is_sealed_with_same_global_batches(tmp_path):
+    from semantic_retrieval.full_data.runtime import FullDataSettings, manifest_config, settings_from_manifest
+    from semantic_retrieval.full_data.campaign import _spec
+    clip = ClipConfig(512, 224, 768, 12, 32, 77, 49408, 512, 8, 12)
+    cfg = FullDataSettings('gpu_qualification', 'both', tmp_path/'random.npz', 'a'*64, clip, 713, world_size=2)
+    packet = _spec(cfg, ['0', '3'], [], [])
+    assert packet['environment']['gpu_count'] == 2
+    assert packet['environment']['distributed_topology'] == 'torchrun-2'
+    assert '--nproc_per_node=2' in packet['command']
+    assert cfg.recipe('uatvr')['global_batch'] == 64 and cfg.recipe('clip4clip')['global_batch'] == 128
+    assert settings_from_manifest(packet) == cfg
+    bad = copy.deepcopy(packet); bad['config']['evaluation']['world_size'] = 3
+    with pytest.raises(ValueError): settings_from_manifest(bad)
+    with pytest.raises(ValueError): _spec(cfg, ['0', '0'], [], [])

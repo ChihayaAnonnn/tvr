@@ -14,6 +14,17 @@ def test_gpu_budget_counts_active_reservations_all_cards_and_terminal_time():
         budget_projection([dict(runs[1], elapsed_seconds=float('nan'))])
 
 
+def test_shared_card_selection_keeps_headroom_and_is_deterministic():
+    from semantic_retrieval.full_data.controller import select_shared_devices
+    rows = [dict(index='0', total_mib=81920, used_mib=5319),
+            dict(index='1', total_mib=81920, used_mib=9701),
+            dict(index='2', total_mib=81920, used_mib=75580),
+            dict(index='3', total_mib=81920, used_mib=3937)]
+    assert select_shared_devices(rows, limit_gib=60, headroom_gib=8) == ['3', '0', '1']
+    assert select_shared_devices(rows[::-1], limit_gib=60, headroom_gib=8) == ['3', '0', '1']
+    assert select_shared_devices(rows, limit_gib=72, headroom_gib=8) == []
+
+
 def test_successor_cap_is_executable_and_rejects_invalid_accounting():
     from semantic_retrieval.full_data.controller import check_successors
     check_successors(0, 2); check_successors(2, 2)

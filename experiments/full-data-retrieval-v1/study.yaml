@@ -23,12 +23,25 @@ cpu_preparation:
   scenario: full_data_prepare:v1
 software_authorization:
   cpu_fixture: true
-  four_gpu: true
+  four_gpu: false
+  gpu: true
   synthetic_only: true
   precision: fp32
-  world_size: 4
+  world_size: 2
   random_clip_sha256: 4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8
 four_gpu_qualification: null
+gpu_qualification: null
+protocol_amendment:
+  date: '2026-10-11'
+  authorization: explicit_user_approves_two_rank_Q0_replacing_four_rank_gate_and_shared_cards
+  scope: this_study_only_no_other_study_gate_change
+  global_batches: unchanged_uatvr64_clip4clip128
+resource_policy:
+  sharing_authorized: true
+  memory_limit_gib: 60
+  headroom_gib: 8
+  selection: least_used_memory_then_device_index
+  existing_processes: never_stop_or_modify
 input_certification:
   run_id: msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b
   manifest_sha256: 8e3932a4e5f2d954153be58132af2a3621c27dfb1dbaf38cd8066d1eb40ed545
@@ -36,7 +49,7 @@ input_certification:
 science:
   authorized: false
   authorized_stages: []
-  reason: pending_new_chain_four_cuda_rank_qualification_and_complete_input_certification
+  reason: pending_new_chain_two_cuda_rank_qualification_and_complete_input_certification
   test: sealed_no_implicit_authorization
 campaign:
   software:
@@ -50,7 +63,7 @@ campaign:
   active_phase_accounting: atomic_lock_and_gpu_count_aware_worst_case_reservations
   retry: diagnose_software_failures_only_new_run_identity_never_overwrite
   model_selection: validation_only_earliest_best_raw_t2v_r1
-  external_jobs: never_terminate_or_interfere
+  external_jobs: sharing_explicitly_authorized_never_terminate_or_modify
 methods:
   uatvr:
     upstream: https://github.com/bofang98/UATVR

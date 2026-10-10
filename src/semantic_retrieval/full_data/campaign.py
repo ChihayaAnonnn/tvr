@@ -17,7 +17,7 @@ from semantic_retrieval.data.episodes import file_sha256
 from semantic_retrieval.evidence.frame_cache import publish_json
 from semantic_retrieval.models.clip import ClipConfig
 from .authorization import STUDY, CONTROL, _committed, _terminal_report, validate_prerequisites
-from .controller import campaign_lock, idle_devices, run_phase, _budget_rows, budget_projection, _read
+from .controller import campaign_lock, available_devices, run_phase, _budget_rows, budget_projection, _read
 from .runtime import FullDataSettings, manifest_config
 
 ARTIFACTS = Path('/data2/hxj/project/UATVR/artifacts')
@@ -41,17 +41,19 @@ def _commit(repo, files, message):
 
 
 def _spec(settings, devices, inputs, parents):
+    if len(devices) != settings.world_size or len(set(devices)) != settings.world_size:
+        raise ValueError('devices must exactly match sealed rank count')
     script = 'qualify_full_data_retrieval.py' if settings.stage == 'gpu_qualification' else 'train_full_data_retrieval.py'
     command = ['/usr/bin/env', 'CUDA_VISIBLE_DEVICES='+','.join(devices), 'OMP_NUM_THREADS=1',
                'OPENBLAS_NUM_THREADS=1', 'PYTHONDONTWRITEBYTECODE=1', 'CUBLAS_WORKSPACE_CONFIG=:4096:8',
-               sys.executable, '-m', 'torch.distributed.run', '--standalone', '--nnodes=1', '--nproc_per_node=4',
+               sys.executable, '-m', 'torch.distributed.run', '--standalone', '--nnodes=1', f'--nproc_per_node={settings.world_size}',
                '--log-dir', '{artifact_run_dir}/logs/elastic',
                'scripts/'+script, '--run-dir', '{artifact_run_dir}']
     return dict(dataset='synthetic' if settings.stage == 'gpu_qualification' else 'msrvtt', stage='baseline',
                 variant='full-data-q0' if settings.stage == 'gpu_qualification' else settings.method, seed=settings.seed,
                 scheduled_timestamp_utc=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
                 environment=dict(python=platform.python_version(), pytorch=str(torch.__version__), cuda=str(torch.version.cuda),
-                                 gpu_model='NVIDIA A800 80GB PCIe', gpu_count=4, precision='fp32', distributed_topology='torchrun-4'),
+                                 gpu_model='NVIDIA A800 80GB PCIe', gpu_count=settings.world_size, precision='fp32', distributed_topology=f'torchrun-{settings.world_size}'),
                 input_checkpoints=[dict(path=str(settings.clip_weights), sha256=settings.clip_sha256)], dataset_splits=inputs,
                 config=manifest_config(settings), parent_run_ids=parents, selection_lineage=[], validation_authorized=True,
                 test_authorized=False, expected_scalar_outputs=[], array_references=[], command=command)
@@ -70,7 +72,7 @@ def _prepare_phase(repo, name, specifications):
         rows = _budget_rows(repo, study, manager)
         for spec in specifications:
             category = 'software' if spec['config']['evaluation']['synthetic'] else 'scientific'
-            rows.append(dict(category=category, gpu_count=4, state='reserved', elapsed_seconds=None,
+            rows.append(dict(category=category, gpu_count=spec['environment']['gpu_count'], state='reserved', elapsed_seconds=None,
                              max_wall_seconds=study['campaign'][category]['max_run_wall_seconds']))
         totals = budget_projection(rows)
         if any(totals[k] > study['campaign'][k]['max_cumulative_gpu_hours'] for k in totals):
@@ -85,15 +87,15 @@ def _prepare_phase(repo, name, specifications):
     return phase, reservation['runs']
 
 
-def _wait_four(repo, deadline, source):
+def _wait_devices(repo, deadline, source, study):
     while True:
         # No tracked edits or duplicate watcher may be silently incorporated while waiting.
         actual = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
         if actual != source: raise ValueError('campaign source changed while waiting for resources')
-        devices = idle_devices()
-        if len(devices) >= 4: return devices[:4]
-        if time.monotonic() >= deadline: raise TimeoutError('four free GPUs unavailable within registered resource wait')
-        print(f'WAITING: four idle GPUs required; available={devices}; no scientific run started', flush=True)
+        devices = available_devices(study); count = study['software_authorization']['world_size']
+        if len(devices) >= count: return devices[:count]
+        if time.monotonic() >= deadline: raise TimeoutError('eligible GPUs unavailable within registered resource wait')
+        print(f'WAITING: {count} eligible GPUs required; available={devices}; no scientific run started', flush=True)
         time.sleep(min(30, max(0, deadline-time.monotonic())))
 
 
@@ -102,14 +104,14 @@ def _open_gate(repo, reservations):
     with campaign_lock(registry.with_name('registry.jsonl.campaign.lock')):
         study = yaml.safe_load(_committed(repo, repo/CONTROL/'study.yaml'))
         q = reservations[0]; path = Path(q['artifact_path'])/'provenance/full-data-qualification.json'
-        study['four_gpu_qualification'] = dict(run_id=q['run_id'], manifest_sha256=q['manifest_sha256'], report_sha256=file_sha256(path))
+        study['gpu_qualification'] = dict(run_id=q['run_id'], manifest_sha256=q['manifest_sha256'], report_sha256=file_sha256(path))
         inputs, certificate = scientific_inputs(repo)
         settings = FullDataSettings('baseline', 'uatvr', PRETRAINED, file_sha256(PRETRAINED), FORMAL, 713,
-                                    certificate, file_sha256(certificate))
+                                    certificate, file_sha256(certificate), world_size=study['software_authorization']['world_size'])
         head = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
         validate_prerequisites(repo, study, dict(git_sha=head), settings)
         study['science'] = dict(authorized=True, authorized_stages=['baseline'],
-                               reason='predeclared_gate_satisfied_authenticated_complete_inputs_and_new_four_cuda_rank_Q0',
+                               reason='approved_gate_satisfied_authenticated_complete_inputs_and_matching_cuda_rank_Q0',
                                test='sealed_no_implicit_authorization')
         (registry.with_name('study.yaml')).write_text(yaml.safe_dump(study, sort_keys=False))
         _commit(repo, [Path(CONTROL)/'study.yaml'], 'research: record passing full-data Q0 and open predefined baseline gate')
@@ -147,9 +149,10 @@ def main(repo):
     load_registry(repo/CONTROL/'registry.jsonl')
     source = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
     deadline = time.monotonic()+study['campaign']['max_resource_wait_seconds']
-    devices = _wait_four(repo, deadline, source)
-    if study['four_gpu_qualification'] is None:
-        settings = FullDataSettings('gpu_qualification', 'both', RANDOM, file_sha256(RANDOM), FORMAL, 713)
+    devices = _wait_devices(repo, deadline, source, study)
+    if study.get('gpu_qualification') is None:
+        settings = FullDataSettings('gpu_qualification', 'both', RANDOM, file_sha256(RANDOM), FORMAL, 713,
+                                    world_size=study['software_authorization']['world_size'])
         phase, reservations = _prepare_phase(repo, 'Q0', [_spec(settings, devices, [], [])])
         if run_phase(repo, phase, ARTIFACTS): return 1
         _open_gate(repo, reservations)
@@ -165,8 +168,8 @@ def main(repo):
         if set(existing) == {'uatvr', 'clip4clip'}: continue
         if existing: raise ValueError('partial scientific seed requires diagnosed exact recovery')
         specs = [_spec(FullDataSettings('baseline', method, PRETRAINED, file_sha256(PRETRAINED), FORMAL, seed,
-                                       certificate, file_sha256(certificate)), devices, inputs,
-                       [current['input_certification']['run_id'], current['four_gpu_qualification']['run_id']])
+                                       certificate, file_sha256(certificate), world_size=current['software_authorization']['world_size']), devices, inputs,
+                       [current['input_certification']['run_id'], current['gpu_qualification']['run_id']])
                  for method in ('uatvr', 'clip4clip')]
         phase, _ = _prepare_phase(repo, f'B-seed{seed}', specs)
         if run_phase(repo, phase, ARTIFACTS): return 1

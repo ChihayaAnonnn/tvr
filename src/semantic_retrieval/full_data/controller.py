@@ -84,6 +84,32 @@ def idle_devices():
     return free
 
 
+def select_shared_devices(rows, *, limit_gib, headroom_gib):
+    if any(type(x) is not int or x < 1 for x in (limit_gib, headroom_gib)):
+        raise ValueError('invalid shared-card memory policy')
+    seen, eligible = set(), []
+    for row in rows:
+        index, total, used = row['index'], row['total_mib'], row['used_mib']
+        if (not isinstance(index, str) or not index.isdigit() or index in seen
+                or type(total) is not int or type(used) is not int or not 0 <= used <= total):
+            raise ValueError('invalid GPU memory observation')
+        seen.add(index)
+        if total-used >= (limit_gib+headroom_gib)*1024: eligible.append((used, int(index), index))
+    return [item[2] for item in sorted(eligible)]
+
+
+def available_devices(study):
+    policy = study.get('resource_policy', {'sharing_authorized': False})
+    if policy.get('sharing_authorized') is not True: return idle_devices()
+    result = subprocess.run(['nvidia-smi', '--query-gpu=index,memory.total,memory.used',
+                             '--format=csv,noheader,nounits'], check=True, capture_output=True, text=True)
+    rows = []
+    for line in result.stdout.splitlines():
+        index, total, used = (s.strip() for s in line.split(','))
+        rows.append(dict(index=index, total_mib=int(total), used_mib=int(used)))
+    return select_shared_devices(rows, limit_gib=policy['memory_limit_gib'], headroom_gib=policy['headroom_gib'])
+
+
 def _read(path):
     with Path(path).open() as stream: return strict_json_load(stream)
 
@@ -230,7 +256,7 @@ def _run_one(repo, identity, study, manager):
     devices = next((s.split('=', 1)[1].split(',') for s in command if s.startswith('CUDA_VISIBLE_DEVICES=')), [])
     if cards and (len(devices) != cards or len(set(devices)) != cards): raise ValueError('sealed GPU devices differ from budget')
     deadline = time.monotonic()+study['campaign'].get('max_resource_wait_seconds', 21600)
-    while cards and not set(devices).issubset(idle_devices()):
+    while cards and not set(devices).issubset(available_devices(study)):
         if time.monotonic() >= deadline:
             publish_json(root/'provenance/controller-result.json', dict(**plan, spawned=False, elapsed_seconds=0.0,
                          terminal_exit_code=75, reason='external_gpu_occupancy_timeout'))
