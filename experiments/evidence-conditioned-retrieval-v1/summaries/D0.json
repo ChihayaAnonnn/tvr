@@ -1,0 +1,53 @@
+{
+  "phase": "D0-approved-source-role-input",
+  "phase_path": "experiments/evidence-conditioned-retrieval-v1/phases/D0.json",
+  "runs": [
+    {
+      "manifest_sha256": "68448b6b791402498cade4ff5f6e9bde78fe3460f078af4e9aff9b55a68d4dc3",
+      "output_hashes": {
+        "command.sh": "60754dd17321160dd702e5b2a0a119dc75c1419b7331d4adb0db6d07779e9e40",
+        "logs/worker.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "metrics/val_eval_000.json": "3e783ba1fad77d73bee74908faee7d0da9839afe8e3a9b269c633dd62f7d5bba",
+        "provenance/controller-launch.json": "f72d09021129da545fd97f52c93438b780ee049497d014a607d960c19fedfac2",
+        "provenance/controller-plan.json": "c613e509f2f88d256edc2f83ff9fffa7a65cd29e72cc9dcc39bd5bfce5c623b0",
+        "provenance/controller-result.json": "aec5b2c981ce31aa262108af9daa366e5fbb3cd7dadeadda21899961c6a0c220",
+        "provenance/inputs/initial-index.json": "9d916043772b2a2cb39ebf5c710b63dd14c06371787449da9cdd2a6dd5c06c85",
+        "provenance/inputs/labels/T_match-id-map.json": "a444973c3fbca95bf1f1e34884752fd14a2e0a2c028f7ebf58677afad9e08142",
+        "provenance/inputs/labels/T_match-relations.json": "bd21312caf915109d679b253823d8d2b6b09588b1c8ec613ab9800f3ea3d2f53",
+        "provenance/inputs/labels/T_value-id-map.json": "cf0d6a514026a486cfa1cb2af6c2b23c44a6e37fbf8d23a8d79703f4fd3f3e9e",
+        "provenance/inputs/labels/T_value-relations.json": "cf7c70978120b9e448dd4e7291dd2dd2f5975518445a6c4cc6e193ab5a1ef0ef",
+        "provenance/inputs/labels/V_calibration-id-map.json": "7b24925dc69f16988cd9db9faf6cd7c2b8aa3c10c670b3fb5a2f7f84bccfa0fd",
+        "provenance/inputs/labels/V_calibration-relations.json": "404ee0b6c148efce57e37c2a7739ea975ad98755bba662bc9db94d00d26d184d",
+        "provenance/inputs/labels/V_development-id-map.json": "ee3f7b612a2f50c7149e2f8cd8a7b4110cef7cb789b0cb0436bf4ce3041bbea2",
+        "provenance/inputs/labels/V_development-relations.json": "f8cd28812cb1cd0d94c3e030a3c83515d089c357fbccc2d8658a681e44304019",
+        "provenance/inputs/labels/V_locked-id-map.json": "2c7d01f85be6beda96fae4e36b3af792a82280affd3caa12ec85f279d7438022",
+        "provenance/inputs/labels/V_locked-relations.json": "26b01e08c3a320f5d08646259c2309245761f8d77b02dfd1d6fc436864aeff91",
+        "provenance/inputs/pilot-annotations.json": "c0cb92062d98989024e116cbdb3b49553cf19cdfb7318e7e4e77efe44663e98a",
+        "provenance/inputs/pilot-videos-000.input-index.json": "440bfa3d283c60ea1ddd4885157ac7dda042067866dbc3eb59aa9963feed8b79",
+        "provenance/inputs/role-assignment-00.json": "b2a53fe7ee852598c8532972ac2ce7b0a64448bd64c64b0a8623b419e5f731ef",
+        "provenance/inputs/role-assignment-01.json": "06ba728b42263074dab7497942766585f442e15e5da816bd57400f33101c4013",
+        "provenance/inputs/role-assignment-02.json": "0ef1536842b0a51796b0b9b0f194b8b9ee101194a8fb675fde7107a1643d8528",
+        "provenance/inputs/role-assignment-03.json": "3cfec0382ac70f342f8543e0b820f3ba8d0ac79888397449d9ad43bae6a3ad95",
+        "provenance/inputs/role-assignment-04.json": "7ccb8896380e195c8268310e5acf6b7f950b49c6bd185bf7f8f26f009d210133",
+        "provenance/inputs/role-assignment-05.json": "a4c4ebfcf7cb0b82a95d0cf0706a20dbe2d117dc8023a16a498f9705ea729096",
+        "provenance/inputs/role-assignment-06.json": "862631a901001d19ed16fd95b43b9bf572de745e847da46edaf92173e0218d69",
+        "provenance/inputs/role-assignment-07.json": "3e21cf9283f3fc58c758ac9decb5f11b566ecd936ea0c1031b423d5ebb07b09d",
+        "provenance/inputs/role-assignment-08.json": "97dbf3d66030017ecaba47c9adf5ad895015fb143d97da80750c7873eed430a5",
+        "provenance/inputs/roles/T_match.json": "05da696d35e90b0c060c243feb2e02567f7608b00029aa87d572ebd6263b97d5",
+        "provenance/inputs/roles/T_value.json": "a49021740fdfb458ccd8d4fb29eaea652d0f798cbc9ae579d5bc2dd862c5b564",
+        "provenance/inputs/roles/V_calibration.json": "f946b11c26b79f92951009c13137beeb7b0582cf1d00429396c2903753773fa6",
+        "provenance/inputs/roles/V_development.json": "faa7191488896b885eeb1dc7575726861e356023747604cd07ad587f5a4f6262",
+        "provenance/inputs/roles/V_locked.json": "3ee5204760017e29900a9b3220c35df102afff9607ad19d1e6c9bb500adbd290",
+        "provenance/inputs/source-report.json": "7e4ea90e62b6553f9ddd3130182567cdbcd8d05f797ad264db0b1daee320fb8f",
+        "provenance/source-preparation-result.json": "43d6856d49a6423ea69480c95a0b2219d77d249af1f80335e7ae0aa78b4e0ce3"
+      },
+      "run_id": "msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "evidence-conditioned-retrieval-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
