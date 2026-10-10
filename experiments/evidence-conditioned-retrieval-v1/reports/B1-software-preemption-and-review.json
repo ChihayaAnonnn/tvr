@@ -89,21 +89,7 @@
     "independent_compatibility": {
       "real_files": 35,
       "snapshot_root_bytes_identical": true
-    },
-    "root_affected_regression": {
-      "passed": 670,
-      "seconds": 246.65,
-      "warnings": [
-        "Existing PyTorch TypedStorage deprecation warning"
-      ],
-      "command": "CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/.conda/envs/tvr/bin/python -m pytest -p no:cacheprovider tests/semantic_retrieval tests/test_experiment_artifacts.py tests/test_experiment_tracking.py tests/test_manage_experiment_run.py tests/test_experiment_archive_e2e.py tests/test_experiment_artifact_docs.py tests/test_legacy_artifact_migration.py -q"
-    },
-    "initial_regression_invocation": {
-      "exit_code": 4,
-      "tests_run": 0,
-      "reason": "Wrong explicit test path tests/test_runtime_artifacts.py; corrected to actual tests/semantic_retrieval included in passing command."
-    },
-    "qualified_executable_source": "748be745f0df"
+    }
   },
   "successor_policy": "Fresh unique runs after committed source and new four CUDA rank qualification; restart evaluation from identical S2 matcher checkpoints, never import incomplete snapshots across executable sources.",
   "limitations": [
