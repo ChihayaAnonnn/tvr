@@ -14,3 +14,7 @@ Available source evidence (read-only inspection; not a new scientific experiment
 After the scientific source definition is supplied, the remaining work is to prove five source-disjoint roles with trusted validation membership/test exclusion, bind the pretrained B/32 input and initial index, and preregister the small falsification pilot with all matched-budget arms. Only then may the corresponding stage gate be evaluated. Do not use this status report itself as a passed training gate.
 
 Scientific metrics, scientific GPU-hours, and hypothesis verdict: **not available; 0 scientific GPU-hours; not tested**. Software Q0 allocation: **0.07994 GPU-hours**. No favorable or unfavorable scientific arm was omitted because none was run.
+
+## 2026-10-10 source audit update
+
+The user approved youtube-id-content-sha256-v1 and exclusion of 254 training clips sharing source components with trusted validation. The pinned read-only audit found 202 crossing original sources, 203 affected validation clips and 31 temporally overlapping cross-boundary pairs; no exact-byte duplicates among 9000 allowed videos. All 9000 source metadata records match the hash-pinned published release. See source-audit-2026-10-10.md. This resolves the operational definition question, but the actual five-role manifests, pretrained input preparation and scientific preregistration/gates remain pending. No scientific gate changed. The earlier missing-definition statement records the previous state.

@@ -104,6 +104,8 @@ def load_reference_parts(path, student, *, expected_sha256):
     payload = torch.load(path, map_location='cpu', weights_only=True)
     if set(payload) != {'clip', 'temporal', 'matcher.base'}:
         raise ValueError('reference snapshot must contain exactly clip/temporal/matcher.base')
+    from semantic_retrieval.runtime.checkpoint import _hydrate_array_references
+    payload = _hydrate_array_references(payload,path.parent.parent)
     student.clip.load_state_dict(payload['clip'], strict=True)
     student.temporal.load_state_dict(payload['temporal'], strict=True)
     student.matcher.base.load_state_dict(payload['matcher.base'], strict=True)

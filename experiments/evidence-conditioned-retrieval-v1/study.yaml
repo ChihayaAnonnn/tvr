@@ -16,7 +16,11 @@ software_authorization:
   provenance_policy: reuse_verified_random_input_bytes_only_no_old_study_authorization
   precision: fp32
   world_size: 4
-  physical_indices: [0, 2, 3, 4]
+  physical_indices:
+  - 0
+  - 2
+  - 3
+  - 4
   topology_reason: preserve_known_four_card_topology_if_fresh_device_inspection_confirms_idle
   scientific_data: forbidden
 four_gpu_qualification:
@@ -33,7 +37,15 @@ campaign:
     max_cumulative_gpu_hours: 32
     max_successors_per_failure: 2
     scaling_after_negative_gate: forbidden
-  identity_checks: [source_sha, manifest_sha256, command_sha256, config_sha256, input_sha256, checkpoint_sha256, action_state, cumulative_consumption]
+  identity_checks:
+  - source_sha
+  - manifest_sha256
+  - command_sha256
+  - config_sha256
+  - input_sha256
+  - checkpoint_sha256
+  - action_state
+  - cumulative_consumption
   terminal_in_place_retry: forbidden
   source_fix_requires_new_committed_identity: true
   recovery_first: verify-run
@@ -42,18 +54,30 @@ science:
   authorized: false
   authorized_stages: []
   gates:
-    reference: {passed: false, reports: []}
-    matcher: {passed: false, reports: []}
-    transitions: {passed: false, reports: []}
-    value: {passed: false, reports: []}
-    calibration: {passed: false, reports: []}
-    evaluation: {passed: false, reports: []}
+    reference:
+      passed: false
+      reports: []
+    matcher:
+      passed: false
+      reports: []
+    transitions:
+      passed: false
+      reports: []
+    value:
+      passed: false
+      reports: []
+    calibration:
+      passed: false
+      reports: []
+    evaluation:
+      passed: false
+      reports: []
   required_before_first_training:
-    - committed_new_chain_production_four_cuda_rank_qualification
-    - five_source_disjoint_roles_and_query_connected_components_audited
-    - trusted_v1_validation_membership_and_test_exclusion_proved
-    - pretrained_clip_b32_input_hash_and_full_gallery_index_specification_verified
-    - preregistered_small_pilot_and_matched_baselines_frozen
+  - committed_new_chain_production_four_cuda_rank_qualification
+  - five_source_disjoint_roles_and_query_connected_components_audited
+  - trusted_v1_validation_membership_and_test_exclusion_proved
+  - pretrained_clip_b32_input_hash_and_full_gallery_index_specification_verified
+  - preregistered_small_pilot_and_matched_baselines_frozen
   roles:
     T_match: train_only_reference_and_matcher
     T_value: disjoint_train_sources_for_frozen_transition_value_training
@@ -63,13 +87,60 @@ science:
   candidate_selection: fixed_sparse_frozen_clip_index_without_GT_insertion
   unknown_semantic_labels: excluded_from_supervised_denominators_never_converted_to_negative
   mandatory_comparisons:
-    matcher: [deterministic, fixed_scale, learned_temperature, standard_probabilistic, gaussian]
-    acquisition: [fixed_frames, random, margin, entropy, mean_regressor, distribution]
-    value_features: [geometry, distribution]
+    matcher:
+    - deterministic
+    - fixed_scale
+    - learned_temperature
+    - standard_probabilistic
+    - gaussian
+    acquisition:
+    - fixed_frames
+    - random
+    - margin
+    - entropy
+    - mean_regressor
+    - distribution
+    value_features:
+    - geometry
+    - distribution
   fairness: same_initial_candidates_and_observations_same_request_clip_temporal_MC_budget_record_actual_latency
-  proper_metrics: [rich_score_NLL, transition_NLL, transition_Brier]
+  proper_metrics:
+  - rich_score_NLL
+  - transition_NLL
+  - transition_Brier
   uncertainty_incremental_requirement: improvement_beyond_geometry_under_matched_budget_on_locked_validation
   distribution_claim_requirement: expected_gain_success_alone_does_not_prove_full_distribution_necessity
   bootstrap_unit: source_connected_component
   negative_results: archive_all_arms_and_stop_on_preregistered_falsification
   test: sealed_no_path_to_authorization_in_this_protocol
+weight_preparation:
+  authorized: true
+  scope: cpu_public_pretrained_input_only
+  spec:
+    schema_version: evidence-public-clip-input-v1
+    url: https://openaipublic.azureedge.net/clip/models/40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af/ViT-B-32.pt
+    sha256: 40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af
+    max_bytes: 400000000
+    max_seconds: 600
+    clip:
+      embed_dim: 512
+      image_size: 224
+      vision_width: 768
+      vision_layers: 12
+      patch_size: 32
+      context_length: 77
+      vocab_size: 49408
+      text_width: 512
+      text_heads: 8
+      text_layers: 12
+      fixture: false
+source_definition:
+  version: youtube-id-content-sha256-v1
+  approved_by: 2026-10-10_user_explicit_source_definition_and_training_subset_reply
+  edges:
+  - same_original_youtube_id
+  - same_video_sha256
+  cross_boundary_policy: keep_trusted_validation_500_exclude_all_254_conflicting_training_videos
+  training_eligible_count: 8246
+  unknown_cross_url_visual_duplicates: not_excluded_by_this_operational_definition_report_as_limitation
+  report: experiments/evidence-conditioned-retrieval-v1/reports/source-audit-2026-10-10.md

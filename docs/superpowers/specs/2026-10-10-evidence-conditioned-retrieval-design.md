@@ -126,7 +126,7 @@ position_id始终是该帧在固定时间顺序帧池中的槽位。增加帧不
 - V_calibration：转移概率校准。
 - V_locked：最终冻结配置的锁定validation评估。
 
-上述是新路径的逻辑角色，不自动改变现有split。实施时必须绑定显式manifest并核验来源组件不相交。同视频caption、帧视图、近重复来源和同一转移不能跨分区。第一版不做交叉拟合，用分开的T_match/T_value避免收益头只学习匹配器训练集上的行为。
+上述是新路径的逻辑角色，不自动改变现有split。实施时必须绑定显式manifest并核验来源组件不相交。同视频caption、帧视图、近重复来源和同一转移不能跨分区。2026-10-10 用户批准的第一版来源操作定义：以相同原始 YouTube ID 或相同视频 SHA-256 建边取连通分量，同源不重叠片段也合并；保留 trusted-v1 validation 500 个视频，从本 study 训练可用集合排除同源的 254 个视频（剩 8246 个），原 split 不改写。跨不同 URL 的未知视觉重复不声称已排除，作为明确限制；证据见 `experiments/evidence-conditioned-retrieval-v1/reports/source-audit-2026-10-10.md`。第一版不做交叉拟合，用分开的T_match/T_value避免收益头只学习匹配器训练集上的行为。
 
 relevance_space必须显式为benchmark_annotation或reviewed_semantic。前者按官方标注协议报告，不解释为完整语义真值；后者unknown保持unknown。标签不全的episode不能声称精确全库Recall或完整候选漏召回率。
 

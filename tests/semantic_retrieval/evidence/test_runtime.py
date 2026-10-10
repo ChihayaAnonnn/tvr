@@ -76,7 +76,8 @@ def test_transition_input_rejects_different_frozen_matcher(config_factory,tmp_pa
         _read_transition_input(cfg,matcher_sha256='b'*64)
 
 
-def test_real_video_evaluation_partial_initial_decode_and_successor(config_factory,episode_manifest,tmp_path,monkeypatch):
+@pytest.mark.parametrize('shared_source',[False,True])
+def test_real_video_evaluation_partial_initial_decode_and_successor(config_factory,episode_manifest,tmp_path,monkeypatch,shared_source):
     """Module integration on synthetic CPU inputs; this does not bypass a scientific CLI gate."""
     import json
     import torch
@@ -99,6 +100,8 @@ def test_real_video_evaluation_partial_initial_decode_and_successor(config_facto
     payload,write,_ = episode_manifest
     payload.update(schema_version=3,relevance_space='reviewed_semantic')
     row = payload['episodes'][0];row.update(split='val_development',query_source_ids=['query-source'],query_component_id='d'*64,frame_counts=[2,2])
+    if shared_source:
+        row['source_ids']=['shared-original-video','shared-original-video']
     episodes = write()
     index = tmp_path/'index.json'
     index.write_text(json.dumps(dict(schema_version='evidence-initial-index-v1',clip_sha256=cfg.model.base.clip_sha256,

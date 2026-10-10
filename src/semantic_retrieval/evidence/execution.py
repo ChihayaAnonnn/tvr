@@ -275,10 +275,14 @@ def _episodes_and_sources(cfg,role,model,context):
         e = w.episode
         if e.gallery_version != cfg.index.gallery_version:
             raise ValueError('episode gallery differs from configured fixed index')
-        for i,(c,p,h,count,source_id) in enumerate(zip(e.canonical_ids,e.video_paths,e.content_sha256,e.frame_counts,e.source_ids)):
+        # Episode.source_ids is aggregate deduplicated lineage, not a video-aligned column.
+        for c,p,h,count in zip(e.canonical_ids,e.video_paths,e.content_sha256,e.frame_counts):
             if c in videos and videos[c] != (p,h):
                 raise ValueError('conflicting canonical source inventory')
-            videos[c] = (p,h); inventory[c] = (p,h,count,source_id)
+            if c in inventory and inventory[c][2] != count:
+                raise ValueError('conflicting canonical frame count')
+            lineage = set(e.source_ids) | (set(inventory[c][3]) if c in inventory else set())
+            videos[c] = (p,h); inventory[c] = (p,h,count,tuple(sorted(lineage)))
     ref = cfg.index.reference
     if file_sha256(ref.path) != ref.sha256:
         raise ValueError('initial index specification hash mismatch')
@@ -375,7 +379,8 @@ def _episodes_and_sources(cfg,role,model,context):
         labels,presence = bind_candidate_order(e,order)
         selected_episode = replace(e,canonical_ids=order,candidate_ids=order,relevance=labels,answer_in_candidates=presence,
                   video_paths=tuple(inventory[c][0] for c in order),content_sha256=tuple(inventory[c][1] for c in order),
-                  frame_counts=tuple(inventory[c][2] for c in order),source_ids=tuple(inventory[c][3] for c in order))
+                  frame_counts=tuple(inventory[c][2] for c in order),
+                  source_ids=tuple(sorted({s for c in order for s in inventory[c][3]})))
         result.append(replace(w,episode=selected_episode))
     index_store.write('initial_index_embeddings',index.embeddings.detach().cpu())
     publish_json(index_store.run_root/'provenance'/('initial-index-'+role+'.json'),dict(schema_version='evidence-initial-index-report-v1',
@@ -385,11 +390,12 @@ def _episodes_and_sources(cfg,role,model,context):
 
 
 def _write_reference_parts(context,model):
-    from semantic_retrieval.runtime.checkpoint import _publish_file
+    from semantic_retrieval.runtime.checkpoint import _publish_file, _externalize_large_tensors
     path = context.paths.checkpoints/'reference-parts.pt'
     if path.exists():
         raise ValueError('reference snapshot already exists')
-    _publish_file(path,lambda h:torch.save({'clip':model.clip.state_dict(),'temporal':model.temporal.state_dict(),'matcher.base':model.matcher.base.state_dict()},h))
+    payload = _externalize_large_tensors({'clip':model.clip.state_dict(),'temporal':model.temporal.state_dict(),'matcher.base':model.matcher.base.state_dict()},context.array_store)
+    _publish_file(path,lambda h:torch.save(payload,h))
     return path
 
 
