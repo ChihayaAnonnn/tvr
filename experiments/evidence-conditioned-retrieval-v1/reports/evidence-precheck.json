@@ -1,0 +1,158 @@
+{
+  "schema_version": "evidence-claim-existence-precheck-v1",
+  "source_sha": "541dd67f39044d4c9de73a660426283901c343fd",
+  "generated_at": "2026-10-10T04:41:54.622490+00:00",
+  "standard_helper": "tools/evidence_check.py unresolved via ARIS_REPO/installed-skills/local tools chain; manual deterministic fallback used",
+  "scope": "Committed bytes plus SHA-256 and strict typed JSON-pointer equality; verifies cited aggregate existence only, not semantic claim support.",
+  "review_independence": "deterministic",
+  "acceptance_status": "accepted_for_existence_only",
+  "summary": {
+    "verified": 19,
+    "path_missing": 0,
+    "value_not_found": 0
+  },
+  "audited_input_hashes": {
+    "experiments/evidence-conditioned-retrieval-v1/reports/gain-mse-integration-review.json": "cd44a4e4e9e5fe0c9e56c83846a38176df8aad7f2d8fbf98a2c7fedc28726426",
+    "experiments/evidence-conditioned-retrieval-v1/reports/Q0-R5-final-source-qualification.json": "5aae375cc40656c298e115bc6fb947e126492305f6531d54335da267bcbd68c1",
+    "experiments/evidence-conditioned-retrieval-v1/reports/B1-development-comparison.json": "50896dc40fd854a96d116b9e2f3efeee6c6f865eb93c5c838de5f65da37d13ea",
+    "experiments/evidence-conditioned-retrieval-v1/reports/B2-transition-gate.json": "3b047ce8fa2709a239b1a8520525ab29c8c9b2119482e4b457103a79dce3029a",
+    "experiments/evidence-conditioned-retrieval-v1/reports/final-resource-accounting.json": "4f8b3b56b7b7897a9b43d108a2c749715c0821624f3e102ce0f7bdf097ccf961",
+    "experiments/evidence-conditioned-retrieval-v1/reports/research-evidence-2026-10-10.md": "dd9b995ef7e3446d9bf8d992e86530960717bc03701bc7a222bb82e063cad049",
+    "experiments/evidence-conditioned-retrieval-v1/reports/B2-component-coverage.md": "7748954b07840bfbbe4b59d56536b3f0572bed4e0b24cd7992959782d1a24c22"
+  },
+  "checks": [
+    {
+      "id": "software_tests",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/gain-mse-integration-review.json",
+      "json_pointer": "/root_regression/tests_passed",
+      "value": 690,
+      "status": "verified"
+    },
+    {
+      "id": "four_ranks",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/Q0-R5-final-source-qualification.json",
+      "json_pointer": "/world_size",
+      "value": 4,
+      "status": "verified"
+    },
+    {
+      "id": "restore_check",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/Q0-R5-final-source-qualification.json",
+      "json_pointer": "/checks/exact_resume",
+      "value": true,
+      "status": "verified"
+    },
+    {
+      "id": "det_final",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B1-development-comparison.json",
+      "json_pointer": "/runs/0/final_correct",
+      "value": 14,
+      "status": "verified"
+    },
+    {
+      "id": "fixed_final",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B1-development-comparison.json",
+      "json_pointer": "/runs/1/final_correct",
+      "value": 18,
+      "status": "verified"
+    },
+    {
+      "id": "gauss_final",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B1-development-comparison.json",
+      "json_pointer": "/runs/4/final_correct",
+      "value": 17,
+      "status": "verified"
+    },
+    {
+      "id": "gauss_delta",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B1-development-comparison.json",
+      "json_pointer": "/runs/4/final_delta_vs_deterministic_interval/mean_delta",
+      "value": 0.046875,
+      "status": "verified"
+    },
+    {
+      "id": "gauss_CI_lower",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B1-development-comparison.json",
+      "json_pointer": "/runs/4/final_delta_vs_deterministic_interval/lower",
+      "value": -0.015625,
+      "status": "verified"
+    },
+    {
+      "id": "gauss_CI_upper",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B1-development-comparison.json",
+      "json_pointer": "/runs/4/final_delta_vs_deterministic_interval/upper",
+      "value": 0.125,
+      "status": "verified"
+    },
+    {
+      "id": "B2_gate",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B2-transition-gate.json",
+      "json_pointer": "/passed",
+      "value": false,
+      "status": "verified"
+    },
+    {
+      "id": "B2_corrected",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B2-transition-gate.json",
+      "json_pointer": "/runs/1/corrected_components",
+      "value": 4,
+      "status": "verified"
+    },
+    {
+      "id": "B2_worsened",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B2-transition-gate.json",
+      "json_pointer": "/runs/1/worsened_components",
+      "value": 4,
+      "status": "verified"
+    },
+    {
+      "id": "corrected_threshold",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B2-transition-gate.json",
+      "json_pointer": "/thresholds/corrected_components",
+      "value": 8,
+      "status": "verified"
+    },
+    {
+      "id": "worsened_threshold",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/B2-transition-gate.json",
+      "json_pointer": "/thresholds/worsened_components",
+      "value": 4,
+      "status": "verified"
+    },
+    {
+      "id": "science_GPUh",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/final-resource-accounting.json",
+      "json_pointer": "/allocated_gpu_hours/scientific",
+      "value": 12.108477896449138,
+      "status": "verified"
+    },
+    {
+      "id": "software_GPUh",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/final-resource-accounting.json",
+      "json_pointer": "/allocated_gpu_hours/software",
+      "value": 0.46945463612675664,
+      "status": "verified"
+    },
+    {
+      "id": "complete_runs",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/final-resource-accounting.json",
+      "json_pointer": "/terminal_counts/completed",
+      "value": 25,
+      "status": "verified"
+    },
+    {
+      "id": "failed_runs",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/final-resource-accounting.json",
+      "json_pointer": "/terminal_counts/failed",
+      "value": 6,
+      "status": "verified"
+    },
+    {
+      "id": "cancelled_runs",
+      "source": "experiments/evidence-conditioned-retrieval-v1/reports/final-resource-accounting.json",
+      "json_pointer": "/terminal_counts/cancelled",
+      "value": 4,
+      "status": "verified"
+    }
+  ]
+}

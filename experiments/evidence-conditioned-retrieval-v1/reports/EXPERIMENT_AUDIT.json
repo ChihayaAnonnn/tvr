@@ -1,0 +1,49 @@
+{
+  "schema_version": "evidence-experiment-audit-v1",
+  "audited_source_sha": "541dd67f39044d4c9de73a660426283901c343fd",
+  "reviewer_agent_id": "/root/experiment_integrity_audit",
+  "reviewer_model": "gpt-6-astra",
+  "reasoning_effort": "ultra",
+  "verdict": "WARN",
+  "integrity_status": "warn",
+  "review_independence": "same-family",
+  "acceptance_status": "provisional",
+  "check_status": {
+    "A": "pass_scoped",
+    "B": "pass",
+    "C": "pass",
+    "D": "pass",
+    "E": "warn",
+    "F": "pass"
+  },
+  "audited_input_hashes": {
+    "study.yaml": "a999381789a7b7e9668abe0a046aaab59ba737399186cda8ba4282a5128f9755",
+    "registry.jsonl": "0ec91c9f37e1a626be143e42e7855859428b897f0fb2057bab8be0b745c38719",
+    "PREREGISTRATION.md": "30b31722dcd4eebdad3f5bbf73f75c5e701e214ba367e5d64fa3c9f0a908f639",
+    "EXPERIMENT_TRACKER.md": "3eb74390ca0c4b6e9da917c8984a9a82d3a3beb9a02f6a25fea57dfbe6f2798b",
+    "summaries/S3-G.json": "98ba5a94ed82b922a7170e08d9302bdb39f967380c46aebd44af604393aac877",
+    "summaries/S3-D.json": "d04ce62d5574e8011c011ff4c4965333f094da5bee4f84850b051488e853cb51",
+    "reports/B1-development-comparison.json": "50896dc40fd854a96d116b9e2f3efeee6c6f865eb93c5c838de5f65da37d13ea",
+    "reports/B2-transition-gate.json": "3b047ce8fa2709a239b1a8520525ab29c8c9b2119482e4b457103a79dce3029a",
+    "reports/B2-component-coverage.md": "7748954b07840bfbbe4b59d56536b3f0572bed4e0b24cd7992959782d1a24c22",
+    "reports/final-resource-accounting.json": "4f8b3b56b7b7897a9b43d108a2c749715c0821624f3e102ce0f7bdf097ccf961",
+    "reports/research-evidence-2026-10-10.md": "dd9b995ef7e3446d9bf8d992e86530960717bc03701bc7a222bb82e063cad049",
+    "reports/administrative-controller-snapshot.json": "9664881f6d57f47caff61f03183b85c898993a34057073b3c8190f7c3a9cca9b",
+    "reports/validation/final-root-regression.log": "1db5818f4407dc884887b98eca38c867574aa4f748c6673d27cc639dccb7e47d",
+    "analysis/native_phase_controller.py": "4006595271046eac96df9a8f1c9311ca60f095c8025adb047524832da2060e7b",
+    "analysis/account_resources.py": "db81423ef02472dd84d5bf2fc48e7f78f63f21f26f5551c21869d585177f7158"
+  },
+  "raw_response_sha256": "163c14ccfb319a21d6a6c7db6dbd79868103fd2f0d990f8e395ce91d0d317424",
+  "report": "reports/EXPERIMENT_AUDIT.md",
+  "local_trace": ".aris/traces/experiment-audit/2026-10-10_run01",
+  "unresolved_qualifications": [
+    "Optimizer updates121/110 and supervision differ; frozen skip wording mismatch prevents sigma-only causal interpretation.",
+    "V_locked metadata and labels read for integrity, no model evaluation/selection; literal unread unsupported.",
+    "Historical outer-controller launch-time source hash unavailable.",
+    "Controller lacks atomic active-phase quota, GPU-count-aware reservation and executable successor cap; observed campaign within all budgets/retry limits.",
+    "Source grouping operational; unknown cross-URL visual duplicates remain outside definition."
+  ],
+  "science_reopening_authorized": false,
+  "test_authorized": false,
+  "claims_C1_C2_established": false
+}
