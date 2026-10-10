@@ -1,0 +1,61 @@
+{
+  "schema_version": "evidence-software-review-v1",
+  "run_id": "synthetic-baseline-evidence-q0-r5-four-gpu-seed713-20261010T040014Z-f32bc8290b84",
+  "manifest_sha256": "df5d44523acc6b93f117d0725659cfb52417d301e879be26de1b271f34644d15",
+  "source_sha": "f32bc8290b843965fb67c37e4fb18c00c7df4515",
+  "product_commit": "1d16e57fabfce3a5af1eec3d1bca5ffe42c29a5d",
+  "qualification_report": {
+    "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-evidence-q0-r5-four-gpu-seed713-20261010T040014Z-f32bc8290b84/provenance/evidence-qualification.json",
+    "sha256": "7f9aca9c726bf67c80e9901c9cf5851e493bb28cc7b1a2c6de36c7c9f1896631"
+  },
+  "checks": {
+    "action_recovery": true,
+    "exact_resume": true,
+    "finite_fp32": true,
+    "hidden_evidence_isolated": true,
+    "loc_gradient": true,
+    "rank_weights_equal": true,
+    "real_clip_forward": true,
+    "scale_affects_prediction": true,
+    "scale_gradient": true,
+    "teacher_frozen": true,
+    "three_classes": true,
+    "unknown_rank": true,
+    "value_gradient": true
+  },
+  "qualified_variants": [
+    "gaussian",
+    "deterministic",
+    "fixed_scale",
+    "learned_temperature",
+    "standard_probabilistic"
+  ],
+  "qualified_value_kinds": [
+    "distribution",
+    "geometry",
+    "mean_regressor"
+  ],
+  "world_size": 4,
+  "physical_indices": [
+    0,
+    2,
+    3,
+    4
+  ],
+  "production_capacity": true,
+  "summary_metrics": {
+    "elapsed_seconds": 55.91229538607877,
+    "peak_cuda_bytes": 2011554304.0,
+    "qualification_passed": 1.0
+  },
+  "controller_seconds": 67.14649643597659,
+  "allocated_gpu_hours": 0.07460721826219621,
+  "array_references_verified": 578,
+  "root_regression": {
+    "passed": 690,
+    "seconds": 306.44
+  },
+  "S3_administrative_precheck": "First declaration read a nonexistent registry summary key and failed before any control-plane write or reservation. Corrected to authenticate the terminal output hash and read the actual qualification report; no executable or scientific settings changed.",
+  "scientific_authorized_by_qualification_alone": false,
+  "test_authorized": false
+}

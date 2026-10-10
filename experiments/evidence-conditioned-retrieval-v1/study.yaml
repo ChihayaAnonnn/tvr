@@ -24,9 +24,9 @@ software_authorization:
   topology_reason: preserve_known_four_card_topology_if_fresh_device_inspection_confirms_idle
   scientific_data: forbidden
 four_gpu_qualification:
-  run_id: synthetic-baseline-evidence-q0-r4-four-gpu-seed713-20261010T020655Z-44ba9f320a01
-  manifest_sha256: 15375ba996437a86e9d932f519f2abe6b664d24630e528602368751957c6c7f4
-  report_sha256: 659116d2c80ce81f354abf2269209679aaa68723c21e3e951b91e36dc70a1723
+  run_id: synthetic-baseline-evidence-q0-r5-four-gpu-seed713-20261010T040014Z-f32bc8290b84
+  manifest_sha256: df5d44523acc6b93f117d0725659cfb52417d301e879be26de1b271f34644d15
+  report_sha256: 7f9aca9c726bf67c80e9901c9cf5851e493bb28cc7b1a2c6de36c7c9f1896631
 campaign:
   software:
     max_run_wall_seconds: 1800
@@ -56,6 +56,7 @@ science:
   - reference
   - matcher
   - evaluation
+  - transitions
   gates:
     reference:
       passed: true
@@ -68,8 +69,10 @@ science:
       - path: experiments/evidence-conditioned-retrieval-v1/reports/S1-reference-completion.json
         sha256: a0f5837146b1aa8f6076844bff207db7044e3ad877490a638308588930698e54
     transitions:
-      passed: false
-      reports: []
+      passed: true
+      reports:
+      - path: experiments/evidence-conditioned-retrieval-v1/reports/B1-development-comparison.json
+        sha256: 50896dc40fd854a96d116b9e2f3efeee6c6f865eb93c5c838de5f65da37d13ea
     value:
       passed: false
       reports: []
