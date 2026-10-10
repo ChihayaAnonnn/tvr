@@ -1,0 +1,11 @@
+{
+  "schema_version": "evidence-administrative-client-snapshot-v1",
+  "path": "experiments/evidence-conditioned-retrieval-v1/analysis/native_phase_controller.py",
+  "sha256": "4006595271046eac96df9a8f1c9311ca60f095c8025adb047524832da2060e7b",
+  "captured_after_commit": "85ef84003efca0622376a0f6b9cc3710cf78263f",
+  "historical_launch_time_binding": false,
+  "historical_limitation": "This snapshot proves inspected bytes only; earlier temporary-client launches did not record a controller source hash.",
+  "prospective_invocation": "/home/xujie/.conda/envs/tvr/bin/python experiments/evidence-conditioned-retrieval-v1/analysis/native_phase_controller.py launch S3-D",
+  "scope": "Exact byte-for-byte snapshot, no product or scientific configuration changes. Single active phase; historical terminal GPU totals plus worst current phase allowance. No universal cross-phase atomic quota or executable retry-count guarantee.",
+  "test_authorized": false
+}
