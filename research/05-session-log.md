@@ -704,3 +704,11 @@ seed 0 winner = ep3，V2T A3 AUROC 0.7230，CI95 [0.6300, 0.8097]。
 Independent development branch `codex/evidence-conditioned-retrieval` implements the approved evidence design; review repairs are `1db61d2` / `00f3656`. CPU affected regression: 614 passed; final evidence suite: 92 passed. New independent study `experiments/evidence-conditioned-retrieval-v1/`; production four-A800 FP32 Q0 completed and terminal evidence committed `a0bb35a`, all 13 checks, 5 matcher variants and 3 value heads passed; 0.07994 allocated GPU-hours. This does not prove scientific effectiveness. Science remains closed because the approved near-duplicate-source relation is undefined/unaudited; user clarification is pending. See the study's `reports/science-gate-status.md` and the tracked Superpowers review. No old study was resumed and no MSRVTT/MSVD test was evaluated.
 
 Final whole-repository CPU regression for the evidence implementation: `python -m pytest -p no:cacheprovider -q` under the documented CPU environment — 643 passed, one upstream TypedStorage warning, 261.83 s. Completion details and exhaustive Native rulings: `docs/superpowers/reports/2026-10-10-evidence-conditioned-retrieval-implementation-report.md`. The source-definition science gate remains unchanged.
+
+### 2026-10-10 — approved-source evidence pilot completed at negative B2 gate
+
+用户批准YouTube ID/内容SHA来源定义与排除254训练视频（剩8246），此前来源定义待定已解决。独立study完成W0/D0/S1/S2/B1、Gaussian与deterministic各三角色S3，所有整批reserved/terminal已提交，历史失败保留。最终产品1d16e57；690相关回归、最终Q0-R5四CUDA rank13/13通过。
+
+MSRVTT trusted-v1 Vdev pilot、T2V、DSL=false、seed713、64组件/gallery64/top8：B1 gauss17/64、det14/64、fixed18/64，gauss−det CI跨0；Gaussian B2 corrected=4、worsened=4组件，未达到8/4，停止B3/B4/扩展并关闭本study science授权。没有改参追门，不把小pilot不足当全局方向证伪。C1/C2未证明；V_locked清单参与完整性校验但未用于模型评价/选择，test sealed。
+
+EC-01…05登记本轮事实。报告：experiments/evidence-conditioned-retrieval-v1/reports/research-evidence-2026-10-10.md；完整资源：final-resource-accounting.json（科学12.108477896449、软件0.469454636127 GPUh，含所有失败/取消）。S2更新121/110步与冻结skip文字不一致，外层临时脚本启动源码绑定/并发预算强制范围有限，均明确披露，不补造历史。独立实验审计及claim verdict另存该study/reports。

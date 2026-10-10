@@ -210,3 +210,17 @@
   E-30（与 E-31 冲突）、E-43/E-45（单臂）、E-50/E-51（归因已推翻）、E-65（transitivity）。
 - ❌ 绝不可引用：E-54（符号翻转）；任何声称 "Fix 1 让 `u_mode` 变得能预测失败" 的表述；
   `findings.md §2.6`（整节已被 `findings.md:112-118` 作废）。
+
+## N. Evidence-conditioned retrieval 独立来源pilot（2026-10-10）
+
+本节为独立新study，不复活任何旧study。科学数值均为MSRVTT trusted-v1 V_development pilot、T2V、DSL=false、seed713、64来源组件/64视频gallery/top8；不是官方test benchmark。
+
+| ID | 事实 | 数字 | Artifact | 状态 |
+|---|---|---|---|---|
+| EC-01 | 用户批准按原始YouTube ID或文件SHA-256闭包隔离，保留validation500 | 排除254训练视频，剩8246；202交叉来源、31重叠时间片段对 | experiments/evidence-conditioned-retrieval-v1/reports/source-audit-2026-10-10.md | SOLID（操作定义；未知跨URL视觉重复未排除） |
+| EC-02 | 五matcher全量B1最终正确数 | det14、fixed18、temperature14、standard15、gauss17 /64；gauss−det +4.6875pp，95% CI[−1.5625,+12.5]pp | 同study/reports/B1-development-comparison.json | CAVEATED（单seed小pilot、121/110步不等与监督差异；不能证明不确定性增量） |
+| EC-03 | 六生产者转移全部归档后B2不足 | Gaussian Vdev corrected=4、worsened=4组件；门槛8/4 | 同study/reports/B2-transition-gate.json；B2-component-coverage.md | SOLID（本冻结pilot gate事实）；不构成方向全局证伪 |
+| EC-04 | 最终软件通路与新增四卡资格 | 690相关回归通过；Q0-R5四CUDA rank13/13，578引用 | 同study/reports/gain-mse-integration-review.json；Q0-R5-final-source-qualification.json | SOLID（软件证据；不是科学有效性） |
+| EC-05 | 全历史终态资源核验 | 科学12.108477896449 GPUh；软件0.469454636127 GPUh；含失败/取消 | 同study/reports/final-resource-accounting.json | SOLID（分配GPU wall hours，不等于GPU活跃时间或独占方法延迟） |
+
+C1/C2仍未得到科学支持；B3/B4/扩展按预注册停止，V_locked未用于模型评价/选择，MSRVTT/MSVD test sealed。冻结文档的skip措辞、locked unread措辞及外层调度身份/并发额度强制范围限制见同study/reports/research-evidence-2026-10-10.md。

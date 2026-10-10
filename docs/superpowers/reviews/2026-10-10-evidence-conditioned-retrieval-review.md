@@ -34,3 +34,9 @@ Actual production four-GPU Q0 passed and was archived in `a0bb35a`. Source `b9d5
 Remaining limits: a synthetic software qualification does not establish scientific effectiveness; no real-data scientific run or test evaluation was launched. Recovery rejects ambiguous execution/prediction windows; the qualified replay and synthetic successor module test do not claim coverage of every possible OS/process crash. Successor latency reports the current worker segment explicitly. Real near-duplicate source membership and the five-role audit remain unresolved; source-based science gates stay closed.
 
 Final whole-repository CPU validation: `CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/.conda/envs/tvr/bin/python -m pytest -p no:cacheprovider -q` — **643 passed**, one upstream warning, **261.83 s**. All review fixes are committed; no executable changes followed the successful Q0 qualification.
+
+## 后续最终复核（2026-10-10，早期状态以上为历史）
+
+来源修订已获用户批准；真实科学pilot已运行。最终产品1d16e57：受影响回归690 passed（306.44s），独立最终窄测试9 passed（5.51s），无剩余阻塞。最终Q0-R5四CUDA rank、13/13检查、五matcher/三head及578数组引用全部通过。W0/D0/S1/S2/B1与六个S3生产者均终态归档；B2可检验性门槛不足，停止B3/B4/扩展。V_locked未用于模型评价或选择，test sealed。
+
+最新事实、协议偏差、审查限制及全部资源见experiments/evidence-conditioned-retrieval-v1/reports/research-evidence-2026-10-10.md；独立实验审计/claim verdict另存同目录。早期段落的无科学运行、未定义来源和旧测试计数不再表示当前状态。

@@ -1,0 +1,17 @@
+........................................................................ [ 10%]
+........................................................................ [ 20%]
+........................................................................ [ 31%]
+........................................................................ [ 41%]
+........................................................................ [ 52%]
+........................................................................ [ 62%]
+........................................................................ [ 73%]
+........................................................................ [ 83%]
+........................................................................ [ 93%]
+..........................................                               [100%]
+=============================== warnings summary ===============================
+tests/semantic_retrieval/evidence/test_baselines.py::test_initial_index_never_reads_extra_frames
+  /home/xujie/.conda/envs/tvr/lib/python3.10/site-packages/torch/_utils.py:831: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+    return self.fget.__get__(instance, owner)()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+690 passed, 1 warning in 306.44s (0:05:06)

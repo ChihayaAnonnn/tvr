@@ -9,7 +9,7 @@
 | S1 reference | completed | summaries/S1.json；128访问、110更新 |
 | S2 五matcher | completed | summaries/S2.json；全部五臂，报告保留损失定义差异 |
 | B1 development评价 | completed | summaries/B1-R2.json；五臂全部归档，reports/B1-development-comparison.md/json；保留Gauss/det不按结果挑选 |
-| B2 两matcher三角色转移 | six producers frozen | phases/S3-G.json与S3-D.json；B1完成；全六臂归档后按Vdev门槛8 corrected组件/4 worsened组件判定 |
-| B3 收益/校准/选择 | gated | B2变化gate |
-| B4 锁定validation | gated | 冻结全部选择；MSRVTT/MSVD test始终sealed |
-| 多seed/扩展 | gated | 预注册正向统计与成本gate，否则停止 |
+| B2 两matcher三角色转移 | completed; gate insufficient | 六臂完整归档；Gaussian Vdev corrected=4、worsened=4，门槛8/4，未通过；reports/B2-transition-gate.json |
+| B3 收益/校准/选择 | not run; stopped | B2预注册可检验性门槛不足；不是软件未实现 |
+| B4 锁定validation | not run; stopped | B2未通过；V_locked未用于模型评价或选择；test sealed |
+| 多seed/扩展 | stopped | 本冻结pilot不充分；不得改参追逐过关 |

@@ -1,88 +1,12 @@
-# Evidence-conditioned retrieval — implementation report
+# Evidence-conditioned retrieval — final implementation and research report
 
-2026-10-10. Branch: `codex/evidence-conditioned-retrieval`; retained worktree: `/home/xujie/.codex/worktrees/ad3a/UATVR`. Approved baseline: `a9a2f76`. Original master and its untracked user files were preserved. All 11 implementation tasks and the consolidated independent-review repair pass are implemented. Production four-GPU software qualification passed. Scientific effectiveness remains untested because source-definition/audit prerequisites have not passed; MSRVTT/MSVD test stays sealed.
+2026-10-10. Branch `codex/evidence-conditioned-retrieval`; retained worktree `/home/xujie/.codex/worktrees/ad3a/UATVR`. Tasks1–11 implemented; final product1d16e57; 690 related regression tests passed; final Q0-R5 four-CUDA-rank qualification passed. W0/D0/S1/S2/B1 and six S3 science producers completed. B2 variation gate failed; B3/B4/scaling correctly not run. C1/C2 scientifically unproved.
 
-## Implemented code
+Authoritative current evidence and complete requested report: [research-evidence-2026-10-10.md](../../../experiments/evidence-conditioned-retrieval-v1/reports/research-evidence-2026-10-10.md). Final audit and claim verdict are pending and will be stored beside that immutable snapshot. All initial task commit IDs remain in the historical git version of this report; final resource JSON binds every actual run source SHA. The original worktree and user untracked files are preserved.
 
-All product modules are under `src/semantic_retrieval/evidence/`.
+## Historical Native decisions and prior verification
 
-| Function | Files |
-|---|---|
-| Query-specific observation state, nested views, attempted/successful frame accounting, cache identity | `types.py`, `views.py`, `frame_cache.py`, `encoding.py`, `config.py` |
-| Frozen CLIP, stable temporal positions, query-conditioned Gaussian scores and reproducible MC contrastive objectives | `model.py:20`, `matcher.py`, `sampling.py`, `objectives.py`, `training.py`; compatible optional positions in `src/semantic_retrieval/models/temporal.py` |
-| Frozen rich-score teacher and source-isolated transition supervision | `execution.py:509`, `data.py`, `transitions.py`; reviewed-semantic episode schema v3 in `src/semantic_retrieval/data/episodes.py` |
-| Distribution/geometry/mean value heads and validation-only temperature calibration | `value.py`, `calibration.py` |
-| Fixed-view/random/margin/entropy/mean/distribution policy baselines under one budget/journal | `baselines.py`, `policy.py`, `journal.py:11`, `runtime.py` |
-| Exact training checkpoint, inference-only model loading, hash-bound successor observation/action recovery | `checkpoint.py`, `recovery.py:43` |
-| Proper outcome/rich-score metrics, external arrays, paired source-component bootstrap, synchronized operation latency | `evaluation.py:102`, `timing.py`, `execution.py` |
-| Protected reserve/prepare/start/lifecycle, new-study gate, full-capacity software qualification | `authorization.py:31`, `qualification.py:94`, `schemas.py`, `cli.py`; four evidence CLI scripts under `scripts/` |
-
-No placeholder scientific path or bypass gate was introduced. Unknown relevance is not converted into a negative target. Candidate selection never inserts ground-truth positives. Offline diagnostic rich frames use separate storage and do not enter online evidence. Ambiguous unfinished work fails closed; successful imports validate the whole snapshot before copying and refuse conflicting output.
-
-## Commits
-
-| Task / change | Commit |
-|---|---|
-| 1 strict types/config | `a804583` |
-| 2 observation isolation/time positions | `13754f4` |
-| 3 probabilistic scoring/objectives | `8f1f48d` |
-| 4 frozen reference/matcher training | `72d672d` |
-| 5 transition compiler/source contracts | `9108068` |
-| 6 value models/calibration | `c33f017` |
-| 7 budgeted recoverable actions | `3c1f17a` |
-| 8 evaluation and matched baselines | `3774bac` |
-| 9 DDP/checkpoint | `4e8e233` |
-| 10 archive/real runtime/CLI integration | `f5d2fad` |
-| 11 protected CPU qualification/new independent study | `df5850b` |
-| Review: semantic lineage and objective guards | `1db61d2` |
-| Review: compatibility/recovery/metrics/distributed repairs | `00f3656` |
-| Review report and preregistered Q0 | `b9d5d2f` |
-| Complete reserved Q0 batch | `ee8f3c1` |
-| Complete terminal Q0 batch and summary | `a0bb35a` |
-| Registered qualification; science gate status | `33db0c0` |
-
-## Actual verification
-
-CPU command prefix: `CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/.conda/envs/tvr/bin/python -m pytest -p no:cacheprovider`.
-
-- Affected regression: `tests/semantic_retrieval tests/test_experiment_artifacts.py tests/test_manage_experiment_run.py tests/test_experiment_artifact_docs.py -q` — **614 passed**, one upstream TypedStorage deprecation warning, **218.10 s**.
-- Final committed evidence suite: `tests/semantic_retrieval/evidence -q` — **92 passed**, one upstream warning, **42.36 s**. It includes actual four-Gloo-rank protected CLI training/checkpoint restore, actual two-Gloo-rank BPE/CLIP/index writes, real partial video decode, and successor import where repeated frame decode raises immediately.
-- Targeted RED→GREEN tests and independent findings are recorded in `docs/superpowers/reviews/2026-10-10-evidence-conditioned-retrieval-review.md`.
-- The committed four-GPU qualification binding was checked through `validate_qualification`; a scientific reference reservation remains rejected with `scientific stage is not authorized by its study gate`.
-
-## GPU qualification and archive
-
-Study: `experiments/evidence-conditioned-retrieval-v1/`; Q0 control spec `phases/Q0.json`; terminal summary `summaries/Q0.json`; registry `registry.jsonl` contains the committed reserved/completed batch. Unique run:
-
-`synthetic-baseline-evidence-q0-four-gpu-seed713-20261009T175208Z-b9d5d2fb3adb`
-
-Archive:
-
-`/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-evidence-q0-four-gpu-seed713-20261009T175208Z-b9d5d2fb3adb/`
-
-Exact source SHA: `b9d5d2fb3adb5a510ed2236c5a1481e773a1486c`.
-Manifest SHA-256: `f481e259a2d2240b2322948a47088cf29af676bdf8780e539090703fdb509c80`.
-Qualification report SHA-256: `8ed5b1ea14c51ccb67bec6268f65bc9a20feec27a73afc8fd799623b7e7cb17f`.
-
-Command, with `CUDA_VISIBLE_DEVICES=0,2,3,4` and `OMP_NUM_THREADS=1`:
-
-```text
-/home/xujie/.conda/envs/tvr/bin/python -m torch.distributed.run --standalone --nproc_per_node=4 scripts/qualify_evidence_retrieval.py --config <archive>/provenance/worker-config.json --run-id synthetic-baseline-evidence-q0-four-gpu-seed713-20261009T175208Z-b9d5d2fb3adb
-```
-
-The complete actual argv is immutable in archive `command.sh` / `manifest.json`. Four distinct A800 cards, full ViT-B/32 random weights, FP32, synthetic videos only. **13/13 checks passed**: real CLIP, hidden-evidence isolation, loc/scale/value gradients, scale influences prediction, frozen teacher, three-class labels, unknown rank, equal rank parameters, exact checkpoint resume, action recovery, finite FP32. Five matcher variants and three value head kinds passed. Continuous and restored results are identical.
-
-Worker exercise **57.96 s**, complete controller wall **71.945 s**, allocated GPU use **0.07994 GPU-hours**. Peak allocated CUDA memory **2,011,554,304 bytes per rank**; driver-reported usage approximately 2.9 GiB. Run limit 1,800 s, cumulative software limit 8 GPU-hours, maximum two diagnosed successors; no failure or retry occurred. All cards returned to idle after exit. **578 array references** in **348 JSON files** and external checkpoint payloads were verified before terminal completion; terminal inventory **780 files**. No terminal outputs were overwritten.
-
-`provenance/evidence-qualification.json`, `controller-result.json`, `gpu-schedule.json`, `array-integrity.json`, `logs/controller-worker.log`, checkpoint and referenced arrays contain the evidence. Reserve → committed reservation → verify → clean bound worker → verify → terminal transition → finalize/commit was followed.
-
-## Independent review and limits
-
-The independent final reviewer returned 0 Critical, 11 Important and 1 Minor finding. The fixed-frame baseline finding was regraded Important because it affects a mandatory resource comparison. The author repaired all 12 in one TDD pass and reran affected tests; no second independent approval is claimed. No minor remains deferred. The full finding/resolution table is in the tracked review report.
-
-Scientific runs: **none**; scientific GPU-hours: **0**; hypothesis: **not tested**. The missing audited near-duplicate relation/scientific definition prevents proving five-role isolation. A clarification was requested; no substitute definition was assumed. Pretrained B/32 input preparation, the full source audit and a frozen small falsification pilot remain prerequisites. `experiments/evidence-conditioned-retrieval-v1/reports/science-gate-status.md` records them. The registered qualification opens no science or test gate by itself.
-
-OS/process interruption coverage remains narrower than every possible crash window; unprovable partial execution/prediction is rejected rather than re-executed. Synthetic successor module integration is not presented as a real-data archived scientific successor run. Successor latency explicitly covers the current worker segment; predecessor latency is not invented. Missing bound population/rich diagnostic inputs produce explicit undefined reasons. Positive software results do not establish innovation, superiority, or calibration quality.
+The chronology below is the earlier development snapshot, retained for traceability. Statements about pending source approval, zero science, old test counts or old Q0 apply only to that earlier time, not the current report.
 
 ## Native execution rulings (chronological, exhaustive)
 

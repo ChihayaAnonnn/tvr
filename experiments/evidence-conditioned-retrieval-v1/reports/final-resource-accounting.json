@@ -1,0 +1,579 @@
+{
+  "schema_version": "evidence-campaign-resource-accounting-v1",
+  "scope": "All unique terminal registry runs, including software failures and never-spawned cancellations. Allocated GPU wall hours, not GPU-active energy or isolated method latency.",
+  "terminal_counts": {
+    "completed": 25,
+    "failed": 6,
+    "cancelled": 4
+  },
+  "allocated_gpu_hours": {
+    "software": 0.46945463612675664,
+    "scientific": 12.108477896449138,
+    "cpu_preparation": 0.0,
+    "total": 12.577932532575893
+  },
+  "runs": [
+    {
+      "run_id": "synthetic-baseline-evidence-q0-four-gpu-seed713-20261009T175208Z-b9d5d2fb3adb",
+      "state": "completed",
+      "kind": "software",
+      "source_sha": "b9d5d2fb3adb5a510ed2236c5a1481e773a1486c",
+      "manifest_sha256": "f481e259a2d2240b2322948a47088cf29af676bdf8780e539090703fdb509c80",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-evidence-q0-four-gpu-seed713-20261009T175208Z-b9d5d2fb3adb/provenance/controller-result.json",
+        "sha256": "ed6d2d68d308b14d8c873551f1a4ec2238cf3eb58b03f94dfd1a343df9c303af"
+      },
+      "controller_receipt_schema": "initial-Q0-wall-seconds-v1",
+      "controller_seconds": 71.94499926804565,
+      "gpu_count": 4,
+      "allocated_gpu_hours": 0.07993888807560627,
+      "output_inventory_files": 780
+    },
+    {
+      "run_id": "synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b",
+      "state": "completed",
+      "kind": "software",
+      "source_sha": "619e2ff1c63b2ca760f5984136e7aa923ce72568",
+      "manifest_sha256": "2fd1ceb9126df1ad40e0f56ad4a242bd297e21d72ce496e4b2922f4cee51cee7",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/provenance/controller-result.json",
+        "sha256": "1c258cc3229608f6c978756f1400cf9e85e345a28fbf7e8c82244e77f086e89c"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 46.22622980596498,
+      "gpu_count": 0,
+      "allocated_gpu_hours": 0.0,
+      "output_inventory_files": 10
+    },
+    {
+      "run_id": "msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7",
+      "state": "completed",
+      "kind": "cpu_preparation",
+      "source_sha": "e4db5aaeefb7445faabb3497a29d0fab106f0eb6",
+      "manifest_sha256": "68448b6b791402498cade4ff5f6e9bde78fe3460f078af4e9aff9b55a68d4dc3",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/controller-result.json",
+        "sha256": "aec5b2c981ce31aa262108af9daa366e5fbb3cd7dadeadda21899961c6a0c220"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 49.371569946059026,
+      "gpu_count": 0,
+      "allocated_gpu_hours": 0.0,
+      "output_inventory_files": 35
+    },
+    {
+      "run_id": "synthetic-baseline-evidence-q0-r1-four-gpu-seed713-20261010T003728Z-c636d81e8d8e",
+      "state": "completed",
+      "kind": "software",
+      "source_sha": "c636d81e8d8ee0840197785497a876315c97755c",
+      "manifest_sha256": "278bae47dbf3c37a403cadddcbb884b4ab465de3fcedb866ad82dc0dd6b9d6e2",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-evidence-q0-r1-four-gpu-seed713-20261010T003728Z-c636d81e8d8e/provenance/controller-result.json",
+        "sha256": "88a34cd6ba1faddb66efbfbd223b37d7e9f705d7a1bb97cf200c16468b8487ae"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 72.13450218096841,
+      "gpu_count": 4,
+      "allocated_gpu_hours": 0.08014944686774268,
+      "output_inventory_files": 782
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-reference-seed713-20261010T004033Z-b357001f8b8f",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "b357001f8b8fa1253ea9faf835d305325e272894",
+      "manifest_sha256": "9271ea8ceb3ed96fbf9c2b5123d13e64754cfe647f5ad2aada8b22a77aae62d6",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-reference-seed713-20261010T004033Z-b357001f8b8f/provenance/controller-result.json",
+        "sha256": "0c61186f4e265ca900ed5bb0696267df3dee96b7b29ae9f78f158030ee311053"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 679.7740992370527,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.18882613867695908,
+      "output_inventory_files": 2175
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-matcher-deterministic-seed713-20261010T005437Z-1606bfc9898f",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "1606bfc9898f65ed7134e8c336fc2e175998c37a",
+      "manifest_sha256": "7d9502cba0f9e32fdd2bba4ec9ee85675ec23f4a100468c0ab4b3c9752b0e411",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-deterministic-seed713-20261010T005437Z-1606bfc9898f/provenance/controller-result.json",
+        "sha256": "03a3c26e0dd0bfadfc85e3f9aad71056d51ef57ae75dd05b4118072e20633c75"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 958.0125123140169,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.2661145867538936,
+      "output_inventory_files": 2238
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-matcher-fixed-scale-seed713-20261010T005437Z-1606bfc9898f",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "1606bfc9898f65ed7134e8c336fc2e175998c37a",
+      "manifest_sha256": "5e67838565c50e662c61078a49c27e5d369ddc9f61b405878746b04753488df9",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-fixed-scale-seed713-20261010T005437Z-1606bfc9898f/provenance/controller-result.json",
+        "sha256": "0cdf7ae89a7b64f36e9a22a2d5e5693a5447fbf85998c66ff3874fa8660ef873"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 975.6851018610178,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.2710236394058383,
+      "output_inventory_files": 2238
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-matcher-learned-temperature-seed713-20261010T005437Z-1606bfc9898f",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "1606bfc9898f65ed7134e8c336fc2e175998c37a",
+      "manifest_sha256": "8cf2e268b4ef302f9c8b238024a38fdd16584a622ea614a84336b99c5bb6f93f",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-learned-temperature-seed713-20261010T005437Z-1606bfc9898f/provenance/controller-result.json",
+        "sha256": "c1b276b8760c27050329f290d6219b25cdb5ad3db3fcb1e3f8f47286ecffd56a"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 993.4202336659655,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.27595006490721263,
+      "output_inventory_files": 2238
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-matcher-standard-probabilistic-seed713-20261010T005437Z-1606bfc9898f",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "1606bfc9898f65ed7134e8c336fc2e175998c37a",
+      "manifest_sha256": "df4275f2536cd8808efaff0b7e3ebc556ca62fe71328c03eca569d36ddd7314c",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-standard-probabilistic-seed713-20261010T005437Z-1606bfc9898f/provenance/controller-result.json",
+        "sha256": "cc6231c93f7809a0e2d2ddb70acd74a06a8a582b4296dd9908050e5168f63a3d"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 979.8982182939071,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.27219394952608533,
+      "output_inventory_files": 2243
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-matcher-gaussian-seed713-20261010T005437Z-1606bfc9898f",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "1606bfc9898f65ed7134e8c336fc2e175998c37a",
+      "manifest_sha256": "989d7d99579c1a4a55db2db8c18140178d5e4a3e0e92b735e0af981e73db9df0",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-gaussian-seed713-20261010T005437Z-1606bfc9898f/provenance/controller-result.json",
+        "sha256": "0ab43c9fafd212cad914f57e479462cbeadc45f911b92e309a5bf65b101bf73a"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 987.8805548140081,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.27441126522611337,
+      "output_inventory_files": 2243
+    },
+    {
+      "run_id": "synthetic-baseline-evidence-q0-r2-four-gpu-seed713-20261010T011840Z-46164d43a40c",
+      "state": "completed",
+      "kind": "software",
+      "source_sha": "46164d43a40cf2049b0c9e38ef82ae76fdcf7e30",
+      "manifest_sha256": "a3af740efe1284617b926ac62f345f395718afbfbe4700ea5a9b75cae16cc3a6",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-evidence-q0-r2-four-gpu-seed713-20261010T011840Z-46164d43a40c/provenance/controller-result.json",
+        "sha256": "d05d0fe931c841efff5340cfb4710f7f467e768a7ddc39e94d2d53ee0f3f205e"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 67.07551340700593,
+      "gpu_count": 4,
+      "allocated_gpu_hours": 0.07452834823000659,
+      "output_inventory_files": 783
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-deterministic-seed713-20261010T012227Z-2a0fcdb28b2f",
+      "state": "failed",
+      "kind": "scientific",
+      "source_sha": "2a0fcdb28b2f560894dab0656492dd1f4a9a3dde",
+      "manifest_sha256": "01bd753651bc9786dd0a3b3ecf278c5a14f707c154edbbeb8c0c206366d6fb5f",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-deterministic-seed713-20261010T012227Z-2a0fcdb28b2f/provenance/controller-result.json",
+        "sha256": "315d8c8462a5f441caf05719b7c0bea965e903f1ecdba152605e62886b7b9970"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 1282.7295490490505,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.35631376362473627,
+      "output_inventory_files": 5800
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-fixed-scale-seed713-20261010T012227Z-2a0fcdb28b2f",
+      "state": "failed",
+      "kind": "scientific",
+      "source_sha": "2a0fcdb28b2f560894dab0656492dd1f4a9a3dde",
+      "manifest_sha256": "795d1f0e2fbe88fa05eaa3c3c390e90cb2f291db2294c336c2380045bbeb8692",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-fixed-scale-seed713-20261010T012227Z-2a0fcdb28b2f/provenance/controller-result.json",
+        "sha256": "aee3529de624074bd6167d402ab26449c97439c0b8dc5316428919ed0105c53a"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 1282.7848555570235,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.35632912654361765,
+      "output_inventory_files": 5793
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-learned-temperature-seed713-20261010T012227Z-2a0fcdb28b2f",
+      "state": "failed",
+      "kind": "scientific",
+      "source_sha": "2a0fcdb28b2f560894dab0656492dd1f4a9a3dde",
+      "manifest_sha256": "cadf99cf9785e26bde36121367ae0cce26e80b30ac05c240cca36a5180a52d91",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-learned-temperature-seed713-20261010T012227Z-2a0fcdb28b2f/provenance/controller-result.json",
+        "sha256": "81ba708c183c9d96fe69d19ee3e3d87a5217a7c2245bf33d8e0e09910f760027"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 1282.4834962909808,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.35624541563638357,
+      "output_inventory_files": 5777
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-standard-probabilistic-seed713-20261010T012227Z-2a0fcdb28b2f",
+      "state": "failed",
+      "kind": "scientific",
+      "source_sha": "2a0fcdb28b2f560894dab0656492dd1f4a9a3dde",
+      "manifest_sha256": "257d251a02f07d4990f8c46c988716ca48feb61a76227a692f460cf3eb5254a5",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-standard-probabilistic-seed713-20261010T012227Z-2a0fcdb28b2f/provenance/controller-result.json",
+        "sha256": "69dd970a9cf1ee8065aae7b2c33abfe744eff3b5a56ab3966ad332582ef78e55"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 1282.8560699080117,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.35634890830778104,
+      "output_inventory_files": 5887
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-gaussian-seed713-20261010T012227Z-2a0fcdb28b2f",
+      "state": "failed",
+      "kind": "scientific",
+      "source_sha": "2a0fcdb28b2f560894dab0656492dd1f4a9a3dde",
+      "manifest_sha256": "80f0dd76f84ee46ec2919b8b813ff2d416237f6306171a629a7b82dd3256b604",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-gaussian-seed713-20261010T012227Z-2a0fcdb28b2f/provenance/controller-result.json",
+        "sha256": "c6277b0b7636dcedf1ce60b318ce91f452455b0de2e60d07b29bffe1e92147b7"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 1282.938231452019,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.35637173095889413,
+      "output_inventory_files": 5897
+    },
+    {
+      "run_id": "synthetic-baseline-evidence-q0-r3-four-gpu-seed713-20261010T014530Z-748be745f0df",
+      "state": "completed",
+      "kind": "software",
+      "source_sha": "748be745f0df831b9310bf97ad885b308f8c8d68",
+      "manifest_sha256": "89092284c79cbe7b84f9108e15e2ebab20e76896b00bce5a137a0cfdcf977b32",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-evidence-q0-r3-four-gpu-seed713-20261010T014530Z-748be745f0df/provenance/controller-result.json",
+        "sha256": "1d12176c6e2a7da59570faadd6e744da9f0b002794de85b9ea6a6cef5980fed6"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 72.10165296401829,
+      "gpu_count": 4,
+      "allocated_gpu_hours": 0.08011294773779809,
+      "output_inventory_files": 783
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-deterministic-r1-seed713-20261010T014914Z-3c222f0f0ef0",
+      "state": "failed",
+      "kind": "scientific",
+      "source_sha": "3c222f0f0ef0ea5e0c219ab6e511db1ea7bf87b9",
+      "manifest_sha256": "115cc3d76fe75386991b96fcd1106746670ef6dd9625fe1776809e3d2e0f5f4e",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-deterministic-r1-seed713-20261010T014914Z-3c222f0f0ef0/provenance/controller-result.json",
+        "sha256": "97ee6bf546f6177b524d6658ec04ca5ea263ffbb90d130a7702262acc1e5212d"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 832.9750628490001,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.23138196190250002,
+      "output_inventory_files": 6469
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-fixed-scale-r1-seed713-20261010T014914Z-3c222f0f0ef0",
+      "state": "cancelled",
+      "kind": "scientific",
+      "source_sha": "3c222f0f0ef0ea5e0c219ab6e511db1ea7bf87b9",
+      "manifest_sha256": "2815682412d1d02fa510132a3ecd62aec52c89effe07f8b98a4948e6af4315d3",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-fixed-scale-r1-seed713-20261010T014914Z-3c222f0f0ef0/provenance/controller-result.json",
+        "sha256": "d1352bc19a858f452243e891ef7cc9ea05286fabf7ffe74285d3ea7c87e9ad20"
+      },
+      "controller_receipt_schema": "cancelled-before-spawn-v1",
+      "controller_seconds": 0.0,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.0,
+      "output_inventory_files": 8
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-learned-temperature-r1-seed713-20261010T014914Z-3c222f0f0ef0",
+      "state": "cancelled",
+      "kind": "scientific",
+      "source_sha": "3c222f0f0ef0ea5e0c219ab6e511db1ea7bf87b9",
+      "manifest_sha256": "8cb685bd7b910c22bbf29993b51f825cd206827f8c84432694c77a705f2133b5",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-learned-temperature-r1-seed713-20261010T014914Z-3c222f0f0ef0/provenance/controller-result.json",
+        "sha256": "d1352bc19a858f452243e891ef7cc9ea05286fabf7ffe74285d3ea7c87e9ad20"
+      },
+      "controller_receipt_schema": "cancelled-before-spawn-v1",
+      "controller_seconds": 0.0,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.0,
+      "output_inventory_files": 8
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-standard-probabilistic-r1-seed713-20261010T014914Z-3c222f0f0ef0",
+      "state": "cancelled",
+      "kind": "scientific",
+      "source_sha": "3c222f0f0ef0ea5e0c219ab6e511db1ea7bf87b9",
+      "manifest_sha256": "5e43c250548f1c7d3b53c9898b2bd772a2560b04eea74b18d553a72fb99b1a01",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-standard-probabilistic-r1-seed713-20261010T014914Z-3c222f0f0ef0/provenance/controller-result.json",
+        "sha256": "d1352bc19a858f452243e891ef7cc9ea05286fabf7ffe74285d3ea7c87e9ad20"
+      },
+      "controller_receipt_schema": "cancelled-before-spawn-v1",
+      "controller_seconds": 0.0,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.0,
+      "output_inventory_files": 8
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-gaussian-r1-seed713-20261010T014914Z-3c222f0f0ef0",
+      "state": "cancelled",
+      "kind": "scientific",
+      "source_sha": "3c222f0f0ef0ea5e0c219ab6e511db1ea7bf87b9",
+      "manifest_sha256": "66122868f12e201779a088cf594e1a3aae2c2db81d21e8f17247786507344944",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-gaussian-r1-seed713-20261010T014914Z-3c222f0f0ef0/provenance/controller-result.json",
+        "sha256": "d1352bc19a858f452243e891ef7cc9ea05286fabf7ffe74285d3ea7c87e9ad20"
+      },
+      "controller_receipt_schema": "cancelled-before-spawn-v1",
+      "controller_seconds": 0.0,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.0,
+      "output_inventory_files": 8
+    },
+    {
+      "run_id": "synthetic-baseline-evidence-q0-r4-four-gpu-seed713-20261010T020655Z-44ba9f320a01",
+      "state": "completed",
+      "kind": "software",
+      "source_sha": "44ba9f320a01d9a7ce825b179840e5bd0be447b3",
+      "manifest_sha256": "15375ba996437a86e9d932f519f2abe6b664d24630e528602368751957c6c7f4",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-evidence-q0-r4-four-gpu-seed713-20261010T020655Z-44ba9f320a01/provenance/controller-result.json",
+        "sha256": "e1f21d85911adca9d32b52a0052e50a8676fb13bcf577352940b72ae492b7f1f"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 72.10600825806614,
+      "gpu_count": 4,
+      "allocated_gpu_hours": 0.08011778695340682,
+      "output_inventory_files": 787
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-deterministic-r2-seed713-20261010T021512Z-e79c2a24afdd",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "e79c2a24afdd79b0cfa7c10eeb2d951a4b349027",
+      "manifest_sha256": "cede434bf1a969ebb7c004dd766b87f444827379a598baf26515b5ba3a1cd550",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-deterministic-r2-seed713-20261010T021512Z-e79c2a24afdd/provenance/controller-result.json",
+        "sha256": "6c2d02d9574929ffb5cb4f3c4ac99b9f960067271c8bfef4b9b6f79533d66b2c"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 4857.876436537947,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 1.3494101212605407,
+      "output_inventory_files": 26659
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-fixed-scale-r2-seed713-20261010T021512Z-e79c2a24afdd",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "e79c2a24afdd79b0cfa7c10eeb2d951a4b349027",
+      "manifest_sha256": "0630b3894d467ebcf86d4298caf163d02116d9e0c584bfb0ad034c763170fc4d",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-fixed-scale-r2-seed713-20261010T021512Z-e79c2a24afdd/provenance/controller-result.json",
+        "sha256": "bc96ff06a067010caeb3ba5add164943ab57f9918cd06afb088ddd356d55bde1"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 5306.578983959975,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 1.4740497177666596,
+      "output_inventory_files": 28706
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-learned-temperature-r2-seed713-20261010T021512Z-e79c2a24afdd",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "e79c2a24afdd79b0cfa7c10eeb2d951a4b349027",
+      "manifest_sha256": "bd50bd4d232d78765cd2b39a3f882a935db3ca21b337659cffa2d4fb158e2237",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-learned-temperature-r2-seed713-20261010T021512Z-e79c2a24afdd/provenance/controller-result.json",
+        "sha256": "7aede96db2598b87db2047d43ef4e1095d2da9217cdb8510cb93ffbde2007308"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 4869.575595287955,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 1.3526598875799876,
+      "output_inventory_files": 26627
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-standard-probabilistic-r2-seed713-20261010T021512Z-e79c2a24afdd",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "e79c2a24afdd79b0cfa7c10eeb2d951a4b349027",
+      "manifest_sha256": "6a1fb90cb42e16bf575b23c10b28a8769669f9f843388505296c00bbfa808d38",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-standard-probabilistic-r2-seed713-20261010T021512Z-e79c2a24afdd/provenance/controller-result.json",
+        "sha256": "7ffede00345fbdc12a744ab39373f624f1979afe806b6486a851071bfed821f2"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 5468.882406695979,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 1.5191340018599941,
+      "output_inventory_files": 29572
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-b1-gaussian-r2-seed713-20261010T021512Z-e79c2a24afdd",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "e79c2a24afdd79b0cfa7c10eeb2d951a4b349027",
+      "manifest_sha256": "6c608577784a6c65db89af925f3d1e4470a1b25668aba865b66271851ea816c2",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-gaussian-r2-seed713-20261010T021512Z-e79c2a24afdd/provenance/controller-result.json",
+        "sha256": "f9ffe2b1ce1a0d8cc6ee1d0c95aa255049a5580bc314bc0df970ef22604ffe48"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 5473.375484035001,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 1.5203820788986113,
+      "output_inventory_files": 29598
+    },
+    {
+      "run_id": "synthetic-baseline-evidence-q0-r5-four-gpu-seed713-20261010T040014Z-f32bc8290b84",
+      "state": "completed",
+      "kind": "software",
+      "source_sha": "f32bc8290b843965fb67c37e4fb18c00c7df4515",
+      "manifest_sha256": "df5d44523acc6b93f117d0725659cfb52417d301e879be26de1b271f34644d15",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-evidence-q0-r5-four-gpu-seed713-20261010T040014Z-f32bc8290b84/provenance/controller-result.json",
+        "sha256": "56484e12d97b4301f5447b00f977c7f34a42ee0e5daf13972a49e5993060c482"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 67.14649643597659,
+      "gpu_count": 4,
+      "allocated_gpu_hours": 0.07460721826219621,
+      "output_inventory_files": 787
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-transitions-gaussian-t-value-seed713-20261010T040401Z-8c05fa644df9",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "8c05fa644df91df9868aefda883acb879ad2174b",
+      "manifest_sha256": "d864de2e41c54595ef03abd62e75e97f6c154f93442f2248508a00680c934f19",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-gaussian-t-value-seed713-20261010T040401Z-8c05fa644df9/provenance/controller-result.json",
+        "sha256": "27d38b13a3c9cf66493daec847dddb1d60d1ff7c30c3a94e45dadfcffd5ab221"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 810.5788579529617,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.2251607938758227,
+      "output_inventory_files": 1895
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-transitions-gaussian-v-development-seed713-20261010T040401Z-8c05fa644df9",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "8c05fa644df91df9868aefda883acb879ad2174b",
+      "manifest_sha256": "9071eb247ae7b5ce992129038c28bf898c8a049a0dae943611eacb24e8f99be6",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-gaussian-v-development-seed713-20261010T040401Z-8c05fa644df9/provenance/controller-result.json",
+        "sha256": "1533b8731222b6338806b9312f9bde492efbc7dcc79dfb191da7bfb46ae472f2"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 804.5837735530222,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.22349549265361726,
+      "output_inventory_files": 1839
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-transitions-gaussian-v-calibration-seed713-20261010T040401Z-8c05fa644df9",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "8c05fa644df91df9868aefda883acb879ad2174b",
+      "manifest_sha256": "0029c2e1375377ee4e4e986ebb47836bce9e692d5c8d0083c549a8bb36c01b87",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-gaussian-v-calibration-seed713-20261010T040401Z-8c05fa644df9/provenance/controller-result.json",
+        "sha256": "3fd6c0a65a9121c28e310aed7e6127bc0d1587bc671f32cb9d62d004cc035385"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 801.8111768750241,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.2227253269097289,
+      "output_inventory_files": 1921
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-transitions-deterministic-t-value-seed713-20261010T040401Z-ef2fa0a580ad",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "ef2fa0a580adbe767e65c4424a915a79471abcb3",
+      "manifest_sha256": "aa8869daec85f8a0ecb378361d74e0262c8d4f724deffa07b2de82eab6c45b91",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-deterministic-t-value-seed713-20261010T040401Z-ef2fa0a580ad/provenance/controller-result.json",
+        "sha256": "06da56990dd439be71baf8a54a76f1d5c0bb401f979cf2df0afb626af294ad20"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 789.1057345150039,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.21919603736527885,
+      "output_inventory_files": 1895
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-transitions-deterministic-v-development-seed713-20261010T040401Z-ef2fa0a580ad",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "ef2fa0a580adbe767e65c4424a915a79471abcb3",
+      "manifest_sha256": "17b363014a6f95f697f2e4547a634e8db1e377b9b6022e4bcbd0b0e86868b003",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-deterministic-v-development-seed713-20261010T040401Z-ef2fa0a580ad/provenance/controller-result.json",
+        "sha256": "d2a3067d7e4abb97c179c00d42d078da5beceea96746346528a89cf40a907db5"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 802.3039827819448,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.2228622174394291,
+      "output_inventory_files": 1839
+    },
+    {
+      "run_id": "msrvtt-baseline-evidence-transitions-deterministic-v-calibration-seed713-20261010T040401Z-ef2fa0a580ad",
+      "state": "completed",
+      "kind": "scientific",
+      "source_sha": "ef2fa0a580adbe767e65c4424a915a79471abcb3",
+      "manifest_sha256": "72d2cc56b943af032b024f3b0e176921b5b3ce0a61913856850c432fa0688ba1",
+      "controller_result": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-deterministic-v-calibration-seed713-20261010T040401Z-ef2fa0a580ad/provenance/controller-result.json",
+        "sha256": "bec5c8a3574e7714f175f01b59ec6445d8e4a0fc922eb3ae81176fc7332e8c78"
+      },
+      "controller_receipt_schema": "launch-once-v1",
+      "controller_seconds": 784.4100097300252,
+      "gpu_count": 1,
+      "allocated_gpu_hours": 0.21789166936945145,
+      "output_inventory_files": 1921
+    }
+  ],
+  "test_authorized": false,
+  "compatibility_note": "Initial Q0 uses the hash-bound wall_seconds receipt, later clients use elapsed_seconds. Two final-accounting invocations rejected the legacy Q0 key and the explicit never-spawned cancellation schema before writing any report; exact-schema parsing, independent legacy GPU-hour equality and strict zero-work cancellation checks added. Historical files unchanged."
+}
