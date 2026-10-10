@@ -64,3 +64,43 @@ def test_value_qualification_binds_capacity_and_each_head(config_factory):
         validate_value_qualification(qualified,config_payload(replace(cfg.value,hidden_dim=cfg.value.hidden_dim+1)),report)
     with pytest.raises(ValueError,match='value'):
         validate_value_qualification(qualified,config_payload(replace(cfg.value,kind='geometry')),{'qualified_value_kinds':['distribution']})
+
+
+@pytest.mark.parametrize('operation', ['reserve', 'start'])
+def test_science_split_scope_cannot_unlock_locked_with_development_gate(config_factory,tmp_path,monkeypatch,operation):
+    import copy,json,hashlib,yaml
+    from evidence.archive_fixture import reserve_evidence_fixture
+    from test_runtime_artifacts import git
+    import semantic_retrieval.evidence.authorization as authorization
+    repo,cfg = reserve_evidence_fixture(tmp_path,config_factory(stage='cpu_fixture'))
+    control = cfg.runtime.study_path.parent
+    evidence = control/'scope-evidence.json';evidence.write_text('{"completed":true}\n')
+    study = yaml.safe_load(cfg.runtime.study_path.read_text())
+    study['science'] = dict(authorized=True,authorized_stages=['evaluation','transitions','calibration'],
+        stage_eval_splits={'evaluation':['val_development'],'transitions':['train','val_development','val_calibration'],'calibration':['val_calibration']},
+        gates={stage:dict(passed=True,reports=[dict(path=str(evidence.relative_to(repo)),sha256=hashlib.sha256(evidence.read_bytes()).hexdigest())]) for stage in ['evaluation','transitions','calibration']})
+    cfg.runtime.study_path.write_text(yaml.safe_dump(study));git(repo,'add',str(control));git(repo,'commit','-qm','scope test protocol')
+    manifest=json.loads((cfg.runtime.run_dir/'manifest.json').read_text())
+    # Only the independent GPU prerequisite is isolated here; scope authorization
+    # itself consumes a real committed study/report. Production scope is also
+    # witnessed using the completed real four-rank qualification before launch.
+    monkeypatch.setattr(authorization,'validate_qualification',lambda *args:None)
+    def check(stage,split):
+        candidate=copy.deepcopy(manifest);candidate['config']['evaluation'].update(evidence_stage=stage,eval_split=split)
+        return authorization.assert_evidence_authorized(repo_root=repo,registry_path=cfg.runtime.registry_path,manifest=candidate,operation=operation)
+    for stage,allowed in study['science']['stage_eval_splits'].items():
+        for split in allowed:check(stage,split)
+        for split in ['val_locked','test']:
+            with pytest.raises(ValueError,match='split|sealed'):check(stage,split)
+    with pytest.raises(ValueError,match='split'):check('calibration','val_development')
+    study['science']['stage_eval_splits']['evaluation'].append('val_locked')
+    cfg.runtime.study_path.write_text(yaml.safe_dump(study));git(repo,'add',str(cfg.runtime.study_path));git(repo,'commit','-qm','locked scope alone is insufficient')
+    with pytest.raises(ValueError,match='locked'):check('evaluation','val_locked')
+    study['science']['gates']['locked_validation'] = copy.deepcopy(study['science']['gates']['evaluation'])
+    cfg.runtime.study_path.write_text(yaml.safe_dump(study));git(repo,'add',str(cfg.runtime.study_path));git(repo,'commit','-qm','explicit frozen locked evidence')
+    check('evaluation','val_locked')
+    study['science']['stage_eval_splits']['calibration'].append('val_development')
+    cfg.runtime.study_path.write_text(yaml.safe_dump(study));git(repo,'add',str(cfg.runtime.study_path));git(repo,'commit','-qm','invalid calibration scope')
+    with pytest.raises(ValueError,match='split'):check('calibration','val_development')
+    study['science'].pop('stage_eval_splits');cfg.runtime.study_path.write_text(yaml.safe_dump(study));git(repo,'add',str(cfg.runtime.study_path));git(repo,'commit','-qm','missing scope fails closed')
+    with pytest.raises(ValueError,match='split'):check('evaluation','val_development')

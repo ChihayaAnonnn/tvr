@@ -144,12 +144,21 @@ def assert_evidence_authorized(*, repo_root, registry_path, manifest, operation,
     science = study.get('science',{})
     if science.get('authorized') is not True or stage not in science.get('authorized_stages',()):
         raise ValueError('scientific stage is not authorized by its study gate')
-    gate = science.get('gates',{}).get(stage)
-    if not isinstance(gate,dict) or gate.get('passed') is not True:
-        raise ValueError('scientific predecessor gate has not passed')
-    for report in gate.get('reports',()):
-        path = repo/report['path']
-        if hashlib.sha256(_committed(repo,path)).hexdigest() != report['sha256']:
-            raise ValueError('scientific gate report identity mismatch')
-    if not gate.get('reports'):
-        raise ValueError('scientific gate requires committed auditable evidence')
+    allowed = {'reference':{'train'},'matcher':{'train'},'value':{'train'},
+               'transitions':{'train','val_development','val_calibration'},
+               'calibration':{'val_calibration'},'evaluation':{'val_development','val_locked'}}
+    scopes = science.get('stage_eval_splits')
+    permitted = scopes.get(stage) if isinstance(scopes,dict) else None
+    if not isinstance(permitted,list) or not permitted or any(s not in allowed[stage] for s in permitted) or evaluation.get('eval_split') not in permitted:
+        raise ValueError('scientific split is not explicitly authorized for this stage')
+    names = (stage,'locked_validation') if evaluation.get('eval_split') == 'val_locked' else (stage,)
+    for name in names:
+        gate = science.get('gates',{}).get(name)
+        if not isinstance(gate,dict) or gate.get('passed') is not True:
+            raise ValueError('scientific predecessor gate has not passed: '+name)
+        for report in gate.get('reports',()):
+            path = repo/report['path']
+            if hashlib.sha256(_committed(repo,path)).hexdigest() != report['sha256']:
+                raise ValueError('scientific gate report identity mismatch')
+        if not gate.get('reports'):
+            raise ValueError('scientific gate requires committed auditable evidence')

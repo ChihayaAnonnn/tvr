@@ -38,3 +38,12 @@ CPU 端到端测试在临时已提交源码上运行真实 CLI、合成视频及
 报告自身写入不计入。`resource_counts` 仅记录当前 worker 实际新执行的请求和
 编码，失败请求计数，恢复缓存不重复计数。该离线成本与逐查询在线预算分开报告。
 历史 v1 只计准备后的组装/搜索时间，不可与 v2 的总索引时间直接比较。
+
+科学权限必须显式声明 `science.stage_eval_splits`：reference/matcher/value 仅 train，
+transitions 仅 train/val_development/val_calibration，calibration 仅 val_calibration，
+evaluation 可按已授权阶段声明 val_development/val_locked。缺失或越界声明拒绝预留与启动；
+val_locked 还必须有独立、已提交且哈希匹配的 locked_validation gate。
+
+初始 episode 或 gallery 遇到完全不可用的视频时，结算所有已发生的请求和真实 CLIP 编码，
+发布版本化 `evidence-input-failure-v1` 及受影响查询集合的数量和哈希，然后使整个 run 失败。
+不会产生默认预测、过滤该查询或报告部分总体指标；未完成运行不能支持完整分母的结论。

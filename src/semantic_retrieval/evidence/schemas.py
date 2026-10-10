@@ -21,7 +21,13 @@ def schema_for(kind):
     parents = obj({k:input_ref for k in ('reference','matcher','value','calibration')})
     producer = obj({k:DIGEST for k in ('matcher_sha256','config_sha256','index_sha256','label_sha256','view_sha256','mc_sha256','state_sampling_sha256','feature_schema_sha256')})
     identity = obj(dict(producer_sha256=DIGEST,model_sha256=DIGEST,role={'const':'V_calibration'},relevance_space={'enum':['benchmark_annotation','reviewed_semantic']},feature_schema_sha256=DIGEST))
+    resources = obj({k:COUNT for k in ('frame_requests','clip_frames','temporal_tokens','mc_elements')})
     schemas = {
+        'input_failure': obj(dict(schema_version={'const':'evidence-input-failure-v1'},scope={'enum':['episode','index']},
+            query_id=STRING,candidate_id=STRING,actual_counts=resources,
+            budget={'anyOf':[{'type':'null'},obj(dict(limits=resources,spent=resources,reserved=resources))]},
+            affected_query_count={'type':'integer','minimum':1},affected_query_ids_sha256=DIGEST,
+            evaluation_complete={'const':False},overall_metrics_defined={'const':False})),
         'checkpoint_sidecar': obj(dict(schema_version={'const':'evidence-checkpoint-v1'},sha256=DIGEST,config_sha256=DIGEST,
             parents=parents,model_sha256={'type':'object','additionalProperties':DIGEST,'minProperties':1},stage=STRING,
             producer_sha256=DIGEST,world_size={'type':'integer','minimum':1},source_sha={'type':'string','pattern':'^[0-9a-f]{40}$'},manifest_sha256=DIGEST)),

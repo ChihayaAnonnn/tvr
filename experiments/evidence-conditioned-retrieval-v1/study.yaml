@@ -81,6 +81,9 @@ science:
       reports:
       - path: experiments/evidence-conditioned-retrieval-v1/reports/S2-matcher-completion.json
         sha256: 3c5975d252e5138759c78a09d534450b5a984933195edd88ffbeabb001cd610e
+    locked_validation:
+      passed: false
+      reports: []
   required_before_first_training:
   - committed_new_chain_production_four_cuda_rank_qualification
   - five_source_disjoint_roles_and_query_connected_components_audited
@@ -122,6 +125,21 @@ science:
   bootstrap_unit: source_connected_component
   negative_results: archive_all_arms_and_stop_on_preregistered_falsification
   test: sealed_no_path_to_authorization_in_this_protocol
+  stage_eval_splits:
+    reference:
+    - train
+    matcher:
+    - train
+    transitions:
+    - train
+    - val_development
+    - val_calibration
+    value:
+    - train
+    calibration:
+    - val_calibration
+    evaluation:
+    - val_development
 weight_preparation:
   authorized: true
   scope: cpu_public_pretrained_input_only

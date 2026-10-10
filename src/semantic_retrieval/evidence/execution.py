@@ -38,6 +38,26 @@ class DecodeFailure(ValueError):
     """A requested frame could not be decoded; identity failures are separate."""
 
 
+class InitialObservationFailure(DecodeFailure):
+    """No initial prediction exists; preserve actual work before failing the run."""
+    def __init__(self,query_id,candidate_id,actual_counts,*,budget=None):
+        super().__init__('candidate has empty initial observation: '+candidate_id)
+        self.query_id,self.candidate_id = query_id,candidate_id
+        self.actual_counts,self.budget = actual_counts,budget
+
+
+def _record_input_failure(provenance,failure,query_ids,*,scope):
+    from semantic_retrieval.evidence.schemas import validate_evidence_document
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    payload = dict(schema_version='evidence-input-failure-v1',scope=scope,
+        query_id=failure.query_id,candidate_id=failure.candidate_id,
+        actual_counts=asdict(failure.actual_counts),budget=asdict(failure.budget) if failure.budget is not None else None,
+        affected_query_count=len(query_ids),affected_query_ids_sha256=digest(tuple(sorted(query_ids))),
+        evaluation_complete=False,overall_metrics_defined=False)
+    validate_evidence_document('input_failure',payload)
+    publish_json(provenance/'input-failures'/f'{scope}-rank-{rank}-{digest(failure.query_id)}.json',payload)
+
+
 class VideoFrameSource:
     def __init__(self, videos, image_size, preprocessing_sha256):
         self.videos, self.image_size = videos, image_size
@@ -219,9 +239,9 @@ def _query(model,text):
     return QueryInputs(ids,mask)
 
 
-def initial_episode_state(episode,cfg,source,*,cache=None,model=None,timings=None):
+def initial_episode_state(episode,cfg,source,*,cache=None,model=None,timings=None,failure_context=None):
     candidates = []
-    requests = successes = 0
+    requests = encodes = 0
     initial_requests = sum(len(view_frame_ids(build_frame_pool(n,cfg.views.pool_size),cfg.views.levels[0])) for n in episode.frame_counts)
     upper = ResourceCounts(initial_requests,initial_requests,0,0)
     reserved = BudgetLedger(cfg.policy.limits,ZERO,ZERO).reserve(upper)
@@ -237,17 +257,22 @@ def initial_episode_state(episode,cfg,source,*,cache=None,model=None,timings=Non
                     image = source(provisional,(i,))
             except DecodeFailure:
                 continue
-            valid.append(i); successes += 1
+            valid.append(i)
             if cache is not None and model is not None:
                 device = next(model.parameters()).device
                 with torch.no_grad(),measure(timings,'clip_seconds',device):
                     feature = model.clip.encode_frames(image.to(device)[None],torch.ones((1,1),device=device,dtype=torch.bool))[0,0]
+                encodes += 1
                 identity = FrameCacheIdentity(content,cfg.model.base.clip_sha256,digest(config_payload(cfg.model.base)['clip']),cfg.views.preprocessing_sha256)
                 cache.write(canonical,i,feature,identity=identity)
         if not valid:
-            raise DecodeFailure('candidate has empty initial observation: '+canonical)
+            actual = ResourceCounts(requests,encodes,0,0)
+            failure = InitialObservationFailure(episode.query_id,canonical,actual,budget=reserved.settle(upper,actual))
+            if failure_context is not None:
+                _record_input_failure(failure_context.paths.provenance,failure,(episode.query_id,),scope='episode')
+            raise failure
         candidates.append(CandidateObservation(canonical,content,count,pool,tuple(valid),requested))
-    budget = reserved.settle(upper,ResourceCounts(requests,successes,0,0))
+    budget = reserved.settle(upper,ResourceCounts(requests,encodes,0,0))
     mc_samples = 1 if cfg.model.variant in {'deterministic','learned_temperature'} else cfg.sampling.eval_samples
     return ObservationState(episode.query_id,cfg.index.gallery_version,tuple(candidates),cfg.views.levels,
                             ExecutionProfile(mc_samples,cfg.policy.cost_weights),budget,0)
@@ -359,7 +384,9 @@ def _episodes_and_sources(cfg,role,model,context):
                     continue
                 valid.append(frame_id)
             if not valid:
-                raise DecodeFailure('candidate has empty initial index observation: '+candidate.canonical_id)
+                failure = InitialObservationFailure('__initial_index__:'+role,candidate.canonical_id,ResourceCounts(index_requests,index_encodes,0,0))
+                _record_input_failure(index_store.run_root/'provenance',failure,tuple(w.episode.query_id for w in wrapped),scope='index')
+                raise failure
             successful.append(replace(candidate,observed_frame_ids=tuple(valid)))
         gallery_state = replace(gallery_state,candidates=tuple(successful))
         payload = asdict(gallery_state);rows = payload.pop('candidates')
@@ -458,7 +485,7 @@ def _training(context,cfg,model,device):
         else:
             w = episodes[(iteration*world+rank)%len(episodes)]
             e = w.episode
-            state = initial_episode_state(e,cfg,source,cache=cache,model=model)
+            state = initial_episode_state(e,cfg,source,cache=cache,model=model,failure_context=context)
             query = _query(model,e.query_text)
             level = cfg.views.levels[iteration%len(cfg.views.levels)]
             # Training may read richer views, but the student receives only its explicit observed subset.
@@ -556,7 +583,7 @@ def _execute_scientific_stage(context,cfg):
         initial = []; adapters = {}
         sampling = SamplingState(cfg.sampling,mode='eval',model_sha256=producer.matcher_sha256)
         for w in episodes:
-            state = initial_episode_state(w.episode,cfg,source,cache=cache,model=model)
+            state = initial_episode_state(w.episode,cfg,source,cache=cache,model=model,failure_context=context)
             adapters[state.query_id] = EpisodeAdapter(model,_query(model,w.episode.query_text),source,cache,sampling)
             counts = adapters[state.query_id].prediction_counts(state)
             state = replace(state,budget=state.budget.reserve(counts).settle(counts,counts))
@@ -631,7 +658,7 @@ def _evaluation(context,cfg,model,head):
         synchronize(next(model.parameters()).device);episode_started = time.monotonic()
         state = read_initial_state(context.array_store,e.query_id)
         if state is None:
-            state = initial_episode_state(e,cfg,source,cache=cache,model=model,timings=timings)
+            state = initial_episode_state(e,cfg,source,cache=cache,model=model,timings=timings,failure_context=context)
             save_initial_state(context.array_store,state);snapshot_progress()
         elif tuple(c.canonical_id for c in state.candidates) != e.canonical_ids:
             raise ValueError('recovered initial candidate selection differs from fixed index')

@@ -167,3 +167,52 @@ def _real_index_worker(rank,rendezvous,config_path,run_root):
         assert cache.store.run_root == store.run_root/'provenance'/f'index-rank-{rank}'
     finally:
         dist.destroy_process_group()
+
+
+@pytest.mark.parametrize('scope', ['episode','index'])
+def test_initial_input_failure_preserves_real_requests_without_prediction(config_factory,episode_manifest,tmp_path,scope):
+    import json
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.config import config_payload
+    from semantic_retrieval.evidence.config import InputReference,SplitBinding
+    from semantic_retrieval.evidence.data import read_split_binding
+    from semantic_retrieval.evidence.execution import VideoFrameSource,DecodeFailure,initial_episode_state,_episodes_and_sources
+    from semantic_retrieval.evidence.frame_cache import FrameFeatureCache
+    from semantic_retrieval.evidence.model import EvidenceMatcherModel
+    from semantic_retrieval.evidence.types import digest,ResourceCounts
+    from semantic_retrieval.data.episodes import file_sha256
+    payload,write,paths=episode_manifest;row=payload['episodes'][0]
+    paths[1].write_bytes(b'identity-valid but undecodable source')
+    row.update(canonical_ids=['a','b'],candidate_ids=['a','b'],video_paths=[str(paths[0]),str(paths[1])],
+        content_sha256=[file_sha256(paths[0]),file_sha256(paths[1])],frame_counts=[2,2],split='val_development',
+        query_source_ids=['query-source'],query_component_id='d'*64)
+    payload.update(schema_version=3,relevance_space='reviewed_semantic');manifest=write()
+    cfg=config_factory(stage='evaluation');binding=SplitBinding('V_development',InputReference(manifest,file_sha256(manifest)),'reviewed_semantic')
+    index=tmp_path/'index.json';index.write_text(json.dumps(dict(schema_version='evidence-initial-index-v1',clip_sha256=cfg.model.base.clip_sha256,
+        preprocessing_sha256=cfg.views.preprocessing_sha256,view_sha256=digest(config_payload(cfg.views)),gallery_version='g1',roles={'V_development':['a','b']})))
+    cfg=replace(cfg,splits=(binding,),index=replace(cfg.index,reference=InputReference(index,file_sha256(index)),gallery_version='g1'))
+    model=EvidenceMatcherModel(cfg.model).eval();store=ArtifactArrayStore(tmp_path/'failure-run'/'arrays')
+    context=SimpleNamespace(array_store=store,paths=SimpleNamespace(provenance=store.run_root/'provenance'))
+    episode=read_split_binding(binding)[0].episode
+    source=VideoFrameSource(dict(zip(episode.canonical_ids,zip(episode.video_paths,episode.content_sha256))),cfg.model.base.clip.image_size,cfg.views.preprocessing_sha256)
+    with pytest.raises(DecodeFailure) as caught:
+        if scope=='episode':
+            initial_episode_state(episode,cfg,source,cache=FrameFeatureCache(store),model=model,failure_context=context)
+        else:
+            _episodes_and_sources(cfg,'V_development',model,context)
+    assert caught.value.actual_counts==ResourceCounts(4,1,0,0)
+    reports=list(context.paths.provenance.rglob('input-failures/*.json'))
+    assert len(reports)==1
+    report=json.loads(reports[0].read_text())
+    assert report['schema_version']=='evidence-input-failure-v1'
+    assert report['scope']==scope and report['candidate_id']=='b'
+    assert report['actual_counts']==dict(frame_requests=4,clip_frames=1,temporal_tokens=0,mc_elements=0)
+    assert report['evaluation_complete'] is False and report['overall_metrics_defined'] is False
+    assert report['affected_query_count']==1
+    if scope=='episode':
+        assert report['budget']['spent']==report['actual_counts']
+        assert report['budget']['reserved']==dict(frame_requests=0,clip_frames=0,temporal_tokens=0,mc_elements=0)
+    else:assert report['budget'] is None
+    assert not (context.paths.provenance/'evidence-report.json').exists()
