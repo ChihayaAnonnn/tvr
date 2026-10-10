@@ -1,0 +1,289 @@
+{
+  "phase": "S1-source-disjoint-reference",
+  "study": "evidence-conditioned-retrieval-v1",
+  "runs": [
+    {
+      "dataset": "msrvtt",
+      "stage": "baseline",
+      "variant": "evidence-reference",
+      "seed": 713,
+      "scheduled_timestamp_utc": "20261010T004033Z",
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "gpu_count": 1,
+        "precision": "fp32",
+        "distributed_topology": "single-process"
+      },
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        }
+      ],
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/pilot-annotations.json",
+          "sha256": "c0cb92062d98989024e116cbdb3b49553cf19cdfb7318e7e4e77efe44663e98a"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/source-report.json",
+          "sha256": "7e4ea90e62b6553f9ddd3130182567cdbcd8d05f797ad264db0b1daee320fb8f"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/labels/T_match-relations.json",
+          "sha256": "bd21312caf915109d679b253823d8d2b6b09588b1c8ec613ab9800f3ea3d2f53"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/labels/T_match-id-map.json",
+          "sha256": "a444973c3fbca95bf1f1e34884752fd14a2e0a2c028f7ebf58677afad9e08142"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/roles/T_match.json",
+          "sha256": "05da696d35e90b0c060c243feb2e02567f7608b00029aa87d572ebd6263b97d5"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/labels/T_value-relations.json",
+          "sha256": "cf7c70978120b9e448dd4e7291dd2dd2f5975518445a6c4cc6e193ab5a1ef0ef"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/labels/T_value-id-map.json",
+          "sha256": "cf0d6a514026a486cfa1cb2af6c2b23c44a6e37fbf8d23a8d79703f4fd3f3e9e"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/roles/T_value.json",
+          "sha256": "a49021740fdfb458ccd8d4fb29eaea652d0f798cbc9ae579d5bc2dd862c5b564"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/labels/V_calibration-relations.json",
+          "sha256": "404ee0b6c148efce57e37c2a7739ea975ad98755bba662bc9db94d00d26d184d"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/labels/V_calibration-id-map.json",
+          "sha256": "7b24925dc69f16988cd9db9faf6cd7c2b8aa3c10c670b3fb5a2f7f84bccfa0fd"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/roles/V_calibration.json",
+          "sha256": "f946b11c26b79f92951009c13137beeb7b0582cf1d00429396c2903753773fa6"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/labels/V_development-relations.json",
+          "sha256": "f8cd28812cb1cd0d94c3e030a3c83515d089c357fbccc2d8658a681e44304019"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/labels/V_development-id-map.json",
+          "sha256": "ee3f7b612a2f50c7149e2f8cd8a7b4110cef7cb789b0cb0436bf4ce3041bbea2"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/roles/V_development.json",
+          "sha256": "faa7191488896b885eeb1dc7575726861e356023747604cd07ad587f5a4f6262"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/labels/V_locked-relations.json",
+          "sha256": "26b01e08c3a320f5d08646259c2309245761f8d77b02dfd1d6fc436864aeff91"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/labels/V_locked-id-map.json",
+          "sha256": "2c7d01f85be6beda96fae4e36b3af792a82280affd3caa12ec85f279d7438022"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/roles/V_locked.json",
+          "sha256": "3ee5204760017e29900a9b3220c35df102afff9607ad19d1e6c9bb500adbd290"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/initial-index.json",
+          "sha256": "9d916043772b2a2cb39ebf5c710b63dd14c06371787449da9cdd2a6dd5c06c85"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/pilot-videos-000.input-index.json",
+          "sha256": "440bfa3d283c60ea1ddd4885157ac7dda042067866dbc3eb59aa9963feed8b79"
+        }
+      ],
+      "config": {
+        "model": {
+          "base": {
+            "clip": {
+              "embed_dim": 512,
+              "image_size": 224,
+              "vision_width": 768,
+              "vision_layers": 12,
+              "patch_size": 32,
+              "context_length": 77,
+              "vocab_size": 49408,
+              "text_width": 512,
+              "text_heads": 8,
+              "text_layers": 12,
+              "fixture": false
+            },
+            "clip_weights": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+            "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+            "dim": 512,
+            "num_layers": 1,
+            "num_heads": 8,
+            "max_frames": 16,
+            "coarse_dim": 256,
+            "grouping": null,
+            "alignment": null,
+            "pilot_arm": null
+          },
+          "variant": "deterministic",
+          "scale_floor": 0.01
+        },
+        "loss": {
+          "pc": 1.0,
+          "score": 0.0,
+          "value": 0.0
+        },
+        "optimizer": {
+          "learning_rate": 0.0001,
+          "weight_decay": 0.01,
+          "seed": 713,
+          "trainable_prefixes": [
+            "temporal.",
+            "matcher.base."
+          ]
+        },
+        "scheduler": {
+          "scheduler_name": "constant",
+          "scheduler_steps": 128,
+          "checkpoint_interval": 64
+        },
+        "evaluation": {
+          "config_kind": "evidence-retrieval-v1",
+          "evidence_stage": "reference",
+          "eval_split": "train",
+          "schema_version": 1,
+          "synthetic": false,
+          "views": {
+            "pool_size": 16,
+            "levels": [
+              4,
+              8,
+              16
+            ],
+            "preprocessing_sha256": "8fddcf29db23466cb3d33d41a83510b8b6d9ad29bc56f4da634d02d6993a7972",
+            "decode_protocol": "opencv-rgb-v1"
+          },
+          "sampling": {
+            "train_samples": 8,
+            "eval_samples": 8,
+            "temperature": 1.0,
+            "seed": 713,
+            "protocol": "identity-normal-v1"
+          },
+          "splits": [
+            {
+              "role": "T_match",
+              "manifest": {
+                "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/roles/T_match.json",
+                "sha256": "05da696d35e90b0c060c243feb2e02567f7608b00029aa87d572ebd6263b97d5"
+              },
+              "relevance_space": "benchmark_annotation"
+            },
+            {
+              "role": "T_value",
+              "manifest": {
+                "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/roles/T_value.json",
+                "sha256": "a49021740fdfb458ccd8d4fb29eaea652d0f798cbc9ae579d5bc2dd862c5b564"
+              },
+              "relevance_space": "benchmark_annotation"
+            },
+            {
+              "role": "V_calibration",
+              "manifest": {
+                "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/roles/V_calibration.json",
+                "sha256": "f946b11c26b79f92951009c13137beeb7b0582cf1d00429396c2903753773fa6"
+              },
+              "relevance_space": "benchmark_annotation"
+            },
+            {
+              "role": "V_development",
+              "manifest": {
+                "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/roles/V_development.json",
+                "sha256": "faa7191488896b885eeb1dc7575726861e356023747604cd07ad587f5a4f6262"
+              },
+              "relevance_space": "benchmark_annotation"
+            },
+            {
+              "role": "V_locked",
+              "manifest": {
+                "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/roles/V_locked.json",
+                "sha256": "3ee5204760017e29900a9b3220c35df102afff9607ad19d1e6c9bb500adbd290"
+              },
+              "relevance_space": "benchmark_annotation"
+            }
+          ],
+          "index": {
+            "reference": {
+              "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7/provenance/inputs/initial-index.json",
+              "sha256": "9d916043772b2a2cb39ebf5c710b63dd14c06371787449da9cdd2a6dd5c06c85"
+            },
+            "candidate_count": 8,
+            "gallery_version": "evidence-msrvtt-source-pilot-v1"
+          },
+          "parents": {
+            "reference": null,
+            "matcher": null,
+            "value": null,
+            "calibration": null
+          },
+          "transitions": {
+            "reference": null,
+            "producer_sha256": null,
+            "state_seed": 713,
+            "trajectories": 2
+          },
+          "value": {
+            "hidden_dim": 128,
+            "feature_schema": "observable-action-v1",
+            "temperature": 1.0,
+            "kind": "distribution"
+          },
+          "policy": {
+            "stop_threshold": 0.0,
+            "limits": {
+              "frame_requests": 64,
+              "clip_frames": 64,
+              "temporal_tokens": 4096,
+              "mc_elements": 8192
+            },
+            "cost_weights": [
+              1.0,
+              1.0,
+              0.0625,
+              0.0078125
+            ],
+            "baseline": "fixed_frames"
+          },
+          "resume": null
+        }
+      },
+      "parent_run_ids": [
+        "msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7"
+      ],
+      "selection_lineage": [
+        "experiments/evidence-conditioned-retrieval-v1/reports/prerequisites-2026-10-10.json",
+        "experiments/evidence-conditioned-retrieval-v1/PREREGISTRATION.md",
+        "experiments/evidence-conditioned-retrieval-v1/configs/S1-reference.json"
+      ],
+      "validation_authorized": true,
+      "test_authorized": false,
+      "expected_scalar_outputs": [],
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=0",
+        "OMP_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "scripts/train_evidence_retrieval.py",
+        "--config",
+        "{artifact_run_dir}/provenance/worker-config.json",
+        "--run-id",
+        "{run_id}"
+      ]
+    }
+  ]
+}
