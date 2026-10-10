@@ -232,6 +232,9 @@ def prepare_run(config, *, repo_root, system_config=None):
     from semantic_retrieval.evidence.authorization import assert_evidence_authorized
     assert_evidence_authorized(repo_root=repository,registry_path=registry,manifest=manifest,operation="start",
                                command=shlex.split(paths.command.read_text()))
+    from semantic_retrieval.full_data.authorization import assert_full_data_authorized
+    assert_full_data_authorized(repo_root=repository,registry_path=registry,manifest=manifest,operation="start",
+                               command=shlex.split(paths.command.read_text()))
     verify_committed_reservation(repository, manifest["registry_path"], manifest)
     sealed = shlex.split(paths.command.read_text())
     if not sealed:
