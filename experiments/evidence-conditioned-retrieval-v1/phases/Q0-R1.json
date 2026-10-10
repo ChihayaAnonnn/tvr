@@ -156,6 +156,10 @@
       ],
       "array_references": [],
       "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=0,2,3,4",
+        "OMP_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
         "/home/xujie/.conda/envs/tvr/bin/python",
         "-m",
         "torch.distributed.run",
