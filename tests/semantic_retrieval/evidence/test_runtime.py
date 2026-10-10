@@ -169,6 +169,43 @@ def _real_index_worker(rank,rendezvous,config_path,run_root):
         dist.destroy_process_group()
 
 
+@pytest.mark.parametrize('variant',['gaussian','fixed_scale','standard_probabilistic'])
+def test_real_video_two_query_evaluation_with_rich_reference(config_factory,episode_manifest,tmp_path,variant):
+    import copy,json
+    from dataclasses import replace
+    from types import SimpleNamespace
+    import torch
+    from experiment_artifacts import ArtifactArrayStore,verify_array_reference
+    from semantic_retrieval.config import config_payload
+    from semantic_retrieval.models.clip import ClipBackbone
+    from semantic_retrieval.evidence.config import SplitBinding,InputReference,ParentConfig
+    from semantic_retrieval.evidence.model import EvidenceMatcherModel
+    from semantic_retrieval.evidence.execution import _evaluation,_write_reference_parts
+    from semantic_retrieval.evidence.types import digest
+    from semantic_retrieval.data.episodes import file_sha256
+    cfg=config_factory(stage='evaluation');clip=replace(cfg.model.base.clip,vocab_size=49408)
+    weights=tmp_path/'bpe-clip.pt';torch.save(ClipBackbone(clip).state_dict(),weights)
+    cfg=replace(cfg,model=replace(cfg.model,variant=variant,base=replace(cfg.model.base,clip=clip,clip_weights=weights,clip_sha256=file_sha256(weights))),policy=replace(cfg.policy,baseline='fixed_frames'),transitions=replace(cfg.transitions,reference=None,producer_sha256=None))
+    payload,write,_=episode_manifest;payload.update(schema_version=3,relevance_space='reviewed_semantic')
+    row=payload['episodes'][0];row.update(split='val_development',query_source_ids=['query-source'],query_component_id='d'*64)
+    other=copy.deepcopy(row);other.update(query_id='q1',query_text='another video query',caption_group_id='caption-1');payload['episodes'].append(other)
+    path=write();binding=SplitBinding('V_development',InputReference(path,file_sha256(path)),'reviewed_semantic')
+    index=tmp_path/'index.json';index.write_text(json.dumps(dict(schema_version='evidence-initial-index-v1',clip_sha256=cfg.model.base.clip_sha256,preprocessing_sha256=cfg.views.preprocessing_sha256,view_sha256=digest(config_payload(cfg.views)),gallery_version='g1',roles={'V_development':['a','b']})))
+    cfg=replace(cfg,splits=(binding,),index=replace(cfg.index,reference=InputReference(index,file_sha256(index)),gallery_version='g1'))
+    model=EvidenceMatcherModel(cfg.model).eval();reference_store=ArtifactArrayStore(tmp_path/'reference'/'arrays');reference_store.run_root.joinpath('checkpoints').mkdir()
+    reference_context=SimpleNamespace(array_store=reference_store,paths=SimpleNamespace(checkpoints=reference_store.run_root/'checkpoints'))
+    _write_reference_parts(reference_context,model);reference_path=reference_context.paths.checkpoints/'reference-parts.pt'
+    cfg=replace(cfg,parents=ParentConfig(InputReference(reference_path,file_sha256(reference_path)),cfg.parents.matcher,None,None))
+    store=ArtifactArrayStore(tmp_path/'evaluation'/'arrays');context=SimpleNamespace(array_store=store,paths=SimpleNamespace(root=store.run_root,provenance=store.run_root/'provenance'),config=SimpleNamespace(eval_split='val_development',source_sha='b'*40))
+    result=_evaluation(context,cfg,model,None);report=json.loads((context.paths.provenance/'evidence-report.json').read_text())
+    assert result['summary_metrics']['rich_valid_count'] == 0
+    assert report['undefined_reasons']['rich_proper_scores'] == 'no valid rich-score targets'
+    arrays={a['key']:verify_array_reference(store.run_root,a) for a in report['array_references']}
+    assert arrays['episode_labels'].shape==(2,3)
+    for query in ['q0','q1']:
+        assert (context.paths.provenance/'evidence-actions'/digest(query)).is_dir()
+
+
 @pytest.mark.parametrize('scope', ['episode','index'])
 def test_initial_input_failure_preserves_real_requests_without_prediction(config_factory,episode_manifest,tmp_path,scope):
     import json

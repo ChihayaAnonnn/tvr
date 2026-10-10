@@ -425,6 +425,52 @@ def _episodes_and_sources(cfg,role,model,context):
     return tuple(result),{w.episode.query_id:w for w in result},source,cache
 
 
+def publish_transition_coverage(cfg,role,episodes,producer,references,store):
+    """Publish actual selection for the full input cohort after successful compilation."""
+    from semantic_retrieval.evidence.schemas import validate_evidence_document
+    bindings = [s for s in cfg.splits if s.role == role]
+    if role not in {'T_value','V_development','V_calibration'} or len(bindings) != 1:
+        raise ValueError('transition coverage requires one permitted role')
+    binding = bindings[0]
+    expected = read_split_binding(binding)
+    if not expected or len(episodes) != len(expected) or references.producer != producer or producer.label_sha256 != binding.manifest.sha256 or producer.index_sha256 != cfg.index.reference.sha256 or file_sha256(references.index_path) != references.index_sha256:
+        raise ValueError('transition coverage cohort/producer mismatch')
+    safe_path(cfg.index.reference.path)
+    if file_sha256(cfg.index.reference.path) != cfg.index.reference.sha256:
+        raise ValueError('transition coverage index mismatch')
+    with cfg.index.reference.path.open() as handle:
+        gallery = strict_json_load(handle)['roles'][role]
+    if not gallery or gallery != sorted(set(gallery)):
+        raise ValueError('transition coverage requires sorted unique gallery')
+    positions = {canonical:i for i,canonical in enumerate(gallery)}
+    count = min(cfg.index.candidate_count,len(gallery))
+    selections,presence,queries,components = [],[],[],[]
+    for original,selected in zip(expected,episodes):
+        before,after = original.episode,selected.episode
+        if selected.role != role or after.query_id != before.query_id or after.query_component_id != before.query_component_id or len(after.canonical_ids) != count or len(set(after.canonical_ids)) != count or any(c not in positions for c in after.canonical_ids):
+            raise ValueError('transition coverage query/selection mismatch')
+        labels,actual_presence = bind_candidate_order(before,after.canonical_ids)
+        if after.relevance != labels or after.answer_in_candidates != actual_presence:
+            raise ValueError('transition coverage label/presence mismatch')
+        queries.append(after.query_id);components.append(after.query_component_id)
+        selections.append([positions[c] for c in after.canonical_ids]);presence.append(actual_presence)
+    if len(set(queries)) != len(queries):
+        raise ValueError('transition coverage duplicate query')
+    path = store.run_root/'provenance/transition-coverage.json'
+    if path.exists():
+        raise ValueError('transition coverage already published')
+    arrays = [store.write('candidate_presence',torch.tensor(presence,dtype=torch.int8)),
+              store.write('selected_gallery_indices',torch.tensor(selections,dtype=torch.int64))]
+    payload = dict(schema_version='evidence-transition-coverage-v1',role=role,query_count=len(queries),candidate_count=count,
+        producer_sha256=producer.sha256,transition_index_sha256=references.index_sha256,
+        role_manifest_sha256=binding.manifest.sha256,index_specification_sha256=cfg.index.reference.sha256,
+        query_order_sha256=digest(queries),component_order_sha256=digest(components),gallery_order_sha256=digest(gallery),
+        cohort_complete=True,array_references=[asdict(a) for a in arrays])
+    validate_evidence_document('transition_coverage',payload)
+    publish_json(path,payload)
+    return path
+
+
 def _write_reference_parts(context,model):
     from semantic_retrieval.runtime.checkpoint import _publish_file, _externalize_large_tensors
     path = context.paths.checkpoints/'reference-parts.pt'
@@ -593,7 +639,9 @@ def _execute_scientific_stage(context,cfg):
         adapter = FrozenTransitionModel(model,lambda s:adapters[s.query_id].predict(s),observe,build_value_features)
         truth = {w.episode.query_id:(dict(zip(w.episode.canonical_ids,w.episode.relevance)),(w.episode.query_component_id,)) for w in episodes}
         refs = compile_transitions(states,propose_actions,adapter,truth,store=context.array_store,producer_identity=producer)
-        return dict(summary_metrics={'transition_count':float(len(read_transitions(refs,expected_producer=producer).features))})
+        batch = read_transitions(refs,expected_producer=producer)
+        publish_transition_coverage(cfg,role,episodes,producer,refs,context.array_store)
+        return dict(summary_metrics={'transition_count':float(len(batch.features))})
     from semantic_retrieval.evidence.value import EvidenceValueModel
     value_container = EvidenceValueModel(model,head)
     if cfg.parents.value is not None:
@@ -639,7 +687,7 @@ def _evaluation(context,cfg,model,head):
     episodes,lookup,source,cache = _episodes_and_sources(cfg,role,model,context)
     def snapshot_progress():
         return export_recovery(context.array_store,config_sha256=evidence_config_sha256(cfg),source_sha=context.config.source_sha)
-    journal = ActionJournal(context.array_store.run_root/'provenance'/'evidence-actions',context.array_store,after_write=snapshot_progress)
+    journals = {}
     calibration = None
     if cfg.policy.baseline == 'distribution':
         with cfg.parents.calibration.path.open() as h:
@@ -654,6 +702,9 @@ def _evaluation(context,cfg,model,head):
     records,components,completed = [],[],[]
     for w in episodes:
         e = w.episode
+        journal = ActionJournal(context.array_store.run_root/'provenance'/'evidence-actions',context.array_store,
+                                after_write=snapshot_progress,query_id=e.query_id)
+        journals[e.query_id] = journal
         timings = {}
         synchronize(next(model.parameters()).device);episode_started = time.monotonic()
         state = read_initial_state(context.array_store,e.query_id)
@@ -699,6 +750,7 @@ def _evaluation(context,cfg,model,head):
     selected_logits,selected_classes,selected_valid = [],[],[]
     if cfg.value.kind != 'mean_regressor' and cfg.parents.value is not None:
         for episode,result in completed:
+            journal = journals[episode.query_id]
             truth = dict(zip(episode.canonical_ids,episode.relevance))
             for action_id in result.action_ids:
                 before,after,action = journal.action_prediction_states(action_id)
@@ -720,6 +772,7 @@ def _evaluation(context,cfg,model,head):
         diagnostic_cache = FrameFeatureCache(ArtifactArrayStore(context.paths.provenance/'rich-diagnostics'/'arrays'))
         locs,scales,targets,masks = [],[],[],[]
         for episode,result in completed:
+            journal = journals[episode.query_id]
             state = result.final_state
             rows = []
             for candidate in state.candidates:

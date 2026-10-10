@@ -213,12 +213,13 @@ def _exercise(context,cfg,device):
     policy = build_acquisition_baseline('random',seed=cfg.sampling.seed,config=cfg)
     facade = SimpleNamespace(device=device,prediction_counts=adapter.prediction_counts,predict=lambda s:(adapter.predict(s),adapter.prediction_counts(s)),sampling_sha256=eval_sampling.identity,value_head=head,policy=policy,stop_threshold=cfg.policy.stop_threshold)
     # Continuous run, then repeated completed replay: neither frames nor model computation may run twice.
-    journal = ActionJournal(local_store.run_root/'provenance/evidence-actions',local_store)
+    journal = ActionJournal(local_store.run_root/'provenance/evidence-actions',local_store,query_id=state.query_id)
     continuous = run_policy_episode(context,state,facade,adapter.acquire,journal=journal)
     resumed = run_policy_episode(context,state,facade,lambda *a:(_ for _ in ()).throw(AssertionError('repeated I/O')),journal=journal)
     checks['action_recovery'] = _require(continuous.final_state == resumed.final_state and continuous.action_ids == resumed.action_ids and continuous.initial_ranking == resumed.initial_ranking,'action/prediction recovery')
     # Separate query: simulate interruption after physical execution, before the commit record.
     interrupted = replace(state,query_id=state.query_id+'-interrupted')
+    journal = ActionJournal(local_store.run_root/'provenance/evidence-actions',local_store,query_id=interrupted.query_id)
     action = propose_actions(interrupted)[0]
     journal.prepare(interrupted,reserve_action(interrupted,action,predicted_counts=action.reservation))
     outcome = acquire(action,interrupted,adapter.acquire);journal.record_execution(action.action_id,outcome)

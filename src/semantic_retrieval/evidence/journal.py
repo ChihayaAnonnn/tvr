@@ -9,22 +9,55 @@ from semantic_retrieval.evidence.types import action_from_payload, digest, outco
 
 
 class ActionJournal:
-    def __init__(self, root, store, *, after_write=None):
+    def __init__(self, root, store, *, after_write=None,query_id=None):
         if root != store.run_root/'provenance'/'evidence-actions':
             raise ValueError('journal must be run-local evidence-actions')
         safe_path(root)
         self.root = root
         self.store = store
         self.after_write = after_write
+        if query_id is not None and (not isinstance(query_id,str) or not query_id):
+            raise ValueError('journal query identity required')
+        self.query_id = query_id
+        self.event_root = root if query_id is None else root/digest(query_id)
+        marker = root/'layout.json';safe_path(marker)
+        if query_id is None and marker.exists():
+            raise ValueError('query-scoped journal layout requires explicit query identity')
+        if query_id is not None:
+            layout = dict(schema_version='evidence-query-journal-layout-v1',query_directory='canonical-json-query-id-sha256')
+            if marker.exists():
+                with marker.open() as handle:
+                    if strict_json_load(handle) != layout:
+                        raise ValueError('unsupported query journal layout')
+            else:
+                publish_json(marker,layout)
+
+    def _events(self,event):
+        safe_path(self.event_root)
+        paths = list(self.event_root.glob('*.'+event+'.json'))
+        if self.query_id is not None:
+            paths.extend(self.root.glob('*.'+event+'.json'))
+        return sorted(paths)
 
     def _path(self, action_id, event):
         if not re.fullmatch('[0-9a-f]{64}', action_id) or event not in {'prepare', 'execute', 'commit', 'predict', 'predict_prepare'}:
             raise ValueError('invalid action event identity')
-        p = self.root/(action_id+'.'+event+'.json')
+        name = action_id+'.'+event+'.json'
+        p = self.event_root/name
         safe_path(p)
+        if self.query_id is not None:
+            legacy = self.root/name;safe_path(legacy)
+            if legacy.exists():
+                if p.exists():
+                    raise ValueError('ambiguous duplicate query journal event')
+                return legacy
         return p
 
     def _write(self, action_id, event, payload):
+        if self.query_id is not None:
+            states = [payload[k] for k in ('state','before','after') if k in payload and isinstance(payload[k],dict) and 'query_id' in payload[k]]
+            if any(s['query_id'] != self.query_id for s in states):
+                raise ValueError('journal query identity mismatch')
         p = self._path(action_id,event)
         envelope = dict(schema_version='evidence-action-v1', action_id=action_id, event=event,
                         payload=payload, payload_sha256=digest(payload))
@@ -48,6 +81,10 @@ class ActionJournal:
         validate_evidence_document('action_event',value)
         if set(value) != {'schema_version','action_id','event','payload','payload_sha256'} or value['schema_version'] != 'evidence-action-v1' or value['action_id'] != action_id or value['event'] != event or digest(value['payload']) != value['payload_sha256']:
             raise ValueError('corrupt journal event')
+        if self.query_id is not None and p.parent == self.event_root:
+            states = [value['payload'][k] for k in ('state','before','after') if k in value['payload'] and isinstance(value['payload'][k],dict) and 'query_id' in value['payload'][k]]
+            if any(s['query_id'] != self.query_id for s in states):
+                raise ValueError('journal query identity mismatch')
         return value['payload']
 
     def prepare(self, state, decision):
@@ -114,10 +151,16 @@ class ActionJournal:
     def prediction_for(self,state,*,expected_sampling):
         import torch
         from semantic_retrieval.evidence.types import PairPredictiveScores
+        if self.query_id is not None and state.query_id != self.query_id:
+            raise ValueError('journal query identity mismatch')
         if not self.root.exists():
             return None
-        for path in self.root.glob('*.predict.json'):
-            _,after,p = self._prediction(path.name.split('.')[0])
+        for path in self._events('predict'):
+            key = path.name.split('.')[0]
+            payload = self._read(key,'predict')
+            if payload['after']['query_id'] != state.query_id:
+                continue
+            _,after,p = self._prediction(key)
             if after == state:
                 if p['sampling_sha256'] != expected_sampling:
                     raise ValueError('restored prediction model/integration mismatch')
@@ -127,18 +170,30 @@ class ActionJournal:
 
     def action_prediction_states(self,action_id):
         before,after_action = self._next(action_id)
+        if self.query_id is not None and before.query_id != self.query_id:
+            raise ValueError('journal query identity mismatch')
         action = action_from_payload(self._read(action_id,'prepare')['action'])
-        for path in self.root.glob('*.predict.json'):
-            initial,metered,_ = self._prediction(path.name.split('.')[0])
+        for path in self._events('predict'):
+            key = path.name.split('.')[0]
+            payload = self._read(key,'predict')
+            if payload['before']['query_id'] != after_action.query_id:
+                continue
+            initial,metered,_ = self._prediction(key)
             if initial == after_action:
                 return before,metered,action
         raise ValueError('selected action lacks a completed next prediction')
 
     def episode_history(self,query_id):
-        predictions = [self._prediction(p.name.split('.')[0]) for p in self.root.glob('*.predict.json')]
-        predictions = sorted((p for p in predictions if p[0].query_id == query_id),key=lambda p:p[0].version)
+        if self.query_id is not None and query_id != self.query_id:
+            raise ValueError('journal query identity mismatch')
+        predictions = []
+        for path in self._events('predict'):
+            key = path.name.split('.')[0]
+            if self._read(key,'predict')['before']['query_id'] == query_id:
+                predictions.append(self._prediction(key))
+        predictions.sort(key=lambda p:p[0].version)
         actions = []
-        for path in self.root.glob('*.prepare.json'):
+        for path in self._events('prepare'):
             key = path.name.split('.')[0]
             state = state_from_payload(self._read(key,'prepare')['state'])
             if state.query_id == query_id:
@@ -147,16 +202,18 @@ class ActionJournal:
         return (predictions[0][1] if predictions else None),tuple(k for _,k in sorted(actions))
 
     def recover(self, state):
+        if self.query_id is not None and state.query_id != self.query_id:
+            raise ValueError('journal query identity mismatch')
         if not self.root.exists():
             return state
         safe_path(self.root)
         history = []
-        for p in self.root.glob('*.predict_prepare.json'):
+        for p in self._events('predict_prepare'):
             key = p.name.split('.')[0]
             before = state_from_payload(self._read(key,'predict_prepare')['before'])
             if before.query_id == state.query_id and not self._path(key,'predict').exists():
                 raise ValueError('unfinished prediction; actual work cannot be established')
-        for p in self.root.glob('*.prepare.json'):
+        for p in self._events('prepare'):
             action_id = p.name.split('.')[0]
             prepared = self._read(action_id,'prepare')
             before = state_from_payload(prepared['state'])
@@ -167,8 +224,11 @@ class ActionJournal:
                 if self._read(action_id,'commit') != {'state_sha256': after.state_sha256}:
                     raise ValueError('action commit digest mismatch')
             history.append((before,after,action_id))
-        for p in self.root.glob('*.predict.json'):
-            before,after,_ = self._prediction(p.name.split('.')[0])
+        for p in self._events('predict'):
+            key = p.name.split('.')[0]
+            if self._read(key,'predict')['before']['query_id'] != state.query_id:
+                continue
+            before,after,_ = self._prediction(key)
             if before.query_id == state.query_id:
                 history.append((before,after,None))
         history.sort(key=lambda item:item[0].version)

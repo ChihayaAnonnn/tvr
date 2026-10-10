@@ -51,3 +51,9 @@ val_locked 还必须有独立、已提交且哈希匹配的 locked_validation ga
 恢复 inventory 使用 O_NOFOLLOW 目录描述符递归，拒绝链接、特殊文件及遍历期间身份变化；
 所有叶文件每次重新计算完整 SHA-256，不缓存校验结果。保持 v1 snapshot 的文件排序、
 分片和内容寻址兼容。软件微基准只衡量归档开销，不解释为在线方法加速。
+
+## 查询日志与转移样本覆盖版本
+
+新动作日志使用 `evidence-query-journal-layout-v1` marker，事件存放在 canonical JSON 查询 ID 的 SHA-256 子目录。恢复必须指定查询 ID；保留旧平铺 v1 事件读取，重复布局冲突、外来查询事件或未知 marker 拒绝。每次恢复仍校验所依赖数组的实际字节 SHA-256，缓存不替代完整性检查。
+
+转移编译成功后发布 `provenance/transition-coverage.json`（`evidence-transition-coverage-v1`），绑定 producer、原角色 manifest、完整查询及来源顺序、gallery 与实际 top-K 索引。candidate presence 和候选索引为外置数组；无合法动作的查询仍计入完整 cohort，未知标签保留 -1。该记录用于审计候选缺失与样本覆盖，不参与标签或模型输入。

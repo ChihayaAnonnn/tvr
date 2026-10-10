@@ -23,6 +23,10 @@ def schema_for(kind):
     identity = obj(dict(producer_sha256=DIGEST,model_sha256=DIGEST,role={'const':'V_calibration'},relevance_space={'enum':['benchmark_annotation','reviewed_semantic']},feature_schema_sha256=DIGEST))
     resources = obj({k:COUNT for k in ('frame_requests','clip_frames','temporal_tokens','mc_elements')})
     schemas = {
+        'transition_coverage': obj(dict(schema_version={'const':'evidence-transition-coverage-v1'},
+            role={'enum':['T_value','V_development','V_calibration']},query_count={'type':'integer','minimum':1},candidate_count={'type':'integer','minimum':1},
+            producer_sha256=DIGEST,transition_index_sha256=DIGEST,role_manifest_sha256=DIGEST,index_specification_sha256=DIGEST,
+            query_order_sha256=DIGEST,component_order_sha256=DIGEST,gallery_order_sha256=DIGEST,cohort_complete={'const':True},array_references=array(ref))),
         'input_failure': obj(dict(schema_version={'const':'evidence-input-failure-v1'},scope={'enum':['episode','index']},
             query_id=STRING,candidate_id=STRING,actual_counts=resources,
             budget={'anyOf':[{'type':'null'},obj(dict(limits=resources,spent=resources,reserved=resources))]},

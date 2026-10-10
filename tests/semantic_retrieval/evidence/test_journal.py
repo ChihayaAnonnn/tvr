@@ -59,13 +59,16 @@ def test_unfinished_prediction_fails_closed_for_its_query_only(journal_case):
     assert c.journal.recover(other) == other
 
 
-def test_successor_import_restores_executed_action_without_repeating_io(journal_case,tmp_path):
+@pytest.mark.parametrize('scoped',[False,True])
+def test_successor_import_restores_executed_action_without_repeating_io(journal_case,tmp_path,scoped):
     from experiment_artifacts import ArtifactArrayStore
     from semantic_retrieval.evidence.journal import ActionJournal
     from semantic_retrieval.evidence.recovery import export_recovery,import_recovery,save_initial_state,read_initial_state
     from semantic_retrieval.evidence.config import InputReference
     from semantic_retrieval.data.episodes import file_sha256
     c = journal_case
+    if scoped:
+        c.journal = ActionJournal(c.journal.root,c.journal.store,query_id=c.state.query_id)
     save_initial_state(c.journal.store,c.state)
     c.journal.prepare(c.state,c.decision)
     c.journal.record_execution(c.decision.action.action_id,c.outcome)
@@ -73,7 +76,7 @@ def test_successor_import_restores_executed_action_without_repeating_io(journal_
     successor = ArtifactArrayStore(tmp_path/'successor'/'arrays')
     ref = InputReference(path,file_sha256(path))
     import_recovery(ref,successor,config_sha256='a'*64,source_sha='b'*40)
-    journal = ActionJournal(successor.run_root/'provenance'/'evidence-actions',successor)
+    journal = ActionJournal(successor.run_root/'provenance'/'evidence-actions',successor,query_id=c.state.query_id if scoped else None)
     initial = read_initial_state(successor,c.state.query_id)
     assert initial == c.state
     assert journal.recover(initial) == c.next_state
@@ -132,3 +135,37 @@ def test_recovery_export_rejects_directory_swap_during_inventory(tmp_path,monkey
     with pytest.raises((ValueError,OSError)):
         _directory_inventory(directory,root)
     assert swapped
+
+
+def test_scoped_journal_isolates_shared_video_predictions_and_recovers_legacy(state_factory,tmp_path):
+    from dataclasses import replace
+    import torch
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.evidence.journal import ActionJournal
+    from semantic_retrieval.evidence.types import PairPredictiveScores,ResourceCounts,digest
+    store=ArtifactArrayStore(tmp_path/'run'/'arrays');root=store.run_root/'provenance/evidence-actions'
+    counts=ResourceCounts(0,0,4,8)
+    def record(journal,query):
+        before=state_factory(query_id=query)
+        after=replace(before,budget=before.budget.reserve(counts).settle(counts,counts),version=1)
+        scores=PairPredictiveScores(torch.full((2,),float(len(query))),torch.ones(2),torch.ones(2,4),torch.full((2,),-.6931472),tuple((query,c.canonical_id) for c in before.candidates),'a'*64)
+        journal.prepare_prediction(before,counts);journal.record_prediction(before,after,scores,counts)
+        return before,after
+    legacy=ActionJournal(root,store);before,after=record(legacy,'legacy-query')
+    scoped=ActionJournal(root,store,query_id='legacy-query')
+    assert scoped.recover(before)==after
+    assert scoped.prediction_for(after,expected_sampling='a'*64) is not None
+    other=ActionJournal(root,store,query_id='other-query');other_before,other_after=record(other,'other-query')
+    event=other._read(other_before.state_sha256,'predict')
+    (store.run_root/event['arrays'][0]['path']).write_bytes(b'corrupt')
+    assert scoped.recover(before)==after
+    assert scoped.episode_history('legacy-query')[0]==after
+    assert scoped.prediction_for(after,expected_sampling='a'*64) is not None
+    with pytest.raises(ValueError):other.prediction_for(other_after,expected_sampling='a'*64)
+    new=ActionJournal(root,store,query_id='new-query');new_before,new_after=record(new,'new-query')
+    assert (root/digest('new-query')/(new_before.state_sha256+'.predict.json')).exists()
+    with pytest.raises(ValueError):new.recover(before)
+    reopened=ActionJournal(root,store,query_id='new-query')
+    assert reopened.recover(new_before)==new_after
+    with pytest.raises(ValueError,match='explicit query'):
+        ActionJournal(root,store)
