@@ -1,11 +1,12 @@
 """Authenticated full-caption datasets and pinned upstream 1 FPS frame policy."""
 import math
+from contextlib import contextmanager
 import re
 from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
 from experiment_artifacts import strict_json_load
 from semantic_retrieval.data.episodes import file_sha256
@@ -140,3 +141,29 @@ class CaptionDataset(Dataset):
         row = self.captions[index]
         video, frame_mask = self.decode(row['official_video_id'])
         return (*self.text(index), video, frame_mask, torch.tensor(self.video_ids[row['official_video_id']]))
+
+
+def _initialize_loader_worker(_worker_id):
+    # Spawn isolates worker RNG from training and avoids inherited CUDA contexts.
+    import cv2
+    torch.set_num_threads(1)
+    cv2.setNumThreads(1)
+
+
+@contextmanager
+def batch_loader(dataset, batches, *, workers, pin_memory):
+    """Ordered, bounded CPU prefetch; propagate errors and close workers on exit."""
+    if type(workers) is not int or workers not in {0, 4} or type(pin_memory) is not bool:
+        raise ValueError('invalid bounded loader configuration')
+    options = {} if workers == 0 else dict(multiprocessing_context='spawn', prefetch_factor=2,
+                                          worker_init_fn=_initialize_loader_worker, timeout=90)
+    loader = DataLoader(dataset, batch_sampler=batches, num_workers=workers,
+                        pin_memory=pin_memory, **options)
+    iterator = iter(loader)
+    try:
+        yield iterator
+    finally:
+        if workers:
+            # Pinned PyTorch2.1 has no public iterator close API. Explicit close
+            # is required on rank failure/early exit, rather than relying on GC.
+            iterator._shutdown_workers()

@@ -164,6 +164,11 @@ def assert_full_data_authorized(*, repo_root, registry_path, manifest, operation
     if evaluation.get('config_kind') != KIND:
         raise ValueError('full-data execution requires explicit typed config marker')
     settings = settings_from_manifest(manifest)
+    if settings.stage != 'cpu_fixture':
+        expected_loader = dict(workers_per_rank=settings.loader_workers, prefetch_batches_per_worker=2,
+                               backend='spawn-v1', worker_timeout_seconds=90, ordered_batches=True)
+        if study.get('loader_policy') != expected_loader:
+            raise ValueError('loader differs from sealed study policy')
     if settings.stage != 'cpu_fixture' and (settings.world_size != study['software_authorization']['world_size']
             or settings.memory_limit_gib != study['resource_policy']['memory_limit_gib']):
         raise ValueError('GPU topology/memory settings differ from approved study')

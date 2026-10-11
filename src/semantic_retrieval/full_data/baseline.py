@@ -1,11 +1,11 @@
 """Complete-caption training and full-gallery, bidirectional validation."""
 import math
+import time
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.distributed as dist
-from torch.utils.data import DataLoader
 from experiment_artifacts import strict_json_load, verify_array_reference
 
 from semantic_retrieval.data.episodes import file_sha256
@@ -13,7 +13,7 @@ from semantic_retrieval.evidence.frame_cache import publish_json, safe_path
 from semantic_retrieval.runtime.artifacts import publish_metrics
 from semantic_retrieval.runtime.checkpoint import model_sha256
 from semantic_retrieval.runtime.distributed import gather_metadata
-from .loader import read_complete, CaptionDataset
+from .loader import read_complete, CaptionDataset, batch_loader
 from semantic_retrieval.full_data.metrics import retrieval_metrics
 from .qualification import initial_clip, make_model, checkpoint_identity, step
 from .training import make_optimizer, unique_video_batches, save_state, restore_state, carry_checkpoint
@@ -28,22 +28,31 @@ def choose_epoch(rows):
     return min(rows, key=lambda r: (-r['t2v_r1'], r['epoch']))['epoch']
 
 
-def train_epoch(model, network, optimizer, dataset, batches, device):
+def train_epoch(model, network, optimizer, dataset, batches, device, *, loader_workers=0):
     rank, world = (dist.get_rank(), dist.get_world_size()) if dist.is_initialized() else (0, 1)
     local = [list(batch[rank*(len(batch)//world):(rank+1)*(len(batch)//world)]) for batch in batches]
     if any(not b for b in local): raise ValueError('empty training rank cannot be silently skipped')
-    loader = DataLoader(dataset, batch_sampler=local, num_workers=0, pin_memory=device.type == 'cuda')
-    iterator = iter(loader)
     values, count = [], 0
-    for indices in local:
-        batch = _collective_call(lambda: next(iterator))
-        if len(batch[0]) != len(indices): raise ValueError('training batch cardinality changed')
-        result = step(model, network, optimizer, tuple(x.to(device, non_blocking=True) for x in batch))
-        loss = torch.tensor([result[k] for k in ('loss', 'contrastive', 'mil', 'kl')], device=device, dtype=torch.float64)
-        if world > 1: dist.all_reduce(loss); loss /= world
-        count += len(indices); values.append(loss.cpu().tolist())
-        if rank == 0 and len(values) % 100 == 0:
-            print(f'updates={len(values)}/{len(local)} loss={result["loss"]:.6f}', flush=True)
+    data_seconds, step_seconds, window_count = 0.0, 0.0, 0
+    with batch_loader(dataset, local, workers=loader_workers, pin_memory=device.type == 'cuda') as iterator:
+        for indices in local:
+            started = time.perf_counter()
+            batch = _collective_call(lambda: next(iterator))
+            data_seconds += time.perf_counter()-started
+            if len(batch[0]) != len(indices): raise ValueError('training batch cardinality changed')
+            started = time.perf_counter()
+            result = step(model, network, optimizer, tuple(x.to(device, non_blocking=True) for x in batch))
+            loss = torch.tensor([result[k] for k in ('loss', 'contrastive', 'mil', 'kl')], device=device, dtype=torch.float64)
+            if world > 1: dist.all_reduce(loss); loss /= world
+            count += len(indices); window_count += len(indices)*world
+            values.append(loss.cpu().tolist())  # Synchronizes the measured update.
+            step_seconds += time.perf_counter()-started
+            if len(values) % 100 == 0:
+                if rank == 0:
+                    print(f'updates={len(values)}/{len(local)} loss={result["loss"]:.6f} '
+                          f'data_wait_s={data_seconds/100:.4f} update_s={step_seconds/100:.4f} '
+                          f'global_samples_s={window_count/(data_seconds+step_seconds):.2f}', flush=True)
+                data_seconds, step_seconds, window_count = 0.0, 0.0, 0
     if count != sum(len(b) for b in local): raise ValueError('incomplete caption traversal')
     return np.asarray(values, dtype=np.float32)
 
@@ -143,7 +152,7 @@ def train_baseline(context, settings, device):
     resumed_updates = update
     for epoch in range(start_epoch+1, recipe['epochs']+1):
         epoch_batches = batches[epoch-1]
-        losses = train_epoch(model, network, optimizer, training, epoch_batches, device)
+        losses = train_epoch(model, network, optimizer, training, epoch_batches, device, loader_workers=settings.loader_workers)
         update += len(epoch_batches)
         scores, result = evaluate_complete(model, validation, device)
         checkpoint = context.paths.checkpoints/f'epoch-{epoch:02d}.pt'

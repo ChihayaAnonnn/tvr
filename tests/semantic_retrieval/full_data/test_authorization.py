@@ -86,6 +86,10 @@ def test_synthetic_fixture_permission_and_formal_approved_two_card_identity(perm
                 input_checkpoints=[dict(path=str(q.clip_weights), sha256=q.clip_sha256)],
                 environment=dict(precision='fp32', gpu_count=2, distributed_topology='torchrun-2'))
     check(four)
+    from dataclasses import replace
+    serial = dict(four, config=manifest_config(replace(q, loader_workers=0)))
+    with pytest.raises(ValueError, match='loader'):
+        check(serial)
     with pytest.raises(ValueError): check(dict(four, environment=dict(four['environment'], gpu_count=4)))
     bad = copy.deepcopy(four); bad['config']['model']['clip_sha256'] = 'b'*64
     with pytest.raises(ValueError): check(bad)

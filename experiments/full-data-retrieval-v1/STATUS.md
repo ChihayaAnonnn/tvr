@@ -12,3 +12,8 @@ All scientific runs remain validation-only; test is sealed. Official paper test1
 
 
 Live execution update: first two-rank Q0 failed on non-contiguous NCCL metadata buffers, was archived in a56a6cb (83.415507s,0.04634195GPUh), and did not open science. The shared gather correction passed91 affected CPU tests and independent follow-up review. A new Q0 will qualify the corrected committed source; full-data training/R@1 remain pending at this commit.
+
+
+Optimization handoff (2026-10-11): first UATVR scientific worker completedepoch1 and enteredepoch2; controller was found absent. Verified originalrun before stopping its bound process group; pair sealed73178fe (UATVR failed, CLIP4Clip unlaunched/cancelled), conservatively charged20.072222GPUh. Epoch1 raw validation T2V51.29/V2T78.60 is an intermediate failed-run observation, not a final selected result. Full failure/checkpoint history retained.
+
+User requested supply optimization: four spawned loader workers/rank, ordered prefetch2 and90s timeout now integrated with scientific and formal Q0 paths; tests250 passed and independent review clear. Gate reclosed until new-source Q0. Old executable checkpoint cannot resume changed source, so new training restarts official initialization with fixed global batches/seeds/protocol. Native campaign will be launched inside independent tmux supervision. No optimized scientific R@1 or end-to-end speedup exists at this commit.

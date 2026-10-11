@@ -15,6 +15,8 @@ from semantic_retrieval.runtime.distributed import gather_metadata, gather_with_
 from semantic_retrieval.full_data.models import BaselineModel
 from semantic_retrieval.full_data.metrics import retrieval_metrics
 from .runtime import manifest_config
+from .loader import batch_loader
+from torch.utils.data import TensorDataset
 from .training import make_optimizer, save_state, restore_state
 from experiment_artifacts import artifact_json_bytes
 
@@ -145,7 +147,12 @@ def qualify(context, settings, device):
         if device.type == 'cuda': torch.cuda.reset_peak_memory_stats(device)
         model, network = make_model(settings, method, clip_state, device)
         opt = make_optimizer(model, learning_rate=settings.recipe(method)['learning_rate'], total_steps=20)
-        batch = _synthetic_batch(settings, settings.recipe(method)['global_batch']//world, rank, device)
+        local_count = settings.recipe(method)['global_batch']//world
+        cpu_batch = _synthetic_batch(settings, local_count, rank, torch.device('cpu'))
+        with batch_loader(TensorDataset(*cpu_batch), [list(range(local_count))], workers=settings.loader_workers,
+                          pin_memory=device.type == 'cuda') as iterator:
+            batch = tuple(x.to(device, non_blocking=True) for x in next(iterator))
+        del cpu_batch
         before = model.clip.text_projection.detach().clone()
         first, second = step(model, network, opt, batch), step(model, network, opt, batch)
         if torch.equal(before, model.clip.text_projection):
