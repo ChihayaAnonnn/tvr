@@ -28,6 +28,6 @@ Results: per-run `metrics/selected_validation.json`, `provenance/baseline-result
 
 ## Optimized supply and persistent Native execution (2026-10-11)
 
-See TRAINING_OPTIMIZATION.md. Formal runs now seal4 spawned loader workers per rank, prefetch2 batches/worker and90s timeout. Prior executable qualification is invalidated; new two-rank Q0 must pass. Old executable checkpoint compatibility remains strict, so this change restarts the complete scientific recipe under new identities.
+See TRAINING_OPTIMIZATION.md. Final measured policy now seals8 spawned loader workers per rank, prefetch2 batches/worker and90s timeout. Prior executable qualification is invalidated; new two-rank Q0 must pass. Old executable checkpoint compatibility remains strict, so this change restarts the complete scientific recipe under new identities.
 
 For an hours-long run, start the same campaign inside an independent `tmux` session from the clean linked worktree, with `remain-on-exit` enabled. Capture the pane to inspect controller progress/failure, and read run-local logs for training progress. This avoids a foreground desktop tool ending the controller while a separately sessioned torchrun survives. It does not bypass launch binding, locks, resource checks, budgets or terminal archival.
