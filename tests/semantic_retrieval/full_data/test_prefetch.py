@@ -42,17 +42,18 @@ def collect(dataset, workers):
         return list(iterator)
 
 
-def test_real_spawn_prefetch_preserves_batch_pixels_order_and_parent_rng(videos):
+@pytest.mark.parametrize('workers', [4, 8])
+def test_real_spawn_prefetch_preserves_batch_pixels_order_and_parent_rng(videos, workers):
     torch.manual_seed(713); before = torch.get_rng_state().clone()
     expected = collect(videos, 0); after = torch.get_rng_state().clone()
     torch.set_rng_state(before)
-    actual = collect(videos, 4)
+    actual = collect(videos, workers)
     assert torch.equal(torch.get_rng_state(), after)
     assert torch.cat([b[2] for b in actual]).tolist() == [5, 1, 6, 0, 7, 3, 2, 4]
     for left, right in zip(expected, actual):
         assert all(torch.equal(a, b) for a, b in zip(left, right))
     torch.set_rng_state(before)
-    replay = collect(videos, 4)
+    replay = collect(videos, workers)
     assert all(torch.equal(a, b) for left, right in zip(actual, replay) for a, b in zip(left, right))
 
 

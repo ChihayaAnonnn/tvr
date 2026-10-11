@@ -153,7 +153,7 @@ def _initialize_loader_worker(_worker_id):
 @contextmanager
 def batch_loader(dataset, batches, *, workers, pin_memory):
     """Ordered, bounded CPU prefetch; propagate errors and close workers on exit."""
-    if type(workers) is not int or workers not in {0, 4} or type(pin_memory) is not bool:
+    if type(workers) is not int or workers not in {0, 4, 8} or type(pin_memory) is not bool:
         raise ValueError('invalid bounded loader configuration')
     options = {} if workers == 0 else dict(multiprocessing_context='spawn', prefetch_factor=2,
                                           worker_init_fn=_initialize_loader_worker, timeout=90)

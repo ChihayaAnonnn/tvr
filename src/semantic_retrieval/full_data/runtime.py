@@ -42,8 +42,8 @@ class FullDataSettings:
 
     def __post_init__(self):
         if self.loader_workers is None:
-            object.__setattr__(self, 'loader_workers', 0 if self.stage == 'cpu_fixture' else 4)
-        if type(self.loader_workers) is not int or self.loader_workers not in {0, 4}:
+            object.__setattr__(self, 'loader_workers', 0 if self.stage == 'cpu_fixture' else 8)
+        if type(self.loader_workers) is not int or self.loader_workers not in {0, 4, 8}:
             raise ValueError('invalid sealed loader worker count')
         if self.world_size is None:
             object.__setattr__(self, 'world_size', 1 if self.stage == 'cpu_fixture' else 4)
