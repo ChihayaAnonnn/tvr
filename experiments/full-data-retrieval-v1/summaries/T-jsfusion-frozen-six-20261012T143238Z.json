@@ -1,0 +1,130 @@
+{
+  "phase": "T-jsfusion-frozen-six-20261012T143238Z",
+  "phase_path": "experiments/full-data-retrieval-v1/phases/T-jsfusion-frozen-six-20261012T143238Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "e3ab14ca49697423ec9ecd0d20da4640f919351f21252e3040ec3a7f4c989c56",
+      "output_hashes": {
+        "arrays/sha256/0a/0a49bbe59ae5f2658da1557eb94165a3cf0d7e7244dd27909adb2f6e76aefbe9.npy": "300237a179bd119373a0a9d1dda52eb578020b312c0e53568fac7e4fe81be2f9",
+        "arrays/sha256/3b/3b609bd9ddd40ccfbc525b3219e4905966e0ab150597f4b218d602dd852fa541.npy": "1bd3848060f2b35a8dba0d5fa17f7bb73a78efa13e18a4ad5d0b97b1ae1f5cde",
+        "arrays/sha256/bb/bb436b0dc82c3b4c0696e9bd7e5d6781a2d0218b2d8e63241b07fedb7eaf1c0b.npy": "2ff6d586ed625c4102863283c427400310cca241411ae48c9cf080324567872d",
+        "command.sh": "1b42810cdfd2fb82e73e07c3e42819fb4c3bbd978d9ab27704d6601d8baf40ad",
+        "logs/worker.log": "e868591b2eb733cf23bdb18623e4cb5c96b467ba81de7ca3aac415409f431102",
+        "metrics/final_test.json": "d4bbbbac6e82f6b7bbb6a195bc954b823d55aacf4c9ca0f994c710a0f47c0b32",
+        "metrics/test_eval_000.json": "d4bbbbac6e82f6b7bbb6a195bc954b823d55aacf4c9ca0f994c710a0f47c0b32",
+        "provenance/controller-launch-intent.json": "5e431a91768d876e2d829e3170b115f18ad45bc1d2f93a389227d3af6466ea5d",
+        "provenance/controller-launch.json": "b2b7e21ed79d603b91e0c1b2b38da81977bafaa97f6d3a0a76f1e687729f64f8",
+        "provenance/controller-plan.json": "36acfffccb7911edb71871d282ef84e5ccd641e5682c0e081366693b4c5b0447",
+        "provenance/controller-result.json": "7bedc02813c79ce8c17a87854f9afef4b470469c97ccbca4a6526e43d23a5aeb",
+        "provenance/final-test-result.json": "72cb477f22dd049b35d3a37e1038e156d0a48c6c445d9f33302f522f5f24f3a6"
+      },
+      "run_id": "msrvtt-final-test-uatvr-seed713-20261012T143236Z-ca9fc5567fc6",
+      "state": "completed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "944ff35b76350ab6973db7d02e76b21dd508edb0caa2c13e0eedb8e7760be9d9",
+      "output_hashes": {
+        "arrays/sha256/87/87e7b21c58d9c87c5c30ee99017e62121e17137bf18f50dc5fe62e02f4a1e0d1.npy": "218a86581db27b35cac4f464e091d4d476c4e2a15dcefaf4a79b8a48cd2bb099",
+        "arrays/sha256/a8/a8faeb9e8fb4ebf7e6391125234f8046f3dd9f6459574dedea8a5214d46c78cd.npy": "5a19451da5f785c470cd2db86de64f8e788fdc2e13a1f983a3b350b4e319f383",
+        "arrays/sha256/bc/bcf08d6fd5952ffb00182610883dc0e009fc17e9e49f07425339b51412fcb55a.npy": "08ad22b62e45e13d22d9b395fbe00e9281a1bf4ea15c8af21b16222df809cbc8",
+        "command.sh": "11630f87b511f4caa27ca69b715c274eb38870976e1eb3ca6acb88553eeba2f3",
+        "logs/worker.log": "66705e01aac7d8df524bb49a292a8335747c53d884296fe55339115e0222dbe0",
+        "metrics/final_test.json": "7d702f8ab1cf5b39e05952256ac762d8507a7746b987c835e15826544baf341f",
+        "metrics/test_eval_000.json": "7d702f8ab1cf5b39e05952256ac762d8507a7746b987c835e15826544baf341f",
+        "provenance/controller-launch-intent.json": "ef86e785f7cfa600bebe5185c2fd634cae0704d2b100616552780633c273172a",
+        "provenance/controller-launch.json": "94c98e5078de3853c53ad7898f5870aa3a93b149cad6220778006d03fa24f41a",
+        "provenance/controller-plan.json": "c8bb7f967197e42b81e1f426e6f16e6a89963acc6fc24f74bc88f98864f3d144",
+        "provenance/controller-result.json": "b79a078f1472974a6ee3a02aded24bc1c4a2b9e0357de8652ae3816c5e343965",
+        "provenance/final-test-result.json": "db3444555309f74be8710cf0662907a200b995323b89af7df201b39a9dcb9862"
+      },
+      "run_id": "msrvtt-final-test-clip4clip-seed713-20261012T143237Z-ca9fc5567fc6",
+      "state": "completed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "1fe9943500bb53966f30e13e34e46988edc5b743ac47fcc77a68b47a08bd9695",
+      "output_hashes": {
+        "arrays/sha256/26/2661905851a614cf46baf6563895c056754b1d53b071c54053709e64e13f1578.npy": "9798e9f8a92075bb0570aefd17d6789da42095d3296a86441749679b236327ab",
+        "arrays/sha256/4d/4dbd6545e90e12f9d4eef8b966b6dd835d1c215c9edc98c827bf0ad8f5f0bb96.npy": "67e4e2a8afadf5140073e049e5694326c329b06217519bf488f21cf816f109a5",
+        "arrays/sha256/fe/fe835fd6873320ec5fc18972a286edddee32056aa2d2211b9d6a1cb4d49afe06.npy": "da37ef0710fa8e74076359e57bd4756fad68daa6f37aa2e61ce6da0a037ae1b8",
+        "command.sh": "6e37666fcd3adeda28195cabe877fac01a968a0e8786cf757b03b9caf759d9cb",
+        "logs/worker.log": "de12fefc65d46814d1a8add3f3334e2896b3d9c359d427eb0e41810bbcbfb001",
+        "metrics/final_test.json": "aea6eec85e6eaf3669fac76e257a73e5d754680fc0922b65ed1c9ae5475c1204",
+        "metrics/test_eval_000.json": "aea6eec85e6eaf3669fac76e257a73e5d754680fc0922b65ed1c9ae5475c1204",
+        "provenance/controller-launch-intent.json": "47357e2d6c68c592b700c02f844698fdae866e852345e2c31a9fc88c58ac9817",
+        "provenance/controller-launch.json": "cb78d1471929f5cdbcfb048e88c5cc5d114540a7765026effd05b49e4d0eeff2",
+        "provenance/controller-plan.json": "451009842e70db2955af4a4235c61a0981d9b1c482e4f7b9c3c714d1d78004f4",
+        "provenance/controller-result.json": "b7b96e451e06e1decb0e302eb255ffab86ff3c2f2f1a7aa9acb4f68d98fda997",
+        "provenance/final-test-result.json": "acedd33effc0a1fd2c274213801ec190b96d8d853a3f5ff2394372cdb61a0b76"
+      },
+      "run_id": "msrvtt-final-test-uatvr-seed714-20261012T143237Z-ca9fc5567fc6",
+      "state": "completed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "299f6c2d759613beb26506ec06d7da8bb001fb3db14b434b5ff2803fdffd961a",
+      "output_hashes": {
+        "arrays/sha256/75/754fe7c1cac1ec6b14977fdd055790335527781eab6633d225cc060127fffeeb.npy": "80f38aef974d0a9f3c4e18f068da628a9d99b8a7a0a11c9f7060d420f8c58a96",
+        "arrays/sha256/79/791bedfdee5b6ce0ce89deeb4f4512f0d9a910c6ea25e98d9b7225a859d40843.npy": "ca5fa4d087950fc7ea9cf6d66a0f53106097af5e91d746bf10527d676c12bd7e",
+        "arrays/sha256/c5/c549db8541a4f9ea423989f1fb13706c1d1e55ad37650a0bdd2de32fc769307e.npy": "db0b25f10307474adec05f5b32ea18f6ef004003d3dce9c87299a6b748e2cfc0",
+        "command.sh": "8db8ef409e0d3d982ac494cc066b7a0a53d3bf6ae750c94a7633861980fecb1d",
+        "logs/worker.log": "18f0aa184c80faef3fd7634c6d2e1fc2564f4f53ef14e7a486b80cddd078e70a",
+        "metrics/final_test.json": "b7b1bf32f72fbd47692e201bd58a43ca36215c83f1c687c366a7f80dea6c5bf1",
+        "metrics/test_eval_000.json": "b7b1bf32f72fbd47692e201bd58a43ca36215c83f1c687c366a7f80dea6c5bf1",
+        "provenance/controller-launch-intent.json": "80ab148a858daacc3c4b2a74ad538585113bbd1ffb460118ce011b4541641ad9",
+        "provenance/controller-launch.json": "b29f5552c97d03454369c8987cc6710f067c6117c7682148507bf6076b830b67",
+        "provenance/controller-plan.json": "19b1180cfbb42872d980d64537bd112f0b0d53ae2c84431c0da0150bcf556164",
+        "provenance/controller-result.json": "e8924d26fc739bfb04a8e31b3345dec211a33ba58780ce70edb5525d79d42312",
+        "provenance/final-test-result.json": "dc38a97714f3f103275e8b1d5832394b8e463956dbf71e7e9a760491ebf50c21"
+      },
+      "run_id": "msrvtt-final-test-clip4clip-seed714-20261012T143237Z-ca9fc5567fc6",
+      "state": "completed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "8b0f94706cb2eb13b6dadb35c08151d3db3c628068a948fb23fbc405b3553115",
+      "output_hashes": {
+        "arrays/sha256/9f/9fdcb066992b130961f0f2a894417991b13cf102b8c1dab0290060ce80be82e9.npy": "c8165e763fe0c0cfe4a3538534949657d35c7a4c14c42c2df3e1de37a8a431ca",
+        "arrays/sha256/ef/eff648a07551387a00a1af045cc7c3ad1aee52c016475564f5685ce01a1d7cf2.npy": "0a0d3ac2c7548b18521db1eb9b62f7a4da27c4812435362ff68fa7a8e060ee33",
+        "arrays/sha256/fd/fd1c60adfcc730794c676f743a4e2a872d8d3e9725e431c1aedcfe718ee6e2dd.npy": "bfdd01954101774761094cd67e64cb665956d2f35f769d4afa7355a81836b40a",
+        "command.sh": "3cdd1d438868e9388733e403cbfc9986cee74268f2370093eb3587eb651903d3",
+        "logs/worker.log": "3ab41755bbf14467abeeba02fcad738389f120a090d7697ba73914a26df2a7d6",
+        "metrics/final_test.json": "5f7b5667158e9d1a31ba6daf2aa29a079febc1f7b0cebc75e12c28aca42fd01e",
+        "metrics/test_eval_000.json": "5f7b5667158e9d1a31ba6daf2aa29a079febc1f7b0cebc75e12c28aca42fd01e",
+        "provenance/controller-launch-intent.json": "ded5b0cd29210d3a37568211618ae0e08277f245cae9a77aa98daa0c598b7f13",
+        "provenance/controller-launch.json": "b7b5d87868bd77765e2be7bcdb8e037cf62ab9b40d9b876ffc2ef9ad2a16a174",
+        "provenance/controller-plan.json": "45df79d6800bb82138187cec72f5ceb9e91f6b5c3f0102126ce9d7f275946c2c",
+        "provenance/controller-result.json": "b375740f087f95bd38d9bfc7874a242de0f4f44d5c7baaf13d6a72c0e8486a8c",
+        "provenance/final-test-result.json": "5ac6473d2e7d78303eb71098c2cd66d9aee3e06dd1a390c1a6af42f934123897"
+      },
+      "run_id": "msrvtt-final-test-uatvr-seed715-20261012T143238Z-ca9fc5567fc6",
+      "state": "completed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "95fbf9487e05d9e1dc5ff46d8608cbce5dfd63c82070d69adc897c42078be6c7",
+      "output_hashes": {
+        "arrays/sha256/04/046bfb3fdce5ca90af0f8aaeeab5c02f848fb0235ca066e2fd8b9e093cee7a3f.npy": "717ba5d6c06f2ec5a92edf88346e358b02b160cfe97807b2cc7c6c494dbd17d0",
+        "arrays/sha256/58/589f83126a3612b581b1417a3bbf38b4cbca5789f5f2b7feec3356017a0c9d8e.npy": "63df5936ee202bd43e21645cb2c807a6b553e62cf84e065658bdc11963277ee8",
+        "arrays/sha256/6f/6f4a48b01ae164a3be06b4606d532f39ec575b6653083502425657db1de2f4ba.npy": "e5f0ef3ba48a7b74c8904907d30d06f2963681050888309c58b3486af7bc1158",
+        "command.sh": "8a2f22a4607cdd46adf9ffe572c09cffc6ddf3271bf42133dd902ec8319c3488",
+        "logs/worker.log": "5678acc0af3150d2157619329317e815ba7b520b9f6ae6d6fb3bc73e407e579e",
+        "metrics/final_test.json": "8042b5518f5f824301f7922c46841817471c6f03c20edcce696bf41690514260",
+        "metrics/test_eval_000.json": "8042b5518f5f824301f7922c46841817471c6f03c20edcce696bf41690514260",
+        "provenance/controller-launch-intent.json": "42a19ab360b5ab4fbc13eee9310c0a6fbb31d9286793c45dd1122551ba143d6f",
+        "provenance/controller-launch.json": "7c7156d9629779f057ef7fd33542f056eba2fb9e4f177c787022d3e86067459e",
+        "provenance/controller-plan.json": "81cfa3dc9aa3e7f841ac528daa822cd76453e6f6b3031bf2b76e8eecaa4e909d",
+        "provenance/controller-result.json": "c2913cfcda4c12cdbbf0b977e44ec55ec22e45f29abb93d4e2bff5f12d8ff81d",
+        "provenance/final-test-result.json": "660834c0e6db5a6453461e2f9400ee826671e495aed2bb4717241f9cc4eccc78"
+      },
+      "run_id": "msrvtt-final-test-clip4clip-seed715-20261012T143238Z-ca9fc5567fc6",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "full-data-retrieval-v1",
+  "terminal_counts": {
+    "completed": 6
+  }
+}
