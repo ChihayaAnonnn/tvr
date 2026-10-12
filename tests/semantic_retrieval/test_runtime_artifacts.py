@@ -260,3 +260,22 @@ def test_fp32_gate_rejects_ambient_autocast(reservation):
     commit_reservation(repo, config)
     with torch.autocast("cpu", dtype=torch.bfloat16), pytest.raises(ValueError, match="precision"):
         prepare_run(config, repo_root=repo)
+
+
+def test_final_typed_consumer_never_enters_training_resume_validators(tmp_path,monkeypatch):
+    # This test isolates runtime dispatch after an explicit permission grant.
+    # Production final authorization is separately exercised at reserve/start.
+    from semantic_retrieval.full_data import authorization
+    from semantic_retrieval.full_data.final import FinalSystemConfig
+    from semantic_retrieval.runtime.artifacts import prepare_run
+    from semantic_retrieval.runtime.distributed import configure_fp32
+    configure_fp32()
+    monkeypatch.setattr(authorization,'assert_full_data_authorized',lambda **kwargs:None)
+    payload=dict(stage='final',test_authorized=True,validation_authorized=False,parent_run_ids=['fixture-parent'],
+                 config=dict(model={},loss={},optimizer={},scheduler={},evaluation=dict(eval_split='test',config_kind='full-data-test-v1')))
+    repo,config=reservation.__wrapped__(tmp_path,SimpleNamespace(param=payload))
+    config=replace(config,eval_split='test');commit_reservation(repo,config)
+    manifest=json.loads((config.run_dir/'manifest.json').read_text())
+    context=prepare_run(config,repo_root=repo,system_config=FinalSystemConfig(config,manifest['config']))
+    assert context.config.eval_split=='test'
+    with pytest.raises(ValueError,match='typed consumer'):prepare_run(config,repo_root=repo)

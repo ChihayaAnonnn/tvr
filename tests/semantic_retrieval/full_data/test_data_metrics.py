@@ -155,6 +155,12 @@ def test_complete_export_decodes_real_short_videos_and_roundtrips_all_records(tm
     validation = CaptionDataset(loaded, splits['val'], frames=3, image_size=16, text_length=8)
     scores, measured = evaluate_complete(model, validation, torch.device('cpu'))
     assert scores.shape == (3, 1) and measured['t2v']['R1'] == measured['v2t']['R1'] == 100
+    loaded['v']['split'] = 'test'
+    with pytest.raises(ValueError): evaluate_complete(model, validation, torch.device('cpu'))
+    test_scores, test_metrics = evaluate_complete(model, validation, torch.device('cpu'), expected_split='test')
+    np.testing.assert_array_equal(test_scores, scores)
+    assert test_metrics['t2v']['R1'] == test_metrics['v2t']['R1'] == 100
+    loaded['v']['split'] = 'val'
     # Even a re-authenticated source shard must satisfy its cross-record contract.
     source = out/'sources-000.json'
     payload = json.loads(source.read_bytes())

@@ -248,7 +248,15 @@ def prepare_run(config, *, repo_root, system_config=None):
     from semantic_retrieval.evidence.config import EvidenceSystemConfig
     from semantic_retrieval.full_data.runtime import FullDataSystemConfig
     is_evidence = isinstance(system_config,EvidenceSystemConfig)
-    if isinstance(system_config, FullDataSystemConfig):
+    from semantic_retrieval.full_data.final import FinalSystemConfig
+    if isinstance(system_config, FinalSystemConfig):
+        if (system_config.runtime != config or system_config.config != manifest['config']
+                or manifest['config']['evaluation'].get('config_kind') != 'full-data-test-v1'
+                or config.eval_split != 'test'):
+            raise ValueError('typed final-test configuration mismatch')
+    elif manifest['config']['evaluation'].get('config_kind') == 'full-data-test-v1':
+        raise ValueError('final test requires its typed consumer')
+    elif isinstance(system_config, FullDataSystemConfig):
         from semantic_retrieval.full_data.runtime import validate_full_data_binding
         validate_full_data_binding(repository, manifest, system_config, config)
     elif manifest['config']['evaluation'].get('config_kind') == 'full-data-retrieval-v1':
@@ -332,7 +340,7 @@ def prepare_run(config, *, repo_root, system_config=None):
     for name, digest in references.items():
         if _hash_input(repository, {"path": name, "sha256": digest}) != digest:
             raise ValueError("input SHA-256 mismatch")
-    if system_config is not None and not is_evidence and not isinstance(system_config, FullDataSystemConfig):
+    if system_config is not None and not is_evidence and not isinstance(system_config, (FullDataSystemConfig, FinalSystemConfig)):
         _validate_resume(repository, manifest, system_config)
         _validate_pilot(repository, manifest, system_config)
     return RunContext(

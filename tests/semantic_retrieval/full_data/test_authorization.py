@@ -93,3 +93,10 @@ def test_synthetic_fixture_permission_and_formal_approved_two_card_identity(perm
     with pytest.raises(ValueError): check(dict(four, environment=dict(four['environment'], gpu_count=4)))
     bad = copy.deepcopy(four); bad['config']['model']['clip_sha256'] = 'b'*64
     with pytest.raises(ValueError): check(bad)
+
+
+def test_final_marker_cannot_retarget_an_unrelated_study(tmp_path):
+    from semantic_retrieval.full_data.authorization import assert_full_data_authorized
+    manifest=dict(study='fixture-study',config=dict(evaluation=dict(config_kind='full-data-test-v1')))
+    with pytest.raises(ValueError,match='independent study'):
+        assert_full_data_authorized(repo_root=tmp_path,registry_path=tmp_path/'experiments/fixture-study/registry.jsonl',manifest=manifest,operation='start',command=['python','fixture.py'])

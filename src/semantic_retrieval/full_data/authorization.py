@@ -11,7 +11,7 @@ from semantic_retrieval.evidence.frame_cache import safe_path
 
 STUDY = 'full-data-retrieval-v1'
 CONTROL = 'experiments/' + STUDY
-ENTRIES = {'prepare_full_data_retrieval.py', 'train_full_data_retrieval.py', 'qualify_full_data_retrieval.py'}
+ENTRIES = {'prepare_full_data_retrieval.py', 'train_full_data_retrieval.py', 'qualify_full_data_retrieval.py', 'evaluate_full_data_test.py'}
 PRETRAINED_SHA = '40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af'
 
 
@@ -123,7 +123,7 @@ def assert_full_data_authorized(*, repo_root, registry_path, manifest, operation
     entries = {Path(str(a)).name for a in argv} & ENTRIES
     scenario = evaluation.get('qualification_scenario', '')
     relevant = (manifest.get('study') == STUDY or STUDY in str(registry_path or '')
-                or evaluation.get('config_kind') == STUDY or str(scenario).startswith('full_data_') or entries)
+                or evaluation.get('config_kind') in {STUDY, 'full-data-test-v1'} or str(scenario).startswith('full_data_') or entries)
     if not relevant:
         return
     if (operation not in {'reserve', 'start'} or repo_root is None or registry_path is None
@@ -144,6 +144,10 @@ def assert_full_data_authorized(*, repo_root, registry_path, manifest, operation
                     control_plane=CONTROL, data_plane='artifacts/'+STUDY, registry=CONTROL+'/registry.jsonl')
     if any(study.get(k) != v for k, v in required.items()):
         raise ValueError('full-data study identity/status mismatch')
+    if 'evaluate_full_data_test.py' in entries or evaluation.get('config_kind') == 'full-data-test-v1':
+        from .final import assert_final_authorized
+        assert_final_authorized(repo, study, manifest, entries)
+        return
     if (manifest.get('test_authorized') is not False or study.get('test_authorized') is not False
             or evaluation.get('eval_split') != 'val' or manifest.get('validation_authorized') is not True):
         raise ValueError('full-data test remains sealed; validation only')

@@ -140,7 +140,7 @@ def validate_controller_launch(repo, root, manifest):
         else: raise ValueError('GPU worker requires an active locked controller')
     finally: os.close(fd)
     study = yaml.safe_load(_committed(repo, repo/CONTROL/'study.yaml'))
-    category = 'scientific' if manifest['config']['evaluation']['full_data_stage'] == 'baseline' else 'software'
+    category = 'scientific' if manifest['config']['evaluation']['full_data_stage'] in {'baseline', 'test_evaluation'} else 'software'
     if plan['max_wall_seconds'] != study['campaign'][category]['max_run_wall_seconds']:
         raise ValueError('controller wall budget differs from frozen study')
     totals = budget_projection(_budget_rows(repo, study, manager))
@@ -158,7 +158,7 @@ def _budget_rows(repo, study, manager):
         cards = manifest['environment']['gpu_count']
         if cards == 0: continue  # P0 is authenticated by its own terminal protocol, never GPU work.
         stage = manifest['config']['evaluation']['full_data_stage']
-        category = 'scientific' if stage == 'baseline' else 'software'
+        category = 'scientific' if stage in {'baseline', 'test_evaluation'} else 'software'
         seconds = None
         if status['state'] in TERMINAL:
             name = 'provenance/controller-result.json'
@@ -241,7 +241,7 @@ def _run_one(repo, identity, study, manager):
                 raise ValueError('failed-attempt accounting receipt changed')
             attempts += int(_read(receipt)['spawned'] is True)
     check_successors(attempts, study['campaign']['max_successors_per_failure'])
-    category = 'scientific' if stage == 'baseline' else 'software'
+    category = 'scientific' if stage in {'baseline', 'test_evaluation'} else 'software'
     cap = study['campaign'][category]['max_run_wall_seconds']
     plan = dict(manifest_sha256=identity.manifest_sha256, source_sha=manifest['git_sha'],
                 command_sha256=manifest['command_sha256'], controller_sha256=file_sha256(Path(__file__)),

@@ -58,13 +58,13 @@ def train_epoch(model, network, optimizer, dataset, batches, device, *, loader_w
 
 
 @torch.no_grad()
-def evaluate_complete(model, dataset, device):
+def evaluate_complete(model, dataset, device, *, expected_split='val'):
     model.eval()
     rank, world = (dist.get_rank(), dist.get_world_size()) if dist.is_initialized() else (0, 1)
     if len(dataset) % world or len(dataset) < world:
         raise ValueError('validation queries cannot be equally sharded without omission')
     gallery = sorted({r['official_video_id'] for r in dataset.captions})
-    if any(dataset.videos[i]['split'] != 'val' for i in gallery):
+    if expected_split not in {'val', 'test'} or any(dataset.videos[i]['split'] != expected_split for i in gallery):
         raise ValueError('validation gallery contains training videos')
     n = len(dataset)//world; begin, end = rank*n, (rank+1)*n
     def concatenate(parts):

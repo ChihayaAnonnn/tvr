@@ -182,3 +182,10 @@ study（新目录 + 新 protocol_version）重新建立授权路径。
 
 37 个 commit 未合并进 master，两个本地分支均无 upstream，`d3a3cd9` 不在任何 remote 上。
 **在做出处置决策（ADR-10）之前，不要 rebase / reset / 删除该分支或其 worktree。**
+
+2026-10-12 scoped user amendment: “用1k test进行测试” authorizes only
+`full-data-retrieval-v1` final MSRVTT JSFUSION1000x1000 evaluation of its six
+already validation-selected baseline checkpoints. `FINAL_TEST_PROTOCOL.md` and
+study.yaml final_test freeze scope/inputs/checkpoints; fresh matching-source
+production two-rank Q0 remains required. Baseline/qualification entries remain
+non-test. Other studies, MSVD, tuning on test and new-method gates are unchanged.
