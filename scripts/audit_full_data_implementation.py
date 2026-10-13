@@ -187,7 +187,13 @@ def numerical(inputs, config, root, method):
     reference.load_state_dict(mapping, strict=True)
     local = {name.removeprefix('core.') if method == 'uatvr' else 'clip.'+name.removeprefix('core.'): p
              for name,p in model.named_parameters()}
-    for name,p in reference.named_parameters(): p.requires_grad_(local[name].requires_grad)
+    # Independently execute the pinned trainer's freeze_layer_num=0 policy.
+    for name,p in reference.clip.named_parameters():
+        keep=(name.startswith(('ln_final.','text_projection','logit_scale','visual.ln_post.','visual.proj'))
+              or name.startswith(('transformer.resblocks.','visual.transformer.resblocks.')))
+        p.requires_grad_(keep)
+    for name,p in reference.named_parameters():
+        if p.requires_grad != local[name].requires_grad:raise ValueError('official freeze differs: '+name)
     selected = inputs.read(config['batch'])
     for v in selected['videos'].values():
         if v['split'] != 'train': raise ValueError('audit batch is not training-only')
@@ -288,6 +294,9 @@ def main():
     if args.numeric:
         result=numerical(inputs,config,root,args.numeric)
         publish(root/'provenance'/f'numeric-{args.numeric}.json',result);return
+    import signal
+    def deadline(_signum,_frame):raise TimeoutError('CPU audit exceeded 7200-second run budget')
+    signal.signal(signal.SIGALRM,deadline);signal.alarm(7200)
     manager.start_run(identity);started=time.monotonic()
     try:
         import shutil
@@ -316,11 +325,16 @@ def main():
                 numeric={m:json.loads((root/'provenance'/f'numeric-{m}.json').read_text())['all_passed'] for m in ('uatvr','clip4clip')}))
         manager.transition_run(argparse.Namespace(**vars(identity),expected='running',next_state='validating',exit_code=None,output=[]))
         manager.transition_run(argparse.Namespace(**vars(identity),expected='validating',next_state='completed',exit_code=0,output=[]))
+        signal.alarm(0)
     except Exception:
+        signal.alarm(0)
         import traceback
         publish(root/'provenance/audit-failure.json',dict(traceback=traceback.format_exc(),elapsed_seconds=time.monotonic()-started))
         state=json.loads((root/'status.json').read_text())['state']
-        if state in ('running','validating'):
+        if state=='running':
+            manager.transition_run(argparse.Namespace(**vars(identity),expected='running',next_state='validating',exit_code=None,output=[]))
+            state='validating'
+        if state=='validating':
             manager.transition_run(argparse.Namespace(**vars(identity),expected=state,next_state='failed',exit_code=1,output=[]))
         raise
 

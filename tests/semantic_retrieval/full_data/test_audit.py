@@ -21,3 +21,17 @@ def test_loss_summary_preserves_components_and_rejects_missing_updates():
     assert row['component_sum_max_error'] < 1e-6
     with pytest.raises(ValueError, match='updates'):
         loss_summary(losses, 3)
+
+
+def test_input_binding_uses_file_bytes_not_array_content_digest(tmp_path):
+    from scripts.audit_full_data_implementation import Inputs, digest
+    from experiment_artifacts import ArtifactArrayStore
+    ref = ArtifactArrayStore(tmp_path/'arrays').write('test', np.arange(5)).as_dict()
+    path = tmp_path/ref['path']
+    # Store paths may be rooted at arrays/; resolve the published path explicitly.
+    if not path.exists(): path=tmp_path/'arrays'/ref['path']
+    assert digest(path) != ref['sha256']
+    inputs=Inputs.__new__(Inputs);inputs.verified=set();inputs.references={str(path.resolve()):ref['sha256']}
+    with pytest.raises(ValueError,match='changed'):inputs.check(path)
+    inputs.references[str(path.resolve())]=digest(path)
+    assert inputs.check(path)==path.resolve()

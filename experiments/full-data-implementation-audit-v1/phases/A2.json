@@ -1,0 +1,72 @@
+{
+  "phase": "A2-correct-byte-bound-audit",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=",
+        "OMP_NUM_THREADS=4",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "scripts/audit_full_data_implementation.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "audit_kind": "official-parity-v1",
+          "eval_split": "val"
+        },
+        "loss": {},
+        "model": {},
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-implementation-audit-v1/inputs/audit-000.input-index.json",
+          "sha256": "2b876135d00175a099e83bcf83cfad79d2480c2825053519e5731718577776f9"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-implementation-audit-v1/inputs/audit-001.input-index.json",
+          "sha256": "24e2c4581c2b2c26fd398aee01fad2a8b00000b564a8ba040817474495a17264"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-implementation-audit-v1/inputs/audit-002.input-index.json",
+          "sha256": "de56a63d9fd0647f31d11dca04b8a0d60df07a56d90b1115f7c58390dda00dd5"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-implementation-audit-v1/inputs/audit-003.input-index.json",
+          "sha256": "21a6b885420db59670b27e2f720635e227c14d4a57d48542374dfb5817e8ca76"
+        }
+      ],
+      "environment": {
+        "cuda": "disabled",
+        "distributed_topology": "single-process-cpu-gloo",
+        "gpu_count": 0,
+        "gpu_model": "none",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [],
+      "parent_run_ids": [
+        "msrvtt-baseline-cpu-audit-seed713-20261013T094812Z-5086788a87e8"
+      ],
+      "scheduled_timestamp_utc": "20261013T095250Z",
+      "seed": 713,
+      "selection_lineage": [
+        "experiments/full-data-implementation-audit-v1/PROTOCOL.md"
+      ],
+      "stage": "baseline",
+      "test_authorized": false,
+      "validation_authorized": true,
+      "variant": "cpu-audit"
+    }
+  ],
+  "study": "full-data-implementation-audit-v1"
+}
