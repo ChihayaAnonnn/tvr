@@ -1,0 +1,36 @@
+{
+  "captions": [
+    {
+      "caption_id": "109460",
+      "official_video_id": "video0",
+      "query_id": "video0:109460",
+      "query_text": "a car is shown"
+    },
+    {
+      "caption_id": "69660",
+      "official_video_id": "video1000",
+      "query_id": "video1000:69660",
+      "query_text": "a woman is wearing a costume"
+    }
+  ],
+  "videos": {
+    "video0": {
+      "fps": 12.0,
+      "frame_count": 146,
+      "path": "/data2/hxj/data/MSRVTT/videos/compressed_videos/msrvtt_224_12fps/video0.mp4",
+      "sha256": "56fed6a04acec740dfe2cd1ccb9c76799d1b2fae756b116ae271cdd3c2ecf339",
+      "source_component": "4b6f72e7c0119ae94243cb4067e7ada41ecd7d799007ef157d85b7d0f5440c1d",
+      "split": "train",
+      "video_id": "video0"
+    },
+    "video1000": {
+      "fps": 12.0,
+      "frame_count": 134,
+      "path": "/data2/hxj/data/MSRVTT/videos/compressed_videos/msrvtt_224_12fps/video1000.mp4",
+      "sha256": "4eba8051667b472815dadfd0af6f01ef757e5a729e38fb1837e7590858eb2791",
+      "source_component": "75aafa9ff93fb5651fd0f36e4fa3fbf84fe23aeb88fe35f9bf0442335029a68c",
+      "split": "train",
+      "video_id": "video1000"
+    }
+  }
+}

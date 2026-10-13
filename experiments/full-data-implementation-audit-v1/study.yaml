@@ -1,0 +1,33 @@
+study: full-data-implementation-audit-v1
+protocol_version: 1
+status: registered
+user_authorization: 2026-10-13_user_start_official_parity_and_training_trajectory_audit
+control_plane: experiments/full-data-implementation-audit-v1
+data_plane: artifacts/full-data-implementation-audit-v1
+registry: experiments/full-data-implementation-audit-v1/registry.jsonl
+test_authorized: false
+scope: CPU_only_read_only_historical_training_and_two_fixed_train_pairs
+gpu_count: 0
+max_run_wall_seconds: 7200
+max_software_successors: 2
+science_training_authorized: false
+test_selection_authorized: false
+old_studies_reopened: false
+numerical_contract:
+  precision: fp32
+  backbone: production_ViT-B32
+  batch: two_deterministically_selected_training_videos
+  frames: 12
+  optimizer_updates: 2
+  purpose: numerical_software_equivalence_not_training_or_model_selection
+  atol: 0.000002
+  rtol: 0.0002
+  input_tensor_tolerance: exact
+  difference_is_valid_audit_outcome: true
+historical_contract:
+  methods: [uatvr, clip4clip]
+  seeds: [713, 714, 715]
+  epochs_per_run: 5
+  missing_gradients: explicitly_missing_never_reconstructed
+  no_checkpoint_modification: true
+archive_rules: Scheme_A_reserve_commit_verify_run_terminal_commit

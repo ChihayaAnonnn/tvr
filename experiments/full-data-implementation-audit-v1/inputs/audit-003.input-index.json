@@ -1,0 +1,1702 @@
+{
+  "files": [
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/4c/4c6fc3ca86858b798ca448fe7b04b83400de3d690dacb06e2173073ad5082b3d.npy",
+      "sha256": "4c6fc3ca86858b798ca448fe7b04b83400de3d690dacb06e2173073ad5082b3d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/4c/4c736fccc7daed5293897176b57ff78dd0a22d96bf92387c0b4c3ce17db1f484.npy",
+      "sha256": "4c736fccc7daed5293897176b57ff78dd0a22d96bf92387c0b4c3ce17db1f484"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/4d/4da8245e32629122ce2a723a09e8a965c38961d570a97665193d1ca0b3a51268.npy",
+      "sha256": "4da8245e32629122ce2a723a09e8a965c38961d570a97665193d1ca0b3a51268"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/4d/4dc11a02c0570e2c7f315ac171a51289826aa94ac9dc44c00ade6426ab384e2f.npy",
+      "sha256": "4dc11a02c0570e2c7f315ac171a51289826aa94ac9dc44c00ade6426ab384e2f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/4d/4df22059b4863cc850d3eff414905d02428c67244cfd51f994bf1e5c00c2b810.npy",
+      "sha256": "4df22059b4863cc850d3eff414905d02428c67244cfd51f994bf1e5c00c2b810"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/4e/4e27beb5365a1677ed1454a06d0425135d4c00c07345e1397de6dfc17ae0b79a.npy",
+      "sha256": "4e27beb5365a1677ed1454a06d0425135d4c00c07345e1397de6dfc17ae0b79a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/4e/4eac43e38566635e5dcde9021540a54d26650bb0ccb9fa3747fd8a3e9cc5ed16.npy",
+      "sha256": "4eac43e38566635e5dcde9021540a54d26650bb0ccb9fa3747fd8a3e9cc5ed16"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/4f/4f1368cdc6bd5d30bcf0b63828f40c19e407c6397b2d5f03dd91676fcbcc90a8.npy",
+      "sha256": "4f1368cdc6bd5d30bcf0b63828f40c19e407c6397b2d5f03dd91676fcbcc90a8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/4f/4ff3108b2d63a356faf6953a571420ecd3e808459fee722e125959c53ec49804.npy",
+      "sha256": "4ff3108b2d63a356faf6953a571420ecd3e808459fee722e125959c53ec49804"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/50/5088ed9df5489231e24a08c842c034f450499638f430e22a930d2a128eb7f833.npy",
+      "sha256": "5088ed9df5489231e24a08c842c034f450499638f430e22a930d2a128eb7f833"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/50/50bd5ba4cad1fc4f161bfdea4f26fd12413a032657a59e6c59f7014a43f4b170.npy",
+      "sha256": "50bd5ba4cad1fc4f161bfdea4f26fd12413a032657a59e6c59f7014a43f4b170"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/51/5192cc6f5a32510122bfad73d6bc2694753c29919a8ea78686b5cddf0888d9e0.npy",
+      "sha256": "5192cc6f5a32510122bfad73d6bc2694753c29919a8ea78686b5cddf0888d9e0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/51/51b5aaf0650b89354ce89442299c5819c0e80a3ebc1af22747dd36cfba2439c0.npy",
+      "sha256": "51b5aaf0650b89354ce89442299c5819c0e80a3ebc1af22747dd36cfba2439c0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/51/51d22cfa9c84d26a434584140347260b0c708e65a1d40673dc3b7452637b0067.npy",
+      "sha256": "51d22cfa9c84d26a434584140347260b0c708e65a1d40673dc3b7452637b0067"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/52/527617261bab8067fffab9738eab1e77052deec21648ad82fd70d89461a873f4.npy",
+      "sha256": "527617261bab8067fffab9738eab1e77052deec21648ad82fd70d89461a873f4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/53/531387f4a81f34a8952d43c075502ed46022b4bfe7c234acfa1cf2e439f6ebca.npy",
+      "sha256": "531387f4a81f34a8952d43c075502ed46022b4bfe7c234acfa1cf2e439f6ebca"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/53/535e400fb3a07aa1646c64e58c82ee0b447392aa2212acbbb66842df8a61c1c0.npy",
+      "sha256": "535e400fb3a07aa1646c64e58c82ee0b447392aa2212acbbb66842df8a61c1c0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/53/53759d5a7d68c514012487a11493c234feecdbc36c3f0a4e1592726456d463f8.npy",
+      "sha256": "53759d5a7d68c514012487a11493c234feecdbc36c3f0a4e1592726456d463f8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/53/53a9794c8d01ee3e23abcb0ab67225e008426f237e3f277ecfd9d1ae3eb77576.npy",
+      "sha256": "53a9794c8d01ee3e23abcb0ab67225e008426f237e3f277ecfd9d1ae3eb77576"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/54/54c81294b5bbc7fc6808dd65486350a544aab1a9880bf811209f44215a7f4b1d.npy",
+      "sha256": "54c81294b5bbc7fc6808dd65486350a544aab1a9880bf811209f44215a7f4b1d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/54/54c8cf4801f98bf62f2b82e6a8201814e815d5adf714692f2a3506ce4bbd3bf0.npy",
+      "sha256": "54c8cf4801f98bf62f2b82e6a8201814e815d5adf714692f2a3506ce4bbd3bf0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/55/5573e7a66e8ff5c9a05bea0f761abee6b841d2ef7440a1c3f175df0369d49fb8.npy",
+      "sha256": "5573e7a66e8ff5c9a05bea0f761abee6b841d2ef7440a1c3f175df0369d49fb8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/55/5573e8564f8f53037daba7b4c5f35bce644e086fffa840902cd706d745eaf08d.npy",
+      "sha256": "5573e8564f8f53037daba7b4c5f35bce644e086fffa840902cd706d745eaf08d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/55/55d648d89e83922bb159aed62da25babd9758b6b28ab623b8e4ee8f4260441eb.npy",
+      "sha256": "55d648d89e83922bb159aed62da25babd9758b6b28ab623b8e4ee8f4260441eb"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/56/564ff947b3c81ec07f3738d0dc4b529b13a32768999756fae71c9f178769bde0.npy",
+      "sha256": "564ff947b3c81ec07f3738d0dc4b529b13a32768999756fae71c9f178769bde0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/56/56ebc4d3cc9d03f2a4127d450985441d81d37c88b75e04443121a8d26a67b741.npy",
+      "sha256": "56ebc4d3cc9d03f2a4127d450985441d81d37c88b75e04443121a8d26a67b741"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/57/57abeeb309c21700ebfc9cf8ec0351234dc30abe42b293f8e57bb083e12849d3.npy",
+      "sha256": "57abeeb309c21700ebfc9cf8ec0351234dc30abe42b293f8e57bb083e12849d3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/57/57ec03fe1a4a5d854e340f289b7964bc056bb3bd99bd61e991a99e143760fe61.npy",
+      "sha256": "57ec03fe1a4a5d854e340f289b7964bc056bb3bd99bd61e991a99e143760fe61"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/58/583528a831b3ef67b288d60ae8432f964d5fda76d06970c1553e9f7f585df592.npy",
+      "sha256": "583528a831b3ef67b288d60ae8432f964d5fda76d06970c1553e9f7f585df592"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/59/59be6e7bd390bb5a209a3e15f210d2f918e2f860743fe8460a6d3e9aa3fa11fb.npy",
+      "sha256": "59be6e7bd390bb5a209a3e15f210d2f918e2f860743fe8460a6d3e9aa3fa11fb"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/5a/5a877a205e4a12c95eac9dfb7693be557ec425cf343164bcbce8afe898cda1cb.npy",
+      "sha256": "5a877a205e4a12c95eac9dfb7693be557ec425cf343164bcbce8afe898cda1cb"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/5a/5af26edc54f6493193c05afa273c23a2ac2015d388fba61e6767514909e5faf9.npy",
+      "sha256": "5af26edc54f6493193c05afa273c23a2ac2015d388fba61e6767514909e5faf9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/5c/5c624bfb6c0e252c85e6b58094bc19de622992ed7d45ce2a29d39f1a59a4f2b4.npy",
+      "sha256": "5c624bfb6c0e252c85e6b58094bc19de622992ed7d45ce2a29d39f1a59a4f2b4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/5c/5c99f2c199a1fc5e36bda327c9c83cf7272937bf5be40a964dc2d5bf9f0159ef.npy",
+      "sha256": "5c99f2c199a1fc5e36bda327c9c83cf7272937bf5be40a964dc2d5bf9f0159ef"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/5d/5d417b78b607aa00e5cd1ea43dab14d8460d4c9b9e6b49886ba4f8fc4ad2bd0d.npy",
+      "sha256": "5d417b78b607aa00e5cd1ea43dab14d8460d4c9b9e6b49886ba4f8fc4ad2bd0d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/5d/5d758758c5921ce5b2d179cf1f4f7905fd4052bb9780f5467dd9f2fb05a986a4.npy",
+      "sha256": "5d758758c5921ce5b2d179cf1f4f7905fd4052bb9780f5467dd9f2fb05a986a4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/5e/5e10fcf775971336d5fd2a44f555f5e165bf87ce17360c40ea733debcdd7623d.npy",
+      "sha256": "5e10fcf775971336d5fd2a44f555f5e165bf87ce17360c40ea733debcdd7623d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/5e/5ee66827557392806e8a90a14bb07ebadbed2a5c9d785d04e97779ba333279e3.npy",
+      "sha256": "5ee66827557392806e8a90a14bb07ebadbed2a5c9d785d04e97779ba333279e3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/60/60398e503ca35d86c94f06f0326f0992a53c1c2175e76bf5b88d44e864b5f8c9.npy",
+      "sha256": "60398e503ca35d86c94f06f0326f0992a53c1c2175e76bf5b88d44e864b5f8c9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/60/604311d56708c8d3e5810a4bb66aa7517b8f69fd36bd9d85dbdff9c2e9026ff1.npy",
+      "sha256": "604311d56708c8d3e5810a4bb66aa7517b8f69fd36bd9d85dbdff9c2e9026ff1"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/60/607e226e4cd39cda94b3ff9386f0648c3eda62d9a61353d0b648be3275dead78.npy",
+      "sha256": "607e226e4cd39cda94b3ff9386f0648c3eda62d9a61353d0b648be3275dead78"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/62/62bf8ed43e311ae7fda684582c5544c0e3ba8c07689a0f4f2bf88be44ba6a65c.npy",
+      "sha256": "62bf8ed43e311ae7fda684582c5544c0e3ba8c07689a0f4f2bf88be44ba6a65c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/64/641e03b5ed5a329345657dd49e670cf664f202dd57e9978f5eb97a10d50cdb9c.npy",
+      "sha256": "641e03b5ed5a329345657dd49e670cf664f202dd57e9978f5eb97a10d50cdb9c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/64/64780bd443cef450f526c51a65eb1098066d383f7b835e36dbe4e9d213161c1e.npy",
+      "sha256": "64780bd443cef450f526c51a65eb1098066d383f7b835e36dbe4e9d213161c1e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/64/64fe0067019281c5cf6a7712f2375eda20a5d14b751698329b0a5d1630f7e002.npy",
+      "sha256": "64fe0067019281c5cf6a7712f2375eda20a5d14b751698329b0a5d1630f7e002"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/66/66a632f5e36d030f1d622328f742177e5759644ebdd609f1ffe837361cb0225e.npy",
+      "sha256": "66a632f5e36d030f1d622328f742177e5759644ebdd609f1ffe837361cb0225e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/66/66aea8a134176aefa6ba9ace9e0bf28b1ba51d1c6257f986d8daba4a6f15fdff.npy",
+      "sha256": "66aea8a134176aefa6ba9ace9e0bf28b1ba51d1c6257f986d8daba4a6f15fdff"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/67/67694f01ab31ce9f170e9c11dd350b39474ac3059060b349b7424e0ea0aed3e4.npy",
+      "sha256": "67694f01ab31ce9f170e9c11dd350b39474ac3059060b349b7424e0ea0aed3e4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/67/67714deee4226de37273b54ab6c45ffd042f81b8b7f3a28dfff7675f70838698.npy",
+      "sha256": "67714deee4226de37273b54ab6c45ffd042f81b8b7f3a28dfff7675f70838698"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/68/688583590c5748df73301634c713b6ca4d1592711de62aeea12b7190f6872ea5.npy",
+      "sha256": "688583590c5748df73301634c713b6ca4d1592711de62aeea12b7190f6872ea5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/69/6945b61d3653bda6d1283d2df77ad118e8c04e4894c1c4336b8bd11dbfe6a665.npy",
+      "sha256": "6945b61d3653bda6d1283d2df77ad118e8c04e4894c1c4336b8bd11dbfe6a665"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/69/69d6ace3f9e112e0fbe1fd46a172d6cdab59bbaa4e78a204b9c79648e27d1872.npy",
+      "sha256": "69d6ace3f9e112e0fbe1fd46a172d6cdab59bbaa4e78a204b9c79648e27d1872"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6a/6a10b3a2b5b44b2b74f915defcedcdf772f8b17caff832cb457b420e87057ee4.npy",
+      "sha256": "6a10b3a2b5b44b2b74f915defcedcdf772f8b17caff832cb457b420e87057ee4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6a/6a9258d56861d061fa2dadcf1b153411befba68e611799231a93fda5af9b0dff.npy",
+      "sha256": "6a9258d56861d061fa2dadcf1b153411befba68e611799231a93fda5af9b0dff"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6a/6aa63c9ce2b882c02ed038c20bcb217674d8c2f5979a5ae04c12f2ee26be3ab0.npy",
+      "sha256": "6aa63c9ce2b882c02ed038c20bcb217674d8c2f5979a5ae04c12f2ee26be3ab0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6b/6b7fd1cb8e2d422f568c93eb21f0426eaaa9640a0f4700772fb42cf7ff64fd96.npy",
+      "sha256": "6b7fd1cb8e2d422f568c93eb21f0426eaaa9640a0f4700772fb42cf7ff64fd96"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6c/6c1ee7aa4ec98e68527c94d52b69317567e5f11a0d36e54398622d98e4036775.npy",
+      "sha256": "6c1ee7aa4ec98e68527c94d52b69317567e5f11a0d36e54398622d98e4036775"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6c/6c536b9a01ecd985f4a9a0eb92eaa5d42ef8e1007757d0fda1b42e2e4495cfd3.npy",
+      "sha256": "6c536b9a01ecd985f4a9a0eb92eaa5d42ef8e1007757d0fda1b42e2e4495cfd3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6d/6d0340a74c5992f5a912c1547a786a748c116ed43b15186ebdcf151d790de5ab.npy",
+      "sha256": "6d0340a74c5992f5a912c1547a786a748c116ed43b15186ebdcf151d790de5ab"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6d/6d0e470e520f06c0f827569c3a782521e228d9a5a693be1fcbf8177b10d386b5.npy",
+      "sha256": "6d0e470e520f06c0f827569c3a782521e228d9a5a693be1fcbf8177b10d386b5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6d/6d2b858f3e1609a85488ed061828f0add2dba2667aaa569d2a912bdb5597c007.npy",
+      "sha256": "6d2b858f3e1609a85488ed061828f0add2dba2667aaa569d2a912bdb5597c007"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6d/6d3691572e4087d90513ebba73cd37af6336542a4b6851299524d1a9ec4fcccb.npy",
+      "sha256": "6d3691572e4087d90513ebba73cd37af6336542a4b6851299524d1a9ec4fcccb"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6e/6e393824f1eb07ba19ae4f7f8c0fb31385a02d69349db667fcee4dd6d346bd22.npy",
+      "sha256": "6e393824f1eb07ba19ae4f7f8c0fb31385a02d69349db667fcee4dd6d346bd22"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6e/6e3faf6ee9096b3c926e2541044aa1ed97e1cd6d9305f15f0b6eec4fbeff38ae.npy",
+      "sha256": "6e3faf6ee9096b3c926e2541044aa1ed97e1cd6d9305f15f0b6eec4fbeff38ae"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6e/6e5b4a2ccba9852f71e42d29a404a43503e9e0dbae174609881107213e7e58de.npy",
+      "sha256": "6e5b4a2ccba9852f71e42d29a404a43503e9e0dbae174609881107213e7e58de"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6f/6f41bfab2df8c55b0fc80b840069cf39e4a1d81c95e8bd628b6f779cdbba993b.npy",
+      "sha256": "6f41bfab2df8c55b0fc80b840069cf39e4a1d81c95e8bd628b6f779cdbba993b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6f/6f7442106f2a0dcf0c0079cb071efab40d6a72db566350a9f2d2c472f9529c98.npy",
+      "sha256": "6f7442106f2a0dcf0c0079cb071efab40d6a72db566350a9f2d2c472f9529c98"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/6f/6fcda82983ffa62684d7265f6fada1407d86b1220101bd5de382caeae20b4df9.npy",
+      "sha256": "6fcda82983ffa62684d7265f6fada1407d86b1220101bd5de382caeae20b4df9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/70/709608538c99b26689fa6a9ce7e26a7d7017630f676b9b5517aabf66042c71e5.npy",
+      "sha256": "709608538c99b26689fa6a9ce7e26a7d7017630f676b9b5517aabf66042c71e5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/70/70bebc834b0c25ccd932f80e6057235a4d6e661a20cba88600c43ef7fff13868.npy",
+      "sha256": "70bebc834b0c25ccd932f80e6057235a4d6e661a20cba88600c43ef7fff13868"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/71/7139de2410081b6b25ce3c8ca007131da8a53dd9aa6ff12ca3325f4c073a66ad.npy",
+      "sha256": "7139de2410081b6b25ce3c8ca007131da8a53dd9aa6ff12ca3325f4c073a66ad"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/71/713cc7524c455566afa24e52dd4b6a010fb3144b52e7db2f061b5100c2d97988.npy",
+      "sha256": "713cc7524c455566afa24e52dd4b6a010fb3144b52e7db2f061b5100c2d97988"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/72/72e72086e75d6546c627203838ffc3786eec3bf63b125b6687ac0e1ad8424438.npy",
+      "sha256": "72e72086e75d6546c627203838ffc3786eec3bf63b125b6687ac0e1ad8424438"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/73/733909e0023896fdcdd40add7606cac145090d403e576261fc86e734e58afb80.npy",
+      "sha256": "733909e0023896fdcdd40add7606cac145090d403e576261fc86e734e58afb80"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/75/7546a0c59db920a324d4e67df5971aa144f803aeab6988c83577eb7ff6817b06.npy",
+      "sha256": "7546a0c59db920a324d4e67df5971aa144f803aeab6988c83577eb7ff6817b06"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/77/77533eb0ba2372be4858a9cd267222f73988b6bef811979d70cbc85ddf349e94.npy",
+      "sha256": "77533eb0ba2372be4858a9cd267222f73988b6bef811979d70cbc85ddf349e94"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/77/776d9b5bcfb5d64ac4801d88a1caed8283549ef84af40ae531e311e466836fe7.npy",
+      "sha256": "776d9b5bcfb5d64ac4801d88a1caed8283549ef84af40ae531e311e466836fe7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/77/77cf250465100602b8cb801a834b4efde09c37e3949d78a209cf665fdc5f2937.npy",
+      "sha256": "77cf250465100602b8cb801a834b4efde09c37e3949d78a209cf665fdc5f2937"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/77/77dfce68f6f58b41fdf26a6e6669cf13494e987e67c53b8a1cf648cea0633e5f.npy",
+      "sha256": "77dfce68f6f58b41fdf26a6e6669cf13494e987e67c53b8a1cf648cea0633e5f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/78/783ffa007b3cd374bb3dcdfb857774b02ffe4db0ae52d36d0444715bdc6e8744.npy",
+      "sha256": "783ffa007b3cd374bb3dcdfb857774b02ffe4db0ae52d36d0444715bdc6e8744"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/78/78775e6dd61eab5247bd73dbcf04a6a6e4d4b95f98c1802e6317b0a6197f88d8.npy",
+      "sha256": "78775e6dd61eab5247bd73dbcf04a6a6e4d4b95f98c1802e6317b0a6197f88d8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/78/78e65fa83123163cf3afa6deeb371975c4d6b51550905f998bb852ad9663bc9c.npy",
+      "sha256": "78e65fa83123163cf3afa6deeb371975c4d6b51550905f998bb852ad9663bc9c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/79/79aba508caeef6ad5c07a27d394b6624841097272b9141435194d6ed34daa132.npy",
+      "sha256": "79aba508caeef6ad5c07a27d394b6624841097272b9141435194d6ed34daa132"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/79/79f1d0e23a05e6ee07f2f30c9b04cceb3252fe7e30926891a5c558727194be2d.npy",
+      "sha256": "79f1d0e23a05e6ee07f2f30c9b04cceb3252fe7e30926891a5c558727194be2d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7a/7a9ba852404b2b791b06216e01d19fc814f41dc4655123e397bf6b62389c5f10.npy",
+      "sha256": "7a9ba852404b2b791b06216e01d19fc814f41dc4655123e397bf6b62389c5f10"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7a/7abe80e6373c06b319a8337c6bcec9f05097ae7a37dc3a4532baaf381fe935f9.npy",
+      "sha256": "7abe80e6373c06b319a8337c6bcec9f05097ae7a37dc3a4532baaf381fe935f9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7a/7adf94525492ddac2cde578f1668fc8c1d8fe07ddbc81c3c43815fcd44e2ea67.npy",
+      "sha256": "7adf94525492ddac2cde578f1668fc8c1d8fe07ddbc81c3c43815fcd44e2ea67"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7a/7ae3287388fb458b98b34b1159391fa3ce67811588702a748d34afe945c9a26b.npy",
+      "sha256": "7ae3287388fb458b98b34b1159391fa3ce67811588702a748d34afe945c9a26b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7b/7b1b4e68e2b9430a8d060183bddca8bdd4ba11869b3f31e457725cc4b69dec24.npy",
+      "sha256": "7b1b4e68e2b9430a8d060183bddca8bdd4ba11869b3f31e457725cc4b69dec24"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7b/7b2cee4616c5b780af61df2f0d4d6d53698881ae3efa7beb05ff320ccba70873.npy",
+      "sha256": "7b2cee4616c5b780af61df2f0d4d6d53698881ae3efa7beb05ff320ccba70873"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7b/7bffc646d77b93a40f00bce4f756413a02425d44b0b98586f167036309b87d2d.npy",
+      "sha256": "7bffc646d77b93a40f00bce4f756413a02425d44b0b98586f167036309b87d2d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7c/7c4b2070108fdbc036baa347a90c9a88c2f6f5e4a882c5278255c8c412335f18.npy",
+      "sha256": "7c4b2070108fdbc036baa347a90c9a88c2f6f5e4a882c5278255c8c412335f18"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7c/7ca1e36656bd849998deb5b8f33adf5f9be49288c1e06342972dc5edb94b491e.npy",
+      "sha256": "7ca1e36656bd849998deb5b8f33adf5f9be49288c1e06342972dc5edb94b491e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7d/7d6b704de048ae32e531721009644d6a898a8d5cf62785766e6b919e3b49d15c.npy",
+      "sha256": "7d6b704de048ae32e531721009644d6a898a8d5cf62785766e6b919e3b49d15c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7d/7dcbb5a5ad972d11aee66cabb98de601bf7afd84fa37a78b3b299663f925a7aa.npy",
+      "sha256": "7dcbb5a5ad972d11aee66cabb98de601bf7afd84fa37a78b3b299663f925a7aa"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7e/7eeca4ec5e43f1ae38acf9583c8bc38efa941979baa5d407dcd79c5ba92919fb.npy",
+      "sha256": "7eeca4ec5e43f1ae38acf9583c8bc38efa941979baa5d407dcd79c5ba92919fb"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/7f/7fb4ea57168766cbbd52bbb7dd27362740cb5b2fdcb19ded55da685617f1a6e7.npy",
+      "sha256": "7fb4ea57168766cbbd52bbb7dd27362740cb5b2fdcb19ded55da685617f1a6e7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/80/801aa2b0555b5e1afe4f90f9ac16eef39650bddb3ba3b5ff13cd399c47cd6973.npy",
+      "sha256": "801aa2b0555b5e1afe4f90f9ac16eef39650bddb3ba3b5ff13cd399c47cd6973"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/80/803c8bf9c0b46f455b1c9860ee37a56cfdf319fae6ce182eb1656c4c3f1521d5.npy",
+      "sha256": "803c8bf9c0b46f455b1c9860ee37a56cfdf319fae6ce182eb1656c4c3f1521d5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/80/803f51c9ed99767c2bfba00cd156e70b6480fe06df3ab0f6613b2614bd533889.npy",
+      "sha256": "803f51c9ed99767c2bfba00cd156e70b6480fe06df3ab0f6613b2614bd533889"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/80/8042f55ef81e202b74009d7412184de8b15a41e80b2fd520265bd3341e1ba8e3.npy",
+      "sha256": "8042f55ef81e202b74009d7412184de8b15a41e80b2fd520265bd3341e1ba8e3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/80/80e0bfb27cd64d13a8a7bcde1129616ac3b7b87ebfb92710835fa983e7d7d167.npy",
+      "sha256": "80e0bfb27cd64d13a8a7bcde1129616ac3b7b87ebfb92710835fa983e7d7d167"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/81/812d7d97980763764144cd279bb0a4d2458204ac088cceb86e5772abae655fca.npy",
+      "sha256": "812d7d97980763764144cd279bb0a4d2458204ac088cceb86e5772abae655fca"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/81/81f7882913b1903368d4bd09f5add7b7cc53bbf9f5cb8a044cf17ce67b72664f.npy",
+      "sha256": "81f7882913b1903368d4bd09f5add7b7cc53bbf9f5cb8a044cf17ce67b72664f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/82/8207f93a1884646e422a6713093ee8607a1f7677c9e59c06c1945314635e2f40.npy",
+      "sha256": "8207f93a1884646e422a6713093ee8607a1f7677c9e59c06c1945314635e2f40"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/82/825e49552000417111ae31af9d8fdac076c53566b882e82b0e159979ab5b99a9.npy",
+      "sha256": "825e49552000417111ae31af9d8fdac076c53566b882e82b0e159979ab5b99a9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/83/835872f6b8f6a3e65a7a8e4ffa1233645fb50192c4ee0792e4244d212b3d15a8.npy",
+      "sha256": "835872f6b8f6a3e65a7a8e4ffa1233645fb50192c4ee0792e4244d212b3d15a8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/84/8439834f8853fdcb28040aecc6aa264291814cec0ae0d36c5c359a72dacb4609.npy",
+      "sha256": "8439834f8853fdcb28040aecc6aa264291814cec0ae0d36c5c359a72dacb4609"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/85/857267ea12e21539db9cb2a8537371ff7a627ed5fbb3848f37e8ee9c56980c52.npy",
+      "sha256": "857267ea12e21539db9cb2a8537371ff7a627ed5fbb3848f37e8ee9c56980c52"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/86/86c55651d848d41b17cd900852c97602ced01397dfb6f8f4120d340b350c61ab.npy",
+      "sha256": "86c55651d848d41b17cd900852c97602ced01397dfb6f8f4120d340b350c61ab"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/87/872238d2c5381258a3d486e1d9445b71b6844c878cfbf24012db0ae89ba54cbc.npy",
+      "sha256": "872238d2c5381258a3d486e1d9445b71b6844c878cfbf24012db0ae89ba54cbc"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/87/87617c147de4692f689e075a538ef71e6afc5a23652bfb70d826ee3b752d6c5f.npy",
+      "sha256": "87617c147de4692f689e075a538ef71e6afc5a23652bfb70d826ee3b752d6c5f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/87/87832285f03d5374d1ca94056c36ff69ca90e66bd97387567c61df802eb7edb4.npy",
+      "sha256": "87832285f03d5374d1ca94056c36ff69ca90e66bd97387567c61df802eb7edb4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/88/8896302c30e4c0d14279d97aa09bb1e9f018b5983f059ad818e302680c6d74d5.npy",
+      "sha256": "8896302c30e4c0d14279d97aa09bb1e9f018b5983f059ad818e302680c6d74d5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/88/88d4cf8987ea192ae7b435785c7377c02c0086f9fbb4dea8d7d2b2b2c90dac57.npy",
+      "sha256": "88d4cf8987ea192ae7b435785c7377c02c0086f9fbb4dea8d7d2b2b2c90dac57"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/88/88f69f8ed64be037b4582c0590acfc73d2e1e5598fc2a8f3c7d4e06196239e80.npy",
+      "sha256": "88f69f8ed64be037b4582c0590acfc73d2e1e5598fc2a8f3c7d4e06196239e80"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/89/895551b79785042f41673bcc70cf365aeeaad27dd60af1e82fea443a8218e586.npy",
+      "sha256": "895551b79785042f41673bcc70cf365aeeaad27dd60af1e82fea443a8218e586"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/89/897f1d92219a6edad57899e86d90c41f9269d6355d256da64cf441047fe3e4fe.npy",
+      "sha256": "897f1d92219a6edad57899e86d90c41f9269d6355d256da64cf441047fe3e4fe"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/89/89c2a2212e649b7190948037650ecfcd4af21b635a55bafee6bf410d9501f19c.npy",
+      "sha256": "89c2a2212e649b7190948037650ecfcd4af21b635a55bafee6bf410d9501f19c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/89/89f6e40d0bce0f79233832d242190964707d9fe67faf4b34940cff0afd2d5c17.npy",
+      "sha256": "89f6e40d0bce0f79233832d242190964707d9fe67faf4b34940cff0afd2d5c17"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/8a/8a20398d810486b0ee374949322f4015a2eb73989bace1bc7085ccf1d9cfc215.npy",
+      "sha256": "8a20398d810486b0ee374949322f4015a2eb73989bace1bc7085ccf1d9cfc215"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/8b/8bd4fe413ee3fcc747c779263c2f1da3c033e734f442a0bc5e77defb016aaebf.npy",
+      "sha256": "8bd4fe413ee3fcc747c779263c2f1da3c033e734f442a0bc5e77defb016aaebf"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/8c/8c3e3784262c954e3a375b5ebca997e9f7dddd85148415a9d100a287494f0442.npy",
+      "sha256": "8c3e3784262c954e3a375b5ebca997e9f7dddd85148415a9d100a287494f0442"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/8c/8c98bcc911ac453a4a9d0e301b51aa3972105a5805883583d0fe390e6ac6e581.npy",
+      "sha256": "8c98bcc911ac453a4a9d0e301b51aa3972105a5805883583d0fe390e6ac6e581"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/8e/8e143858eb0b83ffebabf0fd817994ec3bf111d22c915a7db21d7799ce94bf25.npy",
+      "sha256": "8e143858eb0b83ffebabf0fd817994ec3bf111d22c915a7db21d7799ce94bf25"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/8e/8e6c9a0a527d7a8dac4eddc02da6b0c46fef50f0ee3702f3e7dfce299a69071a.npy",
+      "sha256": "8e6c9a0a527d7a8dac4eddc02da6b0c46fef50f0ee3702f3e7dfce299a69071a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/8e/8e77693c91c677b661e7be753617b3b316c72b63ab6092c33fcee588c485b15a.npy",
+      "sha256": "8e77693c91c677b661e7be753617b3b316c72b63ab6092c33fcee588c485b15a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/8e/8e7db52c0c8aa27f2879d02c6f88a6a7d30cb0c5a0ecef2245a635cc428dabcf.npy",
+      "sha256": "8e7db52c0c8aa27f2879d02c6f88a6a7d30cb0c5a0ecef2245a635cc428dabcf"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/8e/8ed2e512bb6661e1450697c941c105d21b2cab52e903556b2bcd854cb56c93fc.npy",
+      "sha256": "8ed2e512bb6661e1450697c941c105d21b2cab52e903556b2bcd854cb56c93fc"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/8f/8ffa77a72b1c9876570b5826a9e703ebc525a7bdb4db26e4e0a78afbda5f9444.npy",
+      "sha256": "8ffa77a72b1c9876570b5826a9e703ebc525a7bdb4db26e4e0a78afbda5f9444"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/91/912c3d4ba557cdecb7533fec706f12e51e6930b96e76737aa98e928cbc6ed80a.npy",
+      "sha256": "912c3d4ba557cdecb7533fec706f12e51e6930b96e76737aa98e928cbc6ed80a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/92/92140344b970300eee52a2e7c4af197797e7505dac463a03e92ccb74ddc6ce11.npy",
+      "sha256": "92140344b970300eee52a2e7c4af197797e7505dac463a03e92ccb74ddc6ce11"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/92/92995a8dedbcb0bfdcf26424d0850ef1065b266896ec76dc0fe817aa1091e23d.npy",
+      "sha256": "92995a8dedbcb0bfdcf26424d0850ef1065b266896ec76dc0fe817aa1091e23d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/93/930dddd07f141aa5861657aa4c62ae59f37ec6f2f1cc83b18a2585bdb1f37ca7.npy",
+      "sha256": "930dddd07f141aa5861657aa4c62ae59f37ec6f2f1cc83b18a2585bdb1f37ca7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/93/93d7d1f50cc5a86e560ca351bdc3f1069ef8e382f40bd25ad845b1bd62395444.npy",
+      "sha256": "93d7d1f50cc5a86e560ca351bdc3f1069ef8e382f40bd25ad845b1bd62395444"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/94/94fe53bed457e96ce17671cee38cf939afa95d113d50c01008a646283da14b01.npy",
+      "sha256": "94fe53bed457e96ce17671cee38cf939afa95d113d50c01008a646283da14b01"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/95/9512611b973a69bd64d552e1cc6ef03c6fa9be41a1c0e974055ff5744e3a1c82.npy",
+      "sha256": "9512611b973a69bd64d552e1cc6ef03c6fa9be41a1c0e974055ff5744e3a1c82"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/95/957a361f458ac67888af4ed431bbec40af36732f0c9e3be25aeda828f7dcdcbe.npy",
+      "sha256": "957a361f458ac67888af4ed431bbec40af36732f0c9e3be25aeda828f7dcdcbe"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/96/965d378f8e6f7ae6fc30a0738713ad19fe7a6ce46571a359096d91d521a0ba38.npy",
+      "sha256": "965d378f8e6f7ae6fc30a0738713ad19fe7a6ce46571a359096d91d521a0ba38"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/96/968260de9800c9e7ab10b5bb752a51fd8b689be7fe9ea67e47980209d65a28dc.npy",
+      "sha256": "968260de9800c9e7ab10b5bb752a51fd8b689be7fe9ea67e47980209d65a28dc"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/97/973f6e3bf1178192ec0c03616baecf26960fb3f803a0c12a4aac90239331d05f.npy",
+      "sha256": "973f6e3bf1178192ec0c03616baecf26960fb3f803a0c12a4aac90239331d05f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/97/9786b3adc952e90283e1c443861cef38d1184e02674c30acec67c1916df0667f.npy",
+      "sha256": "9786b3adc952e90283e1c443861cef38d1184e02674c30acec67c1916df0667f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/98/986025e0a246fe27e76e772a5b80ffeee7f68ec427d08c42836ab832d9ca4660.npy",
+      "sha256": "986025e0a246fe27e76e772a5b80ffeee7f68ec427d08c42836ab832d9ca4660"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/99/99c8ca9180116d2e6480241482824adcbc7ad657a2b643a7cd4f31b98934e4a3.npy",
+      "sha256": "99c8ca9180116d2e6480241482824adcbc7ad657a2b643a7cd4f31b98934e4a3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/99/99df4366cf2da86d8c6da2f1ccde79a02e8fe9f4f68bc846a43100f8c5091d9c.npy",
+      "sha256": "99df4366cf2da86d8c6da2f1ccde79a02e8fe9f4f68bc846a43100f8c5091d9c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/99/99fca600847eb8264f1924fb47fd72a8b4e1f0e8a56eee54975c20596639d5a0.npy",
+      "sha256": "99fca600847eb8264f1924fb47fd72a8b4e1f0e8a56eee54975c20596639d5a0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/9a/9a7643a1df2e309966f5a0a47bae989650267573d7d6687c6cd1232178a39512.npy",
+      "sha256": "9a7643a1df2e309966f5a0a47bae989650267573d7d6687c6cd1232178a39512"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/9a/9ab9b6a2af3cb173ce4208fbd7d06f5ee653d597020a7e6cd8efd2366cb1261a.npy",
+      "sha256": "9ab9b6a2af3cb173ce4208fbd7d06f5ee653d597020a7e6cd8efd2366cb1261a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/9b/9b1c96fd2d1d4dcf9aafd9e0d4fd8eb3ca55aac6b45761200991f5c0a0996965.npy",
+      "sha256": "9b1c96fd2d1d4dcf9aafd9e0d4fd8eb3ca55aac6b45761200991f5c0a0996965"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/9c/9c82682c10283faee6338b076890f689ccff35fe80562f0c3c3b9d80670f49e7.npy",
+      "sha256": "9c82682c10283faee6338b076890f689ccff35fe80562f0c3c3b9d80670f49e7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/9e/9e404786308989febd9ef592765190b06449458e2de27ab25ca15239051cbbe2.npy",
+      "sha256": "9e404786308989febd9ef592765190b06449458e2de27ab25ca15239051cbbe2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/9e/9e479936974ca18f627efd8849d2a68f7441312a8cae81573d5ddcb41b4f1252.npy",
+      "sha256": "9e479936974ca18f627efd8849d2a68f7441312a8cae81573d5ddcb41b4f1252"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/9e/9e55b9b67a3b0705295be2a28f1470a067faaef99e1dc7adf87ece677dd5f549.npy",
+      "sha256": "9e55b9b67a3b0705295be2a28f1470a067faaef99e1dc7adf87ece677dd5f549"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/9f/9f0a647cd3ecd8d01540884d638a933c133c95994a7b82ede381d70559e95e5e.npy",
+      "sha256": "9f0a647cd3ecd8d01540884d638a933c133c95994a7b82ede381d70559e95e5e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/9f/9fca2a737575ff8b7e26579c1cf89524d0846eb6dc4fadf0048d6b9f7526ffeb.npy",
+      "sha256": "9fca2a737575ff8b7e26579c1cf89524d0846eb6dc4fadf0048d6b9f7526ffeb"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/9f/9fea875019913ce39e9201e8257ce7bca7d46239c7d68d312ceebac3e78552ad.npy",
+      "sha256": "9fea875019913ce39e9201e8257ce7bca7d46239c7d68d312ceebac3e78552ad"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a0/a04c4c1e615838b8b439a275481ae8dd4f07d88507b3df85f5f635174ccf0391.npy",
+      "sha256": "a04c4c1e615838b8b439a275481ae8dd4f07d88507b3df85f5f635174ccf0391"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a0/a08cb68ae4bcee92ba241c8ec443f918069acb49a77de4dddac51007092dc998.npy",
+      "sha256": "a08cb68ae4bcee92ba241c8ec443f918069acb49a77de4dddac51007092dc998"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a1/a122078861a336071043e5f941040fbcecbd0838527cf9ae4775a7a528801559.npy",
+      "sha256": "a122078861a336071043e5f941040fbcecbd0838527cf9ae4775a7a528801559"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a1/a125eb8d4dd3557573e3b9160433ba09027d2b508bb9b434cfc8ff8576cd83c0.npy",
+      "sha256": "a125eb8d4dd3557573e3b9160433ba09027d2b508bb9b434cfc8ff8576cd83c0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a1/a13a0165e53c23f2fb230eed5dafa14b172388c81d3c403e35ec2af9c6487402.npy",
+      "sha256": "a13a0165e53c23f2fb230eed5dafa14b172388c81d3c403e35ec2af9c6487402"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a1/a167a1d24d2be4bb2a559590163b2db7904f7b35bdff21ea267e1912dac0991d.npy",
+      "sha256": "a167a1d24d2be4bb2a559590163b2db7904f7b35bdff21ea267e1912dac0991d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a1/a18f965162d6738f789f83e1de4a60db3cdcd6597403d2ea1bf17baf58a561de.npy",
+      "sha256": "a18f965162d6738f789f83e1de4a60db3cdcd6597403d2ea1bf17baf58a561de"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a1/a1a49557650c88d0fba7e8ce8251b10634d9171ef7c079c296b1aca18d810639.npy",
+      "sha256": "a1a49557650c88d0fba7e8ce8251b10634d9171ef7c079c296b1aca18d810639"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a2/a2c6cff84ae0f29bc58f7c564202e0f78982947bb58342dc3ec371ce96e99501.npy",
+      "sha256": "a2c6cff84ae0f29bc58f7c564202e0f78982947bb58342dc3ec371ce96e99501"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a2/a2f4020dc67907c6fc3e7ebc771fc1721f05105a99f6071cf21e63df846bfc35.npy",
+      "sha256": "a2f4020dc67907c6fc3e7ebc771fc1721f05105a99f6071cf21e63df846bfc35"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a3/a30e556bed934ad581526f8fbc37f0f8db3c3bf81d63ad7173ed1eec7bf1c97c.npy",
+      "sha256": "a30e556bed934ad581526f8fbc37f0f8db3c3bf81d63ad7173ed1eec7bf1c97c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a3/a313ec0d66743871acd792adb35561625578ebd9c744d7f550aad5394724a3aa.npy",
+      "sha256": "a313ec0d66743871acd792adb35561625578ebd9c744d7f550aad5394724a3aa"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a3/a38b4cdca1ea51e4c1ca4e93ee7c717f1a13ee3a64ce292d4a81a61985db00f6.npy",
+      "sha256": "a38b4cdca1ea51e4c1ca4e93ee7c717f1a13ee3a64ce292d4a81a61985db00f6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a3/a3b1951ad7153a319ada4fd7cd7c14dca4c6cf39d2f3838be75f6e99e680d6b2.npy",
+      "sha256": "a3b1951ad7153a319ada4fd7cd7c14dca4c6cf39d2f3838be75f6e99e680d6b2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a4/a447ff47dca5d2ba2a881bc85fb939fa5febc891611d992371539403c63095e5.npy",
+      "sha256": "a447ff47dca5d2ba2a881bc85fb939fa5febc891611d992371539403c63095e5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a5/a55fd585039e634e38604b59455e72b841ca79ce7b4737e0679e8d3f4cf28beb.npy",
+      "sha256": "a55fd585039e634e38604b59455e72b841ca79ce7b4737e0679e8d3f4cf28beb"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a6/a63cf03f3f5b420d9faf6215eb32200ddeae6ba24a229c6b20a4bd47983b4415.npy",
+      "sha256": "a63cf03f3f5b420d9faf6215eb32200ddeae6ba24a229c6b20a4bd47983b4415"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a7/a701ed29fc432e18bc4e7382503a0921da2b92fee46c95b64be2999356af999f.npy",
+      "sha256": "a701ed29fc432e18bc4e7382503a0921da2b92fee46c95b64be2999356af999f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a7/a714d3f483fba4d5a94b8d6a9de5507b8d2642b06dd969fbf6da989cf06e5937.npy",
+      "sha256": "a714d3f483fba4d5a94b8d6a9de5507b8d2642b06dd969fbf6da989cf06e5937"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a7/a794a8a5df7c8bcb3b59ad7f4b9974e0443b262028597b158d60332d7142830f.npy",
+      "sha256": "a794a8a5df7c8bcb3b59ad7f4b9974e0443b262028597b158d60332d7142830f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a7/a7cb62414574e72852e231d74fcb731198991b90790205b191dcab1d85e4caf0.npy",
+      "sha256": "a7cb62414574e72852e231d74fcb731198991b90790205b191dcab1d85e4caf0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a8/a859b8ec6c301c369641698fe200228b5a3938cd9c1113f98da17cc8e229c939.npy",
+      "sha256": "a859b8ec6c301c369641698fe200228b5a3938cd9c1113f98da17cc8e229c939"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a9/a91900e84b01ff9602a65d9a2334a003561d748265a3059040e9f387a968a363.npy",
+      "sha256": "a91900e84b01ff9602a65d9a2334a003561d748265a3059040e9f387a968a363"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/a9/a9e2ddbe408a4b737caf71d0a67f3bb88df54b0e19cb764c21758065a98b0806.npy",
+      "sha256": "a9e2ddbe408a4b737caf71d0a67f3bb88df54b0e19cb764c21758065a98b0806"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/aa/aa8ccbfeba907410a7be5786f6c6670b7f70a8c02d10bf74eac3a54bf1883e45.npy",
+      "sha256": "aa8ccbfeba907410a7be5786f6c6670b7f70a8c02d10bf74eac3a54bf1883e45"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/aa/aae7cb934474cba1b967d5f600a5c2b6dda906b122e834604f8477c6ebc6f905.npy",
+      "sha256": "aae7cb934474cba1b967d5f600a5c2b6dda906b122e834604f8477c6ebc6f905"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/aa/aafed068b3186bbe19d9b6d3768af18a236f16223aa0da263723d0afcd88e9a7.npy",
+      "sha256": "aafed068b3186bbe19d9b6d3768af18a236f16223aa0da263723d0afcd88e9a7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ab/ab68a2087ca4b9d17b46f91769dd2de531aad1c7a202a4f0e34f8932153b2da2.npy",
+      "sha256": "ab68a2087ca4b9d17b46f91769dd2de531aad1c7a202a4f0e34f8932153b2da2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ab/abc20f101945b3e224bb9f6abeebc593732e4aec7fc5fb80d7bf8224da11a9a3.npy",
+      "sha256": "abc20f101945b3e224bb9f6abeebc593732e4aec7fc5fb80d7bf8224da11a9a3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ab/abf1f03288e76ac2affa071d559e6dc1be5c4f54ecc4235ace5b19d43f44f930.npy",
+      "sha256": "abf1f03288e76ac2affa071d559e6dc1be5c4f54ecc4235ace5b19d43f44f930"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ac/ac98e95c85aeb3690d7b2b7c28a73db9ee07eb17443e75182bc9c110f134d9ae.npy",
+      "sha256": "ac98e95c85aeb3690d7b2b7c28a73db9ee07eb17443e75182bc9c110f134d9ae"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ac/acff929762320542c28790848838008e51faba9d7c1e921dc8a1aecf15c0ae56.npy",
+      "sha256": "acff929762320542c28790848838008e51faba9d7c1e921dc8a1aecf15c0ae56"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ad/ad795b13057c53833c089f9802ca6767cfcbe50a842653d62d6847c69bd60f49.npy",
+      "sha256": "ad795b13057c53833c089f9802ca6767cfcbe50a842653d62d6847c69bd60f49"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ae/ae7cfececac7a17a881617b36d179f3503cc320bbc4c671f4f535d414f45e62c.npy",
+      "sha256": "ae7cfececac7a17a881617b36d179f3503cc320bbc4c671f4f535d414f45e62c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ae/aee5acd8964687b6876f55bfab8c24f466cdd2128ff8533d4b902c19451b31af.npy",
+      "sha256": "aee5acd8964687b6876f55bfab8c24f466cdd2128ff8533d4b902c19451b31af"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/af/af1441e284fab9e6a9ebbdc9eae967ed16fa2eb032eaf7306f595a6f8cd4b290.npy",
+      "sha256": "af1441e284fab9e6a9ebbdc9eae967ed16fa2eb032eaf7306f595a6f8cd4b290"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/af/af2c4c2892a46a105af4ed41879f8c13a67f025a84fcb65c430cfc89e8cdff45.npy",
+      "sha256": "af2c4c2892a46a105af4ed41879f8c13a67f025a84fcb65c430cfc89e8cdff45"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/af/af829afcc644021cdb327797e15e06477df843692a0f626e79f24d73123549a0.npy",
+      "sha256": "af829afcc644021cdb327797e15e06477df843692a0f626e79f24d73123549a0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b0/b0ec07f347fe53519e16f42f5f2a89fa327f9ea8e05dd01cf5456bc4ebb8d2cc.npy",
+      "sha256": "b0ec07f347fe53519e16f42f5f2a89fa327f9ea8e05dd01cf5456bc4ebb8d2cc"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b1/b11ccb1c16904ea62a769c0d826ee3d3235f8ebe3ed5691a52c6324ac8c18fd7.npy",
+      "sha256": "b11ccb1c16904ea62a769c0d826ee3d3235f8ebe3ed5691a52c6324ac8c18fd7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b1/b18cff9d4a6d0697ab7696a1faa1533314294c2ed20a7f94d04c096115205a61.npy",
+      "sha256": "b18cff9d4a6d0697ab7696a1faa1533314294c2ed20a7f94d04c096115205a61"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b2/b2cfa5bf58ce65f24db50a431af86cbd76c40dbbec929ad511ba21b67c9be3a0.npy",
+      "sha256": "b2cfa5bf58ce65f24db50a431af86cbd76c40dbbec929ad511ba21b67c9be3a0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b2/b2dbbba01c89cb9b1658b120f69f887e9e839dafabe53d4c62ab1b56ac47f0b7.npy",
+      "sha256": "b2dbbba01c89cb9b1658b120f69f887e9e839dafabe53d4c62ab1b56ac47f0b7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b3/b398552dd2278d2cc15705bd8a091d0e35b7dd5cdfc35d9d8614d0ba29bc632f.npy",
+      "sha256": "b398552dd2278d2cc15705bd8a091d0e35b7dd5cdfc35d9d8614d0ba29bc632f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b4/b40c46385fb9eb7a3229ae515da6a0bf2a0f00e7f744946c23c932aa8f7938ed.npy",
+      "sha256": "b40c46385fb9eb7a3229ae515da6a0bf2a0f00e7f744946c23c932aa8f7938ed"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b4/b40d8c967f7577ca7857adbe6240a2c6d3b50ecbb1ff6839fb8aa287fc2be120.npy",
+      "sha256": "b40d8c967f7577ca7857adbe6240a2c6d3b50ecbb1ff6839fb8aa287fc2be120"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b4/b4e63c0d2e0516aa504c527890cc66e29ba51c4da8cb79d89091c1b00da9181a.npy",
+      "sha256": "b4e63c0d2e0516aa504c527890cc66e29ba51c4da8cb79d89091c1b00da9181a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b5/b58d0204073bf4316397bb81e62a8b92a9f7ea4a843b9c965d4406e19c00f6fc.npy",
+      "sha256": "b58d0204073bf4316397bb81e62a8b92a9f7ea4a843b9c965d4406e19c00f6fc"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b5/b5dfc228f7b0c9b90402318c4005f22f8cb7ca373f26ac3df298bac47c0d94fa.npy",
+      "sha256": "b5dfc228f7b0c9b90402318c4005f22f8cb7ca373f26ac3df298bac47c0d94fa"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b6/b64307e5e0acbc6e65c5205581ce51bb7dbd77c2343c9680885cb7ebb24bb412.npy",
+      "sha256": "b64307e5e0acbc6e65c5205581ce51bb7dbd77c2343c9680885cb7ebb24bb412"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b6/b693e95059578a17f929115bfc55c1c27bf47834034a796c394905bc8b8878b7.npy",
+      "sha256": "b693e95059578a17f929115bfc55c1c27bf47834034a796c394905bc8b8878b7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b7/b7471c900083e7b5c668dce30f2bd93827f0feaa110784bf9cdbc70f85b5c9c2.npy",
+      "sha256": "b7471c900083e7b5c668dce30f2bd93827f0feaa110784bf9cdbc70f85b5c9c2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b7/b76c327b4a365aadcfb717449294fcf88873bf48591a76e0f9de8206153de218.npy",
+      "sha256": "b76c327b4a365aadcfb717449294fcf88873bf48591a76e0f9de8206153de218"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b7/b778d5fa6afce46540dc472091b54a9e694d2efacf6668f4ae6c49079f129880.npy",
+      "sha256": "b778d5fa6afce46540dc472091b54a9e694d2efacf6668f4ae6c49079f129880"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b7/b782a161036d22a4433f71ebb73a6d013b1286d18a7876f5ae3ce4f387e030b0.npy",
+      "sha256": "b782a161036d22a4433f71ebb73a6d013b1286d18a7876f5ae3ce4f387e030b0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b8/b825ab13f558a2af121792f587a13524fcc6fd576b5298260e032d4e9f9dff96.npy",
+      "sha256": "b825ab13f558a2af121792f587a13524fcc6fd576b5298260e032d4e9f9dff96"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b8/b8320c8816d82f305fa0da8b732af109a54e6c79b954e6b1c453c6fcf64de8eb.npy",
+      "sha256": "b8320c8816d82f305fa0da8b732af109a54e6c79b954e6b1c453c6fcf64de8eb"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b8/b84ed6896d7900183c3f5a38660d61f43c67b9ac15ba027ded2888804de0589f.npy",
+      "sha256": "b84ed6896d7900183c3f5a38660d61f43c67b9ac15ba027ded2888804de0589f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b8/b8ed02bae3f676f9694de69f92b78af21b9007fa66616e076b82f78e2dfbf09a.npy",
+      "sha256": "b8ed02bae3f676f9694de69f92b78af21b9007fa66616e076b82f78e2dfbf09a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/b9/b976b382863a3447e7815cb788d4e0569ce5ee5a7fb06edf5567c62519120e64.npy",
+      "sha256": "b976b382863a3447e7815cb788d4e0569ce5ee5a7fb06edf5567c62519120e64"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ba/baa677d713e1ad16de6f8cbd3cfd9bf2a7d18d96041d2f99709f44ee64418efe.npy",
+      "sha256": "baa677d713e1ad16de6f8cbd3cfd9bf2a7d18d96041d2f99709f44ee64418efe"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/bb/bb34900c96361d53819092545292981cbbba1d91bec1645678618cb36611f17c.npy",
+      "sha256": "bb34900c96361d53819092545292981cbbba1d91bec1645678618cb36611f17c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/bb/bb6073d12e025f5507b8803a2fb0a765e40ae4a9f91616127bab199d5c2e25a2.npy",
+      "sha256": "bb6073d12e025f5507b8803a2fb0a765e40ae4a9f91616127bab199d5c2e25a2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/bc/bc11da83b1a531b13a46a3e4a9288b790c539c593478dacd70471c1c7fccb389.npy",
+      "sha256": "bc11da83b1a531b13a46a3e4a9288b790c539c593478dacd70471c1c7fccb389"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/bd/bd85189ffc76908aad07920ee495a2abb857d21a97c4c6d2ff98ca3af7dfa96d.npy",
+      "sha256": "bd85189ffc76908aad07920ee495a2abb857d21a97c4c6d2ff98ca3af7dfa96d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/bd/bd98c72c6fa603a0fe055a8d0420d654d274acd7537123917e7f5dd32fef97cd.npy",
+      "sha256": "bd98c72c6fa603a0fe055a8d0420d654d274acd7537123917e7f5dd32fef97cd"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/bd/bdec8968f0ab903f96ce39a0a746a50a19f6d55fee8e29a00b824a213b1d3769.npy",
+      "sha256": "bdec8968f0ab903f96ce39a0a746a50a19f6d55fee8e29a00b824a213b1d3769"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/be/be651e7889a37c669a0f0bd88b7cd2b122a49e8cee26b8cb0899526f4a111f0d.npy",
+      "sha256": "be651e7889a37c669a0f0bd88b7cd2b122a49e8cee26b8cb0899526f4a111f0d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/be/bee31cbf5e35aff371d5a8b1127255a111ef44ca5ef8e8ef49831e7d5396fe4a.npy",
+      "sha256": "bee31cbf5e35aff371d5a8b1127255a111ef44ca5ef8e8ef49831e7d5396fe4a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/bf/bf7cb374969fdce9ddfc99898a3ced8a56e3b950eb22752a437fbf7b3c228cb3.npy",
+      "sha256": "bf7cb374969fdce9ddfc99898a3ced8a56e3b950eb22752a437fbf7b3c228cb3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/bf/bf9651668e8ea625bec5d1c097cb1cd8672273a821b15daedd2b049b0142b6bf.npy",
+      "sha256": "bf9651668e8ea625bec5d1c097cb1cd8672273a821b15daedd2b049b0142b6bf"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/bf/bfa581ad82c6351a94f2f12b4904005efe6368be9850a66013ca15309db7545e.npy",
+      "sha256": "bfa581ad82c6351a94f2f12b4904005efe6368be9850a66013ca15309db7545e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/bf/bffc1513edfebd91016f620a628247e7435897b277ee2a3392435dc54db57e80.npy",
+      "sha256": "bffc1513edfebd91016f620a628247e7435897b277ee2a3392435dc54db57e80"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c0/c0076757a19fbef3f1f23dfa631ee5070611f9e3892443d76e40c628cf289c93.npy",
+      "sha256": "c0076757a19fbef3f1f23dfa631ee5070611f9e3892443d76e40c628cf289c93"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c0/c03b36712e0d908eb74f0c209a3cb13be3fabcf3537eb8085f4bb67e51cc61d8.npy",
+      "sha256": "c03b36712e0d908eb74f0c209a3cb13be3fabcf3537eb8085f4bb67e51cc61d8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c0/c0b7cfe9be970c0d4c18bab495ef326c663760a79e03b4e31218e50f1f64543e.npy",
+      "sha256": "c0b7cfe9be970c0d4c18bab495ef326c663760a79e03b4e31218e50f1f64543e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c2/c253794cf7f27a2de5b2fc8dca596a44121654f781338f738cda582d791b9536.npy",
+      "sha256": "c253794cf7f27a2de5b2fc8dca596a44121654f781338f738cda582d791b9536"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c3/c36aa303a1980d96e4091c59918d3e15b0f3fcfb68710e77dfb9cbda84f648e9.npy",
+      "sha256": "c36aa303a1980d96e4091c59918d3e15b0f3fcfb68710e77dfb9cbda84f648e9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c4/c40a5a0b89e19907b1e43a3fbbfe0a15231d23732fee0df4e52f37a96fdda508.npy",
+      "sha256": "c40a5a0b89e19907b1e43a3fbbfe0a15231d23732fee0df4e52f37a96fdda508"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c4/c43ba554ea5f8f0f759eb48d96320be7123d9c9cfb93828977c7960f826d550d.npy",
+      "sha256": "c43ba554ea5f8f0f759eb48d96320be7123d9c9cfb93828977c7960f826d550d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c4/c484588c821344c0dbb72c142d782e1a6b7eeb88827bf9caef8d9271a9b194a5.npy",
+      "sha256": "c484588c821344c0dbb72c142d782e1a6b7eeb88827bf9caef8d9271a9b194a5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c4/c4b21b622cad631bafe7cc48924586668409d0d91996e5b73203600fd5d3d0c2.npy",
+      "sha256": "c4b21b622cad631bafe7cc48924586668409d0d91996e5b73203600fd5d3d0c2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c5/c5df7732b5ddedd0a1bf9f2b8c76fd9db43c75896dc74e457f778aeed596986a.npy",
+      "sha256": "c5df7732b5ddedd0a1bf9f2b8c76fd9db43c75896dc74e457f778aeed596986a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c6/c6019cb29e8dea4ac5ea71b09546dad188da991b3ea88dafe3fa7430e1268b41.npy",
+      "sha256": "c6019cb29e8dea4ac5ea71b09546dad188da991b3ea88dafe3fa7430e1268b41"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c6/c62f52b544f667866eb502a3b0d1cea60f0c7a5b1f85194a340c2e6d30f5a3f9.npy",
+      "sha256": "c62f52b544f667866eb502a3b0d1cea60f0c7a5b1f85194a340c2e6d30f5a3f9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c6/c63271d071cc07edaf4ac778474c1bea9d7ceb99d464120a9327c0b72be3e451.npy",
+      "sha256": "c63271d071cc07edaf4ac778474c1bea9d7ceb99d464120a9327c0b72be3e451"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c6/c66684eefebb9477fc28c2863063d0d07f944599f0e51db707e306d20ffbcd0d.npy",
+      "sha256": "c66684eefebb9477fc28c2863063d0d07f944599f0e51db707e306d20ffbcd0d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c6/c6d062edb29112e82acd20a6d4677f217455b151b631e1ff3348bbf3187bf5ab.npy",
+      "sha256": "c6d062edb29112e82acd20a6d4677f217455b151b631e1ff3348bbf3187bf5ab"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c7/c75d6deedd34f93ecddb7f5cc20a874d8160ee091a94cf9bbc1d2921b2b4e58f.npy",
+      "sha256": "c75d6deedd34f93ecddb7f5cc20a874d8160ee091a94cf9bbc1d2921b2b4e58f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c7/c79ef19b56342fa1b7d147423341235c73ccff9cc51913063f0f46680f342296.npy",
+      "sha256": "c79ef19b56342fa1b7d147423341235c73ccff9cc51913063f0f46680f342296"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c7/c7c260b847d43ef6c4c8b55609868ce084ae0e785ef618e61a4b2c33729e3cc4.npy",
+      "sha256": "c7c260b847d43ef6c4c8b55609868ce084ae0e785ef618e61a4b2c33729e3cc4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c7/c7e068f7e7d0a047c52b1a9bff002b034f8f35f3e4d73c6cf5e10cf58b23b015.npy",
+      "sha256": "c7e068f7e7d0a047c52b1a9bff002b034f8f35f3e4d73c6cf5e10cf58b23b015"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c8/c8502d11ca31f320c5494ac9bb51ab583e59bfd1a7d87a26551700a56e3a56ad.npy",
+      "sha256": "c8502d11ca31f320c5494ac9bb51ab583e59bfd1a7d87a26551700a56e3a56ad"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c9/c95d379431fcf7c4c890455228dda3b1448491b188a70f0d2162eabb4e12191d.npy",
+      "sha256": "c95d379431fcf7c4c890455228dda3b1448491b188a70f0d2162eabb4e12191d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c9/c9a65f544bdd10b69987510f7697f077928b4e181cb46b689702bb862076d867.npy",
+      "sha256": "c9a65f544bdd10b69987510f7697f077928b4e181cb46b689702bb862076d867"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/c9/c9d4a6619d415f5a0ebb1dbf2e7acff7e38907319f9c8d846a005661fb135c1a.npy",
+      "sha256": "c9d4a6619d415f5a0ebb1dbf2e7acff7e38907319f9c8d846a005661fb135c1a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ca/ca4e3ab429d7b6a3feaa17677fb146712585a202f152fe1454a4e3611008af67.npy",
+      "sha256": "ca4e3ab429d7b6a3feaa17677fb146712585a202f152fe1454a4e3611008af67"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ca/caef0b1cb6e88e7d571fecaf215bee2415b1678c0c86515f3039a5587d7b7753.npy",
+      "sha256": "caef0b1cb6e88e7d571fecaf215bee2415b1678c0c86515f3039a5587d7b7753"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/cb/cb6a9ab139fffc489b3fb881faebc701a2f8c7639d72605a1c121c2d7c430df6.npy",
+      "sha256": "cb6a9ab139fffc489b3fb881faebc701a2f8c7639d72605a1c121c2d7c430df6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/cc/cc2a2e367b87da90187f2415a11fb6de493575342de5bb3e16d397a320ea10d1.npy",
+      "sha256": "cc2a2e367b87da90187f2415a11fb6de493575342de5bb3e16d397a320ea10d1"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/cc/cc5125cabb5db55a56e4696f4d71ccff7c36e78f605c8feaa541a2f3f9bcd1ee.npy",
+      "sha256": "cc5125cabb5db55a56e4696f4d71ccff7c36e78f605c8feaa541a2f3f9bcd1ee"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/cc/cc9e94ad5f280d0f50ef5c2e845ce8e0745bfa5a4428ab427000da6e2377abd7.npy",
+      "sha256": "cc9e94ad5f280d0f50ef5c2e845ce8e0745bfa5a4428ab427000da6e2377abd7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/cc/cce0da99d55c87731900735aa21e95880790bc09f7008a1f739a90ecac32dde3.npy",
+      "sha256": "cce0da99d55c87731900735aa21e95880790bc09f7008a1f739a90ecac32dde3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/cd/cdb14fecbde22ca1b81c79371db3fae338193c025cdcdc975e5fb6fb4ee3e3fa.npy",
+      "sha256": "cdb14fecbde22ca1b81c79371db3fae338193c025cdcdc975e5fb6fb4ee3e3fa"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/cf/cf5a8786887fb5842eb4bced6141d763bc602176f0a63eb19130153b706d2288.npy",
+      "sha256": "cf5a8786887fb5842eb4bced6141d763bc602176f0a63eb19130153b706d2288"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d0/d008cd5163683420ba22faa568a1500e3bf5bdb3f9e1979d75a9bc6f48e0f2ec.npy",
+      "sha256": "d008cd5163683420ba22faa568a1500e3bf5bdb3f9e1979d75a9bc6f48e0f2ec"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d0/d01f99b80f7df3fd4949df1e6ef219adcd387e7ff1ce03fdf073d6d5338f4ea6.npy",
+      "sha256": "d01f99b80f7df3fd4949df1e6ef219adcd387e7ff1ce03fdf073d6d5338f4ea6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d0/d0dc99dd2ba11e6edac29f7a27430ec82ba7e40f35efa2abf96418ef74756330.npy",
+      "sha256": "d0dc99dd2ba11e6edac29f7a27430ec82ba7e40f35efa2abf96418ef74756330"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d1/d13da72fa7a1b8058155585a6f6a1a2feeb2cc934e307eec40d6de2daf36470c.npy",
+      "sha256": "d13da72fa7a1b8058155585a6f6a1a2feeb2cc934e307eec40d6de2daf36470c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d1/d1b358dfdfd8e1535703397dd7b53c4dec263c5ab538e3d6765890e9335b5bf4.npy",
+      "sha256": "d1b358dfdfd8e1535703397dd7b53c4dec263c5ab538e3d6765890e9335b5bf4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d2/d27a5cfc9995071ae0eb1ed8f0dd5874d82b0670255564198c2306b755b6acd6.npy",
+      "sha256": "d27a5cfc9995071ae0eb1ed8f0dd5874d82b0670255564198c2306b755b6acd6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d3/d3603009eb34dc5102a8cf3a7db65976749ba1b2a23be7bc31be79ce4a8e917f.npy",
+      "sha256": "d3603009eb34dc5102a8cf3a7db65976749ba1b2a23be7bc31be79ce4a8e917f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d3/d3c01cb0a63b6e7df091881f823cf70fa092ee3169dd2bf9d3604984235b59b9.npy",
+      "sha256": "d3c01cb0a63b6e7df091881f823cf70fa092ee3169dd2bf9d3604984235b59b9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d4/d465f45dfcf3e90032b9c9eaf7e705b75dde4701a30b07123e4f590dfe15197f.npy",
+      "sha256": "d465f45dfcf3e90032b9c9eaf7e705b75dde4701a30b07123e4f590dfe15197f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d5/d5069c5153a08b033d215fd6f2fd008ab6f0ce2b0e16a704df71d012fb514710.npy",
+      "sha256": "d5069c5153a08b033d215fd6f2fd008ab6f0ce2b0e16a704df71d012fb514710"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d5/d568da1b7ad2933ab489ae083b663414226398bc593a08bae9093fb95e07bda3.npy",
+      "sha256": "d568da1b7ad2933ab489ae083b663414226398bc593a08bae9093fb95e07bda3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d5/d5708544e020eae5f4a10500ff7b5b0cc3e496994aaa72014c06d6017790eb38.npy",
+      "sha256": "d5708544e020eae5f4a10500ff7b5b0cc3e496994aaa72014c06d6017790eb38"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d5/d5c84d000fc642ffb5da7a6432291d5875b17b5290a3d07730eb0289061b76ab.npy",
+      "sha256": "d5c84d000fc642ffb5da7a6432291d5875b17b5290a3d07730eb0289061b76ab"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d6/d6a34f5fd120d57a43c5fb254e093c9eda63657784fef001362f23c0b846513d.npy",
+      "sha256": "d6a34f5fd120d57a43c5fb254e093c9eda63657784fef001362f23c0b846513d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d6/d6bf6a5d64cfd5d84ce15ff370fdc44ae1b32dfd67841e338994ac6007e814c9.npy",
+      "sha256": "d6bf6a5d64cfd5d84ce15ff370fdc44ae1b32dfd67841e338994ac6007e814c9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d7/d715349a77e6af4c8769f9a0280b296100bc1a29ec123fdc5df34a97072828f7.npy",
+      "sha256": "d715349a77e6af4c8769f9a0280b296100bc1a29ec123fdc5df34a97072828f7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d7/d76955d3f7a0aab87569185fc9d5426381cc7a0e4a3560e037093ed5ca057a70.npy",
+      "sha256": "d76955d3f7a0aab87569185fc9d5426381cc7a0e4a3560e037093ed5ca057a70"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d7/d7a3e475c3c2423000f87fb632b14d1ac9a1fb9d1e0090e65a51eb4a31560b3c.npy",
+      "sha256": "d7a3e475c3c2423000f87fb632b14d1ac9a1fb9d1e0090e65a51eb4a31560b3c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d7/d7dd33362eb6efaf5e92fac3974ee3f04150d09deb194c1eac24038861fee3d9.npy",
+      "sha256": "d7dd33362eb6efaf5e92fac3974ee3f04150d09deb194c1eac24038861fee3d9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d8/d80616d98bd30cc6e00a231e3895c4359abec720b805b718d15d7c17693639b2.npy",
+      "sha256": "d80616d98bd30cc6e00a231e3895c4359abec720b805b718d15d7c17693639b2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d8/d819437e3d7b9609d4bad2466ae4486e368c78e4ab6475d901070d2ec0de30c1.npy",
+      "sha256": "d819437e3d7b9609d4bad2466ae4486e368c78e4ab6475d901070d2ec0de30c1"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d8/d8c8c9186887bdcd2886a04a71d03679680ee0567b3f7c34c067aa29cf1d111b.npy",
+      "sha256": "d8c8c9186887bdcd2886a04a71d03679680ee0567b3f7c34c067aa29cf1d111b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/d9/d93378ec648d1d12935effafc6016d6202f3d7708406ded80599346baa87f7ba.npy",
+      "sha256": "d93378ec648d1d12935effafc6016d6202f3d7708406ded80599346baa87f7ba"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/da/da0258ced4c3c2e388017d33f301f51bb568eba1f370dae2da9085da603e2fc4.npy",
+      "sha256": "da0258ced4c3c2e388017d33f301f51bb568eba1f370dae2da9085da603e2fc4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/da/da0664a3ddd209f710e8c6f831eb8e977e5730eea5a4fb95e75300f7b4bc7121.npy",
+      "sha256": "da0664a3ddd209f710e8c6f831eb8e977e5730eea5a4fb95e75300f7b4bc7121"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/da/da2c2efeae14d63fcac877f8664820236d048231b311b4c0a460ead9142d5daf.npy",
+      "sha256": "da2c2efeae14d63fcac877f8664820236d048231b311b4c0a460ead9142d5daf"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/da/dac70555dbc680f07433d75549a9117076a2f2cbb0c692a5986ab30cae82db04.npy",
+      "sha256": "dac70555dbc680f07433d75549a9117076a2f2cbb0c692a5986ab30cae82db04"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/dc/dc25a0010cc008432b076765526e73a63f3d2f68e2a0ae4d9fef661079bcc681.npy",
+      "sha256": "dc25a0010cc008432b076765526e73a63f3d2f68e2a0ae4d9fef661079bcc681"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/dd/ddc7ae064f2404b19dad6180890a4dc1bdc7ed44c2d50cc23340793b4e5a6288.npy",
+      "sha256": "ddc7ae064f2404b19dad6180890a4dc1bdc7ed44c2d50cc23340793b4e5a6288"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/de/de66d3518e042ed4ad2713a902cdefc6a3b5ce4c3d3b9e9bbc7fd7285959904a.npy",
+      "sha256": "de66d3518e042ed4ad2713a902cdefc6a3b5ce4c3d3b9e9bbc7fd7285959904a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/df/df402aa455e760b3bbc5f4142d0e8f26301873e04713063bb3184f018020ca99.npy",
+      "sha256": "df402aa455e760b3bbc5f4142d0e8f26301873e04713063bb3184f018020ca99"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/df/dfc1cab1fc0ccd7aa13b684bc6c7381a9ca7aa13f5bf0057dfa3eeb34d5a72a4.npy",
+      "sha256": "dfc1cab1fc0ccd7aa13b684bc6c7381a9ca7aa13f5bf0057dfa3eeb34d5a72a4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/df/dfebcb53c0270a4b5f7cb7c3147ac964237e688116d552ee8f5728a8171e89e5.npy",
+      "sha256": "dfebcb53c0270a4b5f7cb7c3147ac964237e688116d552ee8f5728a8171e89e5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e0/e031ae22261397084016826871448e73b3cbc9e4a1d9ca27d7ae3cd44e850853.npy",
+      "sha256": "e031ae22261397084016826871448e73b3cbc9e4a1d9ca27d7ae3cd44e850853"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e1/e10d6fd00b5c7a7b43af943853a761f98c298dd5307e6b81a861436fd1688cc0.npy",
+      "sha256": "e10d6fd00b5c7a7b43af943853a761f98c298dd5307e6b81a861436fd1688cc0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e1/e182ddc350b4a84850db9806685abe9bb053e7854e1df5b60dc1390aa84038d7.npy",
+      "sha256": "e182ddc350b4a84850db9806685abe9bb053e7854e1df5b60dc1390aa84038d7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e2/e254f72616a64f66ab8ed9b91a424e277647f83a18f1c4df9e6f47efc4ea8723.npy",
+      "sha256": "e254f72616a64f66ab8ed9b91a424e277647f83a18f1c4df9e6f47efc4ea8723"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e2/e2d7d5c1b9cc62df74bd7532c60335b534c0350b8943e14a4b65a7fc06ae8806.npy",
+      "sha256": "e2d7d5c1b9cc62df74bd7532c60335b534c0350b8943e14a4b65a7fc06ae8806"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e3/e32f78ccdf07676869c77269dcdd73893e258b695ab42744c14d7cac074885a9.npy",
+      "sha256": "e32f78ccdf07676869c77269dcdd73893e258b695ab42744c14d7cac074885a9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e5/e514414ad2641527baf5a387b5affe8545b063c6abd007a62446eaa8b889b768.npy",
+      "sha256": "e514414ad2641527baf5a387b5affe8545b063c6abd007a62446eaa8b889b768"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e5/e54bfb8ae9e79ea0fd063d89e01161cdd58205eaf3fbd1580d50abdaaa9beb18.npy",
+      "sha256": "e54bfb8ae9e79ea0fd063d89e01161cdd58205eaf3fbd1580d50abdaaa9beb18"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e6/e6ad741320f4b5b92d96fa0a9b9e7397f0d1e2c94b5a091db2fb37a6536aeb99.npy",
+      "sha256": "e6ad741320f4b5b92d96fa0a9b9e7397f0d1e2c94b5a091db2fb37a6536aeb99"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e8/e854c2f8b3516a4d3721e5bb885cceb0b07cb7918bebaa6f66cc4af55ebb1203.npy",
+      "sha256": "e854c2f8b3516a4d3721e5bb885cceb0b07cb7918bebaa6f66cc4af55ebb1203"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e8/e88a1a9ea1852711598b45d2dfb52c09aeee8a880c2b2b5d16ab0d53fd422432.npy",
+      "sha256": "e88a1a9ea1852711598b45d2dfb52c09aeee8a880c2b2b5d16ab0d53fd422432"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e8/e8bf5800a93e35bc21b3a5732f27c1faaf447c1e7827c1b4579102f2ca1105e1.npy",
+      "sha256": "e8bf5800a93e35bc21b3a5732f27c1faaf447c1e7827c1b4579102f2ca1105e1"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e9/e93041c5a324c1ab9cdd3abb005a55f3b42e72557906163818feb55ca994eccd.npy",
+      "sha256": "e93041c5a324c1ab9cdd3abb005a55f3b42e72557906163818feb55ca994eccd"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/e9/e94a96159a0c1719f2983f02155c3452680e90a371bcee19ddb259ca6fe9e8ed.npy",
+      "sha256": "e94a96159a0c1719f2983f02155c3452680e90a371bcee19ddb259ca6fe9e8ed"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ea/eacacb473ec57cd7900f80c74299d3ad0c78545b47cbb331ad48ee87e891fb02.npy",
+      "sha256": "eacacb473ec57cd7900f80c74299d3ad0c78545b47cbb331ad48ee87e891fb02"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ea/eafb083f99a3eb9be5645c7b35c495de0d886771f6557ab9657b744c772489a3.npy",
+      "sha256": "eafb083f99a3eb9be5645c7b35c495de0d886771f6557ab9657b744c772489a3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ec/ec14abaf6b2573baa304db6fc721f8f909553da8a3e5174ded5b34239861158b.npy",
+      "sha256": "ec14abaf6b2573baa304db6fc721f8f909553da8a3e5174ded5b34239861158b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ec/ec769b7cf9359ed47885a34e32822253405a85784b0e2b3e8edbad586c75a5b5.npy",
+      "sha256": "ec769b7cf9359ed47885a34e32822253405a85784b0e2b3e8edbad586c75a5b5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ed/ed4d9a47f3b54c1f169639bdeec8be8fb8c14f2a9510de9c03d66f0bbe2737a3.npy",
+      "sha256": "ed4d9a47f3b54c1f169639bdeec8be8fb8c14f2a9510de9c03d66f0bbe2737a3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ed/edbfe20ac7bbc854f1de253b5659cb48a925bc81121af41b0d40e0cf7c3e874b.npy",
+      "sha256": "edbfe20ac7bbc854f1de253b5659cb48a925bc81121af41b0d40e0cf7c3e874b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ee/ee19f5427d20c876129b26a689da1a93e3fed6f0b8b9560d1d615aff914d1883.npy",
+      "sha256": "ee19f5427d20c876129b26a689da1a93e3fed6f0b8b9560d1d615aff914d1883"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ee/ee9e02295d616cb922e8dcb936d8ba3563b8a66f9137fca5da26771bcf93ea6a.npy",
+      "sha256": "ee9e02295d616cb922e8dcb936d8ba3563b8a66f9137fca5da26771bcf93ea6a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ef/ef08a82aa6bae879e5c5d32bad2e65e805f0ef0711e6fe900e92f87277952c1a.npy",
+      "sha256": "ef08a82aa6bae879e5c5d32bad2e65e805f0ef0711e6fe900e92f87277952c1a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ef/ef74177b24bf10b408f011bcf7c5c58615440f074109d1053f81578011a771cf.npy",
+      "sha256": "ef74177b24bf10b408f011bcf7c5c58615440f074109d1053f81578011a771cf"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ef/efd038603f59f1b654d208cd97ae10e7c2c1686deee54b9dfa180d79632c5b63.npy",
+      "sha256": "efd038603f59f1b654d208cd97ae10e7c2c1686deee54b9dfa180d79632c5b63"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f0/f01ea8cdc963f1e8fad2e687a3c716889ba9e315aa9c111b8c38e6b596c2ff14.npy",
+      "sha256": "f01ea8cdc963f1e8fad2e687a3c716889ba9e315aa9c111b8c38e6b596c2ff14"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f0/f050ad69ebc9a6f431883c21b88bf9ed82051da58edb1c0887b8ba61ba973911.npy",
+      "sha256": "f050ad69ebc9a6f431883c21b88bf9ed82051da58edb1c0887b8ba61ba973911"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f1/f1958445d68a2ff3cbf56896ce660669872d5b1d81bc9ea132ae274246bd5460.npy",
+      "sha256": "f1958445d68a2ff3cbf56896ce660669872d5b1d81bc9ea132ae274246bd5460"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f1/f1a72409e68ec22a7b57f84a860227906a737991d64ad49902e416886b37bbc6.npy",
+      "sha256": "f1a72409e68ec22a7b57f84a860227906a737991d64ad49902e416886b37bbc6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f1/f1bdaf696142d7525b48d775e2ca5ac749e795b462751463c179968d03998770.npy",
+      "sha256": "f1bdaf696142d7525b48d775e2ca5ac749e795b462751463c179968d03998770"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f3/f31ca096ebd52529873b5e2ce23b29290d694815e5d7ed90549d7619fa86981d.npy",
+      "sha256": "f31ca096ebd52529873b5e2ce23b29290d694815e5d7ed90549d7619fa86981d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f3/f34b20181c177366f35f3cc2c9c4b0dfa47078fbc46b408ac92a01b8aac77111.npy",
+      "sha256": "f34b20181c177366f35f3cc2c9c4b0dfa47078fbc46b408ac92a01b8aac77111"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f3/f364d12bf8efcb9bf775f4e8d678a80781acc5de2eeb8bf419a2c83710c3cc32.npy",
+      "sha256": "f364d12bf8efcb9bf775f4e8d678a80781acc5de2eeb8bf419a2c83710c3cc32"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f3/f3849bf8395625db60a3de1dbf34b2a83080b517ddccede38fbde540f320bf9a.npy",
+      "sha256": "f3849bf8395625db60a3de1dbf34b2a83080b517ddccede38fbde540f320bf9a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f3/f3d2ef6f9315b57b54fd4a4308a305132f5e670b25adaba79ba4c631b2ef157a.npy",
+      "sha256": "f3d2ef6f9315b57b54fd4a4308a305132f5e670b25adaba79ba4c631b2ef157a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f3/f3f3f656e0b0f9fe3cc41944708d2a45aee7e77c1405f6e5da0e55908b2c5839.npy",
+      "sha256": "f3f3f656e0b0f9fe3cc41944708d2a45aee7e77c1405f6e5da0e55908b2c5839"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f4/f40a14cb1ebd93333b62fe7d8f5129eccd3b8ffb525446d3bfc05335dd2eef07.npy",
+      "sha256": "f40a14cb1ebd93333b62fe7d8f5129eccd3b8ffb525446d3bfc05335dd2eef07"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f4/f4cce8196ae8b3f1d785b3c2c5814605898f6d573d71b89ba8419f9b31924fed.npy",
+      "sha256": "f4cce8196ae8b3f1d785b3c2c5814605898f6d573d71b89ba8419f9b31924fed"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f5/f53a5608b099d42a6226eb1dfd9d74bbd7748d09b9be2ad5d1f9ef5d5681c424.npy",
+      "sha256": "f53a5608b099d42a6226eb1dfd9d74bbd7748d09b9be2ad5d1f9ef5d5681c424"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f6/f6705a4308b099be17f25a9bf541e7449a3873ac45868e11a1eebf22d7522748.npy",
+      "sha256": "f6705a4308b099be17f25a9bf541e7449a3873ac45868e11a1eebf22d7522748"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f6/f675b564cf716c3fd1c2ff4f47cb14da9e954422a84bac54c0d2a79d0a3e30b0.npy",
+      "sha256": "f675b564cf716c3fd1c2ff4f47cb14da9e954422a84bac54c0d2a79d0a3e30b0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f6/f68718edee4c1eebb61c5cd28043804c260953b22383ef8b935d965fa800f9a6.npy",
+      "sha256": "f68718edee4c1eebb61c5cd28043804c260953b22383ef8b935d965fa800f9a6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f7/f7b61b1bcd783ec4e73e43f73b446424f68647f22e0df230025f7a6194be6062.npy",
+      "sha256": "f7b61b1bcd783ec4e73e43f73b446424f68647f22e0df230025f7a6194be6062"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f7/f7bfb5c6096149c3fa3c7c7bfc1cfbc510f08967b7a1c033345b8e29b6e4cab9.npy",
+      "sha256": "f7bfb5c6096149c3fa3c7c7bfc1cfbc510f08967b7a1c033345b8e29b6e4cab9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f7/f7e3c491199ed2a84ee7928af79d743caee8c8f57a0ee23970acc3cebc5e119d.npy",
+      "sha256": "f7e3c491199ed2a84ee7928af79d743caee8c8f57a0ee23970acc3cebc5e119d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f8/f863a07b432344511024d71129453497b7894973a4bcf997e8486ad93954d5b7.npy",
+      "sha256": "f863a07b432344511024d71129453497b7894973a4bcf997e8486ad93954d5b7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f8/f8ac1b2d9318f7f9f0fa432a49a14068a42a573196467e0fb9e2296953f78652.npy",
+      "sha256": "f8ac1b2d9318f7f9f0fa432a49a14068a42a573196467e0fb9e2296953f78652"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f8/f8cb20ba068aadb4d2c1b0839a4746513ce44698ec2ce1d4a71342fb937262b8.npy",
+      "sha256": "f8cb20ba068aadb4d2c1b0839a4746513ce44698ec2ce1d4a71342fb937262b8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f9/f90697348c5775f79810d5a074e9c25e73a9db8ee1888a7834528baa94b8d016.npy",
+      "sha256": "f90697348c5775f79810d5a074e9c25e73a9db8ee1888a7834528baa94b8d016"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f9/f923a1f0118fc932e5a35f2f81f78563b222c2829fd1723e4fdcdaa16fd12b3d.npy",
+      "sha256": "f923a1f0118fc932e5a35f2f81f78563b222c2829fd1723e4fdcdaa16fd12b3d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f9/f9887f2c8b82a8cf0cacd975259a754d84a8a3e8fffcf31fc26ef93f8b5b10a3.npy",
+      "sha256": "f9887f2c8b82a8cf0cacd975259a754d84a8a3e8fffcf31fc26ef93f8b5b10a3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/f9/f9f8642f3f081ece234457ac323ea5c24d348861ddb6e31bdbacae4862a87b72.npy",
+      "sha256": "f9f8642f3f081ece234457ac323ea5c24d348861ddb6e31bdbacae4862a87b72"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fa/fa0d6c436a9d6f64d4a433e179095c95d5c59bcecd3afb41866c498f16634825.npy",
+      "sha256": "fa0d6c436a9d6f64d4a433e179095c95d5c59bcecd3afb41866c498f16634825"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fa/fa2713c69c0c7550d0e3ee4395f20c081628b5144065f83b4d625f08449206f3.npy",
+      "sha256": "fa2713c69c0c7550d0e3ee4395f20c081628b5144065f83b4d625f08449206f3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fa/fa78bab69fab46321df30e702db79bff063d7ad21faa31fbe95748555aabfdf3.npy",
+      "sha256": "fa78bab69fab46321df30e702db79bff063d7ad21faa31fbe95748555aabfdf3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fa/fab4f46c475a816442ec89504e038a3125daa67842b23248caf9b927d37b25a6.npy",
+      "sha256": "fab4f46c475a816442ec89504e038a3125daa67842b23248caf9b927d37b25a6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fb/fbbd24ffd117ba5d17a1bb7ae1fc72caa5b60bd1147532adfd1024827118fdaa.npy",
+      "sha256": "fbbd24ffd117ba5d17a1bb7ae1fc72caa5b60bd1147532adfd1024827118fdaa"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fb/fbf4be380292b42d9038ce72bcd769e185ed5a8e3696ea25c196014ea20d43cd.npy",
+      "sha256": "fbf4be380292b42d9038ce72bcd769e185ed5a8e3696ea25c196014ea20d43cd"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fc/fc51c467173a05bca6f705db9d7114fd86b40deeac4eaa61e44faaa03411c51d.npy",
+      "sha256": "fc51c467173a05bca6f705db9d7114fd86b40deeac4eaa61e44faaa03411c51d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fd/fd5163a0e5648e9b5413e02b117cbdd18ee38a884a8826b929f6e11b9ef6731f.npy",
+      "sha256": "fd5163a0e5648e9b5413e02b117cbdd18ee38a884a8826b929f6e11b9ef6731f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fd/fd85467bc8013b4d6fb4b4b1fd353bb624d3c54050d3998a37f5072ea637d3e1.npy",
+      "sha256": "fd85467bc8013b4d6fb4b4b1fd353bb624d3c54050d3998a37f5072ea637d3e1"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fd/fdcd119214a02ae4c7076a2edad1c697306f2ee7b6ee50d3c50b2b87323941b7.npy",
+      "sha256": "fdcd119214a02ae4c7076a2edad1c697306f2ee7b6ee50d3c50b2b87323941b7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fe/fe21257f8375f22d977ac7874b13da951d73e2d2ccf23ecae66c61d8a2e4028e.npy",
+      "sha256": "fe21257f8375f22d977ac7874b13da951d73e2d2ccf23ecae66c61d8a2e4028e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/fe/fecbd26a941e20dd9065d94ec5f38f50f8812bba5c5af295cefcdee984c7d62b.npy",
+      "sha256": "fecbd26a941e20dd9065d94ec5f38f50f8812bba5c5af295cefcdee984c7d62b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/arrays/sha256/ff/ff0a90ba038cda7eecc66f940aacfc93740364a87e7bb7e4cdcdd33a4c0497c7.npy",
+      "sha256": "ff0a90ba038cda7eecc66f940aacfc93740364a87e7bb7e4cdcdd33a4c0497c7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-01.json",
+      "sha256": "d166a01075e998ac4ef014ca396a88e59053f9f852e48a6efe41bc6402cd5201"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-01.pt",
+      "sha256": "bbb98381ebfa537239973a7824181e9a3da65348b5d35857fcc22e87b8c95de1"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-02.json",
+      "sha256": "8de01dccd37fd2324a2570411731194177830af53c90fa6cff1153be3e19be28"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-02.pt",
+      "sha256": "e881c97d4bcb97925518d19226e355c63ef89a2f55c77d6beacaaa63cd4b3723"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-03.json",
+      "sha256": "2435810ee5a6c3e7ed2ad80d1ec571de5f4c1601c48a8c74e17ed7a4782bda11"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-03.pt",
+      "sha256": "788b03450f33f226bf2713122ed0448c20e2c8aaece1faf9a534524c216bd423"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-04.json",
+      "sha256": "be40fd17b313eef01bcd7a7b2401e41e70a89b54f645c5b7b1b58e8648fc753c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-04.pt",
+      "sha256": "4ef379c75aa752196eb0153fa6f4c83f2b134e4ee67541abca27a54c861a6397"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-05.json",
+      "sha256": "0f47420b1c35d6e08dafbe57b516cb41c95a5dd6c1d68eb7af8c1c557c8b9147"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-05.pt",
+      "sha256": "f47f3dc444bc91c7ea33f0ef0531418e5b02cc2626d32190483dfba57deb2f05"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/logs/worker.log",
+      "sha256": "5a3b8f7b7a017b11ec1a8482db2fdfaceee869d3c2d3643a19992892fe07a63b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/manifest.json",
+      "sha256": "12a85fd3214182b9cf71883c21e1d47e4810641ef2e4d0a457d2509558389123"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/provenance/epoch-01.json",
+      "sha256": "4e524b0db6b3ad86d579e5b827f4a506ae2e255e654d0a121e6eb5e8dcd5650b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/provenance/epoch-02.json",
+      "sha256": "deac0b50f2d4bcae07e12489f9f5d7a2aae851eb83a0c47731a7faa36bdec2a0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/provenance/epoch-03.json",
+      "sha256": "7b299d54a15bb0ec802dea221ff8d68c89870bd708922e9361d0c6a8d48536a2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/provenance/epoch-04.json",
+      "sha256": "f9501e780bab5c9b16837b0f218c7d9cc6e1c11fde28111751464b42652c9e83"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/provenance/epoch-05.json",
+      "sha256": "68c27f4786d29bee7a9441a44763ddc1c64fa0110f5ce214528b3173618665cc"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/status.json",
+      "sha256": "9249a0e21cede032954f2e484d131fd43382f6c2dde4e163c4b889d3935c76fc"
+    },
+    {
+      "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-implementation-audit-v1/inputs/config.json",
+      "sha256": "3d4f2a148682e66e69f944ecc4ac52ef5d3dc6d3eb78286a894af9c9fb6bfd7e"
+    },
+    {
+      "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-implementation-audit-v1/inputs/train-batch.json",
+      "sha256": "2c06cab2bb20f196aed97e4e971ed3ced04fa12a26c24380be43283056440366"
+    },
+    {
+      "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-implementation-audit-v1/inputs/training-terminal-registry.json",
+      "sha256": "43bb4ce5a06015630ff3b41f6d867e439b96ce997c4cdda9eac62cdea92e2062"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/README.md",
+      "sha256": "72eb0767b60ec2382fbd65a236ef9359fc49cbb2a11f9da389a90187c69c96de"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/dataloaders/data_dataloaders.py",
+      "sha256": "9b847f65896164d61b27670b6201666861393a8e57083d2c5aeaf81db19e09c1"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/dataloaders/dataloader_activitynet_retrieval.py",
+      "sha256": "044d165b617b1fffa9b26d99b0ede73517eee580cff5fb63dfe30d1921954e29"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/dataloaders/dataloader_didemo_retrieval.py",
+      "sha256": "65cea2ceda12882f4d5187725f50f7c24160ff297d07770e875df04941e9da1e"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/dataloaders/dataloader_lsmdc_retrieval.py",
+      "sha256": "61feebc5e419d9d31e8d946acb9ab269cdce8e6f8002cc566b69eb3cfb5cac3e"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/dataloaders/dataloader_msrvtt_retrieval.py",
+      "sha256": "21963bb8d650ef23a1251615e91641e5d50eb742315bf33aba85023e6e15a334"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/dataloaders/dataloader_msvd_retrieval.py",
+      "sha256": "0d729b19358699399aa589476d548b0d64f8ef3d7e4ead88b7db20644b331dfd"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/dataloaders/rawvideo_util.py",
+      "sha256": "cb62541f12da740d9c1511519c9e4ae0785517413bd712ac32e7fe6776ba255a"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/main_task_retrieval.py",
+      "sha256": "45b7ab4bf06eeb87beb2a21647950eecdae2daf1e0cc2bc985dab30b2e34e5f1"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/metrics.py",
+      "sha256": "103e93090de14f55d1db61e40ecf1fbc814670975bd9b9ab1fe341d0c95f0a6f"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/modules/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/modules/bpe_simple_vocab_16e6.txt.gz",
+      "sha256": "924691ac288e54409236115652ad4aa250f48203de50a9e4722a6ecd48d6804a"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/modules/file_utils.py",
+      "sha256": "9bbc073d4ac83c28e8c17d745daac1c6b70c5c3b2581c7541cd66c888bdb5679"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/modules/modeling.py",
+      "sha256": "2bd870e24ee0ce9b0b5f036b1fac01adfdbb22bd392a2fe74b9c385473853e84"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/modules/module_clip.py",
+      "sha256": "6efe65dcc44503c75e33ca1c49d6c53e7441c3bc48ec707081fa55e2833c6a5b"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/modules/module_cross.py",
+      "sha256": "5d109edc3f2fd150d4c3db91912d4c220fa594e2e4708bf313fcf55968195d5d"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/modules/optimization.py",
+      "sha256": "7dab5de2bbd1398e07ddbb18667544caae385d8ef9c17c55e0358303ed28b4b8"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/modules/tokenization_clip.py",
+      "sha256": "60af2eccd9d1208933213b57d24c9ac337ca4be935bc6550a7300b656a6f3bb5"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/modules/until_config.py",
+      "sha256": "a410fb06ad08e3a7b5b9cb2f9b598148990f9d2005919f8ac964e0e80c231bf0"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/modules/until_module.py",
+      "sha256": "ace0cdb726819615494daebb87013f58a7dbda517c184c5b83b7a015b386d476"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/preprocess/compress_video.py",
+      "sha256": "dd5017455e02e576513cee647c350a76b0f158429f617dab774a6175968693ea"
+    },
+    {
+      "path": "/tmp/clip4clip-official-fullscale-reference/util.py",
+      "sha256": "c7be5c2ccd823483062a1f7c7865b2d462428d0a5febeb8e02961869b937909e"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/README.md",
+      "sha256": "fea5b97ef75ce7b475f4bea0caf337f3db3bddc49ce3656bc468cdd938f52544"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/dataloaders/data_dataloaders.py",
+      "sha256": "e02c72482a221f8520192050cac03f5a83976159b4a827fb812e91c039c08858"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/dataloaders/dataloader_msrvtt_retrieval.py",
+      "sha256": "21adff0b527643c33141bc19f4190cccec0af2903aae8900d4b2005b225c77c2"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/dataloaders/rawframes_util.py",
+      "sha256": "4426635a1fbaac923a3521449c3918d5e1fb78e18def84d024be6ec67ae5212f"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/dataloaders/rawvideo_util.py",
+      "sha256": "940c100737f1fe6461e943fc648b86ffa09559d31b8b11c891576ae1c07d2107"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/main_task_retrieval.py",
+      "sha256": "c2666a8ff735e5ab6e6214fd86f2b28bd76b1f8a6b1a8830eb7226b44c5ffe4f"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/metrics.py",
+      "sha256": "22277149d0a2e536d82f3e9091cc58c58c53a11d2965f5ca256c1a161b7c6e31"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/modules/bpe_simple_vocab_16e6.txt.gz",
+      "sha256": "924691ac288e54409236115652ad4aa250f48203de50a9e4722a6ecd48d6804a"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/modules/file_utils.py",
+      "sha256": "9bbc073d4ac83c28e8c17d745daac1c6b70c5c3b2581c7541cd66c888bdb5679"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/modules/modeling.py",
+      "sha256": "65a126d41ce2828ce818857fdd2581ef951ab61dd0c58feb6734b6bd54ab1707"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/modules/module_clip.py",
+      "sha256": "0f4f5d2e98d2237a349e59629ecac8141695a70f929a42b199f89e67b41df775"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/modules/module_cross.py",
+      "sha256": "5d109edc3f2fd150d4c3db91912d4c220fa594e2e4708bf313fcf55968195d5d"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/modules/optimization.py",
+      "sha256": "7dab5de2bbd1398e07ddbb18667544caae385d8ef9c17c55e0358303ed28b4b8"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/modules/tokenization_clip.py",
+      "sha256": "60af2eccd9d1208933213b57d24c9ac337ca4be935bc6550a7300b656a6f3bb5"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/modules/until_config.py",
+      "sha256": "a410fb06ad08e3a7b5b9cb2f9b598148990f9d2005919f8ac964e0e80c231bf0"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/modules/until_module.py",
+      "sha256": "fd3d063fc9bd9e63e76c316e705c2a87662076bea941744b9ab4f8ac8824d15c"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/prob_models/pie_model.py",
+      "sha256": "dc5e093009f26f418c7a7a8aa455c4b9219d6c20e84ef8ca9e01602913d8a284"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/prob_models/probemb.py",
+      "sha256": "8bfd89dfeef131083fe2f592b00be923a11a1dc884a1b61757e3b4af01f720eb"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/prob_models/tensor_utils.py",
+      "sha256": "e142d95951cff6761303b5781ee6b1e24bea074a040e901f521332a83315e4b4"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/prob_models/uncertainty_module.py",
+      "sha256": "4bb2da90b068c9c3245a805676cb9f8c3e61b68592f1a7375ecde4d92d27967a"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/train.sh",
+      "sha256": "f90c894d4d6327cac8c1284ed9d4ba343caf418b072ee2235f5fa59eb97210b4"
+    },
+    {
+      "path": "/tmp/uatvr-official-fullscale-reference/util.py",
+      "sha256": "c7be5c2ccd823483062a1f7c7865b2d462428d0a5febeb8e02961869b937909e"
+    }
+  ],
+  "kind": "file_sha256_index",
+  "schema_version": 1
+}
