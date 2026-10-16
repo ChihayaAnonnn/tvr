@@ -39,8 +39,13 @@ class FullDataSettings:
     world_size: int | None = None
     memory_limit_gib: int = 60
     loader_workers: int | None = None
+    factor_arm: str | None = None
 
     def __post_init__(self):
+        if self.factor_arm is not None:
+            from .factors import ARMS
+            if self.factor_arm not in ARMS:
+                raise ValueError('invalid single-factor arm')
         if self.loader_workers is None:
             object.__setattr__(self, 'loader_workers', 0 if self.stage == 'cpu_fixture' else 8)
         if type(self.loader_workers) is not int or self.loader_workers not in {0, 4, 8}:
@@ -106,7 +111,7 @@ def manifest_config(settings):
     resume = None if settings.resume is None else dict(parent_run_id=settings.resume.parent_run_id,
         checkpoint=str(settings.resume.checkpoint), checkpoint_sha256=settings.resume.checkpoint_sha256,
         sidecar_sha256=settings.resume.sidecar_sha256)
-    return dict(
+    result = dict(
         model=dict(architecture='full-data-baseline-v1', method=settings.method, clip=asdict(settings.clip),
                    clip_weights=str(settings.clip_weights), clip_sha256=settings.clip_sha256,
                    temporal_layers=1 if settings.clip.fixture else 4, extra_video_tokens=2,
@@ -124,6 +129,10 @@ def manifest_config(settings):
                         loader_workers=settings.loader_workers, loader_prefetch_factor=2, loader_backend='spawn-v1',
                         world_size=settings.world_size, memory_limit_gib=settings.memory_limit_gib,
                         deterministic_algorithms=True, resume=resume))
+    if settings.factor_arm is not None:
+        result['evaluation']['factor_arm'] = settings.factor_arm
+        result['loss']['batching'] = 'caption_shuffle_v1' if settings.factor_arm == 'caption_shuffle' else 'unique_video_all_captions_v1'
+    return result
 
 
 def settings_from_manifest(manifest):
@@ -136,7 +145,7 @@ def settings_from_manifest(manifest):
         settings = FullDataSettings(ev['full_data_stage'], model['method'], Path(model['clip_weights']), model['clip_sha256'],
                                     ClipConfig(**model['clip']), ev['seed'],
                                     None if source is None else Path(source['path']), None if source is None else source['sha256'], resume,
-                                    ev['world_size'], ev['memory_limit_gib'], ev['loader_workers'])
+                                    ev['world_size'], ev['memory_limit_gib'], ev['loader_workers'], ev.get('factor_arm'))
         if source is not None and set(source) != {'path', 'sha256'}:
             raise ValueError('source input configuration has unconsumed fields')
         if cfg != manifest_config(settings):

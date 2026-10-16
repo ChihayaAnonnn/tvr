@@ -105,7 +105,7 @@ def test_upstream_optimizer_freeze_groups_warmup_and_nonzero_update(clip, batch)
     assert not torch.equal(before, model.clip.text_projection)
 
 
-def _ddp_worker(rank, init_file, output, method, cfg, initial, batch):
+def _ddp_worker(rank, init_file, output, method, cfg, initial, batch, batching):
     import datetime
     from semantic_retrieval.full_data.models import BaselineModel
     torch.set_num_threads(1)
@@ -113,7 +113,7 @@ def _ddp_worker(rank, init_file, output, method, cfg, initial, batch):
                                          timeout=datetime.timedelta(seconds=45))
     try:
         model = BaselineModel(method, cfg, {k.removeprefix('core.clip.' if method == 'uatvr' else 'core.'): v
-                                          for k, v in initial.items() if k.startswith('core.clip.' if method == 'uatvr' else 'core.')}, temporal_layers=1)
+                                          for k, v in initial.items() if k.startswith('core.clip.' if method == 'uatvr' else 'core.')}, temporal_layers=1, batching=batching)
         model.load_state_dict(initial, strict=True)
         ddp = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
         torch.manual_seed(101)
@@ -125,16 +125,18 @@ def _ddp_worker(rank, init_file, output, method, cfg, initial, batch):
 
 
 @pytest.mark.parametrize('method', ['clip4clip', 'uatvr'])
-def test_two_rank_cpu_gradients_match_serial_global_objective(tmp_path, clip, batch, method):
+@pytest.mark.parametrize('batching', ['unique_video_all_captions_v1','caption_shuffle_v1'])
+def test_two_rank_cpu_gradients_match_serial_global_objective(tmp_path, clip, batch, method, batching):
     from semantic_retrieval.full_data.models import BaselineModel
     model = BaselineModel(method, clip.config, clip.state_dict(), temporal_layers=1)
+    model.batching = batching
     initial = copy.deepcopy(model.state_dict())
-    global_batch = tuple(torch.cat([x, x], dim=0) for x in batch[:-1]) + (torch.arange(4),)
+    global_batch = tuple(torch.cat([x, x], dim=0) for x in batch[:-1]) + (torch.arange(4) if batching == 'unique_video_all_captions_v1' else torch.tensor([0,1,0,1]),)
     torch.manual_seed(101)
     model(*global_batch)['loss'].backward()
     expected = {k: p.grad for k, p in model.named_parameters() if p.grad is not None}
     torch.multiprocessing.spawn(_ddp_worker, args=(str(tmp_path/'gloo'), str(tmp_path/'gradient'), method,
-                                                 clip.config, initial, global_batch), nprocs=2, join=True)
+                                                 clip.config, initial, global_batch, batching), nprocs=2, join=True)
     for rank in range(2):
         gradients = torch.load(tmp_path/f'gradient-{rank}.pt', weights_only=True)
         assert gradients.keys() == expected.keys()

@@ -205,3 +205,15 @@ final_test:
   no_duplicate_successful_evaluation: true
   paper_training_protocol_differs: 8246_source_filtered_training_videos_vs_original_9k
   new_method_hypothesis_supported: false
+validation_factors:
+  authorized: true
+  authorization: 2026-10-16_explicit_user_single_factor_validation_comparisons
+  test_authorized: false
+  arms:
+  - control
+  - temporal_offset
+  - caption_shuffle
+  seeds:
+  - 713
+  protocol: experiments/full-data-retrieval-v1/VALIDATION_FACTORS.md
+  max_scientific_runs: 6

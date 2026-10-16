@@ -111,7 +111,12 @@ def read_complete(report_path, report_sha256, references, *, expected_train=8246
 
 
 class CaptionDataset(Dataset):
-    def __init__(self, videos, captions, *, frames=12, image_size=224, text_length=32):
+    def __init__(self, videos, captions, *, frames=12, image_size=224, text_length=32, temporal_offset=False, seed=0):
+        if type(temporal_offset) is not bool or type(seed) is not int or seed < 0:
+            raise ValueError('invalid sampling configuration')
+        if temporal_offset and any(videos[r['official_video_id']]['split'] != 'train' for r in captions):
+            raise ValueError('temporal augmentation is training-only')
+        self.temporal_offset, self.seed, self.epoch = temporal_offset, seed, 0
         self.videos, self.captions = videos, captions
         self.frames, self.image_size = frames, image_size
         self.video_ids = {i: n for n, i in enumerate(sorted(videos))}
@@ -124,11 +129,15 @@ class CaptionDataset(Dataset):
     def text(self, index):
         return self.tokens[index], self.text_masks[index]
 
-    def decode(self, video_id):
+    def decode(self, video_id, query_id=None):
         row = self.videos[video_id]
         if file_sha256(row['path']) != row['sha256']:
             raise ValueError('video changed after cohort certification')
-        indices = official_frame_indices(row['frame_count'], row['fps'], self.frames)
+        if self.temporal_offset:
+            from .factors import offset_frame_indices
+            indices = offset_frame_indices(row['frame_count'], row['fps'], self.frames, seed=self.seed, epoch=self.epoch, query_id=query_id)
+        else:
+            indices = official_frame_indices(row['frame_count'], row['fps'], self.frames)
         frames, mask = decode_video(row['path'], indices, self.image_size, decoder_threads=1)
         if not mask.all():
             raise ValueError('certified frame decode failed; refusing partial training example')
@@ -139,7 +148,7 @@ class CaptionDataset(Dataset):
 
     def __getitem__(self, index):
         row = self.captions[index]
-        video, frame_mask = self.decode(row['official_video_id'])
+        video, frame_mask = self.decode(row['official_video_id'], row['query_id'])
         return (*self.text(index), video, frame_mask, torch.tensor(self.video_ids[row['official_video_id']]))
 
 

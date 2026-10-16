@@ -94,11 +94,13 @@ def train_baseline(context, settings, device):
     rank, world = dist.get_rank(), dist.get_world_size()
     videos, captions = _collective_call(lambda: read_complete(settings.source_report, settings.source_report_sha256,
                                                              context.input_references))
-    training = _collective_call(lambda: CaptionDataset(videos, captions['train']))
+    training = _collective_call(lambda: CaptionDataset(videos, captions['train'], temporal_offset=settings.factor_arm == 'temporal_offset', seed=settings.seed))
     validation = _collective_call(lambda: CaptionDataset(videos, captions['val']))
     recipe = settings.recipe(settings.method)
     identities = [r['official_video_id'] for r in captions['train']]
-    batches = [unique_video_batches(identities, global_batch=recipe['global_batch'], world_size=world,
+    from .factors import caption_batches
+    sampler = caption_batches if settings.factor_arm == 'caption_shuffle' else unique_video_batches
+    batches = [sampler(identities, global_batch=recipe['global_batch'], world_size=world,
                                    seed=settings.seed, epoch=epoch) for epoch in range(recipe['epochs'])]
     initial = _collective_call(lambda: initial_clip(settings))
     model, network = make_model(settings, settings.method, initial, device)
@@ -151,6 +153,7 @@ def train_baseline(context, settings, device):
         _collective_call(recover_history)
     resumed_updates = update
     for epoch in range(start_epoch+1, recipe['epochs']+1):
+        training.epoch = epoch-1
         epoch_batches = batches[epoch-1]
         losses = train_epoch(model, network, optimizer, training, epoch_batches, device, loader_workers=settings.loader_workers)
         update += len(epoch_batches)

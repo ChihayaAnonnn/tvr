@@ -20,8 +20,11 @@ def _freeze_official_bottom(clip):
 
 class BaselineModel(nn.Module):
     def __init__(self, method, clip_config, clip_state, *, temporal_layers=4,
-                 extra_video_tokens=2, extra_text_tokens=2, samples=7):
+                 extra_video_tokens=2, extra_text_tokens=2, samples=7, batching='unique_video_all_captions_v1'):
         super().__init__()
+        if batching not in {'unique_video_all_captions_v1', 'caption_shuffle_v1'}:
+            raise ValueError('invalid registered batch policy')
+        self.batching = batching
         self.method, self.clip_config = method, clip_config
         reference = ClipBackbone(clip_config)
         expected = reference.state_dict()
@@ -125,7 +128,7 @@ class BaselineModel(nn.Module):
         if not self.training or video_ids.dtype != torch.long or video_ids.shape != (len(input_ids),) or len(video) != len(input_ids):
             raise ValueError('paired baseline training input contract mismatch')
         global_ids = gather_metadata(video_ids)
-        if len(global_ids.unique()) != len(global_ids):
+        if self.batching == 'unique_video_all_captions_v1' and len(global_ids.unique()) != len(global_ids):
             raise ValueError('official paired loss requires unique video identities per global batch')
         logits, mil, kl = self._logits(self.encode_text(input_ids, text_mask), self.encode_video(video, frame_mask))
         if logits.shape != (len(global_ids), len(global_ids)):

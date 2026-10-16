@@ -66,6 +66,8 @@ def validate_prerequisites(repo, study, manifest, settings):
             or report.get('test_authorized') is not False or set(report.get('qualified_methods', ())) != {'uatvr', 'clip4clip'}
             or not all(report.get('checks', {}).get(k) is True for k in checks)):
         raise ValueError('incomplete production matching-CUDA-rank qualification')
+    if settings.factor_arm is not None and report.get('factor_paths_qualified') is not True:
+        raise ValueError('single-factor paths lack matching-source qualification')
     changed = subprocess.run(['git', 'diff', '--name-only', qm['git_sha'], manifest['git_sha'], '--',
                               'src/semantic_retrieval', 'scripts', 'experiment_artifacts.py', 'experiment_tracking.py'],
                              cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
@@ -168,6 +170,21 @@ def assert_full_data_authorized(*, repo_root, registry_path, manifest, operation
     if evaluation.get('config_kind') != KIND:
         raise ValueError('full-data execution requires explicit typed config marker')
     settings = settings_from_manifest(manifest)
+    from .factors import validate_factor_permission
+    validate_factor_permission(study, settings, manifest['variant'])
+    if settings.factor_arm is not None and settings.stage == 'baseline' and operation == 'reserve':
+        from .factors import validate_factor_slot
+        keys=[]
+        for record in parse_registry_text(_committed(repo,registry).decode()):
+            if record['event'] != 'completed':continue
+            with (Path(record['artifact_path'])/'manifest.json').open() as stream:
+                previous=strict_json_load(stream)
+            if manifest_sha256(previous)!=record['manifest_sha256']:
+                raise ValueError('prior factor manifest identity changed')
+            ev=previous['config']['evaluation']
+            if ev.get('full_data_stage')=='baseline' and ev.get('factor_arm') is not None:
+                keys.append((previous['config']['model']['method'],ev['factor_arm'],previous['seed']))
+        validate_factor_slot(keys,(settings.method,settings.factor_arm,settings.seed),study['validation_factors']['max_scientific_runs'])
     if settings.stage != 'cpu_fixture':
         expected_loader = dict(workers_per_rank=settings.loader_workers, prefetch_batches_per_worker=2,
                                backend='spawn-v1', worker_timeout_seconds=90, ordered_batches=True)
@@ -197,7 +214,7 @@ def assert_full_data_authorized(*, repo_root, registry_path, manifest, operation
         return
     if (entries != {'train_full_data_retrieval.py'} or manifest['dataset'] != 'msrvtt'
             or env['gpu_count'] != settings.world_size or env['distributed_topology'] != f'torchrun-{settings.world_size}'
-            or manifest['variant'] != settings.method or settings.seed not in study['seeds']
+            or manifest['variant'] != (settings.method+'-'+settings.factor_arm if settings.factor_arm else settings.method) or settings.seed not in study['seeds']
             or settings.clip_sha256 != PRETRAINED_SHA):
         raise ValueError('scientific baseline requires frozen full-data approved-rank recipe')
     validate_prerequisites(repo, study, manifest, settings)

@@ -45,7 +45,8 @@ def initial_clip(settings):
 
 
 def make_model(settings, method, clip_state, device):
-    model = BaselineModel(method, settings.clip, clip_state, temporal_layers=1 if settings.clip.fixture else 4).to(device)
+    model = BaselineModel(method, settings.clip, clip_state, temporal_layers=1 if settings.clip.fixture else 4,
+                          batching='caption_shuffle_v1' if settings.factor_arm == 'caption_shuffle' else 'unique_video_all_captions_v1').to(device)
     network = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device.index] if device.type == 'cuda' else None,
                                                        find_unused_parameters=True) if dist.is_initialized() else model
     return model, network
@@ -153,6 +154,9 @@ def qualify(context, settings, device):
                           pin_memory=device.type == 'cuda') as iterator:
             batch = tuple(x.to(device, non_blocking=True) for x in next(iterator))
         del cpu_batch
+        if settings.factor_arm == 'caption_shuffle':
+            # Real repeated-video negatives, including same input frames.
+            batch[2][-1].copy_(batch[2][0]);batch[3][-1].copy_(batch[3][0]);batch[4][-1].copy_(batch[4][0])
         before = model.clip.text_projection.detach().clone()
         first, second = step(model, network, opt, batch), step(model, network, opt, batch)
         if torch.equal(before, model.clip.text_projection):
@@ -193,5 +197,6 @@ def qualify(context, settings, device):
         if device.type == 'cuda': torch.cuda.empty_cache()
     return dict(schema_version='full-data-qualification-v1', world_size=world, device_type=device.type,
                 production_capacity=not settings.clip.fixture, qualified_methods=list(settings.methods), checks=checks,
+                factor_paths_qualified=settings.factor_arm == 'caption_shuffle',
                 source_sha=context.config.source_sha, manifest_sha256=context.config.manifest_sha256,
                 test_authorized=False, observations=observations, array_references=refs)

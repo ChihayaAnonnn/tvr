@@ -122,7 +122,7 @@ def _report(repo):
     for record in load_registry(repo/CONTROL/'registry.jsonl'):
         if record['event'] != 'completed': continue
         root = Path(record['artifact_path']); manifest = _read(root/'manifest.json')
-        if manifest['config']['evaluation'].get('full_data_stage') != 'baseline': continue
+        if manifest['config']['evaluation'].get('full_data_stage') != 'baseline' or manifest['config']['evaluation'].get('factor_arm') is not None: continue
         status = _read(root/'status.json'); name = 'metrics/selected_validation.json'
         if status['output_hashes'].get(name) != file_sha256(root/name): raise ValueError('selected baseline metrics changed')
         result = _read(root/'provenance/baseline-result.json')
@@ -163,7 +163,7 @@ def main(repo):
         for record in load_registry(repo/CONTROL/'registry.jsonl'):
             if record['event'] == 'completed':
                 m = _read(Path(record['artifact_path'])/'manifest.json')
-                if m['config']['evaluation'].get('full_data_stage') == 'baseline' and m['seed'] == seed:
+                if m['config']['evaluation'].get('full_data_stage') == 'baseline' and m['config']['evaluation'].get('factor_arm') is None and m['seed'] == seed:
                     existing.append(m['variant'])
         if set(existing) == {'uatvr', 'clip4clip'}: continue
         if existing: raise ValueError('partial scientific seed requires diagnosed exact recovery')
