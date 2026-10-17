@@ -1,0 +1,184 @@
+{
+  "phase": "VF-clip4clip-control-20261017T000151Z",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=3,1",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nnodes=1",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/train_full_data_retrieval.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "checkpoint_selection": "earliest_raw_t2v_r1",
+          "config_kind": "full-data-retrieval-v1",
+          "deterministic_algorithms": true,
+          "dsl": false,
+          "eval_split": "val",
+          "factor_arm": "control",
+          "frames": 12,
+          "full_data_stage": "baseline",
+          "loader_backend": "spawn-v1",
+          "loader_prefetch_factor": 2,
+          "loader_workers": 8,
+          "memory_limit_gib": 60,
+          "qualification_steps": 0,
+          "resume": null,
+          "seed": 713,
+          "source_report": {
+            "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b/provenance/complete-preparation.json",
+            "sha256": "e99bada8bfdb5e11e7337c91884754893a5bae1db8971a04c0d6a5ae92bbd497"
+          },
+          "synthetic": false,
+          "text_length": 32,
+          "world_size": 2
+        },
+        "loss": {
+          "batching": "unique_video_all_captions_v1",
+          "contrastive": "official_symmetric_diagonal",
+          "mil_alpha": 0.01,
+          "vib_beta": 0.0001
+        },
+        "model": {
+          "architecture": "full-data-baseline-v1",
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "extra_text_tokens": 2,
+          "extra_video_tokens": 2,
+          "freeze_layer_num": 0,
+          "method": "clip4clip",
+          "samples": 7,
+          "temporal_layers": 4
+        },
+        "optimizer": {
+          "beta1": 0.9,
+          "beta2": 0.98,
+          "clip_coefficient": 0.001,
+          "epsilon": 1e-06,
+          "gradient_norm": 1.0,
+          "kind": "pinned_bert_adam",
+          "recipes": {
+            "clip4clip": {
+              "epochs": 5,
+              "global_batch": 128,
+              "learning_rate": 0.0001
+            }
+          },
+          "weight_decay": 0.2
+        },
+        "scheduler": {
+          "kind": "warmup_cosine",
+          "warmup": 0.1
+        }
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-000.input-index.json",
+          "sha256": "ffe95bb7fec0e861c27d17bff3c9cf637b6e8d96dcdde556b31db3d17d7dba62"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-001.input-index.json",
+          "sha256": "ccd1319f2d4ef6c59c49d106eeb7b9214a747447be77785b5f26185faca373bf"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-002.input-index.json",
+          "sha256": "8cfeb099ded9c5486100ff532ddc6978b13a2ce4e9b90e252c5305fda9af7571"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-003.input-index.json",
+          "sha256": "088290ac3a51ae9fcbd136296d610f95cf86308b49c194f8f1a61914452b631b"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-004.input-index.json",
+          "sha256": "1fdf6b40fa092776aa1668b3faf799074a64e6f7e1c3793b9488d0c6eba2ab19"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-005.input-index.json",
+          "sha256": "d27f93fc27987578e64ed948a99c44cb69c72a38d114d8433fd60f95d12c08c5"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-006.input-index.json",
+          "sha256": "cb640a57f937a2e0dbd53c1a58b9eec87d84a2ee4f0bc774d204b3cc87d54332"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-007.input-index.json",
+          "sha256": "a01e5ea384596fbb955dd40663a34e13b66598abb9437dc8bac496a35a48e43c"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-008.input-index.json",
+          "sha256": "55cdb369cfd3a0381bd32b08a69a348faaecb284c72ecefcd821547411d262e2"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-009.input-index.json",
+          "sha256": "339d217b6714f9fe45aa3e8c6a6377db9000aa3879a55fb93b7c5d9b2edd977c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b/provenance/complete-preparation.json",
+          "sha256": "e99bada8bfdb5e11e7337c91884754893a5bae1db8971a04c0d6a5ae92bbd497"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b/provenance/inputs/complete-cohort-000.input-index.json",
+          "sha256": "489c03f47b1fccd5743c13f0c1801ab0f1176e570d85c76952e0789ad2f97af6"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        }
+      ],
+      "parent_run_ids": [
+        "msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b",
+        "synthetic-baseline-full-data-q0-seed713-20261016T102959Z-18cce3b59102"
+      ],
+      "scheduled_timestamp_utc": "20261017T000150Z",
+      "seed": 713,
+      "selection_lineage": [
+        "experiments/full-data-retrieval-v1/VALIDATION_FACTORS.md"
+      ],
+      "stage": "baseline",
+      "test_authorized": false,
+      "validation_authorized": true,
+      "variant": "clip4clip-control"
+    }
+  ],
+  "study": "full-data-retrieval-v1"
+}
