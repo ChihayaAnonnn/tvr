@@ -91,16 +91,34 @@ def authenticated_parent(repo, permission, parent_id):
     return parent,selected
 
 
-def reject_duplicate_test(records, *, method, seed):
-    prefix=f'msrvtt-final-test-{method}-seed{seed:03d}-'
+def test_permission(study, parent_id):
+    matches=[]
+    for key, authorization in (
+        ('final_test','2026-10-12_explicit_user_use_1k_test'),
+        ('final_test_factors','2026-10-21_explicit_user_completed_factors_1k_test'),
+    ):
+        p=study.get(key,{})
+        if p.get('authorized') is True and p.get('authorization')==authorization:
+            if any(r['run_id']==parent_id for r in p.get('selected',[])):
+                matches.append(p)
+    if len(matches)!=1:raise ValueError('parent lacks unique explicit test authorization')
+    return matches[0]
+
+
+def test_variant(settings):
+    return 'test-'+settings.method+('-'+settings.factor_arm if settings.factor_arm else '')
+
+
+def reject_duplicate_test(records, *, method, seed, variant=None):
+    prefix=f"msrvtt-final-{variant or ('test-'+method)}-seed{seed:03d}-"
     if any(r['event']=='completed' and r['run_id'].startswith(prefix) for r in records):
         raise ValueError('successful final test cannot be repeated')
 
 
 def assert_final_authorized(repo,study,manifest,entries):
     from .authorization import validate_prerequisites
-    p=study.get('final_test',{})
-    if (p.get('authorized') is not True or p.get('authorization')!='2026-10-12_explicit_user_use_1k_test'
+    p=test_permission(study,manifest['config']['evaluation']['parent_run_id'])
+    if (p.get('authorized') is not True
             or entries!={ENTRY} or manifest['stage']!='final' or manifest['dataset']!='msrvtt'
             or manifest['test_authorized'] is not True or manifest['validation_authorized'] is not False
             or manifest['environment']['gpu_count']!=2 or manifest['environment']['precision']!='fp32'
@@ -110,8 +128,8 @@ def assert_final_authorized(repo,study,manifest,entries):
     settings=settings_from_manifest(parent)
     from experiment_artifacts import parse_registry_text
     from .authorization import CONTROL, _committed
-    reject_duplicate_test(parse_registry_text(_committed(repo,repo/CONTROL/'registry.jsonl').decode()),method=settings.method,seed=settings.seed)
-    if (manifest['config']!=final_config(parent,p,selected) or manifest['variant']!='test-'+settings.method
+    reject_duplicate_test(parse_registry_text(_committed(repo,repo/CONTROL/'registry.jsonl').decode()),method=settings.method,seed=settings.seed,variant=test_variant(settings))
+    if (manifest['config']!=final_config(parent,p,selected) or manifest['variant']!=test_variant(settings)
             or manifest['seed']!=settings.seed or set(manifest['parent_run_ids'])!={parent['run_id'],study['gpu_qualification']['run_id']}):
         raise ValueError('final test differs from frozen selected configuration')
     expected=[p['test_csv'],*p['video_indices']]
@@ -181,7 +199,7 @@ def main(repo,argv=None):
     try:
         context=_collective_call(lambda:prepare_run(runtime,repo_root=repo,system_config=FinalSystemConfig(runtime,m['config'])))
         _collective_call(lambda:start_run(context) if rank==0 else None)
-        permission=yaml.safe_load(_committed(repo,registry.with_name('study.yaml')))['final_test']
+        permission=test_permission(yaml.safe_load(_committed(repo,registry.with_name('study.yaml'))),m['config']['evaluation']['parent_run_id'])
         parent,selected=_collective_call(lambda:authenticated_parent(repo,permission,m['config']['evaluation']['parent_run_id']))
         settings=settings_from_manifest(parent)
         from .loader import read_complete

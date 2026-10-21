@@ -121,10 +121,10 @@ final_test:
   authorized: true
   authorization: 2026-10-12_explicit_user_use_1k_test
   scope: this_study_msrvtt_jsfusion_1k_only_other_studies_and_msvd_remain_sealed
-  test_csv:
+  test_csv: &id002
     path: /data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv
     sha256: e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a
-  video_indices:
+  video_indices: &id003
   - path: /home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json
     sha256: 0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8
   - path: /home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json
@@ -217,3 +217,41 @@ validation_factors:
   - 713
   protocol: experiments/full-data-retrieval-v1/VALIDATION_FACTORS.md
   max_scientific_runs: 6
+final_test_factors:
+  authorized: true
+  authorization: 2026-10-21_explicit_user_completed_factors_1k_test
+  scope: this_study_msrvtt_jsfusion_1k_only_other_studies_and_msvd_remain_sealed
+  test_csv: *id002
+  video_indices: *id003
+  selected:
+  - run_id: msrvtt-baseline-uatvr-temporal_offset-seed713-20261016T150148Z-37ef7f83cc30
+    manifest_sha256: 4de20b43181c1618847cc702c8944657d5de06d1f4d6736fcc2c2d8ad41d50a6
+    method: uatvr
+    seed: 713
+    selected_epoch: 5
+    result_sha256: 38ffaef1992354de1dd3bcf62dbe51d03c86c5d35c4d7512604947eb784d45e9
+    metrics_sha256: 413a256bca39f198fcdc76fb59edf93d69a624b0e26229da4d0b9ca212fb6acf
+    checkpoint:
+      path: /data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-temporal_offset-seed713-20261016T150148Z-37ef7f83cc30/checkpoints/epoch-05.pt
+      sha256: a064c34fb293d08f3c8d76869e76873153f81d086d63f6577388b2aaa0e392d1
+      sidecar_sha256: e88f2919714afe991b345d7593c3d218b1069ed613fb95cdf95a5dbdb950eec9
+  - run_id: msrvtt-baseline-uatvr-caption_shuffle-seed713-20261016T194309Z-ebcc5b543283
+    manifest_sha256: c0dd8df92890e32e672d06c61202108d9cc17122b4285657c7496eda1037f922
+    method: uatvr
+    seed: 713
+    selected_epoch: 3
+    result_sha256: a52f5e01ae8da6b67789c8ec4aece1f2ce27449ca006125fe52ddb593ff051bf
+    metrics_sha256: df0003e0b174b1f6b0c379cdd6bcee4466f6d41b9d8420c2d643c6467f145987
+    checkpoint:
+      path: /data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-caption_shuffle-seed713-20261016T194309Z-ebcc5b543283/checkpoints/epoch-03.pt
+      sha256: 6e5c874c9d40459d63dc179ee2a4b4d95966b74487139917987970a9807359e9
+      sidecar_sha256: 7d29e87adc7688cd328cac4ae3b30e241eebe5e88111f0bad31bc59d5d04f1e4
+  selection: validation_only_frozen_before_test
+  dsl: false
+  precision: fp32
+  test_video_count: 1000
+  test_query_count: 1000
+  no_test_tuning: true
+  no_duplicate_successful_evaluation: true
+  paper_training_protocol_differs: 8246_source_filtered_training_videos_vs_original_9k
+  new_method_hypothesis_supported: false

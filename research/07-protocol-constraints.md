@@ -189,3 +189,9 @@ already validation-selected baseline checkpoints. `FINAL_TEST_PROTOCOL.md` and
 study.yaml final_test freeze scope/inputs/checkpoints; fresh matching-source
 production two-rank Q0 remains required. Baseline/qualification entries remain
 non-test. Other studies, MSVD, tuning on test and new-method gates are unchanged.
+
+2026-10-21 scoped user amendment: evaluate the two completed full-data UATVR
+seed713 factor treatments on JSFUSION1k using their frozen validation-selected
+checkpoints, compare against the archived original seed713 baseline. See
+`full-data-retrieval-v1/FACTOR_TEST_PROTOCOL.md` and `study.yaml final_test_factors`.
+Failed/incomplete treatments and all other studies remain outside this scope.

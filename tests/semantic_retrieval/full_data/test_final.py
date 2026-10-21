@@ -50,3 +50,25 @@ def test_successful_test_cannot_be_repeated_but_other_seed_is_independent():
     with pytest.raises(ValueError):reject_duplicate_test(records,method='uatvr',seed=713)
     reject_duplicate_test(records,method='uatvr',seed=714)
     reject_duplicate_test(records,method='clip4clip',seed=713)
+
+
+def test_factor_permission_is_explicit_and_does_not_authorize_other_parents():
+    from semantic_retrieval.full_data.final import test_permission
+    old=dict(authorized=True,authorization='2026-10-12_explicit_user_use_1k_test',selected=[dict(run_id='old')])
+    factors=dict(authorized=True,authorization='2026-10-21_explicit_user_completed_factors_1k_test',selected=[dict(run_id='factor')])
+    study=dict(final_test=old,final_test_factors=factors)
+    assert test_permission(study,'old') is old
+    assert test_permission(study,'factor') is factors
+    with pytest.raises(ValueError):test_permission(study,'unfinished')
+    factors['authorized']=False
+    with pytest.raises(ValueError):test_permission(study,'factor')
+
+
+def test_factor_test_deduplication_keeps_original_baseline_separate():
+    from semantic_retrieval.full_data.final import reject_duplicate_test
+    records=[dict(event='completed',run_id='msrvtt-final-test-uatvr-seed713-20261012T000000Z-aaaaaaaaaaaa')]
+    reject_duplicate_test(records,method='uatvr',seed=713,variant='test-uatvr-temporal_offset')
+    records.append(dict(event='completed',run_id='msrvtt-final-test-uatvr-temporal_offset-seed713-20261021T000000Z-bbbbbbbbbbbb'))
+    with pytest.raises(ValueError):
+        reject_duplicate_test(records,method='uatvr',seed=713,variant='test-uatvr-temporal_offset')
+    reject_duplicate_test(records,method='uatvr',seed=713,variant='test-uatvr-caption_shuffle')
