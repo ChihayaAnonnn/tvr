@@ -1,0 +1,132 @@
+{
+  "phase": "Q0-factor-test-20261021T161028Z",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=0,3",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nnodes=1",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/qualify_full_data_retrieval.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "checkpoint_selection": "earliest_raw_t2v_r1",
+          "config_kind": "full-data-retrieval-v1",
+          "deterministic_algorithms": true,
+          "dsl": false,
+          "eval_split": "val",
+          "factor_arm": "caption_shuffle",
+          "frames": 12,
+          "full_data_stage": "gpu_qualification",
+          "loader_backend": "spawn-v1",
+          "loader_prefetch_factor": 2,
+          "loader_workers": 8,
+          "memory_limit_gib": 60,
+          "qualification_steps": 3,
+          "resume": null,
+          "seed": 713,
+          "source_report": null,
+          "synthetic": true,
+          "text_length": 32,
+          "world_size": 2
+        },
+        "loss": {
+          "batching": "caption_shuffle_v1",
+          "contrastive": "official_symmetric_diagonal",
+          "mil_alpha": 0.01,
+          "vib_beta": 0.0001
+        },
+        "model": {
+          "architecture": "full-data-baseline-v1",
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/arrays/random-pilot-clip.npz",
+          "extra_text_tokens": 2,
+          "extra_video_tokens": 2,
+          "freeze_layer_num": 0,
+          "method": "both",
+          "samples": 7,
+          "temporal_layers": 4
+        },
+        "optimizer": {
+          "beta1": 0.9,
+          "beta2": 0.98,
+          "clip_coefficient": 0.001,
+          "epsilon": 1e-06,
+          "gradient_norm": 1.0,
+          "kind": "pinned_bert_adam",
+          "recipes": {
+            "clip4clip": {
+              "epochs": 5,
+              "global_batch": 128,
+              "learning_rate": 0.0001
+            },
+            "uatvr": {
+              "epochs": 5,
+              "global_batch": 64,
+              "learning_rate": 5e-05
+            }
+          },
+          "weight_decay": 0.2
+        },
+        "scheduler": {
+          "kind": "warmup_cosine",
+          "warmup": 0.1
+        }
+      },
+      "dataset": "synthetic",
+      "dataset_splits": [],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/arrays/random-pilot-clip.npz",
+          "sha256": "4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8"
+        }
+      ],
+      "parent_run_ids": [],
+      "scheduled_timestamp_utc": "20261021T161027Z",
+      "seed": 713,
+      "selection_lineage": [],
+      "stage": "baseline",
+      "test_authorized": false,
+      "validation_authorized": true,
+      "variant": "full-data-q0"
+    }
+  ],
+  "study": "full-data-retrieval-v1"
+}
