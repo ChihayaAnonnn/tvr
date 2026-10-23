@@ -1,0 +1,30 @@
+{
+  "study": "laya-rerank-validation-v1",
+  "protocol_version": 1,
+  "control_plane": "experiments/laya-rerank-validation-v1",
+  "data_plane": "artifacts/laya-rerank-validation-v1",
+  "registry": "experiments/laya-rerank-validation-v1/registry.jsonl",
+  "test_authorized": false,
+  "science_authorized": false,
+  "gpu_qualification": null,
+  "software_qualification": {
+    "world_size": 4,
+    "precision": "fp32",
+    "synthetic_only": true,
+    "production_capacity": true,
+    "random_initialization": true,
+    "optimizer": false,
+    "max_gpu_hours": 8,
+    "max_run_minutes": 30
+  },
+  "science": {
+    "max_gpu_hours": 24,
+    "max_run_hours": 8
+  },
+  "retry": {
+    "max_diagnosed_successors_per_failure_class": 2,
+    "identity_change_requires_new_run": true
+  },
+  "fixed": "fixed.json",
+  "status": "implementation_cpu_only"
+}

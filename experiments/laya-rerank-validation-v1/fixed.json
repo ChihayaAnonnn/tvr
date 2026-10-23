@@ -1,0 +1,49 @@
+{
+  "config_kind": "laya-rerank-validation-v1",
+  "split": "val",
+  "seed": 713,
+  "top_k": 10,
+  "frames": 4,
+  "precision": "fp32",
+  "dsl": false,
+  "training": false,
+  "query_count": 10000,
+  "video_count": 500,
+  "query_batch": 1,
+  "candidate_microbatch": 8,
+  "option_attention": "block",
+  "option_order": [
+    "match",
+    "not_supported"
+  ],
+  "fusion": false,
+  "language_prefix_cache": false,
+  "temperature": "checkpoint",
+  "world_size_qualification": 4,
+  "bootstrap_seed": 713,
+  "bootstrap_samples": 10000,
+  "latency_sample_queries": 100,
+  "latency_warmup_queries": 5,
+  "latency_rounds": 3,
+  "parent": {
+    "run_id": "msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502",
+    "manifest_sha256": "5ee7d938e312d5182bc549e4393f638ef3069506930f5c8d76edd314f8ddfd71",
+    "method": "uatvr",
+    "seed": 713,
+    "selected_epoch": 5,
+    "result_sha256": "18bcf3e2fcb0e956546a8bdc7e6888804f14831c507ccd7e404ddad9fb69c596",
+    "metrics_sha256": "dbe547a7f68e13f403c84f5cb99a0b5cdacd483913dadca74c24b861f3f7e41d",
+    "checkpoint": {
+      "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/checkpoints/epoch-05.pt",
+      "sha256": "b86658bf9e7311fe8799d3f68547d48020fc27b87c95f7af22a06d1156d8479f",
+      "sidecar_sha256": "090e6c35bc238a566fbbdf9dc06b6a483705543da4bfb6d477d61108bbccfa04"
+    }
+  },
+  "input_certification": {
+    "run_id": "msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b",
+    "manifest_sha256": "8e3932a4e5f2d954153be58132af2a3621c27dfb1dbaf38cd8066d1eb40ed545",
+    "report_sha256": "e99bada8bfdb5e11e7337c91884754893a5bae1db8971a04c0d6a5ae92bbd497"
+  },
+  "weights": "/data2/hxj/open-models/laya-vision/models",
+  "external_code": "/data2/hxj/open-models/laya-vision/code"
+}
