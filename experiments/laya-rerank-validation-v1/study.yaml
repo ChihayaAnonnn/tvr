@@ -7,9 +7,9 @@
   "test_authorized": false,
   "science_authorized": true,
   "gpu_qualification": {
-    "run_id": "synthetic-baseline-laya-q0-perf-seed713-20261023T092254Z-69a22333343d",
-    "manifest_sha256": "362c418cace5f7a138675d4c04c129c31afab42cc12ced6b4c87498f3cb74157",
-    "report_sha256": "d66b76499962daafc91a88baec1eeae4290d233768d1f7dc23e324e0f19f44f5"
+    "run_id": "synthetic-baseline-laya-q0-singleton-seed713-20261023T093531Z-081ac8c60dcd",
+    "manifest_sha256": "671bc0c49da92d4583105e03d594f5ef30a91294c6865d57864600b3fab2a653",
+    "report_sha256": "126845386caab39183750c36849973d00ec44645c0e80da561f91b8d09ab8345"
   },
   "software_qualification": {
     "world_size": 2,
@@ -40,7 +40,7 @@
     "identity_change_requires_new_run": true
   },
   "fixed": "fixed.json",
-  "status": "accuracy_completed_performance_authorized",
+  "status": "singleton_semantics_qualified_performance_retry_authorized",
   "topology_amendment": {
     "date": "2026-10-23",
     "scope": "this_study_only",
