@@ -59,6 +59,20 @@ def validate_lineage(repo,manifest,records,*,allow_source_upgrade):
         if count>=2:raise ValueError('two diagnosed successors per failure class exhausted')
 
 
+def summary_inventory(row,root):
+    import json
+    from .store import digest
+    if 'output_hashes' in row:return row['output_hashes']
+    ref=row.get('output_hashes_reference',{});path=Path(ref.get('path',''))
+    if (path!=root/'status.json' or ref.get('json_pointer')!='/output_hashes'
+            or digest(path)!=ref.get('sha256')):raise ValueError('terminal inventory reference identity mismatch')
+    status=json.loads(path.read_text());inventory=status.get('output_hashes')
+    if (any(status.get(k)!=row.get(k) for k in ('run_id','state','manifest_sha256'))
+            or not isinstance(inventory,dict) or len(inventory)!=ref.get('entry_count')):
+        raise ValueError('terminal inventory reference scope mismatch')
+    return inventory
+
+
 def budget_rows(repo,records,*,category='software'):
     import json
     from experiment_artifacts import make_run_paths,load_validated_run_lifecycle,manifest_sha256
@@ -66,10 +80,11 @@ def budget_rows(repo,records,*,category='software'):
     from .store import digest
     if category not in {'software','scientific'}:raise ValueError('unknown budget category')
     anchors={}
+    roots={r['run_id']:Path(r['artifact_path']) for r in records if r['event']=='reserved'}
     for path in sorted((repo/CONTROL/'summaries').glob('*.json')):
         summary=json.loads(committed(repo,path))
         for row in summary.get('runs',[]):
-            anchors[row['run_id']]=row['output_hashes'].get('provenance/controller-result.json')
+            anchors[row['run_id']]=summary_inventory(row,roots[row['run_id']]).get('provenance/controller-result.json')
     rows=[]
     for ref in (r for r in records if r['event']=='reserved'):
         root=Path(ref['artifact_path']);paths=make_run_paths(root.parents[3],STUDY,ref['run_id'])

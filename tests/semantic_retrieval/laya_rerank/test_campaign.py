@@ -50,3 +50,16 @@ def test_worker_environment_requires_actual_rank_topology(monkeypatch):
     with pytest.raises(ValueError,match='environment'):assert_runtime_environment({'environment':environment})
     environment['distributed_topology']='single-process'
     assert assert_runtime_environment({'environment':environment})==0
+
+
+def test_budget_external_inventory_authenticates_terminal_status(tmp_path):
+    import json
+    from semantic_retrieval.laya_rerank.campaign import summary_inventory
+    from semantic_retrieval.laya_rerank.store import digest
+    root=tmp_path/'run';root.mkdir();status=root/'status.json'
+    payload=dict(run_id='run',state='completed',manifest_sha256='m',output_hashes={'provenance/controller-result.json':'receipt'})
+    status.write_text(json.dumps(payload))
+    row=dict(run_id='run',state='completed',manifest_sha256='m',output_hashes_reference=dict(path=str(status),sha256=digest(status),json_pointer='/output_hashes',entry_count=1))
+    assert summary_inventory(row,root)==payload['output_hashes']
+    status.write_text(json.dumps({**payload,'output_hashes':{}}))
+    with pytest.raises(ValueError):summary_inventory(row,root)

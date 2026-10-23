@@ -11,7 +11,7 @@ from experiment_artifacts import manifest_sha256,parse_registry_text
 from semantic_retrieval.config import RuntimeConfig
 from semantic_retrieval.full_data.controller import campaign_lock,idle_devices,_terminal,termination_signals
 from semantic_retrieval.runtime.artifacts import publish_metrics
-from .campaign import projected_hours,budget_rows,process_ticks,stop_owned
+from .campaign import projected_hours,budget_rows,process_ticks,stop_owned,owned_processes
 from .protocol import CONTROL,committed,assert_laya_authorized
 from .store import atomic,canonical,digest
 
@@ -54,7 +54,18 @@ def run_controller(repo,root):
                 with (root/'logs'/f'{mode}.log').open('xb') as log:
                     process=subprocess.Popen(command,cwd=repo,stdout=log,stderr=subprocess.STDOUT,start_new_session=True,env=environment)
                     atomic(root/f'provenance/launch-{mode}.json',canonical(dict(pid=process.pid,start_ticks=process_ticks(process.pid),mode=mode,nonce=nonce)))
-                    try:observed=process.wait(timeout=max(1,deadline-time.monotonic()))
+                    try:
+                        while process.poll() is None:
+                            if time.monotonic()>=deadline:raise TimeoutError('scientific run deadline exceeded')
+                            if kind=='performance':
+                                owned={pid for pid,_ in owned_processes(nonce)}
+                                active=subprocess.run(['nvidia-smi','--query-compute-apps=gpu_uuid,pid','--format=csv,noheader'],check=True,capture_output=True,text=True).stdout
+                                for line in active.splitlines():
+                                    uuid,pid=[x.strip() for x in line.split(',')]
+                                    if uuid=='GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede' and int(pid) not in owned:
+                                        raise ValueError('unrelated GPU computation during performance round; comparison incomplete')
+                            time.sleep(1)
+                        observed=process.returncode
                     finally:stop_owned(process,nonce)
                 if observed!=0:raise ValueError('scientific worker failed in '+mode+' exit='+str(observed))
             if kind=='accuracy':
