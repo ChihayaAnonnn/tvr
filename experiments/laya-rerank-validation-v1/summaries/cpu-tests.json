@@ -1,0 +1,20 @@
+{
+  "command": [
+    ".venvs/laya-validation-v1/bin/python",
+    "-m",
+    "pytest",
+    "tests/semantic_retrieval/laya_rerank",
+    "tests/test_experiment_artifacts.py",
+    "tests/semantic_retrieval/test_input_bindings.py",
+    "tests/semantic_retrieval/test_runtime_artifacts.py",
+    "-q"
+  ],
+  "environment": {
+    "CUDA_VISIBLE_DEVICES": "",
+    "LD_LIBRARY_PATH": "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/nvidia/nccl/lib:/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/nvidia/cudnn/lib"
+  },
+  "exit_code": 0,
+  "stdout": "..................ss.................................................... [ 46%]\n........................................................................ [ 93%]\n..........                                                               [100%]\n=============================== warnings summary ===============================\ntests/semantic_retrieval/laya_rerank/test_campaign.py: 2 warnings\ntests/semantic_retrieval/test_runtime_artifacts.py: 11 warnings\n  /data2/hxj/project/UATVR/src/semantic_retrieval/runtime/artifacts.py:172: DeprecationWarning: torch.is_autocast_cpu_enabled() is deprecated. Please use torch.is_autocast_enabled('cpu') instead. (Triggered internally at ../torch/csrc/autograd/init.cpp:663.)\n    if torch.is_autocast_enabled() or torch.is_autocast_cpu_enabled():\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n152 passed, 2 skipped, 13 warnings in 9.84s\n",
+  "source_sha": "2353e40c75901f71fa3c7d32029b9ec895baba3c",
+  "recorded_at": "2026-10-23T10:03:46.537764+00:00"
+}

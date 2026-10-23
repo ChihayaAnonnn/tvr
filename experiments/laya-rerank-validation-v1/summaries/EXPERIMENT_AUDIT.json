@@ -1,0 +1,354 @@
+{
+  "audit_skill": "experiment-audit",
+  "date": "2026-10-23",
+  "generated_at": "2026-10-23T10:05:54.379491+00:00",
+  "verdict": "WARN",
+  "overall_verdict": "warn",
+  "integrity_status": "warn",
+  "reason_code": "qualified_local_validation_and_systems_scope",
+  "summary": "Deterministic integrity checks pass; fixed validation reranking is worse and measured online cost is higher. Claims require the recorded local-validation, checkpoint, hardware and qualification scope.",
+  "blocking_findings": [],
+  "review_independence": "same-family",
+  "acceptance_status": "provisional",
+  "auditor": "fresh Codex read-only reviewer",
+  "agent_id": "/root/audit_results",
+  "subreviewer_id": "/root/audit_results/audit_gt_weights",
+  "reviewer_model": "runtime model identifier not exposed to this reviewer",
+  "checks": {
+    "gt_provenance": {
+      "status": "pass",
+      "details": "Dataset-provided official caption/video relationships independently reconstructed; 10000 queries, 500 validation videos, 493 source groups; exact targets and source groups; no labels passed to judge. Local seed-0 validation holdout, not official test.",
+      "evidence": [
+        "src/semantic_retrieval/data/msrvtt_snapshot.py:103",
+        "src/semantic_retrieval/full_data/loader.py:93",
+        "src/semantic_retrieval/laya_rerank/science.py:78",
+        "src/semantic_retrieval/laya_rerank/evaluator.py:61"
+      ]
+    },
+    "score_normalization": {
+      "status": "pass",
+      "details": "Raw rank-based recalls and MRR, corrected/worsened counts, grouped bootstrap and all timings independently recomputed. Checkpoint-temperature two-choice softmax exactly matches all stored probabilities; no metric self-normalization, fusion or rounding.",
+      "evidence": [
+        "src/semantic_retrieval/laya_rerank/core.py:21",
+        "src/semantic_retrieval/laya_rerank/core.py:29",
+        "src/semantic_retrieval/laya_rerank/judge.py:68",
+        "src/semantic_retrieval/laya_rerank/evaluator.py:25",
+        "src/semantic_retrieval/laya_rerank/measurement.py:150"
+      ]
+    },
+    "result_existence": {
+      "status": "pass",
+      "details": "Accuracy and final performance have committed completed states and hash-valid terminal output inventories; scalar and human reports match raw results. Failed predecessors excluded.",
+      "evidence": [
+        "experiments/laya-rerank-validation-v1/registry.jsonl:8",
+        "experiments/laya-rerank-validation-v1/registry.jsonl:20",
+        "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/status.json:22040",
+        "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/status.json:43",
+        "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/laya-performance.json:1"
+      ]
+    },
+    "dead_code": {
+      "status": "pass",
+      "details": "Accuracy and performance metric functions are reachable from executed workers and their numerical outputs are present. Narrow adapter regression independently passed; durable executor suite receipt records152passed/2skipped and exit0, without an independent broad-suite rerun.",
+      "evidence": [
+        "src/semantic_retrieval/laya_rerank/worker.py:54",
+        "src/semantic_retrieval/laya_rerank/science.py:185",
+        "src/semantic_retrieval/laya_rerank/science_controller.py:59",
+        "src/semantic_retrieval/laya_rerank/measurement.py:124",
+        "src/semantic_retrieval/laya_rerank/measurement.py:150"
+      ]
+    },
+    "scope": {
+      "status": "warn",
+      "details": "One frozen configuration and validation-selected seed713/epoch05 checkpoint on a local 500-video holdout; performance repeats the same hash-selected 100 queries three times on one A800 GPU. Synthetic random-weight native-cache qualification is limited; upstream pretraining overlap is unverified. Cache payload and allocator-dependent RSS delta must stay distinguished. Final draft preserves these limits.",
+      "evidence": [
+        "experiments/laya-rerank-validation-v1/fixed.json:28",
+        "src/semantic_retrieval/laya_rerank/science.py:23",
+        "src/semantic_retrieval/laya_rerank/measurement.py:6",
+        "src/semantic_retrieval/laya_rerank/qualification.py:143",
+        "/data2/hxj/open-models/laya-vision/models/vlm_agent_config.json:20"
+      ]
+    },
+    "evaluation_type": {
+      "status": "pass",
+      "classification": "real_gt",
+      "details": "Accuracy is real_gt. Software qualifications are synthetic-only engineering checks; performance is systems measurement on real validation inputs, not a generalization benchmark."
+    }
+  },
+  "claims": [
+    {
+      "id": "fixed_validation_accuracy",
+      "impact": "supported_with_scope",
+      "claim": "On authenticated archived UATVR validation rankings, fixed Laya reranking reduces R1 by37.14pp; 95% source-group bootstrap interval [-39.929725903614454,-34.258489751780786]."
+    },
+    {
+      "id": "measured_online_cost",
+      "impact": "supported_with_scope",
+      "claim": "On the specified 100-query/three-round/A800 workload, median latency is1.6563379846077906x and incremental peak PyTorch allocated memory is1004412416bytes."
+    },
+    {
+      "id": "full_permutation_and_no_label_leak",
+      "impact": "supported",
+      "claim": "All10000 outputs retain full500 permutations, Top10 membership, tail order, stable probability ranking and R10; model receives query text and visual evidence only."
+    },
+    {
+      "id": "native_cache_equivalence",
+      "impact": "needs_qualifier",
+      "claim": "Production-capacity random-weight synthetic cached/raw-pixel qualification passed; this is not exhaustive trained-model native/cache equivalence on validation."
+    },
+    {
+      "id": "general_efficiency_or_test_generalization",
+      "impact": "unsupported",
+      "claim": "No general efficiency advantage, official test conclusion, across-seed robustness or contamination-free generalization is established."
+    }
+  ],
+  "accuracy": {
+    "run_id": "msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908",
+    "metrics": {
+      "baseline": {
+        "mrr": 0.6489606049330214,
+        "r1": 53.190000000000005,
+        "r10": 86.83,
+        "r5": 79.7
+      },
+      "corrected": 518,
+      "reranked": {
+        "mrr": 0.33876127953619595,
+        "r1": 16.05,
+        "r10": 86.83,
+        "r5": 55.04
+      },
+      "worsened": 4232
+    },
+    "delta_r1_pp": -37.14,
+    "ci95_pp": [
+      -39.929725903614454,
+      -34.258489751780786
+    ],
+    "query_count": 10000,
+    "video_count": 500,
+    "source_group_count": 493,
+    "all_output_hashes_verified": 22032
+  },
+  "performance": {
+    "run_id": "msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4",
+    "comparison_completed": true,
+    "unique_queries": 100,
+    "rounds": 3,
+    "timings_per_arm": 300,
+    "warmup_queries_per_process": 5,
+    "launch_order": [
+      "prepare",
+      "baseline-r0",
+      "enhanced-r0",
+      "enhanced-r1",
+      "baseline-r1",
+      "baseline-r2",
+      "enhanced-r2"
+    ],
+    "fresh_process_receipts_verified": 7,
+    "all_output_hashes_verified": 35,
+    "baseline": {
+      "median_ms": 181.58377055078745,
+      "model_loaded_resident_gpu_allocated_bytes": 682641920,
+      "model_loaded_resident_gpu_reserved_bytes": 734003200,
+      "p95_ms": 185.16071517951787,
+      "peak_gpu_allocated_bytes": 746690560,
+      "peak_gpu_reserved_bytes": 813694976,
+      "per_round": [
+        {
+          "median_ms": 181.69352936092764,
+          "p95_ms": 184.11803394556046,
+          "query_count": 100,
+          "throughput_queries_s": 5.499456279470538
+        },
+        {
+          "median_ms": 179.8512345412746,
+          "p95_ms": 182.52745504723862,
+          "query_count": 100,
+          "throughput_queries_s": 5.566933901348526
+        },
+        {
+          "median_ms": 182.66061949543655,
+          "p95_ms": 185.83855393808335,
+          "query_count": 100,
+          "throughput_queries_s": 5.46075448170673
+        }
+      ],
+      "query_count": 300,
+      "throughput_queries_s": 5.508699665579134
+    },
+    "enhanced": {
+      "median_ms": 300.76409655157477,
+      "model_loaded_resident_gpu_allocated_bytes": 1520204288,
+      "model_loaded_resident_gpu_reserved_bytes": 1570766848,
+      "p95_ms": 307.42126336554065,
+      "peak_gpu_allocated_bytes": 1751102976,
+      "peak_gpu_reserved_bytes": 2172649472,
+      "per_round": [
+        {
+          "median_ms": 300.4389429697767,
+          "p95_ms": 308.3055797731504,
+          "query_count": 100,
+          "throughput_queries_s": 3.3125354184392273
+        },
+        {
+          "median_ms": 300.6800354924053,
+          "p95_ms": 305.5996918817982,
+          "query_count": 100,
+          "throughput_queries_s": 3.330317119380784
+        },
+        {
+          "median_ms": 301.1415679939091,
+          "p95_ms": 304.322835651692,
+          "query_count": 100,
+          "throughput_queries_s": 3.332918088489896
+        }
+      ],
+      "query_count": 300,
+      "throughput_queries_s": 3.3252321573885895
+    },
+    "relative_median_latency": 1.6563379846077906,
+    "relative_p95_latency": 1.6602942101810754,
+    "incremental_peak_gpu_allocated_bytes": 1004412416,
+    "incremental_loaded_gpu_allocated_bytes": 837562368,
+    "max_single_query_vs_archive_abs_error": 2.47955322265625e-05,
+    "archived_top10_guard_passed_all_six_reports": true,
+    "laya_cpu_payload_bytes": 295996000,
+    "laya_disk_bytes": 296378015,
+    "laya_cpu_rss_delta_bytes": 4096,
+    "rss_delta_is_cache_footprint": false
+  },
+  "qualification": {
+    "run_id": "synthetic-baseline-laya-q0-owner-seed713-20261023T094646Z-bf508798c089",
+    "all_output_hashes_verified": 215,
+    "production_capacity": true,
+    "random_initialization": true,
+    "synthetic_only": true,
+    "native_cached_uncached_max_abs_error": 0.0,
+    "batch_1_8_max_abs_error": 4.470348358154297e-07,
+    "original_uatvr_singleton_mask_equivalence": true,
+    "executable_source_matches_performance": true
+  },
+  "budget_gpu_hours": {
+    "software": 0.22240235773911182,
+    "scientific_including_failed": 1.09267021555861
+  },
+  "verification_limits": [
+    "No GPU replay was performed by the auditor.",
+    "GPU memory and exclusivity are authenticated runtime receipts supported by executed source, not independent telemetry replay.",
+    "Warmup count and strict online Top10 checks are established by source/control flow and completed receipts; online per-query rankings were not separately persisted.",
+    "Pretrained Laya/backbone corpus overlap and upstream training history are not independently established.",
+    "Failed predecessor foreign-process cause is unresolved; all its partial timings are excluded."
+  ],
+  "audited_input_hash_convention": "Whole-file SHA-256. NPY contract hashes were separately verified using dtype/shape/payload rules; they are not interchangeable with file hashes.",
+  "audited_input_hashes": {
+    "/data2/hxj/project/UATVR/AGENTS.md": "sha256:bf4acdd06e08600ef889717e58f72a393fb7a4f30898a4ebd2cd1b2b7cdb4b81",
+    "/data2/hxj/project/UATVR/docs/superpowers/specs/2026-10-23-laya-vision-validation-reranking-design.md": "sha256:becbd11cbf4d51a9a58ee1929dfadf7fff0108d6546ecf1253591166fa48cabe",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/study.yaml": "sha256:defa77abfaf74309371944c4832f1e94758170b3730a7f404d417c0c1cede099",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/fixed.json": "sha256:34cd2e4691bd2c9af01754cb1b551d3c024bbcc241ea97f2d375d71a0de6d8a3",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/registry.jsonl": "sha256:a2cf5c3178406dc66e37e22eb6f9c57dbd030b34f941f9d88b1ace99771e7c7c",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/external.input-index.json": "sha256:93b57def84898f0fa01a8dd29b53b8a2d43e267e7209bbe7376fa33b72d7b2e2",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/summaries/accuracy-20261023T085620Z.json": "sha256:875d15b3a9b296b035e83a9f5b8f3c5b0b96ab93ea7d2af579d85cc915815a7b",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/summaries/performance-retry2-20261023T094942Z.json": "sha256:d45f45c5de71d80238a4072047e4c9c1272ecd0b25c8100caae3e21acd3cfe54",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/phases/performance-retry2-20261023T094942Z.json": "sha256:91e03f4b678fbde4293718f7ccfb88d3552799aba64951c43574bfabf913a354",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/summaries/full-validation-report.md": "sha256:1e5af0da903c27a658ec82ff5b0d3df5c1bca146337c73e5b1d2251dff8af9fa",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/summaries/full-validation-comparison.json": "sha256:ded96511d9ddeb67c2ff271bb1bdf0464656c0c8def898bb90ca0ee2b20803a9",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/incidents/singleton-pooling-mask-alias.md": "sha256:ae27f70ad71d2a1e70fd12861136d3e1bc0ae3cf2620dbf714300ebdb2717de5",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/incidents/performance-owner-exit-race.md": "sha256:2c2c9a2d09b0733c80f3906b3ed0e705a128815838204ed35de4c90d224b592e",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/manifest.json": "sha256:4d9209e3c1042f0c7a70b09ae42bab68d3f1922f4d3ed378878b16d60135a07a",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/status.json": "sha256:aba83fb16ff6717d836b9faefdb4b36dd62f80c46cffdb2c35fa297115fdd167",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/provenance/laya-validation.json": "sha256:66829c3a6f5465a9f56465aaca8d3036838894ae8bd0f3c70a878b92ed6dd5d1",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/provenance/visual-cache.json": "sha256:583707841fd7c9ce380ffa5dc99cb5f2ba44f2d18d303524018951e7906f3357",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/provenance/controller-result.json": "sha256:a92efd77437bf2bafcf1a91e7015debd452083e5b5990075d7da4b2ecb7ef724",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/sha256/1f/1f19ec27c504c5e3eb35c27e55b0a033a136ffa6de4f3bf16a77265c9a039de5.npy": "sha256:7e397ca776637dfe04c342212f16a127131ba41b060f8fe94a249f1aa9f3d8db",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/sha256/80/80b03c7468d1561b2cf965ac02edecec601b251b18eb860c7848be2e7d69408d.npy": "sha256:4fc910398a4f41d52f8a8bd8acf20888420ddf05b271ad0679abbef293366afa",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/sha256/da/daa7bc130924245a5c471d7d25f98bf601bea46e1187df2ac1387729eda7a9a4.npy": "sha256:c63ecbda1a2f902f06a546dbbf2428244c2c4c3424905c50ff1fe3aee4187c6e",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/sha256/f9/f966e177a1a14e4a4ce8fca8f387dad7bae25cb2475724e09cd73c1b008f8d22.npy": "sha256:21416967981e21f3cdecc7c3b28f60311111cca6d34f1359e83e7e28a65f2c29",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/sha256/f4/f4180c34dc5acfd35ed97e00fc5f7b9a7047f578bee537a7de1048c0635693ca.npy": "sha256:b6565243ee541e0faa54ca186da8ded3ea1726796599a49d3be32b2aa7ffcff1",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/sha256/e8/e84b8d6f6c4b8e22ffbc463c79d24412f9d1c1ff3b005adaba21940f445a5e34.npy": "sha256:b43b530a07d8b8a53f8cd98f957817335fb3193d2dc928553b82ec763b73f56b",
+    "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/arrays/sha256/8c/8c7e9ace866cd143c966f62a2e1d115521f006cff4f8fd918921e2ffd02fd2f1.npy": "sha256:546cc7fe062b4287692448ca1e83af04ed078426c59f1ee143b3075004dbd842",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/manifest.json": "sha256:28583e61b8ada2c1a2448e201ae52438bad86f6f9f65216de39e9e0de91a8766",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/status.json": "sha256:f0e13c3c5365d3e33a710a1b0b4485350858121b97004aca569ca6610c419c8e",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/arrays/sha256/19/19cf62c0528a06db4444f698843ac39a8de9a7a29ad60c25fb4de9a962f97f4a.npy": "sha256:537fc8bb687595c7eba6163b0b52006410677a21ffa0008cf1fcdbba25408fa4",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/arrays/sha256/20/20709137ea4655295ca85335d6901486f29e12661c089f019381db7eb69e03b3.npy": "sha256:392afe8deda4b239644e1a5c5e1640bdd20b3f1290e2e2c332df5d3b68565d49",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/arrays/sha256/29/2908baa9907f4a5e5ecb0a13bbc7afb162130d6861b186b5a2725fc761d24b9e.npy": "sha256:385ac2aa73bff466746b2cfab07991776698228893c9bbadfa3512ce3793520e",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/arrays/sha256/31/31b28febeadb59450ae2a9a857199d5022eb81852d23ec38918ac1ced16906e9.npy": "sha256:ac006e6a1167179696b0e8c5bc7dd8296e82f1c74e36331a6e3acce5c3ea0b13",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/arrays/sha256/3c/3c862120556476a4d4af96db4308dcdd8c47207c95700af1acb150fe7db92945.npy": "sha256:6cb136171ecd52cb2936db1ba1ce79941a7521a75e11dc0a37b209d0ec44d639",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/arrays/sha256/88/880ef2f1e3e9b1160074ecf9abf1c818d7caa57029ff4d5aa54de4d374894664.npy": "sha256:5eab2efd9fef80f29ae677b6fb05239496248f47db959ef210a25725e58b2ba0",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/arrays/sha256/9d/9da5a5730b423fd022fb94cebb2868989aacabc6b2abaa222c4ec86fbc621161.npy": "sha256:8e6b69f460e80c554c28c4904d60a4194cd3d25091586dfc8acc7a9aeea5c974",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/arrays/sha256/cf/cf97fe9a01dcbc3dc0904ddcaedbf8b85381bba0519c5e58a773ac46d1759e5b.npy": "sha256:48599b50254bfc2dcd71f2568b913aa6f84666235fd511556b35b2979d0df624",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/arrays/sha256/fd/fda511144986b03179487747c3d989eac61b105cd74d8409352a7e9b77cf2b4f.npy": "sha256:709e32ba0152b4701ee5f921471d06b3527bb5871fd07a75b7c5f0f59bd76c54",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/command.sh": "sha256:5fb285d0bdd9fef6bc5e70b008864e4947d2fe0ac03c7b305f77f66e3e273f31",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/logs/baseline-r0.log": "sha256:0334848d9f93adc8e075588e72e509faaf2d5e14f3221915cc0bf69128a5d2d8",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/logs/baseline-r1.log": "sha256:ddf672d22df8d02873dc25807c8a6426ce24978c6217f13d94fcde32bd67ce24",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/logs/baseline-r2.log": "sha256:e74f6b527eea01d35d038c093df2454e486efd5c1b7a6db5e0b26d3500ca2217",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/logs/enhanced-r0.log": "sha256:49e4a7fb2e6d8810d635ce87660401e3622ff536e147596cc20ffababd4ba971",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/logs/enhanced-r1.log": "sha256:d6c7f60d4b3709620e4634b7bf7b7cb2906f78de60dc82b6978a21b870795aab",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/logs/enhanced-r2.log": "sha256:56918c80394f5a063e66de1a596b90fd6680fb472c3b8eba932638857e711c17",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/logs/prepare.log": "sha256:9bb58de440893d8346fe6956c6bab469f1d3de85356c78da7237bb5b3b0bfbc7",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/metrics/val_eval_000.json": "sha256:7ffc8e9d5749c6b4dfc8d41782857cb16a2f9f51464840e98f18024448046b9e",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/controller-live.json": "sha256:e00c9ee32767404a62090d63904e707466b34f42d0277d16e09f0b22658e952b",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/controller-result.json": "sha256:005c49ccf5c946f955be47a27f0c4fe0f4422c2088388de22054b6d0a5e6d581",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/launch-baseline-r0.json": "sha256:03034a1f625b7cdaf94454982264fd9f8ca952138153c01b8063f86e6e62f0d4",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/launch-baseline-r1.json": "sha256:bad5aabdb4c7ac6db467af375da8af890501b4990c50d0cc3ecb495c6f23145d",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/launch-baseline-r2.json": "sha256:82e011f70194a98a215221f4317b2b522e5279e9d397f6264ebd675f2949dfe1",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/launch-enhanced-r0.json": "sha256:77cdf57802dcf3bfa0a699fe0629c46889939d4ac560f5d64f32f156324a493a",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/launch-enhanced-r1.json": "sha256:b793dbcea5752acbc7463b8aa57beb2c7b642e50120bcaae9d9398fcd491a96a",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/launch-enhanced-r2.json": "sha256:8cc3c2f5127112bd3505f7d828976de99ae9f43cb28e61864cd998fa9c946b4b",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/launch-prepare.json": "sha256:dde5571a5fb401e84b437e63169ca526e37c6c89698046d8b3217c1ec9e61a74",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/laya-performance.json": "sha256:0fa976e487ade05c5810def8b1cb04326b63b0ecc24356ffe027cbbc6965a07d",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/original-cache.json": "sha256:9e4f6496ddf887ff5359da0075a248c77031e1466837216032a982b67ae55898",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/performance-baseline-r0.json": "sha256:f5ddd14a97d25f7b9786ebedb273fc0cd6544ccbd2c07eb09d5136daf3fc3b58",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/performance-baseline-r1.json": "sha256:799e86d914f652d678c1c823dd537ce6234c366f275e004fc461fb1f46abaf61",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/performance-baseline-r2.json": "sha256:0a05ea94897419a569db0d087759c016f0d70cad384a663cccb1d0ff2a2d6161",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/performance-enhanced-r0.json": "sha256:9e2dcf91ebd0a13b971d2a4f0ba99122cdda2cbec8bcce732bceaabfb653f460",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/performance-enhanced-r1.json": "sha256:5e93964356690e220544a6154f59242e36a425774310cbecc85356e028d9c06f",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/performance-enhanced-r2.json": "sha256:b5c3dc7464daa74a454e65ce317d9d86608606f6d99cb57c2ebf267236dd95c4",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/synthetic/baseline/synthetic-baseline-laya-q0-owner-seed713-20261023T094646Z-bf508798c089/manifest.json": "sha256:a82f363e7fbf0a4bdd99eb449ebda3d34e1dc670f069a942f8b342cf417553ca",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/synthetic/baseline/synthetic-baseline-laya-q0-owner-seed713-20261023T094646Z-bf508798c089/status.json": "sha256:bf90653b7c5799a1c5c76740a20fa24bfb718482c0b2fb71654d77e8762e6df9",
+    "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/synthetic/baseline/synthetic-baseline-laya-q0-owner-seed713-20261023T094646Z-bf508798c089/provenance/laya-qualification.json": "sha256:d0c8fd264a2baddde4032a60eb4aa4e88310d2c12140b4a7d20bd6f6eb177c10",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/science.py": "sha256:3f9ed48faf1c9487bb3c618b84b76745ecd5595262b3197470a0ce9f2a74ace4",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/measurement.py": "sha256:dc256be7a88fb1db97f731ed6192f385b5edd6f7f75416b5d703d7654227046a",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/worker.py": "sha256:e585d94729dc5de2313454389d99b029a78423d657ad867f49586591a58da371",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/science_policy.py": "sha256:37714414baa181c0b2344edc6f2dbb6a6b79163929556b4526e182d0a392a1b0",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/science_controller.py": "sha256:c6c893796b8754d9030c9e4fcce3941bddea0a4cebd381917d9a3bd3d6b18cdf",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/campaign.py": "sha256:44a70e6dd3a7c5f069ad0521f57ea442ec7c3c24cad7887527bd827c822df1cf",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/protocol.py": "sha256:99a2688d963a2473e0e0dc5c7ba1a1e568e5ad15867a96102339be0850adebf5",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/evaluator.py": "sha256:0d88fabb3bdb910b3e869e2b93d98006d638629943798ef5e828982f2550abec",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/core.py": "sha256:7872d28da56fabd10a79dfaf5b330421299c7f376fed5367d16b1a2b5bf66ec6",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/judge.py": "sha256:56cad4ccff0c6e96ab94b9ccf49a1f07ae448d9477f27836b109edeb04225bd5",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/evidence.py": "sha256:e59a25abf0418e6189ee8bc98c6e0e4e657bfd05ae079e45bed1607b4df6b569",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/visual_cache.py": "sha256:cc1458545fa89a1ef7e6c5be391a9960756abc4fe6eec7e2e8db82bdb9fdbcf8",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/store.py": "sha256:e752ed5e85cd190261a16de2335988e5a6fac10596167b3b95fd4a684203f418",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/qualification.py": "sha256:1315e4f1f80689eb1e08c6bc220963ca564d9c301871b5854ec8c458c6eec58d",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/full_data/loader.py": "sha256:ecfab905e6465366b37f74255b1979b520ad461d0c1c5e2466047d7162de11a1",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/full_data/final.py": "sha256:b3bccc27768f01f5fd4b56429911f24ebc841fa731cb9035a912eefdc0eb8003",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/full_data/models.py": "sha256:c6afcd311602632dfcdc699d263124b1042104dd23eff943eff73b7b0f9acbc5",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/full_data/baseline.py": "sha256:b1d12fb13d4d7909a1d4e1854ffba2680bad790dc36ebe16afaf464eda9089da",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/full_data/upstream_uatvr/modeling.py": "sha256:767d57c72b3382a1e499b38e70cd7c00e45cb81410b9c3879a96ad299e13adde",
+    "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/manifest.json": "sha256:85e960a104752293fdedab7571375e490d4a8bba8a1b0407bff9330ffdd75d3d",
+    "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/checkpoints/epoch-05.pt": "sha256:b86658bf9e7311fe8799d3f68547d48020fc27b87c95f7af22a06d1156d8479f",
+    "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/checkpoints/epoch-05.json": "sha256:090e6c35bc238a566fbbdf9dc06b6a483705543da4bfb6d477d61108bbccfa04",
+    "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/metrics/selected_validation.json": "sha256:dbe547a7f68e13f403c84f5cb99a0b5cdacd483913dadca74c24b861f3f7e41d",
+    "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/provenance/baseline-result.json": "sha256:18bcf3e2fcb0e956546a8bdc7e6888804f14831c507ccd7e404ddad9fb69c596",
+    "/data2/hxj/open-models/laya-vision/models/vlm_agent_config.json": "sha256:543c08bb241ef67a6ef3795cbd2dd34313bea7e94ad200ee1f8798b3e09aa798",
+    "/data2/hxj/open-models/laya-vision/code/laya/vlm.py": "sha256:9277e1af5435f601cba52040a627b8a40c8b116795bce2fa67309f18ef3ec382",
+    "/data2/hxj/open-models/laya-vision/models/model.safetensors": "sha256:31220803f38b44b8b1649b207c632612c9a35dee0da2ef1ea35d21e4b424be68",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/summaries/cpu-tests.json": "sha256:82aaf2db6136744e5a0f880684bf30d12c1b578cccf24214dd51ecd1f95cb37a"
+  },
+  "review_trace_storage": "Codex reviewer/subreviewer conversation and tool trace; executor to archive trace separately",
+  "report_paths": {
+    "markdown": "/tmp/laya-final-audit.md",
+    "json": "/tmp/laya-final-audit.json"
+  },
+  "cpu_test_evidence": {
+    "executor_receipt": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/summaries/cpu-tests.json",
+    "executor_receipt_verified": true,
+    "executor_reported_passed": 152,
+    "executor_reported_skipped": 2,
+    "auditor_independently_ran": "tests/semantic_retrieval/laya_rerank/test_science.py::test_single_query_preserves_archived_pooling_mask_semantics",
+    "auditor_targeted_result": "1 passed; 0 failed",
+    "independent_full_suite_rerun": false
+  }
+}

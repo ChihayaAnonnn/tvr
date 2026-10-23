@@ -1,0 +1,142 @@
+{
+  "study": "laya-rerank-validation-v1",
+  "direction": "t2v",
+  "validation_queries": 10000,
+  "validation_videos": 500,
+  "test_authorized": false,
+  "training": false,
+  "independent_test_conclusion": false,
+  "software_correctness": "passed",
+  "science_verdict": "no_improvement",
+  "accuracy": {
+    "metrics": {
+      "baseline": {
+        "mrr": 0.6489606049330214,
+        "r1": 53.190000000000005,
+        "r10": 86.83,
+        "r5": 79.7
+      },
+      "corrected": 518,
+      "reranked": {
+        "mrr": 0.33876127953619595,
+        "r1": 16.05,
+        "r10": 86.83,
+        "r5": 55.04
+      },
+      "worsened": 4232
+    },
+    "delta_r1_pp": -37.14,
+    "ci95_pp": [
+      -39.929725903614454,
+      -34.258489751780786
+    ],
+    "source_group_count": 493,
+    "bootstrap_seed": 713,
+    "bootstrap_samples": 10000,
+    "visual_cache": {
+      "cpu_payload_bytes": 295996000,
+      "disk_bytes": 296378015,
+      "seconds": 334.04066618182696,
+      "video_count": 500
+    }
+  },
+  "performance": {
+    "alternating_arm_order": true,
+    "baseline": {
+      "median_ms": 181.58377055078745,
+      "model_loaded_resident_gpu_allocated_bytes": 682641920,
+      "model_loaded_resident_gpu_reserved_bytes": 734003200,
+      "p95_ms": 185.16071517951787,
+      "peak_gpu_allocated_bytes": 746690560,
+      "peak_gpu_reserved_bytes": 813694976,
+      "per_round": [
+        {
+          "median_ms": 181.69352936092764,
+          "p95_ms": 184.11803394556046,
+          "query_count": 100,
+          "throughput_queries_s": 5.499456279470538
+        },
+        {
+          "median_ms": 179.8512345412746,
+          "p95_ms": 182.52745504723862,
+          "query_count": 100,
+          "throughput_queries_s": 5.566933901348526
+        },
+        {
+          "median_ms": 182.66061949543655,
+          "p95_ms": 185.83855393808335,
+          "query_count": 100,
+          "throughput_queries_s": 5.46075448170673
+        }
+      ],
+      "query_count": 300,
+      "throughput_queries_s": 5.508699665579134
+    },
+    "enhanced": {
+      "median_ms": 300.76409655157477,
+      "model_loaded_resident_gpu_allocated_bytes": 1520204288,
+      "model_loaded_resident_gpu_reserved_bytes": 1570766848,
+      "p95_ms": 307.42126336554065,
+      "peak_gpu_allocated_bytes": 1751102976,
+      "peak_gpu_reserved_bytes": 2172649472,
+      "per_round": [
+        {
+          "median_ms": 300.4389429697767,
+          "p95_ms": 308.3055797731504,
+          "query_count": 100,
+          "throughput_queries_s": 3.3125354184392273
+        },
+        {
+          "median_ms": 300.6800354924053,
+          "p95_ms": 305.5996918817982,
+          "query_count": 100,
+          "throughput_queries_s": 3.330317119380784
+        },
+        {
+          "median_ms": 301.1415679939091,
+          "p95_ms": 304.322835651692,
+          "query_count": 100,
+          "throughput_queries_s": 3.332918088489896
+        }
+      ],
+      "query_count": 300,
+      "throughput_queries_s": 3.3252321573885895
+    },
+    "fresh_process_per_arm_round": true,
+    "incremental_loaded_gpu_allocated_bytes": 837562368,
+    "incremental_peak_gpu_allocated_bytes": 1004412416,
+    "original_cache": {
+      "compute_seconds": 133.72769232396968,
+      "cpu_payload_bytes": 12294000,
+      "disk_bytes": 12294256,
+      "seconds": 134.04404825996608,
+      "video_count": 500
+    },
+    "performance_comparison_completed": true,
+    "queries_per_round": 100,
+    "relative_median_latency": 1.6563379846077906,
+    "relative_p95_latency": 1.6602942101810754,
+    "rounds": 3,
+    "same_gpu": true,
+    "test_authorized": false,
+    "warmup_queries_per_process": 5
+  },
+  "software_gpu_hours": 0.22240235773911182,
+  "scientific_gpu_hours": 1.09267021555861,
+  "cpu_tests": {
+    "passed": 152,
+    "skipped": 2
+  },
+  "source_reports": [
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/provenance/laya-validation.json",
+      "sha256": "66829c3a6f5465a9f56465aaca8d3036838894ae8bd0f3c70a878b92ed6dd5d1",
+      "artifact_root": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4/provenance/laya-performance.json",
+      "sha256": "0fa976e487ade05c5810def8b1cb04326b63b0ecc24356ffe027cbbc6965a07d",
+      "artifact_root": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4"
+    }
+  ]
+}

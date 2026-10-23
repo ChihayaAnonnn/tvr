@@ -5,7 +5,7 @@
   "data_plane": "artifacts/laya-rerank-validation-v1",
   "registry": "experiments/laya-rerank-validation-v1/registry.jsonl",
   "test_authorized": false,
-  "science_authorized": true,
+  "science_authorized": false,
   "gpu_qualification": {
     "run_id": "synthetic-baseline-laya-q0-owner-seed713-20261023T094646Z-bf508798c089",
     "manifest_sha256": "115721dbdc047a266dcffc52dbb662e62c8bb5820b68363aec3b6393b8cda061",
@@ -40,7 +40,7 @@
     "identity_change_requires_new_run": true
   },
   "fixed": "fixed.json",
-  "status": "exit_safe_monitor_qualified_performance_retry2_authorized",
+  "status": "completed_negative_validation_result",
   "topology_amendment": {
     "date": "2026-10-23",
     "scope": "this_study_only",
@@ -69,5 +69,22 @@
         "sha256": "ac7645864a17cc87e8c7c403b1113a109354f44f025746394d2c3e01ca80e737"
       }
     ]
+  },
+  "performance_result": {
+    "run_id": "msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4",
+    "artifact_path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4",
+    "manifest_sha256": "6e30ca74f99cb868b13d175bf5f60a57dfea96d89966b57f9dbb6d61f952bb32",
+    "report_sha256": "0fa976e487ade05c5810def8b1cb04326b63b0ecc24356ffe027cbbc6965a07d"
+  },
+  "completion": {
+    "date": "2026-10-23",
+    "software_correctness": "passed",
+    "scientific_verdict": "no_improvement",
+    "accuracy_queries": 10000,
+    "performance_completed": true,
+    "software_gpu_hours": 0.22240235773911182,
+    "scientific_gpu_hours": 1.09267021555861,
+    "followup_authorized": false,
+    "report": "summaries/full-validation-report.md"
   }
 }
