@@ -37,3 +37,16 @@ def test_owned_cleanup_stops_child_sessions(tmp_path):
         assert len(owned_processes(nonce))==2
     finally:stop_owned(process,nonce)
     assert owned_processes(nonce)==[]
+
+
+def test_worker_environment_requires_actual_rank_topology(monkeypatch):
+    import platform,torch
+    from semantic_retrieval.runtime.artifacts import assert_runtime_environment
+    from semantic_retrieval.runtime.distributed import configure_fp32
+    configure_fp32();monkeypatch.setenv('WORLD_SIZE','1')
+    monkeypatch.setattr(torch.cuda,'device_count',lambda:0)
+    environment=dict(python=platform.python_version(),pytorch=str(torch.__version__),cuda=str(torch.version.cuda or 'none'),
+                     gpu_model='none',gpu_count=0,precision='fp32',distributed_topology='torchrun-2')
+    with pytest.raises(ValueError,match='environment'):assert_runtime_environment({'environment':environment})
+    environment['distributed_topology']='single-process'
+    assert assert_runtime_environment({'environment':environment})==0

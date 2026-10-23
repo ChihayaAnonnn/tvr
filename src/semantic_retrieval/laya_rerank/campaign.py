@@ -46,12 +46,11 @@ def run_controller(repo,root):
     from scripts import manage_experiment_run as manager
     from experiment_artifacts import manifest_sha256,parse_registry_text
     from semantic_retrieval.config import RuntimeConfig
-    from semantic_retrieval.runtime.artifacts import prepare_run,start_run,complete_run,publish_metrics
+    from semantic_retrieval.runtime.artifacts import publish_metrics
     from semantic_retrieval.runtime.distributed import configure_fp32
     from semantic_retrieval.full_data.controller import campaign_lock,idle_devices,_terminal,termination_signals
-    from .protocol import CONTROL,committed
+    from .protocol import CONTROL,committed,assert_laya_authorized
     from .store import atomic,canonical
-    from .worker import LayaSystemConfig
     m=json.loads((root/'manifest.json').read_text());registry=repo/CONTROL/'registry.jsonl'
     identity=SimpleNamespace(repo_root=repo,registry=registry.relative_to(repo),run_dir=root,run_id=m['run_id'],manifest_sha256=manifest_sha256(m))
     runtime=RuntimeConfig(registry.with_name('study.yaml'),registry,root,m['run_id'],manifest_sha256(m),m['git_sha'],'val')
@@ -63,8 +62,10 @@ def run_controller(repo,root):
         # A global cap of three is stricter than two successors per failure class.
         if len({r['run_id'] for r in records if r['event']=='reserved'})>3: raise ValueError('qualification successor cap exceeded')
         if not {'1','3'}<=set(idle_devices()): raise ValueError('authorized GPU 1/3 are no longer idle')
-        context=prepare_run(runtime,repo_root=repo,system_config=LayaSystemConfig(runtime,m['config']))
-        start_run(context)
+        import shlex
+        assert_laya_authorized(repo_root=repo,registry_path=registry,manifest=m,operation='start',command=shlex.split((root/'command.sh').read_text()))
+        manager.start_run(identity)
+        context=SimpleNamespace(paths=manager.make_run_paths_from_dir(root),config=runtime,sequence=0)
         started=time.monotonic();deadline=started+1770;exit_code=1;reason='not_started';process=None;nonce=None
         token=root/'provenance/controller-live.json'
         atomic(token,canonical({'pid':os.getpid(),'start_ticks':process_ticks(os.getpid()),'source_sha':m['git_sha'],'manifest_sha256':manifest_sha256(m),'command_sha256':m['command_sha256'],'controller_sha256':__import__('hashlib').sha256(Path(__file__).read_bytes()).hexdigest()}))
@@ -85,7 +86,8 @@ def run_controller(repo,root):
             report=json.loads((root/'provenance/laya-qualification.json').read_text())
             if not all(report['checks'].values()):raise ValueError('qualification checks failed')
             publish_metrics(context,dict(split='validation',summary_metrics={'qualification_passed':1.0},array_references=[]))
-            complete_run(context);exit_code=0;reason='passed'
+            manager.transition_run(SimpleNamespace(**vars(identity),expected='running',next_state='validating',exit_code=None,output=[]))
+            exit_code=0;reason='passed'
         except BaseException as exc:
             reason=type(exc).__name__+': '+str(exc)
             if process is not None:stop_owned(process,nonce)

@@ -52,9 +52,20 @@ def assert_laya_authorized(*,repo_root,registry_path,manifest,operation,command)
         hours=projected_hours(budget_rows(repo,records))+prospective
         if hours>8:raise ValueError('software GPU budget exceeded')
         if 'CUDA_VISIBLE_DEVICES=1,3' not in command:raise ValueError('qualification devices differ from authorization')
-        if operation=='reserve' and prospective and existing:
-            if not manifest.get('selection_lineage') or not manifest.get('parent_run_ids'):
+        if prospective and existing:
+            lineage=manifest.get('selection_lineage',[])
+            parents=manifest.get('parent_run_ids',[])
+            if len(lineage)!=1 or len(parents)!=1 or not isinstance(lineage[0],dict):
                 raise ValueError('successor requires committed diagnostic lineage and parent')
+            diagnostic=lineage[0]
+            if (diagnostic.get('kind')!='diagnosed_software_successor'
+                    or diagnostic.get('parent_run_id')!=parents[0] or not diagnostic.get('reason')
+                    or not any(r['run_id']==parents[0] and r['event'] in {'failed','cancelled'} for r in records)):
+                raise ValueError('successor diagnosis/terminal parent mismatch')
+            path=(repo/diagnostic['report_path']).resolve()
+            if not path.is_relative_to(repo) or digest(path)!=diagnostic['report_sha256']:
+                raise ValueError('successor diagnostic hash mismatch')
+            committed(repo,path)
         return
     permission=study.get('gpu_qualification')
     if not permission: raise ValueError('new two-GPU inference/cache qualification has not passed and been archived')

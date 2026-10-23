@@ -37,3 +37,5 @@ __pycache__/
 !.gitignore
 
 /experiments/semantic-answerability-pilot-v1/registry.jsonl.lock
+
+/experiments/laya-rerank-validation-v1/registry.jsonl.lock

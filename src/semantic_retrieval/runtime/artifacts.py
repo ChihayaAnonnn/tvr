@@ -168,6 +168,30 @@ def _validate_pilot(repository, manifest, system_config):
         raise ValueError("P1 completed terminal record must be committed")
 
 
+def assert_runtime_environment(manifest):
+    if torch.is_autocast_enabled() or torch.is_autocast_cpu_enabled():
+        raise ValueError("runtime precision must be FP32 without ambient autocast")
+    if torch.get_float32_matmul_precision() != "highest":
+        raise ValueError("runtime precision forbids reduced-precision float32 matmul")
+    if torch.cuda.is_available() and (torch.backends.cuda.matmul.allow_tf32 or torch.backends.cudnn.allow_tf32):
+        raise ValueError("runtime precision requires CUDA matmul and cuDNN TF32 disabled")
+    gpu_count = torch.cuda.device_count()
+    environment = dict(
+        python=platform.python_version(),
+        pytorch=str(torch.__version__),
+        cuda=str(torch.version.cuda or "none"),
+        gpu_model=torch.cuda.get_device_name(0) if gpu_count else "none",
+        gpu_count=gpu_count,
+        precision="fp32",
+        distributed_topology=f"torchrun-{int(os.environ['WORLD_SIZE'])}"
+        if int(os.environ.get("WORLD_SIZE", "1")) > 1
+        else "single-process",
+    )
+    if environment != manifest["environment"]:
+        raise ValueError("runtime environment or precision mismatch")
+    return gpu_count
+
+
 def prepare_run(config, *, repo_root, system_config=None):
     repository = Path(repo_root).resolve()
     root = config.run_dir
@@ -318,26 +342,7 @@ def prepare_run(config, *, repo_root, system_config=None):
                 raise ValueError("effective config has unsupported evaluation fields")
             if evaluation.get("eval_split") != config.eval_split:
                 raise ValueError("effective config eval_split mismatch")
-    if torch.is_autocast_enabled() or torch.is_autocast_cpu_enabled():
-        raise ValueError("runtime precision must be FP32 without ambient autocast")
-    if torch.get_float32_matmul_precision() != "highest":
-        raise ValueError("runtime precision forbids reduced-precision float32 matmul")
-    if torch.cuda.is_available() and (torch.backends.cuda.matmul.allow_tf32 or torch.backends.cudnn.allow_tf32):
-        raise ValueError("runtime precision requires CUDA matmul and cuDNN TF32 disabled")
-    gpu_count = torch.cuda.device_count()
-    environment = dict(
-        python=platform.python_version(),
-        pytorch=str(torch.__version__),
-        cuda=str(torch.version.cuda or "none"),
-        gpu_model=torch.cuda.get_device_name(0) if gpu_count else "none",
-        gpu_count=gpu_count,
-        precision="fp32",
-        distributed_topology=f"torchrun-{int(os.environ['WORLD_SIZE'])}"
-        if int(os.environ.get("WORLD_SIZE", "1")) > 1
-        else "single-process",
-    )
-    if environment != manifest["environment"]:
-        raise ValueError("runtime environment or precision mismatch")
+    gpu_count = assert_runtime_environment(manifest)
     # This runs inside the actual worker after visibility/environment binding;
     # reserve/controller policy checks intentionally stay CPU-safe.
     if (manifest['study'] == 'semantic-answerability-pilot-v1' and gpu_count > 0

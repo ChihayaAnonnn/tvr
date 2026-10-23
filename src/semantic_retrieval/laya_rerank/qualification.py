@@ -32,6 +32,9 @@ def worker(repo,root,mode):
     m=json.loads((root/'manifest.json').read_text());cfg=m['config']['evaluation']
     from .campaign import validate_worker_launch
     validate_worker_launch(repo,root,m,mode)
+    configure_fp32()
+    from semantic_retrieval.runtime.artifacts import assert_runtime_environment
+    assert_runtime_environment(m)
     if json.loads((root/'status.json').read_text())['state']!='running':raise ValueError('qualification worker needs active run')
     for item in json.loads(committed(repo,repo/CONTROL/'qualification.input-index.json'))['files']:
         if digest(item['path'])!=item['sha256']:raise ValueError('qualification runtime input changed')
@@ -105,12 +108,13 @@ def worker(repo,root,mode):
         return np.load(marker.with_suffix('.npy'),allow_pickle=False)
     local=saved(target)
     gathered=[None,None];dist.all_gather_object(gathered,(ids,local,saved(target,'query_logits_probability')))
-    checks=dict(real_inference=True,visual_cache=True,shard_merge=True,batch_1_8=True,finite_fp32=True,
-                exact_resume=True,cached_uncached_1e5=True,original_uatvr_inference=True)
+    checks=dict(real_inference=True,visual_cache=True,shard_merge=False,batch_1_8=False,finite_fp32=True,
+                exact_resume=False,cached_uncached_1e5=False,original_uatvr_inference=True)
     if mode=='continuous':
         if not np.array_equal(local,saved(root/'arrays/resume'/f'rank{rank}')):raise ValueError('killed-process recovery ranking changed')
         if not np.array_equal(saved(target,'query_logits_probability'),saved(root/'arrays/resume'/f'rank{rank}','query_logits_probability')):
             raise ValueError('killed-process recovery logits/probabilities changed')
+        checks['exact_resume']=True
         # Raw pixels versus cached visual features and batched request reordering.
         cache=memory['0'];texts=[q['query_text'] for q in queries]*2
         z8,p8=judge.score(texts,[cache]*8)
@@ -123,6 +127,7 @@ def worker(repo,root,mode):
         permutation=[7,0,5,2,3,6,1,4]
         zr,_=judge.score([texts[i] for i in permutation],[cache]*8)
         if np.max(np.abs(zr-z8[permutation]))>1e-5:raise ValueError('request permutation changed query mapping')
+        checks['batch_1_8']=True
         from laya.vlm import build_vlm_inputs,collate_vlm,QTYPES
         from .judge import QUESTION,CRITERIA,STATE
         a=judge.agent;q=a._to_internal({'type':'choice','instructions':QUESTION.format(texts[0]),'criteria':CRITERIA})
@@ -133,6 +138,7 @@ def worker(repo,root,mode):
                          pixel_values=b['pixel_values'].to(device),pixel_attention_mask=b['pixel_attention_mask'].to(device),option_span=b['option_span'].to(device))
         error=float(np.max(np.abs(raw.float().cpu().numpy()-z1[:1])))
         if error>1e-5:raise ValueError('cached/raw-pixel logits disagree beyond 1e-5')
+        checks['cached_uncached_1e5']=True
         # Compare both shard outputs to a single-process all-query pass.
         all_root=root/'arrays'/f'single-rank{rank}'
         evaluate(queries,rows,order,judge.score,lambda row:memory[row['video_id']],all_root,{'config':cfg})
@@ -145,6 +151,7 @@ def worker(repo,root,mode):
                 or not np.array_equal(merged_numeric[:,:,:2].argmax(2),single_numeric[:,:,:2].argmax(2))):
             raise ValueError('two-rank numerical outputs differ from single-process beyond 1e-5 or argmax changes')
         if not np.array_equal(merged,saved(all_root)):raise ValueError('two-rank merge differs from single-process result')
+        checks['shard_merge']=True
         report=dict(schema_version='laya-qualification-v1',world_size=2,device_type='cuda',production_capacity=True,
                     random_initialization=True,synthetic_only=True,test_authorized=False,source_sha=m['git_sha'],
                     manifest_sha256=manifest_sha256(m),checks=checks,laya_parameters=parameter_count,
