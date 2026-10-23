@@ -7,9 +7,9 @@
   "test_authorized": false,
   "science_authorized": true,
   "gpu_qualification": {
-    "run_id": "synthetic-baseline-laya-q0-full-seed713-20261023T085310Z-752ee80abaee",
-    "manifest_sha256": "a27a774dc36aa5cf68ffa3843d68e3572d7de161c9a2563c0c7980c0e06677c4",
-    "report_sha256": "b1321c29fc8df7fa74f8624fe407a5e5cb96eb0ffc59cade66dc409318d895e6"
+    "run_id": "synthetic-baseline-laya-q0-perf-seed713-20261023T092254Z-69a22333343d",
+    "manifest_sha256": "362c418cace5f7a138675d4c04c129c31afab42cc12ced6b4c87498f3cb74157",
+    "report_sha256": "d66b76499962daafc91a88baec1eeae4290d233768d1f7dc23e324e0f19f44f5"
   },
   "software_qualification": {
     "world_size": 2,
@@ -40,7 +40,7 @@
     "identity_change_requires_new_run": true
   },
   "fixed": "fixed.json",
-  "status": "source_matched_dual_qualification_archived_accuracy_authorized",
+  "status": "accuracy_completed_performance_authorized",
   "topology_amendment": {
     "date": "2026-10-23",
     "scope": "this_study_only",
@@ -49,5 +49,25 @@
     "new_world_size": 2,
     "qualification_required": true,
     "test_authorized": false
+  },
+  "accuracy_result": {
+    "run_id": "msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908",
+    "manifest_sha256": "10cdfb04444791fc7c622d715a54189cdee97f75967469393a02a2f5b5061117",
+    "report_sha256": "66829c3a6f5465a9f56465aaca8d3036838894ae8bd0f3c70a878b92ed6dd5d1",
+    "artifact_path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908",
+    "input_indices": [
+      {
+        "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-000.input-index.json",
+        "sha256": "73492df87058d24788ba7530bfd6a2d9ce61c6d80aa98b3cceb0f3e489d13456"
+      },
+      {
+        "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-001.input-index.json",
+        "sha256": "f84d52d95452a44c5dd68bddb119ec2e462ba1828cc0b5015c72e8c12eea2ac2"
+      },
+      {
+        "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-002.input-index.json",
+        "sha256": "ac7645864a17cc87e8c7c403b1113a109354f44f025746394d2c3e01ca80e737"
+      }
+    ]
   }
 }
