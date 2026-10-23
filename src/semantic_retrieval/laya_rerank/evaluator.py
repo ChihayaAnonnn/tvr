@@ -37,7 +37,7 @@ def grouped_interval(delta, groups, *, seed=713, samples=10000):
     return tuple(float(x) for x in np.quantile(means, [.025,.975]))
 
 
-def evaluate(queries, videos, rankings, score, evidence, output, identity, *, microbatch=8):
+def evaluate(queries, videos, rankings, score, evidence, output, identity, *, microbatch=8, progress=None):
     """CPU orchestration; callers must authenticate inputs and enforce launch gates first.
 
     score receives only query strings and visual evidence, never evaluation labels.
@@ -68,6 +68,7 @@ def evaluate(queries, videos, rankings, score, evidence, output, identity, *, mi
             store.write(key,block)
         if block.shape != (10,3): raise ValueError('invalid completed query block')
         full.append(rerank(row,block[:,2])); all_blocks.append(block)
+        if progress is not None and (len(full)%250==0 or len(full)==len(queries)):progress(len(full))
     b=np.stack(full)
     gallery={v['video_id']:i for i,v in enumerate(videos)}
     targets=np.array([gallery[q['video_id']] for q in queries])
