@@ -19,7 +19,7 @@
   "fusion": false,
   "language_prefix_cache": false,
   "temperature": "checkpoint",
-  "world_size_qualification": 4,
+  "world_size_qualification": 2,
   "bootstrap_seed": 713,
   "bootstrap_samples": 10000,
   "latency_sample_queries": 100,
