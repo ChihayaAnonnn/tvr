@@ -11,6 +11,11 @@ STATE = {'context': 'These are sampled frames from the same video, ordered chron
 
 class LayaJudge:
     def __init__(self, weights, device='cpu'):
+        import os
+        import sys
+        sys.dont_write_bytecode = True
+        os.environ['HF_HUB_OFFLINE'] = '1'
+        os.environ['TRANSFORMERS_OFFLINE'] = '1'
         from laya.vlm import VLMAgent
         root = Path(weights).resolve(strict=True)
         for item in ('model.safetensors', 'vlm_agent_config.json', 'backbone/config.json', 'processor'):
@@ -48,6 +53,8 @@ class LayaJudge:
                       'raw_images': None, 'n_images': len(cache['features'])}
             row = build_vlm_inputs(a.processor, STATE, q, a.cfg['max_len'], a.cfg['head_max_len'],
                                    option_order=[0, 1], prefix=prefix)
+            if len(row['markers']) != 2:
+                raise ValueError('missing choice option')
             if truncation_answer(row['truncation'], q):
                 raise ValueError('truncated retrieval evidence or query')
             row['qtype'] = QTYPES['choice']; rows.append(row)

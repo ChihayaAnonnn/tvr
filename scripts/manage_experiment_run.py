@@ -377,6 +377,9 @@ def reserve_phase(args: argparse.Namespace) -> dict[str, object]:
         assert_pilot_authorized(repo_root=repo, registry_path=registry, manifest=manifest, operation="reserve")
         assert_evidence_authorized(repo_root=repo,registry_path=registry,manifest=manifest,operation="reserve",command=spec['command'])
         assert_full_data_authorized(repo_root=repo,registry_path=registry,manifest=manifest,operation="reserve",command=spec['command'])
+    from semantic_retrieval.laya_rerank.protocol import assert_laya_authorized
+    for manifest, spec in zip(manifests,phase["runs"]):
+        assert_laya_authorized(repo_root=repo,registry_path=repo/registry,manifest=manifest,operation="reserve",command=spec["command"])
     run_ids = [str(manifest["run_id"]) for manifest in manifests]
     if len(run_ids) != len(set(run_ids)):
         raise ValueError("phase contains duplicate run identities")

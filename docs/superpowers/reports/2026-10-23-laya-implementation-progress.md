@@ -1,32 +1,24 @@
-# Laya implementation progress — incomplete
+# Laya validation integration — CPU delivery
 
-Branch: codex/laya-rerank-validation; parent 03a3fe7.
+2026-10-23. Branch: `codex/laya-validation-v1`, based on `codex/full-data-baselines` (`03a3fe7657852c3ea9be542f637e19cb6c6a6934`). Approved design saved in `docs/superpowers/specs/2026-10-23-laya-vision-validation-reranking-design.md`. This report supersedes the earlier partial implementation note: the current requirement is **four GPUs**, and no historical two-GPU authorization applies.
 
-User-approved specification remains the conversation's fixed Top-10/four-frame validation design.
-Latest explicit authorization: this Laya study may use two GPUs initially; must qualify the new path,
-not reuse full-data study qualification. No test access.
+Implemented: authenticated original-resolution RGB evidence before CLIP transforms; native local frozen Laya FP32 choice adapter using checkpoint temperature and block option attention; query-independent CPU visual-token cache; immutable identity/hash-bound per-query blocks; complete stable Top10 reranking and paired T2V metrics; source-group paired bootstrap seed713/10000; manifest-only evaluator entry; independent reserve/start gate; fixed original seed713 epoch05 identity, no factor checkpoint substitutions; external runtime/weight inventory and dependency snapshots. Existing UATVR scoring code is unchanged. Labels, IDs, filenames, ranks and retriever scores do not enter the judge.
 
-Implemented pure frame selection, stable reranking and paired metrics; implemented real Laya adapter
-using native input construction, cached image features and unrounded temperature-scaled logits.
-Adapter is NOT yet validated against real weights. No scientific runs started.
+CPU tests cover short sampling, duplicate-frame removal, tampered/undecodable video rejection, invalid/nonfinite probabilities, full permutation/tail invariants, R@10 invariance, source-group bootstrap, per-query identity isolation, partial-block recomputation and idempotence, microbatch1/8, independent shards including two spawned CPU processes, wrong split/coverage rejection, missing input bindings and closed science gates.
 
-Verification: initial core test collection failed (missing implementation); then 3 core tests passed.
-`/home/xujie/.conda/envs/tvr/bin/python -m pytest -q tests/semantic_retrieval/laya_rerank tests/semantic_retrieval/full_data/test_factors.py tests/semantic_retrieval/full_data/test_baseline.py`: 13 passed, 1.98 s.
+Fresh verification:
 
-Actual CPU loading attempted offline: transformers 4.52.4 expects preprocessor_config.json,
-while downloaded processor uses the newer format. Do not mutate downloaded files or old tvr environment.
-System python venv creation failed because ensurepip is unavailable. Next: use conda Python's venv
-or an isolated conda environment, install pinned model-compatible dependencies, validate real CPU
-forward/cache equivalence before claiming integration works.
+- Legacy-env affected regression: **73 passed, 1 explicitly skipped**, 78.06s. Paths: `tests/semantic_retrieval/laya_rerank`, `tests/semantic_retrieval/full_data/test_baseline.py`, `test_factors.py`, `tests/test_manage_experiment_run.py`, `tests/semantic_retrieval/test_runtime_artifacts.py`. The skip requires explicit real local weights/environment.
+- Isolated overlay with real local weights and synthetic RGB inputs: **19 passed**, 47.19s, two upstream SWIG deprecation warnings. Tests retain absolute logits tolerance `1e-5`, matching argmax and final ranking for batch1/8; raw-pixel vs cached-feature forward; query permutation/independence; truncation rejection; eval/frozen parameters.
+- All **39** external runtime/processor/config/weight content hashes match the recorded inventory. `git diff --check` clean. CLI help works.
+- Independent read-only reviewer found no remaining direct correctness blocker for this CPU-only delivery. The reviewer checked native API calls, parent checkpoint world-size identity reconstruction, checkpoint/publication hashes, query/cache isolation, manifest input closure and scientific gate refusal.
 
-Outstanding: environment; real CPU tests; raw RGB evidence decoder; authenticated persistence/resume;
-source-group bootstrap; independent study and lifecycle integration; timing worker; qualification;
-full validation; independent review. Existing functions are not an executable experiment pipeline.
+Dependency diagnosis: legacy Torch2.1.2/Transformers4.52.4 cannot load the downloaded processor/config; Transformers4.57.6 still misinterprets its `extra_special_tokens`. The local backbone records Transformers5.17.0, which works with the isolated Torch2.5.1 overlay. Existing base packages are inherited read-only and snapshotted; two pinned existing CUDA shared-library directories are needed for loading the CUDA-enabled Torch binary even when tests hide CUDA. Native CPU commands are in the study README. No external source/weight content was replaced, and offline flags prohibit remote model fallback.
 
-Continuation: added immutable per-directory identity-bound NPY cache with SHA-256 completion
-markers, atomic publication, idempotent identical writes and corruption rejection. New cache
-behavior test observed RED then GREEN; all four local reranker tests pass (0.10 s).
-Environment diagnostics: direct curl to PyPI returns HTTP 200, but pip attempts a stale
-172.30.49.112 proxy even after removing ordinary proxy environment variables. This is a
-pip-specific configuration/network issue, not proof that Transformers 5.17.0 is unavailable.
-No CPU model forward, CUDA qualification, validation or performance result yet.
+## Scope and remaining gates
+
+No experiment reservations, four-GPU qualification, scientific GPU evaluation, test access, performance comparison or accuracy-gain conclusion were produced. The independent registry is empty, `gpu_qualification=null`, and `science_authorized=false`.
+
+Query-block recovery is implemented/tested; complete worker lifecycle recovery is not qualified. The existing runtime rejects restarting a `running` worker as a fresh reservation; recovery must first follow verify-run and the existing archive protocol. Failed/cancelled runs cannot be overwritten or reused.
+
+Before any future scientific execution, implement/review the production four-GPU random-weight synthetic inference/cache qualification plus budget/retry/deadline controller and worker-level recovery; reserve/commit/verify/run/finalize and archive its actual checks. Formal single-query timing/resource worker and its controlled-idle-GPU measurements remain future work. CPU success does not prove CUDA equivalence or scientific benefit. Do not enable science by simply changing a Boolean.

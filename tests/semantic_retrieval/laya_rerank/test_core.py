@@ -26,3 +26,11 @@ def test_pair_metrics():
     assert r['corrected'] == 1 and r['worsened'] == 0
     assert r['baseline']['r1'] == 50 and r['reranked']['r1'] == 100
     assert r['baseline']['r10'] == r['reranked']['r10']
+
+
+def test_nonfinite_and_out_of_range_probabilities_fail():
+    for value in (np.inf,-np.inf,np.nan,-.01,1.01):
+        p=np.full(10,.5);p[0]=value
+        with pytest.raises(ValueError):rerank(np.arange(500),p)
+    a=np.tile(np.arange(12),(1,1));b=a.copy();b[0,[10,11]]=b[0,[11,10]]
+    with pytest.raises(ValueError):compare(a,b,np.array([0]))

@@ -1,0 +1,12 @@
+# Read-only base environment plus isolated overlay; exact snapshot in environment.lock.txt.
+torch==2.5.1
+torchvision==0.20.1
+transformers==5.17.0
+huggingface-hub==1.33.0
+tokenizers==0.23.3
+safetensors==0.8.0
+numpy==1.26.4
+Pillow==11.0.0
+opencv-python==4.11.0.86
+PyYAML==6.0.2
+pytest==9.0.3
