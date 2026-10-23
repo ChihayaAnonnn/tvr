@@ -22,6 +22,20 @@ def wait_idle(devices,deadline):
         print('waiting_for_idle_gpu='+','.join(devices),flush=True);time.sleep(15)
 
 
+def ownership_start_ticks(pid):
+    # Unlike live-worker validation, GPU cleanup monitoring accepts zombies.
+    return (Path('/proc')/str(pid)/'stat').read_text().rsplit(')',1)[1].split()[19]
+
+
+def measurement_owners(pid,nonce,start_ticks):
+    """nvidia-smi can retain our just-exited process after /proc disappears."""
+    owners={p for p,_ in owned_processes(nonce)}
+    try:current=ownership_start_ticks(pid)
+    except (FileNotFoundError,ProcessLookupError):current=None
+    if current is None or current==start_ticks:owners.add(pid)
+    return owners
+
+
 def run_controller(repo,root):
     from .measurement import summarize_performance
     m=json.loads((root/'manifest.json').read_text());ev=m['config']['evaluation'];kind=ev['operation']
@@ -53,17 +67,18 @@ def run_controller(repo,root):
                 nonce=environment['LAYA_LAUNCH_NONCE']
                 with (root/'logs'/f'{mode}.log').open('xb') as log:
                     process=subprocess.Popen(command,cwd=repo,stdout=log,stderr=subprocess.STDOUT,start_new_session=True,env=environment)
-                    atomic(root/f'provenance/launch-{mode}.json',canonical(dict(pid=process.pid,start_ticks=process_ticks(process.pid),mode=mode,nonce=nonce)))
+                    launch_ticks=process_ticks(process.pid)
+                    atomic(root/f'provenance/launch-{mode}.json',canonical(dict(pid=process.pid,start_ticks=launch_ticks,mode=mode,nonce=nonce)))
                     try:
                         while process.poll() is None:
                             if time.monotonic()>=deadline:raise TimeoutError('scientific run deadline exceeded')
                             if kind=='performance':
-                                owned={pid for pid,_ in owned_processes(nonce)}
+                                owned=measurement_owners(process.pid,nonce,launch_ticks)
                                 active=subprocess.run(['nvidia-smi','--query-compute-apps=gpu_uuid,pid','--format=csv,noheader'],check=True,capture_output=True,text=True).stdout
                                 for line in active.splitlines():
                                     uuid,pid=[x.strip() for x in line.split(',')]
                                     if uuid=='GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede' and int(pid) not in owned:
-                                        raise ValueError('unrelated GPU computation during performance round; comparison incomplete')
+                                        raise ValueError('unrelated GPU computation PID='+pid+' during performance round; comparison incomplete')
                             time.sleep(1)
                         observed=process.returncode
                     finally:stop_owned(process,nonce)

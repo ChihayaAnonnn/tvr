@@ -53,3 +53,23 @@ def test_single_query_preserves_archived_pooling_mask_semantics():
         original=torch.ones(count,34);before=original.clone()
         result=core._mean_pooling_for_similarity_sequence(torch.ones(count,32,4),original[:,:32].contiguous())
         assert torch.equal(original,before) and torch.equal(result,torch.ones(count,4))
+
+
+def test_gpu_monitor_keeps_owned_exited_pid_but_rejects_pid_reuse(monkeypatch):
+    from semantic_retrieval.laya_rerank import science_controller as c
+    monkeypatch.setattr(c,'owned_processes',lambda nonce:[])
+    monkeypatch.setattr(c,'ownership_start_ticks',lambda pid:(_ for _ in ()).throw(FileNotFoundError()))
+    assert c.measurement_owners(123,'nonce','ticks')=={123}
+    monkeypatch.setattr(c,'ownership_start_ticks',lambda pid:'reused')
+    assert c.measurement_owners(123,'nonce','ticks')==set()
+
+
+def test_gpu_monitor_accepts_unreaped_owned_zombie():
+    import os,subprocess,sys
+    from semantic_retrieval.laya_rerank import science_controller as c
+    child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(.1)'])
+    try:
+        ticks=c.ownership_start_ticks(child.pid)
+        os.waitid(os.P_PID,child.pid,os.WEXITED|os.WNOWAIT)
+        assert child.pid in c.measurement_owners(child.pid,'unused-nonce',ticks)
+    finally:child.wait()
