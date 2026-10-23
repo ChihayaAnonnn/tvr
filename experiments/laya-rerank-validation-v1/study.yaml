@@ -6,7 +6,11 @@
   "registry": "experiments/laya-rerank-validation-v1/registry.jsonl",
   "test_authorized": false,
   "science_authorized": false,
-  "gpu_qualification": null,
+  "gpu_qualification": {
+    "run_id": "synthetic-baseline-laya-q0-dual-retry1-seed713-20261023T082432Z-6f70cc5f3471",
+    "manifest_sha256": "be595953189b852a58a40132dffff67fd4fe5a9dff57cddeceaf745a8c2bae2f",
+    "report_sha256": "40ec00066853ad13f18452bb164606f1bc7208d4ec22a2c6a443f3b8abb81787"
+  },
   "software_qualification": {
     "world_size": 2,
     "precision": "fp32",
@@ -35,7 +39,7 @@
     "identity_change_requires_new_run": true
   },
   "fixed": "fixed.json",
-  "status": "dual_gpu_qualification_pending",
+  "status": "dual_gpu_qualification_passed_science_not_started",
   "topology_amendment": {
     "date": "2026-10-23",
     "scope": "this_study_only",

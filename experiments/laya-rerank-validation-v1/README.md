@@ -34,3 +34,5 @@ CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 \
 The shared-library paths refer to pinned read-only dependencies already installed on this host; the new Torch/Transformers packages live in the overlay. GPU scientific reproducibility must authenticate the actual qualified runtime/environment before launch. The native test checks raw-pixel versus cached-feature logits at absolute tolerance 1e-5, microbatch1/8, argmax, final ordering, query independence/permutation, strict truncation, and model freeze.
 
 2026-10-23 scoped amendment: user explicitly permits two GPUs for this study. New `qualify_laya_rerank.py` has a two-rank random production-capacity UATVR/Laya controller, 30-minute wall cap, cumulative software budget, owned-session cleanup and actual killed-process/resume/continuous checks. Scientific execution stays disabled pending actual qualification and its archival.
+
+Actual dual-GPU qualification completed and archived on GPU1/3; see `summaries/dual-gpu-qualification-2026-10-23.md`. The historical prequalification statements above describe the CPU delivery stage. Science and test remain disabled; no scientific accuracy/efficiency claim is made.
