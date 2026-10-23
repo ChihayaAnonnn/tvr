@@ -15,6 +15,19 @@ def latency_summary(seconds):
                 throughput_queries_s=float(len(values)/values.sum()),query_count=len(values))
 
 
+def preserve_archived_mask_semantics(model):
+    """Preserve the original batch32 WTI mask when serving a singleton query.
+
+    Upstream pooling clears BOS in-place. With batch32 its contiguous 32-of34
+    mask is a copy; with batch1 it aliases the WTI mask. Only protect that
+    temporary input: weights, pooled values, batch geometry and upstream source
+    stay identical, and strict archived Top10 checks remain mandatory.
+    """
+    original=model.core._mean_pooling_for_similarity_sequence
+    model.core._mean_pooling_for_similarity_sequence=lambda sequence,mask:original(sequence,mask.clone())
+    return model
+
+
 def original_model(data,device):
     from types import SimpleNamespace
     from semantic_retrieval.full_data.models import BaselineModel
@@ -25,7 +38,7 @@ def original_model(data,device):
     identity=checkpoint_identity(SimpleNamespace(config=SimpleNamespace(source_sha=parent['git_sha'])),settings,'uatvr')
     identity['world_size']=parent['environment']['gpu_count']
     load_selected_model(data['selected']['selected_checkpoint']['path'],model,identity,expected_epoch=5)
-    return model.to(device).eval().requires_grad_(False)
+    return preserve_archived_mask_semantics(model.to(device).eval().requires_grad_(False))
 
 
 def prepare_original_cache(root,data,device):
@@ -129,7 +142,7 @@ def measure_arm(repo,root,m,data,device,mode):
                 timings=put_array(root,f'{arm}_round{round_id}_seconds',np.asarray(timings,dtype=np.float64)),
                 selected_indices=put_array(root,f'{arm}_round{round_id}_indices',selected),test_authorized=False,
                 timing_includes_tokenization_encoding_search_transfer_judge_sort=True,unrelated_gpu_processes_detected=False,
-                physical_gpu_index=3)
+                physical_gpu_index=3,archived_batch_mask_semantics_preserved=True)
     atomic(root/f'provenance/performance-{mode}.json',canonical(report))
     return report
 

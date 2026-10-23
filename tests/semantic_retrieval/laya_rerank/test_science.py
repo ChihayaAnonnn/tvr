@@ -39,3 +39,17 @@ def test_sampling_never_uses_correctness_and_latency_units():
     r=latency_summary(np.array([.1,.2,.3]))
     assert r['median_ms']==200 and r['p95_ms']==pytest.approx(290)
     assert r['throughput_queries_s']==pytest.approx(5)
+
+
+def test_single_query_preserves_archived_pooling_mask_semantics():
+    import torch
+    from types import SimpleNamespace
+    from semantic_retrieval.full_data.upstream_uatvr.modeling import UATVR
+    from semantic_retrieval.laya_rerank.measurement import preserve_archived_mask_semantics
+    for count in (1,8,32):
+        core=SimpleNamespace(_mean_pooling_for_similarity_sequence=lambda seq,mask:UATVR._mean_pooling_for_similarity_sequence(None,seq,mask))
+        model=SimpleNamespace(core=core)
+        preserve_archived_mask_semantics(model)
+        original=torch.ones(count,34);before=original.clone()
+        result=core._mean_pooling_for_similarity_sequence(torch.ones(count,32,4),original[:,:32].contiguous())
+        assert torch.equal(original,before) and torch.equal(result,torch.ones(count,4))

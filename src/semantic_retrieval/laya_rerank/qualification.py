@@ -81,7 +81,16 @@ def worker(repo,root,mode):
             decoded=[dataset.decode(str(v)) for v in range(i,i+2)]
             parts.append(retriever.encode_video(torch.stack([v[0] for v in decoded]).to(device),torch.stack([v[1] for v in decoded]).to(device)))
         video={k:torch.cat([p[k] for p in parts]) for k in parts[0]}
-        scores=retriever.score(text,video).cpu().numpy()
+        reference=retriever.score(text,video)
+        from .measurement import preserve_archived_mask_semantics
+        preserve_archived_mask_semantics(retriever)
+        preserved=retriever.score(text,video)
+        singleton=torch.cat([retriever.score({k:v[i:i+1] for k,v in text.items()},video) for i in range(4)])
+        torch.testing.assert_close(reference,preserved,rtol=0,atol=1e-5)
+        torch.testing.assert_close(reference,singleton,rtol=0,atol=1e-5)
+        if not torch.equal(torch.argsort(reference,dim=1,descending=True,stable=True),torch.argsort(singleton,dim=1,descending=True,stable=True)):
+            raise ValueError('singleton UATVR ranking differs from archived batch semantics')
+        scores=reference.cpu().numpy()
     if scores.shape!=(4,12) or not np.isfinite(scores).all():raise ValueError('random UATVR inference invalid')
     order=np.argsort(-scores,axis=1,kind='stable')
     retriever.cpu();del retriever,initial,text,video,parts;torch.cuda.empty_cache()
@@ -109,7 +118,7 @@ def worker(repo,root,mode):
     local=saved(target)
     gathered=[None,None];dist.all_gather_object(gathered,(ids,local,saved(target,'query_logits_probability')))
     checks=dict(real_inference=True,visual_cache=True,shard_merge=False,batch_1_8=False,finite_fp32=True,
-                exact_resume=False,cached_uncached_1e5=False,original_uatvr_inference=True)
+                exact_resume=False,cached_uncached_1e5=False,original_uatvr_inference=True,original_uatvr_singleton_mask_equivalence=True)
     if mode=='continuous':
         if not np.array_equal(local,saved(root/'arrays/resume'/f'rank{rank}')):raise ValueError('killed-process recovery ranking changed')
         if not np.array_equal(saved(target,'query_logits_probability'),saved(root/'arrays/resume'/f'rank{rank}','query_logits_probability')):
