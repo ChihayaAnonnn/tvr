@@ -7,8 +7,8 @@ ROOT=Path(__file__).resolve().parents[3]
 
 def test_fixed_and_closed_science():
     fixed=load_fixed(ROOT)
-    assert fixed['top_k']==10 and fixed['frames']==4 and fixed['world_size_qualification']==4
-    with pytest.raises(ValueError,match='four'):
+    assert fixed['top_k']==10 and fixed['frames']==4 and fixed['world_size_qualification']==2
+    with pytest.raises(ValueError,match='two'):
         assert_laya_authorized(repo_root=ROOT,registry_path=ROOT/'experiments/laya-rerank-validation-v1/registry.jsonl',
             manifest={'study':'laya-rerank-validation-v1','test_authorized':False},operation='reserve',command=['scripts/evaluate_laya_rerank.py'])
 

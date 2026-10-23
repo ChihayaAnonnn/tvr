@@ -1,0 +1,86 @@
+{
+  "phase": "Q0-dual-20261023T082006Z",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=1,3",
+        "LD_LIBRARY_PATH=/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/nvidia/nccl/lib:/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/nvidia/cudnn/lib",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "HF_HUB_OFFLINE=1",
+        "TRANSFORMERS_OFFLINE=1",
+        "/data2/hxj/project/UATVR/.venvs/laya-validation-v1/bin/python",
+        "scripts/qualify_laya_rerank.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "model": {},
+        "loss": {},
+        "optimizer": {},
+        "scheduler": {},
+        "evaluation": {
+          "config_kind": "laya-qualification-v1",
+          "world_size": 2,
+          "seed": 713,
+          "synthetic": true,
+          "random_initialization": true,
+          "precision": "fp32",
+          "max_seconds": 1800,
+          "eval_split": "val",
+          "weights_architecture": "/data2/hxj/open-models/laya-vision/models",
+          "external_code": "/data2/hxj/open-models/laya-vision/code",
+          "frames": 4,
+          "top_k": 10,
+          "query_count": 4,
+          "video_count": 12,
+          "microbatch": 8,
+          "uatvr_clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          }
+        }
+      },
+      "dataset": "synthetic",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/qualification.input-index.json",
+          "sha256": "097e5e9bf03761e47a57f38bc07013878b504139c47c033722210d9e4a11f090"
+        }
+      ],
+      "environment": {
+        "cuda": "12.4",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.5.1+cu124"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [],
+      "parent_run_ids": [],
+      "scheduled_timestamp_utc": "20261023T082006Z",
+      "seed": 713,
+      "selection_lineage": [],
+      "stage": "baseline",
+      "test_authorized": false,
+      "validation_authorized": true,
+      "variant": "laya-q0-dual"
+    }
+  ],
+  "study": "laya-rerank-validation-v1"
+}

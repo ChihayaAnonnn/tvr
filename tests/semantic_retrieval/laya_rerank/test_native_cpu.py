@@ -44,3 +44,15 @@ def test_real_native_batch_cache_and_query_mapping(tmp_path):
     with pytest.raises(ValueError,match='truncated'):
         judge.score(['description '*2000],[saved])
     assert all(not p.requires_grad for p in a.model.parameters()) and not a.model.training
+
+
+@pytest.mark.skipif(not os.environ.get('LAYA_CPU_WEIGHTS'),reason='explicit offline random-capacity CPU check')
+def test_random_capacity_agent_offline():
+    from pathlib import Path
+    from semantic_retrieval.laya_rerank.qualification import random_judge
+    torch.set_num_threads(2);torch.manual_seed(713)
+    j=random_judge(Path(os.environ['LAYA_CPU_WEIGHTS']),torch.device('cpu'))
+    assert sum(p.numel() for p in j.agent.model.parameters())>=200_000_000
+    images=[Image.fromarray(np.zeros((32,48,3),np.uint8))]
+    z,p=j.score(['A synthetic black scene.'],[j.encode(images)])
+    assert z.shape==(1,2) and np.isfinite(z).all() and 0<=p[0]<=1

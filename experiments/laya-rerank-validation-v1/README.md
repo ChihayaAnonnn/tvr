@@ -7,7 +7,7 @@ Branch `codex/laya-validation-v1` descends from `codex/full-data-baselines` at `
 
 Components are in `src/semantic_retrieval/laya_rerank/`: RGB evidence before transforms; native frozen judge; visual token cache; stable full-gallery evaluation; source-group bootstrap; immutable per-query completion blocks. The manifest-only future worker is `scripts/evaluate_laya_rerank.py --run-dir <reserved-run-dir>`.
 
-Both reserve and prepare_run enforce the independent Laya policy. No scientific reservations/runs are enabled: `gpu_qualification=null`, `science_authorized=false`. The registry is deliberately empty. Do not toggle science on merely because CPU tests pass. A separately implemented/reserved four-GPU synthetic production-capacity inference/cache qualification, GPU budget/retry controller, worker lifecycle recovery and their review/archive are prerequisites. Historical dual-GPU qualifications do not count. Formal timing and scientific/resource reports remain future work.
+Both reserve and prepare_run enforce the independent Laya policy. No scientific reservations/runs are enabled: `gpu_qualification=null`, `science_authorized=false`. The registry is deliberately empty. Do not toggle science on merely because CPU tests pass. A separately implemented/reserved two-GPU synthetic production-capacity inference/cache qualification, GPU budget/retry controller, worker lifecycle recovery and their review/archive are prerequisites. Historical dual-GPU qualifications do not count. Formal timing and scientific/resource reports remain future work.
 
 Per-query block recovery is tested, including recomputation of partial blocks. A process interrupted after the lifecycle becomes running cannot simply invoke the worker again: use existing verify-run recovery protocol; failed/cancelled runs are immutable and require new reservations. No lifecycle recovery qualification is claimed by these unit tests.
 
@@ -32,3 +32,5 @@ CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 \
 ```
 
 The shared-library paths refer to pinned read-only dependencies already installed on this host; the new Torch/Transformers packages live in the overlay. GPU scientific reproducibility must authenticate the actual qualified runtime/environment before launch. The native test checks raw-pixel versus cached-feature logits at absolute tolerance 1e-5, microbatch1/8, argmax, final ordering, query independence/permutation, strict truncation, and model freeze.
+
+2026-10-23 scoped amendment: user explicitly permits two GPUs for this study. New `qualify_laya_rerank.py` has a two-rank random production-capacity UATVR/Laya controller, 30-minute wall cap, cumulative software budget, owned-session cleanup and actual killed-process/resume/continuous checks. Scientific execution stays disabled pending actual qualification and its archival.

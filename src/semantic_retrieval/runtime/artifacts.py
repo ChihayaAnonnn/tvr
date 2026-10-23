@@ -256,7 +256,7 @@ def prepare_run(config, *, repo_root, system_config=None):
     if isinstance(system_config, LayaSystemConfig):
         if system_config.runtime != config or system_config.config != manifest["config"]:
             raise ValueError("typed Laya config mismatch")
-    elif manifest["config"]["evaluation"].get("config_kind") == "laya-rerank-validation-v1":
+    elif manifest["config"]["evaluation"].get("config_kind") in {"laya-rerank-validation-v1", "laya-qualification-v1"}:
         raise ValueError("Laya configuration requires typed consumer")
     elif isinstance(system_config, FinalSystemConfig):
         if (system_config.runtime != config or system_config.config != manifest['config']
