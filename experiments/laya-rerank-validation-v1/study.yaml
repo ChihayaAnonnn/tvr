@@ -5,11 +5,11 @@
   "data_plane": "artifacts/laya-rerank-validation-v1",
   "registry": "experiments/laya-rerank-validation-v1/registry.jsonl",
   "test_authorized": false,
-  "science_authorized": false,
+  "science_authorized": true,
   "gpu_qualification": {
-    "run_id": "synthetic-baseline-laya-q0-dual-retry1-seed713-20261023T082432Z-6f70cc5f3471",
-    "manifest_sha256": "be595953189b852a58a40132dffff67fd4fe5a9dff57cddeceaf745a8c2bae2f",
-    "report_sha256": "40ec00066853ad13f18452bb164606f1bc7208d4ec22a2c6a443f3b8abb81787"
+    "run_id": "synthetic-baseline-laya-q0-full-seed713-20261023T085310Z-752ee80abaee",
+    "manifest_sha256": "a27a774dc36aa5cf68ffa3843d68e3572d7de161c9a2563c0c7980c0e06677c4",
+    "report_sha256": "b1321c29fc8df7fa74f8624fe407a5e5cb96eb0ffc59cade66dc409318d895e6"
   },
   "software_qualification": {
     "world_size": 2,
@@ -32,14 +32,15 @@
   },
   "science": {
     "max_gpu_hours": 24,
-    "max_run_hours": 8
+    "max_run_hours": 8,
+    "authorization": "2026-10-23 explicit user: 进行完整实验"
   },
   "retry": {
     "max_diagnosed_successors_per_failure_class": 2,
     "identity_change_requires_new_run": true
   },
   "fixed": "fixed.json",
-  "status": "dual_gpu_qualification_passed_science_not_started",
+  "status": "source_matched_dual_qualification_archived_accuracy_authorized",
   "topology_amendment": {
     "date": "2026-10-23",
     "scope": "this_study_only",
