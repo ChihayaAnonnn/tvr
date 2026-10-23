@@ -5,8 +5,19 @@ from semantic_retrieval.laya_rerank.protocol import assert_laya_authorized, load
 ROOT=Path(__file__).resolve().parents[3]
 
 
-def test_fixed_and_closed_science():
+def test_fixed_and_closed_science(monkeypatch):
+    import json
+    import semantic_retrieval.laya_rerank.protocol as protocol
+    original=protocol.committed
+    def pending(repo,path):
+        raw=original(repo,path)
+        if Path(path).name=='study.yaml':
+            study=json.loads(raw);study['gpu_qualification']=None
+            return json.dumps(study).encode()
+        return raw
+    monkeypatch.setattr(protocol,'committed',pending)
     fixed=load_fixed(ROOT)
+    assert json.loads((ROOT/'experiments/laya-rerank-validation-v1/study.yaml').read_text())['science_authorized'] is False
     assert fixed['top_k']==10 and fixed['frames']==4 and fixed['world_size_qualification']==2
     with pytest.raises(ValueError,match='two'):
         assert_laya_authorized(repo_root=ROOT,registry_path=ROOT/'experiments/laya-rerank-validation-v1/registry.jsonl',
