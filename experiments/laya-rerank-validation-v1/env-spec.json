@@ -1,0 +1,48 @@
+{
+  "base": "existing Python3.10.0 + CUDA12.4 read-only-base venv overlay",
+  "pip_phases": [
+    [
+      "torch==2.5.1",
+      "torchvision==0.20.1"
+    ],
+    [
+      "transformers==5.17.0",
+      "tokenizers==0.23.3",
+      "safetensors==0.8.0"
+    ]
+  ],
+  "env": {
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "CUBLAS_WORKSPACE_CONFIG": ":4096:8"
+  },
+  "weight_dirs": {
+    "laya": {
+      "path": "/data2/hxj/open-models/laya-vision/models",
+      "source": "preexisting local native VLMAgent layout; never download or mutate"
+    }
+  },
+  "resource_shape": {
+    "gpu_type": "A800 80GB",
+    "qualification_ranks": 2,
+    "cpu_threads_per_rank": 1
+  },
+  "smoke": {
+    "gpu_tests": [
+      {
+        "cmd": "bash \"$LAYA_RESERVED_RUN_DIR/command.sh\"",
+        "expect": "exit0 and provenance/laya-qualification.json checks all true"
+      }
+    ],
+    "import_names": [
+      "torch",
+      "transformers"
+    ],
+    "cli_checks": [
+      "nvidia-smi"
+    ]
+  }
+}

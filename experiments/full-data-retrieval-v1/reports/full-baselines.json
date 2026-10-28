@@ -1,0 +1,167 @@
+{
+  "aggregates": {
+    "clip4clip": {
+      "seeds": 3,
+      "t2v_r1_mean": 51.49333333333334,
+      "t2v_r1_std": 0.015275252316516427
+    },
+    "uatvr": {
+      "seeds": 3,
+      "t2v_r1_mean": 53.35,
+      "t2v_r1_std": 0.35791060336346286
+    }
+  },
+  "new_method_hypothesis_supported": false,
+  "paper_test_not_directly_comparable": true,
+  "rows": [
+    {
+      "method": "uatvr",
+      "metrics": {
+        "epoch": 5,
+        "optimizer_updates": 12885,
+        "t2v_mdr": 1.0,
+        "t2v_mnr": 8.9838,
+        "t2v_r1": 53.190000000000005,
+        "t2v_r10": 86.83,
+        "t2v_r5": 79.7,
+        "train_caption_count": 164920,
+        "training_mean_loss": 0.9390706419944763,
+        "v2t_mdr": 1.0,
+        "v2t_mnr": 2.064,
+        "v2t_r1": 79.2,
+        "v2t_r10": 98.2,
+        "v2t_r5": 95.0,
+        "validation_caption_count": 10000,
+        "validation_video_count": 500
+      },
+      "run_id": "msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502",
+      "seed": 713,
+      "selected_epoch": 5
+    },
+    {
+      "method": "clip4clip",
+      "metrics": {
+        "epoch": 5,
+        "optimizer_updates": 6445,
+        "t2v_mdr": 1.0,
+        "t2v_mnr": 9.6001,
+        "t2v_r1": 51.480000000000004,
+        "t2v_r10": 84.96000000000001,
+        "t2v_r5": 77.35,
+        "train_caption_count": 164920,
+        "training_mean_loss": 1.050009846687317,
+        "v2t_mdr": 1.0,
+        "v2t_mnr": 1.766,
+        "v2t_r1": 84.39999999999999,
+        "v2t_r10": 98.2,
+        "v2t_r5": 96.0,
+        "validation_caption_count": 10000,
+        "validation_video_count": 500
+      },
+      "run_id": "msrvtt-baseline-clip4clip-seed713-20261011T042528Z-6d2095e3d502",
+      "seed": 713,
+      "selected_epoch": 5
+    },
+    {
+      "method": "uatvr",
+      "metrics": {
+        "epoch": 2,
+        "optimizer_updates": 5154,
+        "t2v_mdr": 1.0,
+        "t2v_mnr": 8.5954,
+        "t2v_r1": 53.76,
+        "t2v_r10": 86.7,
+        "t2v_r5": 79.91,
+        "train_caption_count": 164920,
+        "training_mean_loss": 1.2619366645812988,
+        "v2t_mdr": 1.0,
+        "v2t_mnr": 1.876,
+        "v2t_r1": 83.0,
+        "v2t_r10": 99.0,
+        "v2t_r5": 97.0,
+        "validation_caption_count": 10000,
+        "validation_video_count": 500
+      },
+      "run_id": "msrvtt-baseline-uatvr-seed714-20261011T163252Z-3c720544401a",
+      "seed": 714,
+      "selected_epoch": 2
+    },
+    {
+      "method": "clip4clip",
+      "metrics": {
+        "epoch": 5,
+        "optimizer_updates": 6445,
+        "t2v_mdr": 1.0,
+        "t2v_mnr": 9.5968,
+        "t2v_r1": 51.51,
+        "t2v_r10": 84.99,
+        "t2v_r5": 77.3,
+        "train_caption_count": 164920,
+        "training_mean_loss": 1.0485161542892456,
+        "v2t_mdr": 1.0,
+        "v2t_mnr": 1.722,
+        "v2t_r1": 84.6,
+        "v2t_r10": 98.0,
+        "v2t_r5": 96.39999999999999,
+        "validation_caption_count": 10000,
+        "validation_video_count": 500
+      },
+      "run_id": "msrvtt-baseline-clip4clip-seed714-20261011T163252Z-3c720544401a",
+      "seed": 714,
+      "selected_epoch": 5
+    },
+    {
+      "method": "uatvr",
+      "metrics": {
+        "epoch": 2,
+        "optimizer_updates": 5154,
+        "t2v_mdr": 1.0,
+        "t2v_mnr": 8.6204,
+        "t2v_r1": 53.1,
+        "t2v_r10": 86.55000000000001,
+        "t2v_r5": 79.78,
+        "train_caption_count": 164920,
+        "training_mean_loss": 1.2623854875564575,
+        "v2t_mdr": 1.0,
+        "v2t_mnr": 1.582,
+        "v2t_r1": 81.2,
+        "v2t_r10": 99.2,
+        "v2t_r5": 96.6,
+        "validation_caption_count": 10000,
+        "validation_video_count": 500
+      },
+      "run_id": "msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca",
+      "seed": 715,
+      "selected_epoch": 2
+    },
+    {
+      "method": "clip4clip",
+      "metrics": {
+        "epoch": 5,
+        "optimizer_updates": 6445,
+        "t2v_mdr": 1.0,
+        "t2v_mnr": 9.6005,
+        "t2v_r1": 51.49,
+        "t2v_r10": 84.95,
+        "t2v_r5": 77.31,
+        "train_caption_count": 164920,
+        "training_mean_loss": 1.0482237339019775,
+        "v2t_mdr": 1.0,
+        "v2t_mnr": 1.714,
+        "v2t_r1": 84.6,
+        "v2t_r10": 98.2,
+        "v2t_r5": 96.2,
+        "validation_caption_count": 10000,
+        "validation_video_count": 500
+      },
+      "run_id": "msrvtt-baseline-clip4clip-seed715-20261012T013316Z-c9c06753e2ca",
+      "seed": 715,
+      "selected_epoch": 5
+    }
+  ],
+  "schema_version": "full-data-baseline-comparison-v1",
+  "test_authorized": false,
+  "training_videos": 8246,
+  "validation_queries": 10000,
+  "validation_videos": 500
+}

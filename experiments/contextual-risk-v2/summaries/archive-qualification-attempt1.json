@@ -1,0 +1,21 @@
+{
+  "phase": "stage0-archive-qualification",
+  "phase_path": "experiments/contextual-risk-v2/phases/stage0-archive-qualification.json",
+  "runs": [
+    {
+      "manifest_sha256": "cd8c3049d861ee659266b3bc22326d75e539d8a7e5b7a9f3624e214ba9e402f1",
+      "output_hashes": {
+        "command.sh": "245cd5695d6a02ac90b75b8cfca6053095bbf2025a01921d8b278dc785583b2c",
+        "logs/train.log": "74cb7ecedccb996385122d6e936bfec2095ce6df596aec1eab28647322b0502a",
+        "provenance/failure.json": "60bf86b755e35705f262cd0b209e36721bb2f3a0a62357eb724c8a634e819d58"
+      },
+      "run_id": "msrvtt-baseline-archive_qualification_4gpu-seed000-20260814T090705Z-e6fddd50c4ec",
+      "state": "cancelled",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "contextual-risk-v2",
+  "terminal_counts": {
+    "cancelled": 1
+  }
+}

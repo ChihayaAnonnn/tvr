@@ -1,0 +1,114 @@
+{
+  "phase": "stage0-archive-qualification-sigterm-retry",
+  "study": "oq1-kl-variance-hubness-v1",
+  "runs": [
+    {
+      "dataset": "msrvtt",
+      "stage": "baseline",
+      "variant": "qual_sigterm_mismatch",
+      "seed": 0,
+      "scheduled_timestamp_utc": "20260829T110000Z",
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "gpu_count": 4,
+        "precision": "fp32",
+        "distributed_topology": "torchrun-4"
+      },
+      "input_checkpoints": [],
+      "dataset_splits": [],
+      "config": {
+        "model": {
+          "datatype": "archive_qualification"
+        },
+        "loss": {},
+        "optimizer": {},
+        "scheduler": {},
+        "evaluation": {
+          "archive_qualification_scenario": "sigterm_different_collectives",
+          "do_train": true,
+          "eval_split": "val",
+          "run_final_test": false
+        }
+      },
+      "parent_run_ids": [
+        "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T100300Z-90c583c8db05",
+        "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T101800Z-f51f0232e970",
+        "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T103300Z-ae601bd295ee"
+      ],
+      "selection_lineage": [
+        "Stage 0 archive qualification: SIGTERM drain with ranks parked in mismatched collectives",
+        {
+          "authorization": "retry after deterministic preflight config-schema mismatch (device_selection_probe is not an effective evaluation arg); predecessor cancelled from reserved with evidence preserved",
+          "predecessor": "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T100300Z-90c583c8db05"
+        },
+        {
+          "authorization": "retry after deterministic preflight environment mismatch (runtime derives distributed_topology as torchrun-4; manifest said torchrun-4-rank, the study.yaml label); predecessor cancelled from reserved with evidence preserved",
+          "predecessor": "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T101800Z-f51f0232e970"
+        },
+        {
+          "authorization": "retry: predecessor reached the intended hang window (4 ranks parked in mismatched collectives) but the controller exited prematurely, so SIGTERM never hit a live controller and no drain evidence was produced; orphaned group manually drained; terminal failed exit 143 with evidence preserved",
+          "predecessor": "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T103300Z-ae601bd295ee"
+        },
+        {
+          "device_selection_probe": {
+            "policy": "study.yaml hardware_policy.device_selection (probe_at_reserve_time, min_free_mib_per_gpu 70000)",
+            "probed_at_utc": "20260829T095233Z",
+            "driver_version": "560.35.05",
+            "selected_cuda_visible_devices": "0,1,3,4",
+            "gpus": [
+              {
+                "index": 0,
+                "uuid": "GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece",
+                "free_mib": 81142
+              },
+              {
+                "index": 1,
+                "uuid": "GPU-4cd26468-4bf3-4a57-cbc1-cab67ea6ff89",
+                "free_mib": 81142
+              },
+              {
+                "index": 3,
+                "uuid": "GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede",
+                "free_mib": 81142
+              },
+              {
+                "index": 4,
+                "uuid": "GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a",
+                "free_mib": 81142
+              }
+            ],
+            "excluded": [
+              {
+                "index": 2,
+                "uuid": "GPU-19f58384-1ce3-9658-5a8b-7d79f437289d",
+                "free_mib": 6632,
+                "reason": "below min_free_mib, external VLLM service"
+              }
+            ]
+          }
+        }
+      ],
+      "validation_authorized": true,
+      "test_authorized": false,
+      "expected_scalar_outputs": [],
+      "array_references": [],
+      "command": [
+        "bash",
+        "scripts/oq1_stage0_launch.sh",
+        "--scenario",
+        "sigterm_different_collectives",
+        "--run-id",
+        "{run_id}",
+        "--run-dir",
+        "{artifact_run_dir}",
+        "--devices",
+        "0,1,3,4",
+        "--port",
+        "29565"
+      ]
+    }
+  ]
+}

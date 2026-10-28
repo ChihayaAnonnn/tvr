@@ -1,0 +1,23 @@
+{
+  "output_hashes_format": "terminal-status-reference-v1",
+  "phase": "accuracy-20261023T085620Z",
+  "phase_path": "experiments/laya-rerank-validation-v1/phases/accuracy-20261023T085620Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "10cdfb04444791fc7c622d715a54189cdee97f75967469393a02a2f5b5061117",
+      "output_hashes_reference": {
+        "entry_count": 22032,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/status.json",
+        "sha256": "aba83fb16ff6717d836b9faefdb4b36dd62f80c46cffdb2c35fa297115fdd167"
+      },
+      "run_id": "msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "laya-rerank-validation-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}

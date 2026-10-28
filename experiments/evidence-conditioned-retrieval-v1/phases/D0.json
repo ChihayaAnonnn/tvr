@@ -1,0 +1,105 @@
+{
+  "phase": "D0-approved-source-role-input",
+  "study": "evidence-conditioned-retrieval-v1",
+  "runs": [
+    {
+      "dataset": "msrvtt",
+      "stage": "baseline",
+      "variant": "source-role-input",
+      "seed": 713,
+      "scheduled_timestamp_utc": "20261010T003417Z",
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "none",
+        "gpu_count": 0,
+        "precision": "fp32",
+        "distributed_topology": "single-process"
+      },
+      "input_checkpoints": [],
+      "dataset_splits": [
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-000.input-index.json",
+          "sha256": "ffe95bb7fec0e861c27d17bff3c9cf637b6e8d96dcdde556b31db3d17d7dba62"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-001.input-index.json",
+          "sha256": "ccd1319f2d4ef6c59c49d106eeb7b9214a747447be77785b5f26185faca373bf"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-002.input-index.json",
+          "sha256": "8cfeb099ded9c5486100ff532ddc6978b13a2ce4e9b90e252c5305fda9af7571"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-003.input-index.json",
+          "sha256": "088290ac3a51ae9fcbd136296d610f95cf86308b49c194f8f1a61914452b631b"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-004.input-index.json",
+          "sha256": "1fdf6b40fa092776aa1668b3faf799074a64e6f7e1c3793b9488d0c6eba2ab19"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-005.input-index.json",
+          "sha256": "d27f93fc27987578e64ed948a99c44cb69c72a38d114d8433fd60f95d12c08c5"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-006.input-index.json",
+          "sha256": "cb640a57f937a2e0dbd53c1a58b9eec87d84a2ee4f0bc774d204b3cc87d54332"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-007.input-index.json",
+          "sha256": "a01e5ea384596fbb955dd40663a34e13b66598abb9437dc8bac496a35a48e43c"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-008.input-index.json",
+          "sha256": "55cdb369cfd3a0381bd32b08a69a348faaecb284c72ecefcd821547411d262e2"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/inputs/D0-9000-videos-009.input-index.json",
+          "sha256": "339d217b6714f9fe45aa3e8c6a6377db9000aa3879a55fb93b7c5d9b2edd977c"
+        },
+        {
+          "path": "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json",
+          "sha256": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33"
+        },
+        {
+          "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv",
+          "sha256": "0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3"
+        },
+        {
+          "path": "dataloaders/splits/msrvtt_trusted_v1_seed0.json",
+          "sha256": "a0e5a82dddec34fa76753c2323cf560c2afc36f3683b231ccd24db2c268be882"
+        }
+      ],
+      "config": {
+        "model": {},
+        "loss": {},
+        "optimizer": {},
+        "scheduler": {},
+        "evaluation": {
+          "eval_split": "val",
+          "qualification_scenario": "evidence_sources:c25476d6b0580c744ab1f06f511fbf4528ccdc341f6c24438eff6d0a7b1eccba"
+        }
+      },
+      "parent_run_ids": [],
+      "selection_lineage": [
+        "experiments/evidence-conditioned-retrieval-v1/reports/source-audit-2026-10-10.md"
+      ],
+      "validation_authorized": true,
+      "test_authorized": false,
+      "expected_scalar_outputs": [],
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=",
+        "OMP_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "scripts/prepare_evidence_sources.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ]
+    }
+  ]
+}

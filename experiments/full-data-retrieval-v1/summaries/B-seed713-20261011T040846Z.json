@@ -1,0 +1,36 @@
+{
+  "phase": "B-seed713-20261011T040846Z",
+  "phase_path": "experiments/full-data-retrieval-v1/phases/B-seed713-20261011T040846Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "dc68038afb6203925ed12537aeb462c970a585831678c0c30fdc580866b7eecb",
+      "output_hashes": {
+        "command.sh": "316278a30791ba23ffd125b30419de68b814298cd503070f711ba64e789ad2b9",
+        "logs/worker.log": "cd20a6306182f96f884cbcc5d90213733d8a2a0e3e5a838281e227ed830bda33",
+        "provenance/controller-audit.jsonl": "8bb6d43d90ad61178f37bff4d0b59f726fee27b50c3da7841eaeff4248c4c2f6",
+        "provenance/controller-launch-intent.json": "f5c3ec011ffeff86e64b422bda6042c41dc939b494bd7ef9662f8a8ce79b8181",
+        "provenance/controller-launch.json": "4f50a590f2fe196584481c1b3ba306fa4aa1554abcec320cd0b2c1556b6a2222",
+        "provenance/controller-plan.json": "5b730bdd8fa9f1c7be652bc3bf512f9f6b2d1e1616c8466ccae17fdf2aa49892",
+        "provenance/controller-result.json": "8c28206ea92399f205d631bbba59ef346bc4c760531bdc6588f16f5fcce6ab98"
+      },
+      "run_id": "msrvtt-baseline-uatvr-seed713-20261011T040846Z-e3b1a256f663",
+      "state": "failed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "3105a639e4c362c811827f443fb159ffc39e7849726c6d57dc9d59845f8d5c86",
+      "output_hashes": {
+        "command.sh": "53f44d1b55562f713f3121c1e8bfd1e4ad0ff69bdc8473c872649fa9593f4941",
+        "provenance/controller-result.json": "a9ec6a59b59664eb7851fb0d8012471cb093c9397838ea61e8ae159caed24012"
+      },
+      "run_id": "msrvtt-baseline-clip4clip-seed713-20261011T040846Z-e3b1a256f663",
+      "state": "cancelled",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "full-data-retrieval-v1",
+  "terminal_counts": {
+    "cancelled": 1,
+    "failed": 1
+  }
+}

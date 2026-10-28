@@ -1,0 +1,90 @@
+{
+  "study": "laya-rerank-validation-v1",
+  "protocol_version": 1,
+  "control_plane": "experiments/laya-rerank-validation-v1",
+  "data_plane": "artifacts/laya-rerank-validation-v1",
+  "registry": "experiments/laya-rerank-validation-v1/registry.jsonl",
+  "test_authorized": false,
+  "science_authorized": false,
+  "gpu_qualification": {
+    "run_id": "synthetic-baseline-laya-q0-owner-seed713-20261023T094646Z-bf508798c089",
+    "manifest_sha256": "115721dbdc047a266dcffc52dbb662e62c8bb5820b68363aec3b6393b8cda061",
+    "report_sha256": "d0c8fd264a2baddde4032a60eb4aa4e88310d2c12140b4a7d20bd6f6eb177c10"
+  },
+  "software_qualification": {
+    "world_size": 2,
+    "precision": "fp32",
+    "synthetic_only": true,
+    "production_capacity": true,
+    "random_initialization": true,
+    "optimizer": false,
+    "max_gpu_hours": 8,
+    "max_run_minutes": 30,
+    "authorization": "2026-10-23_explicit_user_allow_two_gpu_laya_experiments",
+    "physical_indices": [
+      1,
+      3
+    ],
+    "gpu_uuids": [
+      "GPU-4cd26468-4bf3-4a57-cbc1-cab67ea6ff89",
+      "GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede"
+    ]
+  },
+  "science": {
+    "max_gpu_hours": 24,
+    "max_run_hours": 8,
+    "authorization": "2026-10-23 explicit user: 进行完整实验"
+  },
+  "retry": {
+    "max_diagnosed_successors_per_failure_class": 2,
+    "identity_change_requires_new_run": true
+  },
+  "fixed": "fixed.json",
+  "status": "completed_negative_validation_result",
+  "topology_amendment": {
+    "date": "2026-10-23",
+    "scope": "this_study_only",
+    "user_instruction": "允许使用双卡进行实验",
+    "previous_world_size": 4,
+    "new_world_size": 2,
+    "qualification_required": true,
+    "test_authorized": false
+  },
+  "accuracy_result": {
+    "run_id": "msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908",
+    "manifest_sha256": "10cdfb04444791fc7c622d715a54189cdee97f75967469393a02a2f5b5061117",
+    "report_sha256": "66829c3a6f5465a9f56465aaca8d3036838894ae8bd0f3c70a878b92ed6dd5d1",
+    "artifact_path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908",
+    "input_indices": [
+      {
+        "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-000.input-index.json",
+        "sha256": "73492df87058d24788ba7530bfd6a2d9ce61c6d80aa98b3cceb0f3e489d13456"
+      },
+      {
+        "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-001.input-index.json",
+        "sha256": "f84d52d95452a44c5dd68bddb119ec2e462ba1828cc0b5015c72e8c12eea2ac2"
+      },
+      {
+        "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-002.input-index.json",
+        "sha256": "ac7645864a17cc87e8c7c403b1113a109354f44f025746394d2c3e01ca80e737"
+      }
+    ]
+  },
+  "performance_result": {
+    "run_id": "msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4",
+    "artifact_path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/efficiency/msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4",
+    "manifest_sha256": "6e30ca74f99cb868b13d175bf5f60a57dfea96d89966b57f9dbb6d61f952bb32",
+    "report_sha256": "0fa976e487ade05c5810def8b1cb04326b63b0ecc24356ffe027cbbc6965a07d"
+  },
+  "completion": {
+    "date": "2026-10-23",
+    "software_correctness": "passed",
+    "scientific_verdict": "no_improvement",
+    "accuracy_queries": 10000,
+    "performance_completed": true,
+    "software_gpu_hours": 0.22240235773911182,
+    "scientific_gpu_hours": 1.09267021555861,
+    "followup_authorized": false,
+    "report": "summaries/full-validation-report.md"
+  }
+}

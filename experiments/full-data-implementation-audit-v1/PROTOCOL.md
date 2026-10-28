@@ -1,0 +1,13 @@
+# Official parity and training trajectory audit
+
+User instruction on 2026-10-13: start the proposed official implementation audit and existing trajectory diagnosis. Independent CPU-only study; no new scientific training, GPU use, test reads, model selection, or reopening failed research gates. Scheme A applies with this study's own control/data directories.
+
+Native implementation, then independent final review. Inputs are hash-bound official Git revisions, completed baseline manifests/statuses, all 30 epoch records and model tensors, loss arrays, logs, pretrained CLIP and two deterministic training pairs. File copies of the official reference sources are retained in the run. Existing arrays/checkpoints are never overwritten.
+
+Compare actual official modules with current adapters at formal B/32 capacity, FP32, real 12-frame videos and shared initial weights/RNG. One Gloo rank permits the unmodified official training collectives on CPU; no mocked forward, gradient or optimizer. Compare tokens, masks, decoded frames (official rawvideo alternative), valid frame/text features, logits, each loss, gradients and two optimizer steps (the first warmup step is zero LR). Declare atol=2e-6/rtol=2e-4 before observing differences; input comparisons exact. A mismatch is a reportable result, not a reason to relax tolerances. This does not claim full multi-rank upstream equivalence: upstream slice-backward and current corrected global gradient must be distinguished. Existing serial/two-rank gradient regression is run separately.
+
+The official UATVR active loader reads pre-extracted frames, includes train-time temporal offset and contains interactive debugger calls. Its rawvideo alternative can be numerically compared without pretending it is the active default. NumPy deprecated dtype aliases are explicitly adapted in the harness only. Official sources remain unchanged. Reference optimizer grouping follows the pinned trainer, while the actual reference BertAdam implementation is executed. CUDA is hidden and required absent by the worker.
+
+All 30 epoch loss components, validation metrics, optimizer counters, CLIP movement relative to authenticated pretraining and logit scales are reported. LR endpoints are reconstructed from bound schedule/counters and identified as reconstructions. Historical gradient norms/clipping frequency/per-loss gradient contributions are unavailable and must remain marked missing. Wall throughput reflects shared-resource conditions.
+
+Completion: authenticate inputs and parent terminal inventory, retain mismatch details, archive all successful/failed audit attempts, and deliver source difference / numerical audit / trajectory reports. No numerical target for paper R@1 is an acceptance condition.

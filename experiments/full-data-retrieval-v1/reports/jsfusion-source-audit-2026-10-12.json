@@ -1,0 +1,90 @@
+{
+  "train_count": 8246,
+  "test_count": 1000,
+  "video_id_overlap": 0,
+  "summary": {
+    "source_groups": 6707,
+    "multi_clip_source_groups": 2121,
+    "cross_train_test_source_groups": 321,
+    "train_videos_in_cross_source_groups": 390,
+    "test_videos_in_cross_source_groups": 350,
+    "cross_partition_temporally_overlapping_pairs": 54,
+    "overlapping_pair_examples": [
+      {
+        "train_video_id": "video7406",
+        "overlap_seconds": 22.85,
+        "test_video_id": "video7591"
+      },
+      {
+        "train_video_id": "video8896",
+        "overlap_seconds": 21.67,
+        "test_video_id": "video8689"
+      },
+      {
+        "train_video_id": "video9617",
+        "overlap_seconds": 20,
+        "test_video_id": "video7970"
+      },
+      {
+        "train_video_id": "video9769",
+        "overlap_seconds": 17.02,
+        "test_video_id": "video7202"
+      },
+      {
+        "train_video_id": "video7409",
+        "overlap_seconds": 16.24,
+        "test_video_id": "video7787"
+      },
+      {
+        "train_video_id": "video7929",
+        "overlap_seconds": 15.78,
+        "test_video_id": "video9355"
+      },
+      {
+        "train_video_id": "video9479",
+        "overlap_seconds": 15.36,
+        "test_video_id": "video7572"
+      },
+      {
+        "train_video_id": "video9559",
+        "overlap_seconds": 14.61,
+        "test_video_id": "video8922"
+      },
+      {
+        "train_video_id": "video7338",
+        "overlap_seconds": 14.34,
+        "test_video_id": "video9734"
+      },
+      {
+        "train_video_id": "video9970",
+        "overlap_seconds": 14.2,
+        "test_video_id": "video7820"
+      }
+    ],
+    "exact_duplicate_content_groups": 0,
+    "cross_partition_exact_duplicate_groups": 0
+  },
+  "privacy": {
+    "selected": 9246,
+    "excluded": 754,
+    "excluded_values_decoded": 0,
+    "captions_decoded": 0
+  },
+  "raw_annotation": {
+    "path": "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json",
+    "sha256": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33"
+  },
+  "test_csv": {
+    "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+    "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+  },
+  "purpose": "Read-only benchmark provenance disclosure; no test filtering/model selection/training change.",
+  "schema_version": "jsfusion-train-test-source-audit-v1",
+  "audit_date": "2026-10-12",
+  "independently_reproduced": true,
+  "limitations": [
+    "Official JSFUSION benchmark has confirmed shared training/test YouTube sources and partially overlapping temporal intervals.",
+    "Exact file SHA-256 non-duplication does not rule out visual near duplicates.",
+    "No filtering, checkpoint reselection, hyperparameter tuning or retraining was performed in response to test observations."
+  ]
+}

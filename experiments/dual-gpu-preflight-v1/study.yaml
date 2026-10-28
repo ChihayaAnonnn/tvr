@@ -1,0 +1,56 @@
+study: dual-gpu-preflight-v1
+protocol_version: 1
+status: registered
+software_only: true
+scientific_authorized: false
+test_authorized: false
+authorization: user_request_2026-10-01_complete_two_gpu_gradient_and_resume_preflight
+control_plane: experiments/dual-gpu-preflight-v1
+data_plane: artifacts/dual-gpu-preflight-v1
+physical_indices:
+- 3
+- 4
+gpu_uuids:
+- GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede
+- GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a
+max_gpu_hours: 2
+precision: fp32
+global_batch: 16
+local_batch: 8
+K: 4
+panel: present
+optimizer: AdamW
+updates_continuous: 2
+checkpoint_after: 1
+resumed_updates: 1
+gradient_arms:
+- A2
+- A3
+- A4
+parameter_tolerance: 1.0e-06
+optimizer_tolerance: 1.0e-06
+source_parent:
+  path: experiments/semantic-answerability-pilot-v1/summaries/Q0P-20261001T104445Z.json
+  sha256: 56d70f3330eb3eea41f43f00cf24866cfb85e2216128b0d69a71aad745ae086e
+  commit: 4e3d4013b9ae33ca53a29a024f4b55aebea9e74a
+template:
+  path: /data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot-c2/experiments/dual-gpu-preflight-v1/configs/system-template.json
+  sha256: 7ee2d257d21d5f1b9ce352fc7b7937ea7f979288adab10d6e44291ecdc4100f5
+command:
+- env
+- PYTHONPATH=/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot-c2/src:/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot-c2
+- PYTHONDONTWRITEBYTECODE=1
+- OMP_NUM_THREADS=1
+- MKL_NUM_THREADS=1
+- CUDA_VISIBLE_DEVICES=GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede,GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a
+- /home/xujie/.conda/envs/tvr/bin/python
+- -m
+- torch.distributed.run
+- --standalone
+- --nproc_per_node=2
+- /data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot-c2/scripts/preflight_dual_gpu.py
+- --run-dir
+- '{artifact_run_dir}'
+- --template
+- /data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot-c2/experiments/dual-gpu-preflight-v1/configs/system-template.json
+four_gpu_qualification_replacement: false

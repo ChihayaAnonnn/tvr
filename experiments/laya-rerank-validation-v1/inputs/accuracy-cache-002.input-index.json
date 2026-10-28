@@ -1,0 +1,830 @@
+{
+  "files": [
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e255ff5e0b933ddb5f986b1204aac4333f00227574c0abfb7a9d6a72d1caee8b.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e2792e5fd28cd5cccd1feb5b86a7474865d0c6e4fd39f931d1ada7ffd6502669.json",
+      "sha256": "c028cd1a17efc8b2a82c592cb8aa706d90ea5a8b5ab9c56175c7f92f6c700616"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e2792e5fd28cd5cccd1feb5b86a7474865d0c6e4fd39f931d1ada7ffd6502669.npy",
+      "sha256": "2280fd1f184c2852e08e4153986c9dc8d18d65d5ab7f42b4fe29b8ade5d8a201"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e3b466fa8ade3a35bc5f12eb4a19b8341199f128c1fae5a86d974482d0f1a1a5.json",
+      "sha256": "b5a0681d036fc8f5b88c2a62c0ff495d0c0dae30af4e1ab9db0bb5c5ce527853"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e3b466fa8ade3a35bc5f12eb4a19b8341199f128c1fae5a86d974482d0f1a1a5.npy",
+      "sha256": "5de20912589413543d14cf671fd571015ba0559f9d1b47cc350009d6c16c9e04"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e419b0043f137d043973cb7722e6a643e63bc99bb5fe4830f579ad8f84609ecc.json",
+      "sha256": "ca406766fd5f7ae4f38b2325d798193954a58384781061a6fbedb8d60c778441"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e419b0043f137d043973cb7722e6a643e63bc99bb5fe4830f579ad8f84609ecc.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e42514d0cb3be1c39cc231daaaa1125a05b8d416879263c96d6d6b5b9c5bd973.json",
+      "sha256": "d7c47601de7fd574c703988db093628cb9ccec49bb68f59386333326e7074b68"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e42514d0cb3be1c39cc231daaaa1125a05b8d416879263c96d6d6b5b9c5bd973.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e459899cd2dcc15206f58f3301e1537ad38f965732c6edce01ca18a267a00e45.json",
+      "sha256": "ef13726a28f13c1237598f49e171c69812051d1c527f84a1f47f2f2d21664393"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e459899cd2dcc15206f58f3301e1537ad38f965732c6edce01ca18a267a00e45.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e470f6e2de96f1608ac7a9b5584a3d807b480ce1dd68582d0a43b9d8131832cf.json",
+      "sha256": "f4516ab7821d8d282fa74f2b0b6875c5797fd45a2ef7bb555149ecbab41e00c9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e470f6e2de96f1608ac7a9b5584a3d807b480ce1dd68582d0a43b9d8131832cf.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e50be6195f7cc100670d3df9ec19302de6350c3b55654cab1922c8713569689a.json",
+      "sha256": "4dd11fd74c98cd679c7417bc4759a4a42b74daf593649a543fc6e54e74518360"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e50be6195f7cc100670d3df9ec19302de6350c3b55654cab1922c8713569689a.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e5186dd0ea382e02c75315f4b16c440fced033011c93a1e1a56801759da036da.json",
+      "sha256": "36fdbc280acfaa7b9bac9916eb2f96060e194a7f330e7897da744f6fdb8188aa"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e5186dd0ea382e02c75315f4b16c440fced033011c93a1e1a56801759da036da.npy",
+      "sha256": "45365ab2112c930b76a64babb15c379e120fe035400457f3acd2bdf1b5d54679"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e55afa1afd7be963951df8551761d71fdb46ff9f3404c97a41f47d1133eda5f2.json",
+      "sha256": "fe8f83576272c4639ee25bbf0399ba180e0e4b6232f4840c0f0ff8b2e9c1cffc"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e55afa1afd7be963951df8551761d71fdb46ff9f3404c97a41f47d1133eda5f2.npy",
+      "sha256": "1febd59119d12295387c0dd859cc6aacfc0d88d3dd5408042a0f778227a4967b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e56061c16b088f37e80bb0e50b2756e265c7118252e008c3c36ab5240988aa9b.json",
+      "sha256": "69c8accd525dde8a953cefef4ba754bd57a8700deb64643b850e7673ff7a41b7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e56061c16b088f37e80bb0e50b2756e265c7118252e008c3c36ab5240988aa9b.npy",
+      "sha256": "7f890dd61debf93eea6b8ee74396548f3d4dae07a51573547fd4a8d0cda59ed8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e56e8ffaded2214fc01eff272fbf7f9a350f35a4c4f23a1a9f1a698fb9361f3d.json",
+      "sha256": "b0d92be37d2d6c04b7068677e956b6aa3fdafb35ceecb9b7997cf4f3a8895b72"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e56e8ffaded2214fc01eff272fbf7f9a350f35a4c4f23a1a9f1a698fb9361f3d.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e579b956762d761dcf04a2ae03677571cc67f0695d17fce9afae1ab2daa93cf0.json",
+      "sha256": "aade453a03be626a2c846ae1459bfd95dfcb80528cbf0ee0374770350fb952de"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e579b956762d761dcf04a2ae03677571cc67f0695d17fce9afae1ab2daa93cf0.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e5c8813059b1e3839f9b5712575534b95144232f40f4450bf2e464b91426ab5d.json",
+      "sha256": "3e880431b8784e0a7a9b63905d2bd96f53f8a4f02dfa5ada991659e6d520eb58"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e5c8813059b1e3839f9b5712575534b95144232f40f4450bf2e464b91426ab5d.npy",
+      "sha256": "f10bc2aed4a497e7aba3962af513a4ef8aaa50907a96b29b3bd3af2a2d1a0f59"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e5f183b7672d3e692a854751c4304f7a17c0ac5532830e37660cffadcd38a34f.json",
+      "sha256": "9c025eb883970bbba4a85bcb8f432b7eff45c2f028e17a3e6b077f506836507e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e5f183b7672d3e692a854751c4304f7a17c0ac5532830e37660cffadcd38a34f.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e60383522569b662ed9380f72e6e226430262234c61abb586d49f7d854db54bb.json",
+      "sha256": "2018c5a384b1bf63e2590895e7a9e3e78cdc2078c49df2db1e2c740294f98a4b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e60383522569b662ed9380f72e6e226430262234c61abb586d49f7d854db54bb.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e67c9538d57fdbdb78bcac5ab3726d094af707010f06202b1635519892e13e93.json",
+      "sha256": "7562657051a6329ee88dd2395b942f5f561b11ac0119533fdfc71fd68ee2feca"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e67c9538d57fdbdb78bcac5ab3726d094af707010f06202b1635519892e13e93.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e6ceec8ed89490147d0aa7f3edb2cf751ecad449ee983160af92422833ba2fef.json",
+      "sha256": "745ed16e665dc9ef17cc31d5c35a97d83e6d1c45deab4cc0ecf5aa84402bd4c8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e6ceec8ed89490147d0aa7f3edb2cf751ecad449ee983160af92422833ba2fef.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e6f2c829e0b36f3aef7f0824f86e7cc110826fe51b2a5923f148236de37cb446.json",
+      "sha256": "95792350504c3b7fdc37641a9f8a719edc28a0f9962eab77e42eaf804877983c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e6f2c829e0b36f3aef7f0824f86e7cc110826fe51b2a5923f148236de37cb446.npy",
+      "sha256": "f686c3238d0810164f8f500daeeaad81a7396185d1e31d1d5e0ea3e8fc3d69f4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e6fcec025af435468f54d3f22e98ebadf0200cd7102b550434f4a508fcd4a0d7.json",
+      "sha256": "b94c1d9f51f86398b656f9cd9deffe11f118f95f09405e5923fba43f4015b7ba"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e6fcec025af435468f54d3f22e98ebadf0200cd7102b550434f4a508fcd4a0d7.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e74303b545b55f81725f68ba72e92f957b01fe13866c0f30cae7eb615402b791.json",
+      "sha256": "36a75ee4c4bda81f3940281dcdf32aa3deaf255f332c4adc1d1311e2b5dc075b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e74303b545b55f81725f68ba72e92f957b01fe13866c0f30cae7eb615402b791.npy",
+      "sha256": "22e4720d83f665dafcd4c05e911e84d0bf53f227ba3a0f7e1d59d351209fd20c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e7933e8026312e86d89f499d71cc0213600ef58bab5fcc9b1d026cf93367f2fa.json",
+      "sha256": "0443679db0c086c0455080c68a28c1064d8eb31fa6341c0cff0aaeaf4d1df479"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e7933e8026312e86d89f499d71cc0213600ef58bab5fcc9b1d026cf93367f2fa.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e7c49b05a3fc55006b3a338cb7b767f74caa183fe93cce027b95389b160feed6.json",
+      "sha256": "5ed554f582f3e4cc12af8ea2d925b90c35f76dfc9171730c380f37ccfd4de014"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e7c49b05a3fc55006b3a338cb7b767f74caa183fe93cce027b95389b160feed6.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e7c5ca60e12d7b4c0b71f1903be1eb2e265c96fc63090593f01dc3d83a745e57.json",
+      "sha256": "be677832eb014eb837f133201dee9ba2443921bfb286f74b0a2e6644cc359e0f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e7c5ca60e12d7b4c0b71f1903be1eb2e265c96fc63090593f01dc3d83a745e57.npy",
+      "sha256": "a6dcbf26f5977eabf1255d9f048c7ee713ac026398a64483d2bf0fb446068af7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e7f69dee687a3c337523554c9ccee84525b14cc57127d992a85f809cfdb44502.json",
+      "sha256": "d28068b2a97b785cdfdf02ab6926f237a1043398847da0a878b0184f99792164"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e7f69dee687a3c337523554c9ccee84525b14cc57127d992a85f809cfdb44502.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e83fe4389932d7bcb43a9ed8a6fcdd0910384232ef3f023fe6831362cb51ce55.json",
+      "sha256": "56acf1ca746a9cbeee5ed90575a31013dfd4dfd4e6427530a465e66afe2cf0fe"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e83fe4389932d7bcb43a9ed8a6fcdd0910384232ef3f023fe6831362cb51ce55.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e85f0f59bc8d3497aba087f583cab89f90bd0ec0fa3a20fd32e5333556974cc1.json",
+      "sha256": "28a29594f91584537214b6c06c2d558623419c7128d8798ed848c621358613ca"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e85f0f59bc8d3497aba087f583cab89f90bd0ec0fa3a20fd32e5333556974cc1.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e85f275d765392e8527779ac38f0698f339a884145c0a59bb36e1b41ea6f4457.json",
+      "sha256": "46acef1a549491264f80d5f3f17d1717d72cd7a84a76906f346b1aa79c89d911"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e85f275d765392e8527779ac38f0698f339a884145c0a59bb36e1b41ea6f4457.npy",
+      "sha256": "3f31ab6bbdcb199f4627728f3de0ce9c2baf7652c185b90bbe06437b2efd5dfb"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e877ff4380388be3180b6cdee08d108a07f1350dadd12ca6dc23e5a395dedda7.json",
+      "sha256": "f346f8b3cd4624647aba01ae924ae769d6b3fe2e56e1da23142dd48012a5ae7e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e877ff4380388be3180b6cdee08d108a07f1350dadd12ca6dc23e5a395dedda7.npy",
+      "sha256": "f348cd066e2c645d566a6087b28a7e03c09e747f8e1ef89d4bb880ca1b92a1df"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e8d2c922261a636de72485314cb3ec4025f794713f663ba1a3246a39aac9cba9.json",
+      "sha256": "f4e4fcf186b8cec43ce7cefedf09a622e9fb427f2d2e1d93e276bda5fecbd7ec"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e8d2c922261a636de72485314cb3ec4025f794713f663ba1a3246a39aac9cba9.npy",
+      "sha256": "478471fd5ce59e0b673fde238b74474480af3c2ce6202e6cbf2f92d3c71010bf"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e8d64cf5d10783b6605fb37d8acbf9d851c36067775c83575e380c8679f5938d.json",
+      "sha256": "2de01331a123593f2d617de3ffab446bee5ec0de15ace1fe01556005ada40548"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e8d64cf5d10783b6605fb37d8acbf9d851c36067775c83575e380c8679f5938d.npy",
+      "sha256": "babb97ab32ffde0298eef93d607d9cc5b9b252f53d8cc59ab7f2657b29cf3c2e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e9811956bad3e55897294fcb8f6060a9139d6149eea02e6d398d36fc75655808.json",
+      "sha256": "3fd32d4f915950ea002293c7b56f31dde9d2fbc68dcf179a44456bfcd31b24eb"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e9811956bad3e55897294fcb8f6060a9139d6149eea02e6d398d36fc75655808.npy",
+      "sha256": "8df6f1ab3302447ebadd05eeb76c33de43273c92d6d2535833eaa8cd55a0b8c4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e9f1c6b929219522d8a28a8ed761a4e285e524103f161356963bc7b1b104a14a.json",
+      "sha256": "5f1259b65d3baff669dc2b56574ab6780be86b7159bba6ff74c06a33fbd7b553"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/e9f1c6b929219522d8a28a8ed761a4e285e524103f161356963bc7b1b104a14a.npy",
+      "sha256": "2114849a449712b013e6ba64461d4db44fcb77eafd010d1f21aa70844f464783"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ea340e892e61b93ca4ce2376d2b104ec72d9323efb3e6d2b90e5c819e9a2daaf.json",
+      "sha256": "50bf150d913503979c1f0af8e12a7d3af4751d4fd1efe7452c46eabfa8364448"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ea340e892e61b93ca4ce2376d2b104ec72d9323efb3e6d2b90e5c819e9a2daaf.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eac0fed863f7a8ccc938dc222a2fd386ed5190f5b429ea0d71239accd667de6b.json",
+      "sha256": "b154b283a815d6494dd2faa6bd59510d95f46f2fbd2ba6f6451da96100eeed41"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eac0fed863f7a8ccc938dc222a2fd386ed5190f5b429ea0d71239accd667de6b.npy",
+      "sha256": "ffadb82ecc6ea14567c20e7892f2c718e460ea4fba76aa91264cb6d54cf52f88"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eaedad052e97a5e250fb7e53dd69dca48e4776dd066349ae5f131e5b6854a131.json",
+      "sha256": "b8dfc61f4dac75e8fd3f5c310e1e312e036ec156bfc7407627bb2f23429f7075"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eaedad052e97a5e250fb7e53dd69dca48e4776dd066349ae5f131e5b6854a131.npy",
+      "sha256": "eef9e2fc59028a4e719886c1bfcc8535e928f661cfe5c8b806117f7f80aa02e0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eb490c208daabf097db29277513252474846255334b4a4aa473a7ebae5fd9b65.json",
+      "sha256": "0873e6c5326a9c9cf79d0edc636c4f394a9c0e13bbd4e3a350050fac748c633b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eb490c208daabf097db29277513252474846255334b4a4aa473a7ebae5fd9b65.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eb58cf1c20f803617ff9a2e78d13c7725d7f983712c507de33277aaa8ad08498.json",
+      "sha256": "eabfe4c34c140d3d0e607be56b98e8bfaa7607727c1eb86f8b436779d6d72d80"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eb58cf1c20f803617ff9a2e78d13c7725d7f983712c507de33277aaa8ad08498.npy",
+      "sha256": "9c7ce07a6699dbbc41abed49442dc45693593d63ad8176b23a516eca1801636d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eb93a27a411e471fd9e633aa606b06290055db95dfd635d8bfae01acf5707660.json",
+      "sha256": "bbc7f4624d87a7df81664ed60a6b0bfd9010f28163639c0da62f663771acd977"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eb93a27a411e471fd9e633aa606b06290055db95dfd635d8bfae01acf5707660.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ebd675916985fdd19efef6036cef913e3a399dcb67051f54b0b1076f29ddca02.json",
+      "sha256": "c25781add6fd3d99326e14567b48dcf4f158f1559d7615c6171af97ad68a41e9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ebd675916985fdd19efef6036cef913e3a399dcb67051f54b0b1076f29ddca02.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ec606376475208c97ee161f35e84b1f49213c156753cf00760452e777f1e0b9b.json",
+      "sha256": "c9c220237411ea550ddc4b63b40980da78466b2a32829946dcb7e894d44b1fae"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ec606376475208c97ee161f35e84b1f49213c156753cf00760452e777f1e0b9b.npy",
+      "sha256": "82938a5268fd6eb8fdcb312f6ddea5f5ff03d0155216fa662310564dc53f09c2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ecb8de2e9d45edf32e551f7290c79b690696315a6dcccdc73230347bc31ad043.json",
+      "sha256": "1eb5538d759a7a76b97e99f2b197742b082d7820d7b3b8c96553145cf57b0976"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ecb8de2e9d45edf32e551f7290c79b690696315a6dcccdc73230347bc31ad043.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ecc74d21883389ac35a5b4c3519571c39e08f5ff5691cc759e9d2f1e93faa211.json",
+      "sha256": "44f27830f97c9c8f8e19e8d4976999b4d756391c42f0505ce541151fb4f08294"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ecc74d21883389ac35a5b4c3519571c39e08f5ff5691cc759e9d2f1e93faa211.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ecd532472b096ff0639399ba4e2ee099821d9b27e6bf1518fa17b78d60c0855f.json",
+      "sha256": "171e2a5a5ee7972f12d757701c202f8488c674f4aa5f98122872249d2df84bf1"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ecd532472b096ff0639399ba4e2ee099821d9b27e6bf1518fa17b78d60c0855f.npy",
+      "sha256": "b6fe16f8e47fed932435efcb9b91e39def8ac4b145935ff165901cba8e66d145"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ed1cc1a742395a78cc46790bc73710847ce6256797b61f8ae5b55a47e4ffdafd.json",
+      "sha256": "2b1e8e2858c6725efe117ed5b13c89c0519d80eae3a37d336b35de47bcef306a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ed1cc1a742395a78cc46790bc73710847ce6256797b61f8ae5b55a47e4ffdafd.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eda9fb6c53b8736f4d667c948da7302310823491344c6083e8b890e76805b7f0.json",
+      "sha256": "1a565ea8aef1da3a34bfa583f589b8578a49d3fa38f2c56a5d0682fb85ed578a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eda9fb6c53b8736f4d667c948da7302310823491344c6083e8b890e76805b7f0.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ee62412c1bbbb2a6c7efa4101f2def7bc4f6ce2e6f602d013df8d004fadfc6dc.json",
+      "sha256": "cb39496e698137d14105aeaff23eb2cf3951b03e8eab15dda2b130a42551e4d2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ee62412c1bbbb2a6c7efa4101f2def7bc4f6ce2e6f602d013df8d004fadfc6dc.npy",
+      "sha256": "df8055f6493faae5e44255d6ca6c174a2cd80d437c36db195c5e62a9b0967207"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ee836db7f8bb28fd50840eb37397a7cda14ff955ce03c063b05bf3e7f74bbf1f.json",
+      "sha256": "841e5e9d2c4a4c5b87457573dd8c004a86999c35a2441e61aa1448becfa0004b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ee836db7f8bb28fd50840eb37397a7cda14ff955ce03c063b05bf3e7f74bbf1f.npy",
+      "sha256": "82480f4a2f737dbff643171131cff2dfbd53f6b9032fedebdf02f6b6cf5f7c9e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ee9157124d983e2445d8ad92687af4534f154c7330d1b269bf78fb9fab899da6.json",
+      "sha256": "2bd56271505ff5b75f49d1418e762c83fa3b3db33feb477afcb4779a03863267"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ee9157124d983e2445d8ad92687af4534f154c7330d1b269bf78fb9fab899da6.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eea3efc63ceae2e2227cf71693bdb4834f0eeee55605547c84c3aca224600374.json",
+      "sha256": "15c20aefcc31f8353689c3948a3708c32f3429a4a871b0ae1b4a1e2551daf6f4"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eea3efc63ceae2e2227cf71693bdb4834f0eeee55605547c84c3aca224600374.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eecc61f51d3cd04f134622b4004fd3f0541bd23c1324e57ed6c499524f553499.json",
+      "sha256": "9c81f4401b7622b58049114adf77df31976fc99aa20dea2432af651e5e13e83a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/eecc61f51d3cd04f134622b4004fd3f0541bd23c1324e57ed6c499524f553499.npy",
+      "sha256": "c58ce45d7ffdbf4e78b3c7a46eda6099ae29b657bc75e53da4d3aca6bc3be649"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ef0204d76007a35296b1b69575aca06eadb332af7ab52754dc572e732f49a1bd.json",
+      "sha256": "d2cd6653c06274c8dbaa803625e0b673af10b2e92f79adb7412bf6bb8c831a9f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ef0204d76007a35296b1b69575aca06eadb332af7ab52754dc572e732f49a1bd.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ef32faf4e42a905d75571e389d7c3a8b13350a34ff6ab25a538a2f3841ac65f4.json",
+      "sha256": "1f01e5e034987a5c89f7ae8b4cda66df2ccad17d2a1a588d1122f6294310b077"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ef32faf4e42a905d75571e389d7c3a8b13350a34ff6ab25a538a2f3841ac65f4.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/efbb75a5d2826829371da8edf7eb6df686e985799b9961febc7362c2d5299bc7.json",
+      "sha256": "f23e09c79796c626c9105ee93b8657040903516d458f7b19f9b31403379fe3b0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/efbb75a5d2826829371da8edf7eb6df686e985799b9961febc7362c2d5299bc7.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f01f930cb7f036143bee990e25db97531c2532eb2e2f255dc66162784f261745.json",
+      "sha256": "84876d2e6f5df8d2dc56dbb374c2303aefa894b1862c6c8d7e034f8b8b5b8e3d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f01f930cb7f036143bee990e25db97531c2532eb2e2f255dc66162784f261745.npy",
+      "sha256": "74696bf5e62cd890fc936316536a8b99898b39b948c1c7e811007fdf9431b1a6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f1513e2a7e8a7fa81705486121af8d72de157ed9083b3ad1959feac9d83976c9.json",
+      "sha256": "14e727f11c5688d7e7c3bf8bd4c07dad2a24afec34358750171641c51199af2c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f1513e2a7e8a7fa81705486121af8d72de157ed9083b3ad1959feac9d83976c9.npy",
+      "sha256": "6c73995690b2bdc44cb62dd2fe68abcdec14d28fba1c77d8dc1f527577f67878"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f1576afeca1a9f065fc0e669d3268ccc285d88f8363d78c0d9d83e54c4cf418c.json",
+      "sha256": "5ac147b712a0326905ec49ba7bcd904f92940ff64c06303fc190181cbb93d6f2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f1576afeca1a9f065fc0e669d3268ccc285d88f8363d78c0d9d83e54c4cf418c.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f1a541a301a5f7d4fc3fab8458452b417df016aa75e12fcffbce225cb5977afd.json",
+      "sha256": "dcffe2bc1b5448ce6ee63679601c7917681b12e24b617303fed5c05b56bce46c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f1a541a301a5f7d4fc3fab8458452b417df016aa75e12fcffbce225cb5977afd.npy",
+      "sha256": "c4882660cd11a83da9c9e3010258b058cddf206632d3c2f9d0812423ab14c544"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f21da6ba409aef640234f46d43daee0b13206d02cdc8986ba361bec6743e9b43.json",
+      "sha256": "df93f5d67a6e6f29ac1e8c4104ba12aca261175c6a3ac82e5c1b62b5743bc7e5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f21da6ba409aef640234f46d43daee0b13206d02cdc8986ba361bec6743e9b43.npy",
+      "sha256": "8339a0d2563b44a0cb8b2ec4654bea4efd08bae65ea15c3fc795069138447734"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f284db82dd9af1b6eddcd17c005ed83bc8e3d9e6e1eed2ff7465ea6664ea2e3e.json",
+      "sha256": "0b60f669341983ec198620ce9cf34fed4fa803bc3dd54daff1ba1be4497c2c75"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f284db82dd9af1b6eddcd17c005ed83bc8e3d9e6e1eed2ff7465ea6664ea2e3e.npy",
+      "sha256": "ef7731d890cc030a2c4c867e3e5b38bf623d422eac0e8a8a3b0919f6c433cf03"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f2c5be33a542b2eb04cb2b97b6d5df5e9be6b4141bf2a8566c7f96fb3c966fc7.json",
+      "sha256": "724ae9acc6dae7f79a270de65bd9079dd9507c35f7b70deede706bc1270ae6f3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f2c5be33a542b2eb04cb2b97b6d5df5e9be6b4141bf2a8566c7f96fb3c966fc7.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f419d8b2a0d3b765b277c7efe2df493c5c4d0966eff969796cf1affc0e1bc63b.json",
+      "sha256": "a8750b6fe6015fc3a56b5c51cb166dc1a2f897f93439a737a12dd7eb3a9bd2cc"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f419d8b2a0d3b765b277c7efe2df493c5c4d0966eff969796cf1affc0e1bc63b.npy",
+      "sha256": "8e168838deb0edd37998bebcf988f026f220716b9029abcaa383e8c17441efb7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f470feeb6e0d8c80732f2978677ed56f020e6f78f22c770cd77d5ee26d3322de.json",
+      "sha256": "8198d2eb92a64b499b886a97d6748ed24062511786e5f946c56f6aa09e623d5f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f470feeb6e0d8c80732f2978677ed56f020e6f78f22c770cd77d5ee26d3322de.npy",
+      "sha256": "25db9977bb2c3b7b39a944635b5fe385d52bc903816014130eb4f59421e69ff3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f4817cabde54a7f089c855d6f92cad7b8ad247cc35d60e266a51632547c3c3e4.json",
+      "sha256": "1474bbc68713e57354237b5afe6c05bc5b745a2c61ad54febc0c11aa85441db5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f4817cabde54a7f089c855d6f92cad7b8ad247cc35d60e266a51632547c3c3e4.npy",
+      "sha256": "0bd5713fdd4c1b526393a86b95b97f820730640dab3e16bbd7592e0cf56dd00d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f4ccef723dc08843be585cb73c3d8821188541ef12aedd74f0572bbfdfabdec1.json",
+      "sha256": "6c37948651c21dc5d8fa932551c9296901fd84d0a7182ea0db9134da5975b254"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f4ccef723dc08843be585cb73c3d8821188541ef12aedd74f0572bbfdfabdec1.npy",
+      "sha256": "148853b12c4250c0e10d4d27cdf0a1b1217a9a2d3e88c95aac935f880b9c398a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f51f97b4bb1deb60554825862f5f99c09b948db7b58ab439cbd96790a0cd3065.json",
+      "sha256": "46b2a595400de33037cdb53372d4f110200a3d5aecac45ffd7c9215cfaae340f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f51f97b4bb1deb60554825862f5f99c09b948db7b58ab439cbd96790a0cd3065.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f5238115dcbe17e77141d94f7ca6159df9967599895bca4c0de779a9ec763a58.json",
+      "sha256": "828083457697e553a73bf7d126d76c7b1f377ff5b274941173a768c241d4e093"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f5238115dcbe17e77141d94f7ca6159df9967599895bca4c0de779a9ec763a58.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f525bc0de7aeb8337b4106298162dd0798688886915c70d38926b91698756077.json",
+      "sha256": "21059ce717961cb616020612f1c1a40d22bcfbb7e3071434d303038c54c6b419"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f525bc0de7aeb8337b4106298162dd0798688886915c70d38926b91698756077.npy",
+      "sha256": "849c8c57103bbb62495b68890f66ec61078fe93ee6d5628c1fce32306df74a71"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f538faae2c34293321506846716ab12a6ff8d51987ee512de0b46ae02472ebce.json",
+      "sha256": "0051f7b8b274a8a0c8f89b00b234a1c72b39c95c2d2a1e525817cfa0906c2645"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f538faae2c34293321506846716ab12a6ff8d51987ee512de0b46ae02472ebce.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f5968db2533c2e2ca7723d8c86f5506aac32b25cdf8d5002c883dc066cd6fcb2.json",
+      "sha256": "c494098bdd3e1403f19f926fb665ebc0a614252980881d50d8ef5a3198569540"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f5968db2533c2e2ca7723d8c86f5506aac32b25cdf8d5002c883dc066cd6fcb2.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f5a07aede8ed5214b4723f9b52fbe212ab24a1c6ca1be66ad73588b9dbabb4a9.json",
+      "sha256": "e64c93d24f53936a895b0730e30d3176c814e5d91d9daa87fdb29e8d480ddb73"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f5a07aede8ed5214b4723f9b52fbe212ab24a1c6ca1be66ad73588b9dbabb4a9.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f667931b287f7d19cc213b2540972c8535ad276f62b67877aac276b70ab69867.json",
+      "sha256": "5e00c40d0feb2508032d49077c693b4bc49104e2083155f337286a0bb69966a5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f667931b287f7d19cc213b2540972c8535ad276f62b67877aac276b70ab69867.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f6a66d2cd98e9dd9a235e9680870e08221035bc9a682e9b7a3e9636a3184b96e.json",
+      "sha256": "6b1f8abbb74ad852f2be6e4423c1b0ebe9676343a77fb641c3445013c45474ac"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f6a66d2cd98e9dd9a235e9680870e08221035bc9a682e9b7a3e9636a3184b96e.npy",
+      "sha256": "9aae534b3be0fc81b828f95fdff0885d577726c77971c5b170c428ed0605c6f3"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f6e7909dbf077ac592a3cc39b3461d84bbf40bac421649a875528f47741c9c06.json",
+      "sha256": "38001d34da441f687a9a5f2af9b8d319789d64a5ce7016f3acda315dd0e7e98d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f6e7909dbf077ac592a3cc39b3461d84bbf40bac421649a875528f47741c9c06.npy",
+      "sha256": "398f804e7fc3000b5df1097416bc4ab12ae9aa2fa1ab587d29f84d640a6ab0d9"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f74b671b880dcf79ba5845ab11b295accd352738b0cc9e82694a307d437174bb.json",
+      "sha256": "c3305bf6548b70c2b548c4e93d3cb4b8fa4ea448c16434793f1fef7bb36ba5d2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f74b671b880dcf79ba5845ab11b295accd352738b0cc9e82694a307d437174bb.npy",
+      "sha256": "ec24bc77bc1c9a37537a3a0e2fc8d85862215978b20ab03ea684e85e5ac09f6f"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f7f37a5c5015df69ddbbfa7e2f54e91e1dded87269bc871db8033629ed45bf64.json",
+      "sha256": "09841ccbddb28d8dd155a38b4b3247d0dfab854d820662975c0fdaeca9e0a669"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f7f37a5c5015df69ddbbfa7e2f54e91e1dded87269bc871db8033629ed45bf64.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f80eeed4a2e5ee9cc15c5902f55b5ec36ebf8318d3474a7260130418b07b75e3.json",
+      "sha256": "65a59454c0ad9f50e0025128d7bd95f28adcc4ea6445daff5f8a79a8032f9b18"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f80eeed4a2e5ee9cc15c5902f55b5ec36ebf8318d3474a7260130418b07b75e3.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f823b6aedc411797eb89edb06c0c35b53e4f564fdd1e62e434bf0345f1c1da18.json",
+      "sha256": "1a81335e2a66c3c1b8fd29f5d2488abd30a8ac62b3b280cd0e2ce5a1f9a9469d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f823b6aedc411797eb89edb06c0c35b53e4f564fdd1e62e434bf0345f1c1da18.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f843703de5b485c3f49d8a77ff4a6e6331dfbc1348ddae74761e0879dbc38f3c.json",
+      "sha256": "48595a3580a9ca0a758241a44a3d0b879e390546202a30fd05831758227263fa"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f843703de5b485c3f49d8a77ff4a6e6331dfbc1348ddae74761e0879dbc38f3c.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f8c84b49c6c31cf6b7c36d68aa7f07205258dc51fb8ce7e77929ee606119ed99.json",
+      "sha256": "a07aa11cf398fd4a44a1ab4baa6edebd7a1d44d462e28703ba1de6d0901c9bd8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f8c84b49c6c31cf6b7c36d68aa7f07205258dc51fb8ce7e77929ee606119ed99.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f8daaf17dd5662014f53c7970609777ed670c43fa2433b350058ac59cd2afdff.json",
+      "sha256": "80200f7176b49c7be453e53df2890db7ede98c18dce6beacb6891c4dc455b8f0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f8daaf17dd5662014f53c7970609777ed670c43fa2433b350058ac59cd2afdff.npy",
+      "sha256": "369ea213ddfe6e0121089e434ac427ff4c3af908315bb2422a3c04a09e4e5dd6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f973387535019182c332e8f045e51d83547c14c83a3b092076d1afa60ac52356.json",
+      "sha256": "6fc5285b5f7b811e86586c61b088945d2fcf2360db84441137a918a25658a044"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f973387535019182c332e8f045e51d83547c14c83a3b092076d1afa60ac52356.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f97693723d10ca53531f1f34e0a2347738fdd92612988663ab8021def91d8089.json",
+      "sha256": "1c6f51391e2cf8fffe82219dbba7e6f48583c6214cb93916c8f1b00f7632cff7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f97693723d10ca53531f1f34e0a2347738fdd92612988663ab8021def91d8089.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f97a0ade8155f1ebb66c41fd86d6863c7594a4c516e123cd16621bd0cb0177c9.json",
+      "sha256": "d3934503fc69148170209db720282a09ad85c4ce1cdd8d8110e7dce9a5bc6156"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f97a0ade8155f1ebb66c41fd86d6863c7594a4c516e123cd16621bd0cb0177c9.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f9973229e396ba5fdc3260c1ee92b70cc2eeeb8de77979e868b212bd38250d3f.json",
+      "sha256": "b82d38d470b38cdaa17dfab3a3759922202ae4c131fffb3019f58da66504021c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f9973229e396ba5fdc3260c1ee92b70cc2eeeb8de77979e868b212bd38250d3f.npy",
+      "sha256": "415f3eee760520f5759fbc305eb96e87449df522322543660ebbecff399c8628"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f99dae7f0f8d33fbb90b9a25597596aa660a8870afb5e6fb9d92b8c2eb4e3976.json",
+      "sha256": "ef6cebf34a5eafa53b93082daf525cd230b1b931c6a2d97f91b974603dcb3d95"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f99dae7f0f8d33fbb90b9a25597596aa660a8870afb5e6fb9d92b8c2eb4e3976.npy",
+      "sha256": "9ef0658f0a9007c33be8a68ebd0a2c8692ef790ec7872b748cc527711e7d6b1d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f9be4f74c5196f7bdb5e38c92ed9e192aec9041a46d506e4638a3ef95b7bdd87.json",
+      "sha256": "08ddc69099a9470c7b6639bfced6401312608f117903ecd9ab0aee3b0b433b97"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/f9be4f74c5196f7bdb5e38c92ed9e192aec9041a46d506e4638a3ef95b7bdd87.npy",
+      "sha256": "2068863e1d2224c11c66537507256d9b53f5fcafa350f45a3cfc6f80e62b4e86"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fa02a658131d893118ac46d9fa2f66a7fdd9aa3f7ad4993906187d0fc0db581b.json",
+      "sha256": "ecf7c5fc040e16b0ec9d28e60216b01c7c8d2ab0c6826037059d051b836dd2e2"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fa02a658131d893118ac46d9fa2f66a7fdd9aa3f7ad4993906187d0fc0db581b.npy",
+      "sha256": "cdfc172c3470ea026d00275cb0a205857e7b4138f29f47135f47bcbab1bc6af6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fa17726668b24512ccdf8951dc7b2573e9298f602a694c8345d3c4504010976f.json",
+      "sha256": "c961d9924fe027a8c57cd9c31cd2109b2c2b61a666c761ae5a1473ec5a7a7ac7"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fa17726668b24512ccdf8951dc7b2573e9298f602a694c8345d3c4504010976f.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fa87f8ea810b4a33187abb160ef298b34e1676b7d6f14b5016445cbaa739d678.json",
+      "sha256": "8c223229228cc7bdd7af8043d23115d0e1d49f76cc7f45c0e16431943ed42bec"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fa87f8ea810b4a33187abb160ef298b34e1676b7d6f14b5016445cbaa739d678.npy",
+      "sha256": "00c7f456d939098265f8434827e25c5fdecedb7dd981dfefbb8972d60add091c"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fae740736d69560892fa5cf36f15f1088736e8c362e29c3f3e4796fcde499d7d.json",
+      "sha256": "f74d3503c56fed2f70efe06227fd8dbf28450eec10de71d69db81012a0a4a70b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fae740736d69560892fa5cf36f15f1088736e8c362e29c3f3e4796fcde499d7d.npy",
+      "sha256": "781097c64b1ed228cd3899134efea971ea90be278f48fe25e1fbd38b95e479e6"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fbae5f87bf143df9a3d24debd6d1a381313e1c33c6fe1186c670d5e7cc2c0eb1.json",
+      "sha256": "a06f7d22d869f9849f5e543aa2f0a5447032491ed1d6b2b81a87864aa6608a74"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fbae5f87bf143df9a3d24debd6d1a381313e1c33c6fe1186c670d5e7cc2c0eb1.npy",
+      "sha256": "de452c4d40c92872f9a09bcdf24c8621090a87d9663f5b0209fa33f5d9aef66e"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fc7f17d65f8ab27eb095f62f5b267e3a2f4a59cbc985001a0a30e3363340b63f.json",
+      "sha256": "48ce87c2a56b53cb00152dc09f7bdba362bcd90a9c3e50009f9d00929082fb20"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fc7f17d65f8ab27eb095f62f5b267e3a2f4a59cbc985001a0a30e3363340b63f.npy",
+      "sha256": "a10d53a4b27a36c1cbf7fb524f8ba9626079c43de789957d80c93fe1c0cf9e42"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fcb47812c30a7a3ee2dd64626186eaec04e5e58137a441bcc36a26b647492f19.json",
+      "sha256": "fb425f859b3116d08c14ca81ba34613743a67e9fef19ed2bacfd614ac6e59e96"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fcb47812c30a7a3ee2dd64626186eaec04e5e58137a441bcc36a26b647492f19.npy",
+      "sha256": "e4507bd4b36d7f54c813154cebb641783e60dd42c94a3af5f8f8dbbca4b24ec8"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fceb3703bb40731ac15d97026f3baa3425aa6cb10e0d316aea73cd3de843ea7e.json",
+      "sha256": "e30ae4062a82b6dfa2b7b675ed393e218b119a6f94919ae8cb41720a4241944d"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fceb3703bb40731ac15d97026f3baa3425aa6cb10e0d316aea73cd3de843ea7e.npy",
+      "sha256": "47a4c922e2f8f640be354b82b5c026dcf7d8645f27bccb6e80c9afdd7d75fd85"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fdcb5bafe8d11676e301925f01d898e5b62454dbfb75704148dbff9292a2dffc.json",
+      "sha256": "ee84caf2372f3e732cbb5c9c30b92936aa072a7db0152d6f4e064122fa1b0bd1"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fdcb5bafe8d11676e301925f01d898e5b62454dbfb75704148dbff9292a2dffc.npy",
+      "sha256": "7619bd5895f56fa7ffcab53b6f1477e3e6143180b37388e46dc9c943a38e93a0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fddaa039c6961ea50e18623be0a9968d5fbf17ac199d6bf9705bd977a69acb81.json",
+      "sha256": "ab9dea463d4e6317c3b2c99b3aaba9fa7639a0c05a1c8e1058918ce494a8d2e5"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/fddaa039c6961ea50e18623be0a9968d5fbf17ac199d6bf9705bd977a69acb81.npy",
+      "sha256": "a6a9e80c4b7b75c9291684ed9542d34fa63000fbba4a45f06cfedcc1eae09d1a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/feb0c2d5c139d7e82d3a6bba38769e0e67775cac0f3803780c1793499ec23d6a.json",
+      "sha256": "27550f2ae56d89d405fc6cbf45443ec36d565f6da091b92810048341ed625411"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/feb0c2d5c139d7e82d3a6bba38769e0e67775cac0f3803780c1793499ec23d6a.npy",
+      "sha256": "fbadac57bbef9a63c7c12fcf87166fd9307c082041c662dc4246b2db17aa930a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ff2c147d725b148d057a2d80a8acf38b393569540374e6dd78d148c47ac58fe5.json",
+      "sha256": "f9e75c053e88fea9fad1f511c5da8d4920900dc3f40392d9515e588a078901fd"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ff2c147d725b148d057a2d80a8acf38b393569540374e6dd78d148c47ac58fe5.npy",
+      "sha256": "6f86f77217150fc82580fffdc00683442bba5cec28e7840da274d2c94536866b"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ff4c847596036feeb2e4fd75df0a008f8c6167983fe8c4b72a6861d7835f8ada.json",
+      "sha256": "87c90278c8de062d6437a73599e2b04dfdaf6d9287bd4aa7f92d67dfbed80fda"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ff4c847596036feeb2e4fd75df0a008f8c6167983fe8c4b72a6861d7835f8ada.npy",
+      "sha256": "614f15181cd06e8833887753180dbd41077e15768498905f76cb36f4422e1e89"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ff63d6a65c4d0dfbe7948b75dd503c4f573c1d4afcb8f30289edae0598d1778d.json",
+      "sha256": "8eeae5b1a1d7f6f5019d7d902dad2015519d4789b9902cdb7f702c7a948e66b1"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/ff63d6a65c4d0dfbe7948b75dd503c4f573c1d4afcb8f30289edae0598d1778d.npy",
+      "sha256": "33c1b8bfb3f52670309939f097222b0313edb7c6dbd7cf818ee125061e4edc85"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/arrays/visual-cache/identity.json",
+      "sha256": "91ed409f9670d3a5dd5da0e9929a639043e4aef59d62ad889b81814a9e978bb0"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/manifest.json",
+      "sha256": "4d9209e3c1042f0c7a70b09ae42bab68d3f1922f4d3ed378878b16d60135a07a"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/provenance/laya-validation.json",
+      "sha256": "66829c3a6f5465a9f56465aaca8d3036838894ae8bd0f3c70a878b92ed6dd5d1"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/provenance/visual-cache.json",
+      "sha256": "583707841fd7c9ce380ffa5dc99cb5f2ba44f2d18d303524018951e7906f3357"
+    },
+    {
+      "path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908/status.json",
+      "sha256": "aba83fb16ff6717d836b9faefdb4b36dd62f80c46cffdb2c35fa297115fdd167"
+    }
+  ],
+  "kind": "file_sha256_index",
+  "schema_version": 1
+}

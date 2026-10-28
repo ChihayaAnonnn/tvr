@@ -1,0 +1,6 @@
+title: ProTA: Probabilistic Token Aggregation for Text-Video Retrieval
+arxiv_id: 2404.12216v2
+published: 2024-04-18 14:20:30+00:00
+updated: 2024-04-20 04:33:08+00:00
+pdf_url: https://arxiv.org/pdf/2404.12216v2
+fetched: 2026-08-28 via arxiv==4.0.1

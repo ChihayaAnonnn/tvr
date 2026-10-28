@@ -1,0 +1,77 @@
+{
+  "phase": "stage0-archive-qualification",
+  "phase_path": "experiments/oq1-kl-variance-hubness-v1/phases/stage0-archive-qualification.json",
+  "runs": [
+    {
+      "manifest_sha256": "ece85d9fcf546fa050a2f5a00bf3392038d0dd5abcd6e9c4bd3ff2be325db33c",
+      "output_hashes": {
+        "arrays/sha256/90/908251af60385de2b211f1fd4281d4e69cc3ece66815e1ccd2e019d24cace430.npy": "647092735d0f83096419a07a203198e8caba708bd1effbd1b0ff903c75fb910a",
+        "command.sh": "e4a3394dc2ef9635d2da873c657d9043e4c3a7e8a4c0772ead92e12640ff19d6",
+        "logs/controller.log": "ba5dde3cf33b1326dab7aa0d88032ff3cad178a01b07ddeb09396ec0e1e54316",
+        "metrics/selected_validation.json": "e22da43db31aaa6bad4983d0b68faf70823e9d6baf18d298ff80325236a31ac4",
+        "provenance/gpu-probe-launch.json": "1c4457ba215e5bac47368eaf9f94ca8d8d8643edd62b957853affbae05b0e031",
+        "provenance/qualification-rank-0.json": "ed50183e4dfb2386c80b0ddfc4f4589b7a33a64fd3873fee7a89d6661d03be58",
+        "provenance/qualification-rank-1.json": "f7ffdbbfbe14e2f72ac7678ff9d0eb7d7e8d37187342e6fdd9df536a960f790e",
+        "provenance/qualification-rank-2.json": "fee1dd4c5ce0b51a0d80bf3777a121e2096c256cab034b85c8006eacab77bb4c",
+        "provenance/qualification-rank-3.json": "eb5f5442cd7057565797a9ec773fe1ac6919a7ad9310b491938e85ac5c246b6a"
+      },
+      "run_id": "msrvtt-baseline-qual_success-seed000-20260829T103000Z-ae601bd295ee",
+      "state": "completed",
+      "summary_metrics": {
+        "qualification_loss": 7.5
+      }
+    },
+    {
+      "manifest_sha256": "9c95bec1d842c1f12e798029ab09773d210b5d66bcd9b59add46784819c1224e",
+      "output_hashes": {
+        "command.sh": "5179c807755f75625a06ef5a189f93dbc0013c78dbe6556cdeb4d94c73e99235",
+        "logs/controller.log": "965af0c38a3205864fc3c096aa81f4f1e523f92c10e87109c34cd98f1348cfc8",
+        "provenance/gpu-probe-launch.json": "736a4a98929ef57643ea9ff6fdddd202db97ba954e1e182f1570f6c9bb910efa",
+        "provenance/qualification-rank-0.json": "e18ee3cc63858b00f5b0673dd3ae341740e707692c7f55c1905b783ba9d3adbc",
+        "provenance/qualification-rank-1.json": "7104e5fe7089128cb547ee8aba20e986c35f16eaafd21b3906771652563a50ee",
+        "provenance/qualification-rank-2.json": "9e9cf29d0ee827b41eee23783f80a80fc872bbe3c25b91e731a356e287f12fd5",
+        "provenance/qualification-rank-3.json": "6da13587756f42065ba7ecfcc7f71743d95ff4b6c86c27f1ec893422102a7f03"
+      },
+      "run_id": "msrvtt-baseline-qual_nonowner_fail-seed000-20260829T103100Z-ae601bd295ee",
+      "state": "failed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "8a891ebb35840b734bbea9d6bbab4b482c7f5f58c2f6a1a4d18e4b67bc4436df",
+      "output_hashes": {
+        "command.sh": "4c3783d0917b1826a088536777d8adf07f244c30089fb6fbcfa5746f90eb4b7e",
+        "logs/controller.log": "8982de36dd7f846de87f189619f420f27f2299646805d8b4566b9eaa343319c7",
+        "provenance/gpu-probe-launch.json": "1232e5394ebd6bc64e9d4c97cb210238b018f31accbb1765a995832e2f990924",
+        "provenance/qualification-rank-0.json": "d6d918781ba52a97605b1bc35bdc8e1f542b13840523d07834f899e803db8c0a",
+        "provenance/qualification-rank-1.json": "903d7cf10fd080f1a9cdf91511aad6aedcaaf080ed556f837a01e0953660a02c",
+        "provenance/qualification-rank-2.json": "8f9110cfd67106d03073a8fc75e7e466e47d8b5da891cd9ebb01098d093ddda6",
+        "provenance/qualification-rank-3.json": "af2d7d2b7cfb13b837773c9d562ad87ede59550245a28cf3944ae6fd1ce12c99",
+        "provenance/worker_failure.json": "3cce44712d647ceb130506dc74c5f3150367ceffc8f79e7fdbc0edf225032aa1"
+      },
+      "run_id": "msrvtt-baseline-qual_owner_collective_fail-seed000-20260829T103200Z-ae601bd295ee",
+      "state": "failed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "feb54b010723580bcb337cb72154afa56fc02adb6694e23d05cf10b027d1cba2",
+      "output_hashes": {
+        "command.sh": "5d10bf86252b671edbf9676aff3123d233fe6e9fe4d535f57aa3bc32db69dd0c",
+        "logs/controller.log": "f28f115c9538208386899e10467ff64093097b02ee841634268531d5dcb3f2ac",
+        "provenance/attempt-note.json": "3545253093d24c951c173792436c1ec2bfef3482a5cb0ff6f6c4b6693490ca81",
+        "provenance/gpu-probe-launch.json": "4e47b025703e5ceaa608b3ef21c6e49dde334b48b7a41ac8dc84e64297e79f9f",
+        "provenance/qualification-rank-0.json": "159e4d0bc35e6999b7fd1ea50bf5ae29f7d1a86bb0b85206aa191860ed6e392f",
+        "provenance/qualification-rank-1.json": "b0c7c0797fa73b0e40f60961eac4db399e212f605385002913af5101626783e4",
+        "provenance/qualification-rank-2.json": "8cd71b4997945fcf709a15c943da392dc92e40c95592fefc29e89233b360a1bf",
+        "provenance/qualification-rank-3.json": "248d153a0a13a97d30a20d4cd3257203537ad018df90b1bd311f299558d450ed"
+      },
+      "run_id": "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T103300Z-ae601bd295ee",
+      "state": "failed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "oq1-kl-variance-hubness-v1",
+  "terminal_counts": {
+    "completed": 1,
+    "failed": 3
+  }
+}

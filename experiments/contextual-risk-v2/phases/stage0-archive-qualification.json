@@ -1,0 +1,63 @@
+{
+  "phase": "stage0-archive-qualification",
+  "study": "contextual-risk-v2",
+  "runs": [
+    {
+      "dataset": "msrvtt",
+      "stage": "baseline",
+      "variant": "archive_qualification_4gpu",
+      "seed": 0,
+      "timestamp_utc": "20260814T090705Z",
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "gpu_count": 4,
+        "precision": "fp32",
+        "distributed_topology": "single-node-4-rank-nccl"
+      },
+      "input_checkpoints": [],
+      "dataset_splits": [],
+      "config": {
+        "model": {
+          "fixture": "linear-4x2",
+          "train_steps": 1
+        },
+        "loss": {
+          "name": "mse"
+        },
+        "optimizer": {
+          "name": "sgd",
+          "lr": 0.01
+        },
+        "scheduler": {},
+        "evaluation": {
+          "split": "validation",
+          "test_access": false
+        }
+      },
+      "parent_run_ids": [],
+      "selection_lineage": [
+        "Stage 0 archive qualification only; not a scientific candidate"
+      ],
+      "validation_authorized": true,
+      "test_authorized": false,
+      "expected_scalar_outputs": [
+        "fixture_loss"
+      ],
+      "array_references": [],
+      "command": [
+        "/home/xujie/.conda/envs/tvr/bin/torchrun",
+        "--standalone",
+        "--nproc_per_node=4",
+        "tests/test_experiment_archive_e2e.py",
+        "--four-rank-worker",
+        "--mode",
+        "success",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ]
+    }
+  ]
+}

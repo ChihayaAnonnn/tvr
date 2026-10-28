@@ -1,0 +1,12 @@
+{
+  "D1": {
+    "path": "experiments/semantic-answerability-pilot-v1/summaries/D1.json",
+    "sha256": "da72a55769459e9acc33c4f0d5d2a4a65439fcb2473e7975938155a9a8253a11",
+    "commit": "8fe109aef6107eb87834470fd3e3a20cb4bd7f54"
+  },
+  "Q0P": {
+    "path": "experiments/semantic-answerability-pilot-v1/summaries/Q0P-20261001T104445Z.json",
+    "sha256": "56d70f3330eb3eea41f43f00cf24866cfb85e2216128b0d69a71aad745ae086e",
+    "commit": "4e3d4013b9ae33ca53a29a024f4b55aebea9e74a"
+  }
+}

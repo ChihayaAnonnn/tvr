@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Experiment registry record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "event", "artifact_path", "manifest_sha256", "state", "parent_run_ids", "selected_validation", "test_authorized", "summary_metrics"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "pattern": "^(?!.*--)[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "event": {"type": "string", "enum": ["reserved", "completed", "failed", "cancelled", "correction"]},
+    "artifact_path": {"type": "string", "pattern": "^/"},
+    "artifact_locator": {"type": "string", "pattern": "^(?!/)(?!\\./)(?!.*(^|/)\\.\\.(/|$))(?!.*//)[^\\\\]+$"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "state": {"type": "string", "enum": ["reserved", "running", "validating", "completed", "failed", "cancelled"]},
+    "parent_run_ids": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "selected_validation": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/metricReference"}
+      ]
+    },
+    "test_authorized": {"type": "boolean"},
+    "summary_metrics": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+      "additionalProperties": {"type": "number"}
+    },
+    "supersedes_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "event": {"const": "reserved"},
+            "state": {"const": "reserved"},
+            "selected_validation": {"type": "null"},
+            "summary_metrics": {"maxProperties": 0}
+          },
+          "required": ["event", "state"]
+        },
+        {"properties": {"event": {"const": "completed"}, "state": {"const": "completed"}}, "required": ["event", "state"]},
+        {"properties": {"event": {"const": "failed"}, "state": {"const": "failed"}}, "required": ["event", "state"]},
+        {"properties": {"event": {"const": "cancelled"}, "state": {"const": "cancelled"}}, "required": ["event", "state"]},
+        {
+          "properties": {"event": {"const": "correction"}},
+          "required": ["event", "supersedes_sha256"]
+        }
+      ]
+    },
+    {
+      "if": {"properties": {"event": {"const": "correction"}}, "required": ["event"]},
+      "else": {"not": {"required": ["supersedes_sha256"]}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "metricReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^metrics/(?!/)(?!\\.{1,2}/)(?!.*//)(?!.*(?:/\\.{1,2})(?:/|$))[^\\\\]+\\.json$"
+        },
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

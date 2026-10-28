@@ -1,0 +1,52 @@
+{
+  "phase": "W0-public-pretrained-input",
+  "study": "evidence-conditioned-retrieval-v1",
+  "runs": [
+    {
+      "dataset": "synthetic",
+      "stage": "baseline",
+      "variant": "pretrained-clip-input",
+      "seed": 713,
+      "scheduled_timestamp_utc": "20261010T002713Z",
+      "environment": {
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121",
+        "cuda": "12.1",
+        "gpu_model": "none",
+        "gpu_count": 0,
+        "precision": "fp32",
+        "distributed_topology": "single-process"
+      },
+      "input_checkpoints": [],
+      "dataset_splits": [],
+      "config": {
+        "model": {},
+        "loss": {},
+        "optimizer": {},
+        "scheduler": {},
+        "evaluation": {
+          "eval_split": "val",
+          "qualification_scenario": "evidence_weights:54301508dbee51e675235da3229016ae42aee467d24d7224929a928fa38fa5aa"
+        }
+      },
+      "parent_run_ids": [],
+      "selection_lineage": [
+        "experiments/evidence-conditioned-retrieval-v1/reports/source-audit-2026-10-10.md"
+      ],
+      "validation_authorized": true,
+      "test_authorized": false,
+      "expected_scalar_outputs": [],
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=",
+        "OMP_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "scripts/prepare_evidence_weights.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ]
+    }
+  ]
+}

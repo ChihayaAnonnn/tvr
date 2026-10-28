@@ -6,5 +6,4 @@ line-length = 120
 extend-select = ["I"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
-
+pythonpath = ["src", "."]

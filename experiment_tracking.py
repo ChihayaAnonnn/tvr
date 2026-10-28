@@ -1,11 +1,4 @@
-"""Small, dependency-free helpers for trusted experiment provenance.
-
-The tracking sidecar deliberately contains only reproducibility metadata.  It is
-kept separate from the training loss path so that telemetry can never affect
-autograd or optimizer updates.
-"""
-
-from __future__ import annotations
+"""Generic provenance and batch telemetry; retired model configuration is not constructed."""
 
 import csv
 import json
@@ -16,11 +9,7 @@ import tempfile
 from numbers import Integral
 from pathlib import Path
 
-_BATCH_STATS = (
-    "unique_video_count",
-    "duplicate_sample_count",
-    "mean_positive_count",
-)
+_BATCH_STATS = ("unique_video_count", "duplicate_sample_count", "mean_positive_count")
 _BATCH_PROTOCOL_FIELDS = ("epoch", "forward_step", "global_step", *_BATCH_STATS)
 
 
@@ -87,14 +76,19 @@ def compute_batch_semantics(
 
 
 def collect_git_state(project_root):
-    """Capture commit and porcelain paths without embedding command-line data."""
+    """Capture the commit and tracked/index changes relative to ``HEAD``.
+
+    Registered experiments intentionally permit ignored and untracked runtime
+    artifacts (logs, checkpoints, smoke outputs).  Only tracked worktree or
+    index changes make the source state dirty.
+    """
 
     root = Path(project_root)
     commit = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=root, text=True, stderr=subprocess.STDOUT
     ).strip()
     lines = subprocess.check_output(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+        ["git", "status", "--porcelain=v1", "--untracked-files=no"],
         cwd=root,
         text=True,
         stderr=subprocess.STDOUT,
@@ -111,112 +105,25 @@ def collect_git_state(project_root):
     }
 
 
-def build_experiment_manifest(args, split_summary, batch_semantics, git_state):
-    """Build a JSON-serializable provenance payload from explicit safe fields."""
-
-    split = split_summary if split_summary is not None else None
-    pretrained_clip_name = getattr(args, "pretrained_clip_name", "")
-    backbone = {
-        "pretrained_clip_name": pretrained_clip_name,
-        "clip_layer_norm_precision": getattr(
-            args, "clip_layer_norm_precision", "fp16"
-        ),
-        "clip_gradient_checkpointing": bool(
-            getattr(args, "clip_gradient_checkpointing", False)
-        ),
-        "clip_visual_checkpoint_layers": int(
-            getattr(args, "clip_visual_checkpoint_layers", 4)
-        ),
-        "name": pretrained_clip_name,
-        "path": "",
-    }
-    data = {
-        "source_train_csv": getattr(args, "source_train_csv", ""),
-        "train_csv": getattr(args, "train_csv", ""),
-        "val_csv": getattr(args, "val_csv", ""),
-        "test_csv": getattr(args, "test_csv", ""),
-        "annotation_json": getattr(args, "data_path", ""),
-        "split_manifest": getattr(args, "split_manifest", ""),
-        "tqfs_cache_dir": getattr(args, "tqfs_cache_dir", ""),
-        # True means the run trained on all 9000 source videos, including the
-        # 500 trusted-v1 holds out, so its number is comparable to published
-        # ones and not to our own.
-        "fold_val_into_train": bool(getattr(args, "fold_val_into_train", False)),
-    }
-    # How much of the backbone trains, and on what input, dominates every RSPR
-    # effect measured on top of it. Recording these next to the RSPR knobs is
-    # what makes an unintended change show up in a diff of two manifests.
-    optimization = {
-        "lr": float(getattr(args, "lr", 1e-4)),
-        "coef_lr": float(getattr(args, "coef_lr", 1.0)),
-        "lr_decay": float(getattr(args, "lr_decay", 0.9)),
-        "warmup_proportion": float(getattr(args, "warmup_proportion", 0.1)),
-        "epochs": int(getattr(args, "epochs", 20)),
-        "freeze_layer_num": int(getattr(args, "freeze_layer_num", 0)),
-        "max_words": int(getattr(args, "max_words", 20)),
-        "max_frames": int(getattr(args, "max_frames", 100)),
-        "feature_framerate": int(getattr(args, "feature_framerate", 1)),
-        "slice_framepos": int(getattr(args, "slice_framepos", 0)),
-        "expand_msrvtt_sentences": bool(
-            getattr(args, "expand_msrvtt_sentences", False)
-        ),
-    }
-    workers = int(getattr(args, "num_thread_reader", 0))
-    runtime = {
-        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
-        "num_dataloader_workers_per_rank": workers,
-        "prefetch_factor": int(getattr(args, "prefetch_factor", 2)),
-        "pin_memory": bool(getattr(args, "pin_memory", False)),
-        "persistent_workers": workers > 0,
-    }
-    rspr = {
-        "rspr_mode": getattr(args, "rspr_mode", "legacy"),
-        "rspr_sample_count": getattr(args, "rspr_sample_count", 4),
-        "rspr_eval_sample_count": getattr(args, "rspr_eval_sample_count", 8),
-        "rspr_match_mode": getattr(args, "rspr_match_mode", "soft"),
-        "rspr_detach_samples": bool(getattr(args, "rspr_detach_samples", False)),
-        "rspr_match_temperature": getattr(args, "rspr_match_temperature", 0.07),
-        "rspr_prob_temperature": getattr(args, "rspr_prob_temperature", 0.07),
-        "rspr_prob_loss": getattr(args, "rspr_prob_loss", "soft_bce"),
-        "rspr_rank_temperature": getattr(args, "rspr_rank_temperature", 0.07),
-        "rspr_hard_negatives": getattr(args, "rspr_hard_negatives", 8),
-        "rspr_prior_std": getattr(args, "rspr_prior_std", 0.1),
-        "rspr_prob_weight": getattr(args, "rspr_prob_weight", 0.1),
-        "rspr_rank_weight": getattr(args, "rspr_rank_weight", 0.1),
-        "rspr_anchor_weight": getattr(args, "rspr_anchor_weight", 1e-4),
-        "rspr_warmup_epochs": getattr(args, "rspr_warmup_epochs", 1.0),
-        "rspr_eval_seed": getattr(args, "rspr_eval_seed", 0),
-        "rspr_freeze_clip": bool(getattr(args, "rspr_freeze_clip", False)),
-        "rspr_freeze_dsa": bool(getattr(args, "rspr_freeze_dsa", False)),
-        "rspr_grad_diagnostics": bool(getattr(args, "rspr_grad_diagnostics", False)),
-    }
-    return {
-        "protocol_version": split.get("protocol_version") if split else None,
-        "git": git_state,
-        "split": split,
-        "seed": getattr(args, "seed", None),
-        "profile": getattr(args, "experiment_profile", "default"),
-        "rspr": rspr,
-        "optimization": optimization,
-        "run_final_test": bool(getattr(args, "run_final_test", False)),
-        "backbone": backbone,
-        "data": data,
-        "batch": batch_semantics,
-        "runtime": runtime,
-    }
-
-
 def atomic_write_json(path, payload):
     """Atomically replace *path* with pretty, deterministic JSON."""
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    encoded = (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode(
-        "utf-8"
-    )
-    fd, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent)
-    )
+    try:
+        encoded = (
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                allow_nan=False,
+                sort_keys=True,
+                indent=2,
+            )
+            + "\n"
+        ).encode("utf-8")
+    except ValueError as exc:
+        raise ValueError("tracking payload is not strict JSON") from exc
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
     temporary_path = Path(temporary_name)
     try:
         with os.fdopen(fd, "wb") as handle:
@@ -249,10 +156,7 @@ def extract_batch_protocol_stats(loss_dict):
     missing = [name for name in _BATCH_STATS if name not in loss_dict]
     if missing:
         raise ValueError(f"loss stats missing required keys: {missing}")
-    return {
-        name: _finite_number(loss_dict[name], f"loss stat {name}")
-        for name in _BATCH_STATS
-    }
+    return {name: _finite_number(loss_dict[name], f"loss stat {name}") for name in _BATCH_STATS}
 
 
 def append_batch_protocol_stats(path, epoch, forward_step, global_step, stats):
@@ -271,10 +175,7 @@ def append_batch_protocol_stats(path, epoch, forward_step, global_step, stats):
         if extra:
             details.append(f"extra keys: {extra}")
         raise ValueError("batch stats schema mismatch (" + "; ".join(details) + ")")
-    values = {
-        name: _finite_number(stats[name], f"batch stat {name}")
-        for name in _BATCH_STATS
-    }
+    values = {name: _finite_number(stats[name], f"batch stat {name}") for name in _BATCH_STATS}
     row = {
         "epoch": _positive_or_zero_int(epoch, "epoch"),
         "forward_step": _positive_or_zero_int(forward_step, "forward step"),
@@ -290,10 +191,7 @@ def append_batch_protocol_stats(path, epoch, forward_step, global_step, stats):
         except (OSError, csv.Error) as exc:
             raise ValueError(f"unable to read existing batch stats header: {path}") from exc
         if existing_header != fieldnames:
-            raise ValueError(
-                "batch stats header schema mismatch: "
-                f"expected {fieldnames}, got {existing_header}"
-            )
+            raise ValueError(f"batch stats header schema mismatch: expected {fieldnames}, got {existing_header}")
     with path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t")
         if needs_header:

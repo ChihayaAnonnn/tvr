@@ -1,0 +1,75 @@
+{
+  "schema_version": "evidence-pilot-prerequisites-v1",
+  "source_policy_approved": true,
+  "test_authorized": false,
+  "d0": {
+    "run_id": "msrvtt-baseline-source-role-input-seed713-20261010T003417Z-e4db5aaeefb7",
+    "manifest_sha256": "68448b6b791402498cade4ff5f6e9bde78fe3460f078af4e9aff9b55a68d4dc3",
+    "result_sha256": "43d6856d49a6423ea69480c95a0b2219d77d249af1f80335e7ae0aa78b4e0ce3",
+    "independent_validation": {
+      "output_hashes": 35,
+      "references": 19,
+      "decoded_videos": 320,
+      "decoded_frames": 57400,
+      "role_overlap": 0,
+      "assignment_differences": 0
+    }
+  },
+  "w0": {
+    "run_id": "synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b",
+    "manifest_sha256": "2fd1ceb9126df1ad40e0f56ad4a242bd297e21d72ce496e4b2922f4cee51cee7",
+    "weight_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+    "real_cpu_forward": true
+  },
+  "q0": {
+    "run_id": "synthetic-baseline-evidence-q0-r1-four-gpu-seed713-20261010T003728Z-c636d81e8d8e",
+    "manifest_sha256": "278bae47dbf3c37a403cadddcbb884b4ab465de3fcedb866ad82dc0dd6b9d6e2",
+    "report_sha256": "7daa037fff0df8a32bf00ed4b2a1d56aa7a464d33c81a7ad5b38f22032fa311b",
+    "checks_passed": 13,
+    "array_references_verified": 578,
+    "controller_seconds": 72.13450218096841,
+    "allocated_gpu_hours": 0.08014944686774268
+  },
+  "regression": {
+    "command_prefix": "CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/.conda/envs/tvr/bin/python -m pytest -p no:cacheprovider",
+    "batches": [
+      {
+        "paths": [
+          "tests/semantic_retrieval"
+        ],
+        "passed": 483,
+        "seconds": 164.3
+      },
+      {
+        "paths": [
+          "tests/test_experiment_artifacts.py",
+          "tests/test_experiment_tracking.py",
+          "tests/test_experiment_artifact_docs.py",
+          "tests/test_legacy_artifact_migration.py"
+        ],
+        "passed": 145,
+        "seconds": 3.16
+      },
+      {
+        "paths": [
+          "tests/test_manage_experiment_run.py",
+          "tests/test_experiment_archive_e2e.py"
+        ],
+        "passed": 30,
+        "seconds": 72.29
+      }
+    ],
+    "total_passed": 658
+  },
+  "preregistration": {
+    "path": "experiments/evidence-conditioned-retrieval-v1/PREREGISTRATION.md",
+    "sha256": "30b31722dcd4eebdad3f5bbf73f75c5e701e214ba367e5d64fa3c9f0a908f639"
+  },
+  "independent_review": {
+    "agent": "source_gate_review",
+    "code_commit": "e4db5aa",
+    "blocking_findings": 0,
+    "fresh_doc_cpu_invocation": "exit0 ENV_WITNESS 2.1.2+cu121 1.26.4 4.11.0 6.0.2 (8,8) cpu"
+  },
+  "scientific_conclusion": "not_yet_tested"
+}

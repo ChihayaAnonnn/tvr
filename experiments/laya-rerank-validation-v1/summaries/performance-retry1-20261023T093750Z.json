@@ -1,0 +1,39 @@
+{
+  "phase": "performance-retry1-20261023T093750Z",
+  "phase_path": "experiments/laya-rerank-validation-v1/phases/performance-retry1-20261023T093750Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "bfa746f8b029778215057aaced4fcc87e7dbba6fb7d67cc3ad870fd6365740e7",
+      "output_hashes": {
+        "arrays/sha256/20/20709137ea4655295ca85335d6901486f29e12661c089f019381db7eb69e03b3.npy": "392afe8deda4b239644e1a5c5e1640bdd20b3f1290e2e2c332df5d3b68565d49",
+        "arrays/sha256/31/31b28febeadb59450ae2a9a857199d5022eb81852d23ec38918ac1ced16906e9.npy": "ac006e6a1167179696b0e8c5bc7dd8296e82f1c74e36331a6e3acce5c3ea0b13",
+        "arrays/sha256/9c/9c83101374503c28f87faba320b81797e9f0b78fab31a6f180911bc1aff132c6.npy": "29cd803ad19addd9047e8c217ab300884893ea5e49c64d6ebc9ce1804efa3e96",
+        "arrays/sha256/9d/9da5a5730b423fd022fb94cebb2868989aacabc6b2abaa222c4ec86fbc621161.npy": "8e6b69f460e80c554c28c4904d60a4194cd3d25091586dfc8acc7a9aeea5c974",
+        "arrays/sha256/cf/cff69b5fad35005119005382b085934dbbb1f88acd4c2f1fbb30892207e6366b.npy": "4571043904ae264e4e319651278e1a499287ad5f8e42d80eb04bba3aafc32bc9",
+        "arrays/sha256/e4/e47c9be4695b10873e8c384d1a40a9978c125839f17e564838b5cc3911b6f477.npy": "ac2c7dffd40c640675407586c879bd03e699bc7f532d7da736b2ef686f8336b3",
+        "command.sh": "5c1264e6970353dc3fa2dd4c2b8914044b2d211ee7017740789344fe358a152a",
+        "logs/baseline-r0.log": "0334848d9f93adc8e075588e72e509faaf2d5e14f3221915cc0bf69128a5d2d8",
+        "logs/enhanced-r0.log": "49e4a7fb2e6d8810d635ce87660401e3622ff536e147596cc20ffababd4ba971",
+        "logs/enhanced-r1.log": "d6c7f60d4b3709620e4634b7bf7b7cb2906f78de60dc82b6978a21b870795aab",
+        "logs/prepare.log": "9bb58de440893d8346fe6956c6bab469f1d3de85356c78da7237bb5b3b0bfbc7",
+        "provenance/controller-live.json": "dbfcd99e9da5694acbe718d743a4bc2e9e57641c5b25d5914021db399a2bd681",
+        "provenance/controller-result.json": "0fe5d7fadb6e30d090137d19ebc30e6e2b02784b06287f29b86b99d6e764ad3f",
+        "provenance/launch-baseline-r0.json": "f7d07f54a6612d28d2d9a04c45d586030edc68be920d383444e0a34c5d8ba220",
+        "provenance/launch-enhanced-r0.json": "68c9c7463667c7a37538b70d4ff46bb05ec2f1830942f4288ddf496521169a2a",
+        "provenance/launch-enhanced-r1.json": "b26eb5d033a4c0fc011ddcb5202ba636a507475ad9704f2c28a31ea38aa7ac55",
+        "provenance/launch-prepare.json": "f0527c1db78fe691208ba0c8d42517762f1bb497d66314d21092fd3e3109aa45",
+        "provenance/original-cache.json": "81693d034e1a44e097fd344e2588f2b3ff4e370784f4b2ec822b9627cfd0fc9d",
+        "provenance/performance-baseline-r0.json": "c20befd7441b1c719d3fc1ff787c9faddf4322b3ecabfc3927f172920eb887c5",
+        "provenance/performance-enhanced-r0.json": "96a99e03a73af937aef56919668a6c0bb038ed73c151090b472e8d2368f8ba66",
+        "provenance/performance-enhanced-r1.json": "0051604acbd8369960bab25bec259c0112b9a852ace1ad08ed8d9aa5466c3d25"
+      },
+      "run_id": "msrvtt-efficiency-laya-performance-retry1-seed713-20261023T093750Z-3dae69442b10",
+      "state": "failed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "laya-rerank-validation-v1",
+  "terminal_counts": {
+    "failed": 1
+  }
+}

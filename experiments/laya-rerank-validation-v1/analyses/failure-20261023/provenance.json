@@ -1,0 +1,46 @@
+{
+  "kind": "posthoc_readonly_cpu_diagnosis",
+  "date": "2026-10-23",
+  "gpu_used": false,
+  "test_accessed": false,
+  "training": false,
+  "original_scientific_outputs_modified": false,
+  "source_sha": "124ff08acc8858fa3e7f061885c3b34d534d83dd",
+  "environment": {
+    "CUDA_VISIBLE_DEVICES": "",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "OMP_NUM_THREADS": "2",
+    "OPENBLAS_NUM_THREADS": "2",
+    "LD_LIBRARY_PATH": "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/nvidia/nccl/lib:/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/nvidia/cudnn/lib"
+  },
+  "input_hashes": {
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/fixed.json": "34cd2e4691bd2c9af01754cb1b551d3c024bbcc241ea97f2d375d71a0de6d8a3",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/external.input-index.json": "93b57def84898f0fa01a8dd29b53b8a2d43e267e7209bbe7376fa33b72d7b2e2",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/study.yaml": "defa77abfaf74309371944c4832f1e94758170b3730a7f404d417c0c1cede099",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/judge.py": "56cad4ccff0c6e96ab94b9ccf49a1f07ae448d9477f27836b109edeb04225bd5",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/evidence.py": "e59a25abf0418e6189ee8bc98c6e0e4e657bfd05ae079e45bed1607b4df6b569",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/core.py": "7872d28da56fabd10a79dfaf5b330421299c7f376fed5367d16b1a2b5bf66ec6",
+    "/data2/hxj/project/UATVR/src/semantic_retrieval/laya_rerank/science.py": "3f9ed48faf1c9487bb3c618b84b76745ecd5595262b3197470a0ce9f2a74ace4",
+    "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/environment.lock.txt": "c0791c2e556b850378863a92d148b3057c6a324236b2c2efaefe753caed035df"
+  },
+  "cpu_commands": [
+    ".venvs/laya-validation-v1/bin/python /data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/analyses/failure-20261023/reproduce-real-cpu.py",
+    ".venvs/laya-validation-v1/bin/python /data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/analyses/failure-20261023/reproduce-same-device.py",
+    ".venvs/laya-validation-v1/bin/python /data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/analyses/failure-20261023/reproduce-statistics.py"
+  ],
+  "output_sha256": {
+    "same-device-checks.csv": "940134d6ac62418ebbe2b5756c449d183f4f1e3bb21a9d5b7b9171a13f4c63a8",
+    "real-pair-checks.csv": "7a114d1375393cf3fd0106eb2be632e5dd2bb5e717e9d99ec1cd4e3793bfeb76",
+    "reproduce-case-figure.py": "25f5a9a767d452c2b52bed0da210a9454e9ebba7c983fdb5e341b0251034d75f",
+    "reproduce-same-device.py": "3cf92feee4b5a30aed77668286484983b003d265ad78f34aee163e1ef17930ea",
+    "reproduce-real-cpu.py": "4ad16ca709aff54a6d7b7ac843084accc747d801cb1f86c15eea0fa371b4d155",
+    "README.md": "35280453c2e1a239801ec05f03d6742fd7fa6e829ee78412196727e7e1aa529c",
+    "reproduce-statistics.py": "d4ae86a81f523188731abb81e0830bdfeed727cca18aa52e17ccf45484872b28",
+    "case-figure.jpg": "dbf580e540ba05012ea0550866dc6c12b4c2e5e39e36be487fc0337f8bac156b",
+    "cpu-check-summary.json": "095fc8d5bda82dce9d3cf7db18fda94b53cf51612885dc682ba4985a21212009",
+    "statistics.json": "ece64427f4c1e64593b751dcb6c1de36a13e6efb239ee127bd8942f7643553cc"
+  },
+  "interpreter": "/data2/hxj/project/UATVR/.venvs/laya-validation-v1/bin/python"
+}

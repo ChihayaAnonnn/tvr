@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Experiment scalar metrics",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["split", "summary_metrics", "array_references"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "pattern": "^(?!.*--)[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "split": {"type": "string", "enum": ["train", "validation", "test"]},
+    "summary_metrics": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+      "additionalProperties": {"type": "number"}
+    },
+    "array_references": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/arrayReference"}
+    }
+  },
+  "$defs": {
+    "arrayReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "key", "shape", "dtype", "byte_size", "format", "sha256"],
+      "x-canonical-content-address": true,
+      "allOf": [
+        {"if": {"properties": {"sha256": {"pattern": "^0"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/0"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^1"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/1"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^2"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/2"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^3"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/3"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^4"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/4"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^5"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/5"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^6"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/6"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^7"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/7"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^8"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/8"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^9"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/9"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^a"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/a"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^b"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/b"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^c"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/c"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^d"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/d"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^e"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/e"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^f"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/f"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.0"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]0/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.1"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]1/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.2"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]2/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.3"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]3/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.4"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]4/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.5"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]5/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.6"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]6/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.7"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]7/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.8"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]8/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.9"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]9/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.a"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]a/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.b"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]b/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.c"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]c/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.d"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]d/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.e"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]e/"}}}},
+        {"if": {"properties": {"sha256": {"pattern": "^.f"}}}, "then": {"properties": {"path": {"pattern": "^arrays/sha256/[0-9a-f]f/"}}}}
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^arrays/sha256/([0-9a-f]{2})/\\1[0-9a-f]{62}\\.npy$"
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^(?!.*\\.\\.)[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "shape": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 0}
+        },
+        "dtype": {
+          "type": "string",
+          "pattern": "^(?:bool|u?int(?:8|16|32|64)|float(?:16|32|64)|complex(?:64|128))$"
+        },
+        "byte_size": {"type": "integer", "minimum": 0},
+        "format": {"const": "npy"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "phase": "stage1-baselines",
+  "phase_path": "experiments/contextual-risk-v2/phases/stage1-baselines.json",
+  "runs": [
+    {
+      "manifest_sha256": "28c510b8dd2b4b340797719ff87d4dffbe3c4090881dc441ba873c920afcffc2",
+      "output_hashes": {
+        "command.sh": "50c5f873da3d6d797e6c6e3b7058ffa9bc5a380cc30a7aa332fa49a6b920307f",
+        "logs/runtime.log": "328769fed23730ead5ad3e4b761dce5c10bb2a6c01d6895cac979e5e9f34e3f1",
+        "logs/train.log": "9e249c2d9080fff1934d35ee3e0efcda970036af367b1bc773e13fcc5f7336bf",
+        "provenance/worker_failure.json": "c9625d0202b5b55efa6443efa374d8d514dcd556ab821bac825cc171e4f1b475"
+      },
+      "run_id": "msrvtt-baseline-validation_baselines-seed000-20260818T030000Z-354c2c14a0a4",
+      "state": "cancelled",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "contextual-risk-v2",
+  "terminal_counts": {
+    "cancelled": 1
+  }
+}

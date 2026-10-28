@@ -1,0 +1,55 @@
+{
+  "phase": "stage0-determinism-probe",
+  "phase_path": "experiments/oq1-kl-variance-hubness-v1/phases/stage0-determinism-probe.json",
+  "runs": [
+    {
+      "manifest_sha256": "da37ded8885872fe92d829b21c712f2f78a9ca1931b3cb06eb0e8b0c6576ae82",
+      "output_hashes": {
+        "command.sh": "3950165c8cd76aec5c646da16678846484d9863e294eab246aee4fc33845c0c1",
+        "logs/controller.log": "330933e6b5228e7e3b8e38a3d6863c9f3b5ce2c304df19f5af81c8853d88ff48",
+        "logs/runtime.log": "f061a5d93eac9bea46caf7307d6f07b33724aaabe64c8d762780e65a4a427848",
+        "metrics/selected_validation.json": "197cc03a57b1edb8e2deda2e3d5569710e7544a9f6d56d001c5484fabd5d5933",
+        "provenance/determinism-probe-rank0.json": "5aaba05e9c75d31e7515efc62c490871d492e8655f94ec3a15a780d254ffbcfc",
+        "provenance/determinism-probe-step-losses-rank0.npy": "7039f69f722dbfa6ced52cb4594803c072b453af1a8aaa19c3795734b4035ab7",
+        "provenance/gpu-probe-launch.json": "2482bc9a68dd074c3183935d548b164095d45124a4ac62c3119d3e9bcf0ef56f",
+        "provenance/training_args.json": "5bf5ee70d28b361c8765c6bd60e4d840764cb4fadc340e86149c1bcbbcfe27d6",
+        "provenance/training_manifest.json": "4c7d9b908657db7cc5f995a258f4d772d59cf3ed9cf1cc8c2c1864066a44c646"
+      },
+      "run_id": "msrvtt-baseline-det_probe_arm1_a-seed000-20260829T164500Z-0761a744dc85",
+      "state": "completed",
+      "summary_metrics": {
+        "probe_loss_first": 5.544894218444824,
+        "probe_loss_last": 4.444836616516113,
+        "probe_loss_sum": 1035.738920211792,
+        "probe_steps": 200.0
+      }
+    },
+    {
+      "manifest_sha256": "eec1441cc646e8ad660607e238b4f81941d1a6bc67bc017ce92f432e16f614a2",
+      "output_hashes": {
+        "command.sh": "534f617ff8fabcba5c7e5a30842bf07b4a444cbbfeb446057b21f6577c8d3fb2",
+        "logs/controller.log": "731d2642acdcc3abf970331e4cf5128a8e9a4b8b36008ff46ad22096f1ea20e2",
+        "logs/runtime.log": "cc3faccbac6bc314fe4f45684d95414a98751443a4eca0bad62d616f8d8771d4",
+        "metrics/selected_validation.json": "197cc03a57b1edb8e2deda2e3d5569710e7544a9f6d56d001c5484fabd5d5933",
+        "provenance/determinism-probe-rank0.json": "5aaba05e9c75d31e7515efc62c490871d492e8655f94ec3a15a780d254ffbcfc",
+        "provenance/determinism-probe-step-losses-rank0.npy": "7039f69f722dbfa6ced52cb4594803c072b453af1a8aaa19c3795734b4035ab7",
+        "provenance/gpu-probe-launch-refused-20260829T165028Z.json": "129aa0d29dd3ea5431843a63286b76534177aa2ab11afdb7bd6a789c130685e8",
+        "provenance/gpu-probe-launch.json": "42cb6daf1636c2ab66e267d5bfe98050c1d3dcd73db5f8f557786439ad0cad13",
+        "provenance/training_args.json": "17c2b16f35cd38dbe8cf4f683d6eed80e2705e649ccfbbfb3d545dc4dd60a34d",
+        "provenance/training_manifest.json": "4c7d9b908657db7cc5f995a258f4d772d59cf3ed9cf1cc8c2c1864066a44c646"
+      },
+      "run_id": "msrvtt-baseline-det_probe_arm1_b-seed000-20260829T170000Z-0761a744dc85",
+      "state": "completed",
+      "summary_metrics": {
+        "probe_loss_first": 5.544894218444824,
+        "probe_loss_last": 4.444836616516113,
+        "probe_loss_sum": 1035.738920211792,
+        "probe_steps": 200.0
+      }
+    }
+  ],
+  "study": "oq1-kl-variance-hubness-v1",
+  "terminal_counts": {
+    "completed": 2
+  }
+}

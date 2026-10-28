@@ -1,0 +1,145 @@
+trusted-v1 validated: train=8500 val=500 test=1000
+[run_train_msrvtt_bg:worker] CUDA_VISIBLE_DEVICES=2,3 NPROC=2 TRAIN_NUM_WORKERS=12 TRAIN_PREFETCH_FACTOR=4 TRAIN_BATCH_SIZE=256 TRAIN_GRADIENT_ACCUMULATION_STEPS=1 CLIP_CACHE_DIR=/data2/hxj/project/UATVR/.cache
+[run_train_msrvtt_bg:worker] PRETRAINED_CLIP_NAME=ViT-B/16 CLIP_LAYER_NORM_PRECISION=fp32 CLIP_GRADIENT_CHECKPOINTING=1 CLIP_VISUAL_CHECKPOINT_LAYERS=4
+[Runtime] python=/home/xujie/.conda/envs/tvr/bin/python torchrun=/home/xujie/.conda/envs/tvr/bin/torchrun
+08/18/2026 21:54:09 - INFO -   Effective parameters:
+08/18/2026 21:54:09 - INFO -       [Experiment] Fix 1 PoC — BCE(u_mode, V2T failure), w=0.1, 2-GPU pilot {2,3}
+08/18/2026 21:54:09 - INFO -     [Training] epochs=3 | batch_size=256 | lr=0.0001 | coef_lr=0.001 | gradient_accumulation_steps=1 | fp16=False | max_frames=8 | max_words=32 | seed=0
+08/18/2026 21:54:09 - INFO -     [Model] pretrained_clip_name=ViT-B/16 | clip_layer_norm_precision=fp32 | clip_gradient_checkpointing=True | clip_visual_checkpoint_layers=4 | sim_header=seqTransf | loose_type=True | linear_patch=2d | extra_video_cls_num=2 | extra_text_cls_num=2 | n_video_embeddings=7 | n_text_embeddings=7 | use_attributes=False | max_words_attrs=None | attr_num_blocks=4
+08/18/2026 21:54:09 - INFO -     [Protocol] datatype=msrvtt | do_train=True | do_eval=False | eval_split=val | expand_msrvtt_sentences=True | source_train_csv=/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv | test_csv=/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv | split_manifest=/data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/dataloaders/splits/msrvtt_trusted_v1_seed0.json | experiment_profile=default
+08/18/2026 21:54:09 - INFO -   device: cuda:0 n_gpu: 2
+08/18/2026 21:54:10 - INFO -   loading archive file /data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/modules/cross-base
+08/18/2026 21:54:10 - INFO -   Model config {
+  "attention_probs_dropout_prob": 0.1,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.1,
+  "hidden_size": 512,
+  "initializer_range": 0.02,
+  "intermediate_size": 2048,
+  "max_position_embeddings": 128,
+  "num_attention_heads": 8,
+  "num_hidden_layers": 4,
+  "type_vocab_size": 2,
+  "vocab_size": 512
+}
+
+08/18/2026 21:54:10 - WARNING -   Test retrieval by loose type.
+08/18/2026 21:54:10 - WARNING -   	 embed_dim: 512
+08/18/2026 21:54:10 - WARNING -   	 image_resolution: 224
+08/18/2026 21:54:10 - WARNING -   	 vision_layers: 12
+08/18/2026 21:54:10 - WARNING -   	 vision_width: 768
+08/18/2026 21:54:10 - WARNING -   	 vision_patch_size: 16
+08/18/2026 21:54:10 - WARNING -   	 context_length: 77
+08/18/2026 21:54:10 - WARNING -   	 vocab_size: 49408
+08/18/2026 21:54:10 - WARNING -   	 transformer_width: 512
+08/18/2026 21:54:10 - WARNING -   	 transformer_heads: 8
+08/18/2026 21:54:10 - WARNING -   	 transformer_layers: 12
+08/18/2026 21:54:10 - WARNING -   		 linear_patch: 2d
+08/18/2026 21:54:10 - WARNING -   	 cut_top_layer: 0
+08/18/2026 21:54:11 - WARNING -   	 sim_header: seqTransf
+08/18/2026 21:54:11 - WARNING -   CLIP UATVR Model ......
+08/18/2026 21:54:11 - WARNING -   	 Extra video Class token number: 2
+08/18/2026 21:54:11 - WARNING -   	 Extra text Class token number: 2
+08/18/2026 21:54:11 - WARNING -   	 Number of video sampling probabilistic embeddings: 7
+08/18/2026 21:54:11 - WARNING -   	 Number of text sampling probabilistic embeddings: 7
+08/18/2026 21:54:21 - INFO -   UATVR: 8 个参数为新增模块，将随机初始化 (contextual_risk_sidecar×8)
+08/18/2026 21:54:21 - INFO -   UATVR: 3 个 pretrained 参数在当前模型中未使用（通常为 config 元数据），已忽略
+08/18/2026 21:54:21 - INFO -   [A3] trainable parameters: 186113 scalars
+08/18/2026 21:54:22 - INFO -     Batch semantics | requested_effective_batch=256
+08/18/2026 21:54:22 - INFO -     Batch semantics | forward_global_contrastive_batch=256
+08/18/2026 21:54:22 - INFO -     Batch semantics | per_rank_micro_batch=128
+08/18/2026 21:54:22 - INFO -     Batch semantics | gradient_accumulation_steps=1
+08/18/2026 21:54:22 - INFO -     Batch semantics | optimizer_effective_batch=256
+08/18/2026 21:54:22 - INFO -     Batch semantics | forward_steps_per_epoch=664
+08/18/2026 21:54:22 - INFO -     Batch semantics | optimizer_steps_per_epoch=664
+08/18/2026 21:54:22 - INFO -     Batch semantics | total_optimizer_steps=3320
+08/18/2026 21:54:22 - INFO -     Batch semantics | world_size=2
+NCCL version 2.18.6+cuda12.1
+08/18/2026 21:54:22 - INFO -   ***** Running val evaluation *****
+08/18/2026 21:54:22 - INFO -     Split: val | Samples: 10000 | Steps: 625 | Batch: 16 | Frame order: sequential
+08/18/2026 21:54:22 - INFO -   [Optimizer] CLIP: 0 params (lr=1.00e-07) | Other: 8 params (lr=1.00e-04)
+08/18/2026 21:54:22 - INFO -   ***** Running training *****
+08/18/2026 21:54:22 - INFO -     Samples: 170000 | Batch: 128 x 2 GPUs x 1 accum = 256 eff | Steps/epoch: 664 | Total opt steps: 3320
+/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/_utils.py:831: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  return self.fget.__get__(instance, owner)()
+08/18/2026 21:54:24 - INFO -   loading archive file /data2/hxj/project/UATVR/.worktrees/reliable-retrieval-experiment-campaign/modules/cross-base
+08/18/2026 21:54:24 - INFO -   Model config {
+  "attention_probs_dropout_prob": 0.1,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.1,
+  "hidden_size": 512,
+  "initializer_range": 0.02,
+  "intermediate_size": 2048,
+  "max_position_embeddings": 128,
+  "num_attention_heads": 8,
+  "num_hidden_layers": 4,
+  "type_vocab_size": 2,
+  "vocab_size": 512
+}
+
+08/18/2026 21:54:24 - WARNING -   Test retrieval by loose type.
+08/18/2026 21:54:24 - WARNING -   	 embed_dim: 512
+08/18/2026 21:54:24 - WARNING -   	 image_resolution: 224
+08/18/2026 21:54:24 - WARNING -   	 vision_layers: 12
+08/18/2026 21:54:24 - WARNING -   	 vision_width: 768
+08/18/2026 21:54:24 - WARNING -   	 vision_patch_size: 16
+08/18/2026 21:54:24 - WARNING -   	 context_length: 77
+08/18/2026 21:54:24 - WARNING -   	 vocab_size: 49408
+08/18/2026 21:54:24 - WARNING -   	 transformer_width: 512
+08/18/2026 21:54:24 - WARNING -   	 transformer_heads: 8
+08/18/2026 21:54:24 - WARNING -   	 transformer_layers: 12
+08/18/2026 21:54:24 - WARNING -   		 linear_patch: 2d
+08/18/2026 21:54:24 - WARNING -   	 cut_top_layer: 0
+08/18/2026 21:54:25 - WARNING -   	 sim_header: seqTransf
+08/18/2026 21:54:25 - WARNING -   CLIP UATVR Model ......
+08/18/2026 21:54:25 - WARNING -   	 Extra video Class token number: 2
+08/18/2026 21:54:25 - WARNING -   	 Extra text Class token number: 2
+08/18/2026 21:54:25 - WARNING -   	 Number of video sampling probabilistic embeddings: 7
+08/18/2026 21:54:25 - WARNING -   	 Number of text sampling probabilistic embeddings: 7
+08/18/2026 21:54:34 - INFO -   UATVR: 8 个参数为新增模块，将随机初始化 (contextual_risk_sidecar×8)
+08/18/2026 21:54:34 - INFO -   UATVR: 3 个 pretrained 参数在当前模型中未使用（通常为 config 元数据），已忽略
+08/18/2026 21:54:34 - INFO -   Model loaded from /data2/hxj/project/UATVR/ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4
+08/18/2026 21:54:34 - WARNING -   Eval under the multi-sentence per video clip setting.
+08/18/2026 21:54:34 - WARNING -   sentence num: 10000, video num: 500
+Evaluating:   0%|          | 0/625 [00:00<?, ?it/s]Evaluating:   0%|          | 1/625 [00:05<52:39,  5.06s/it]Evaluating:   0%|          | 2/625 [00:06<27:36,  2.66s/it]Evaluating:   1%|          | 4/625 [00:06<10:38,  1.03s/it]Evaluating:   1%|          | 7/625 [00:06<04:46,  2.16it/s]Evaluating:   1%|▏         | 9/625 [00:06<03:17,  3.12it/s]Evaluating:   2%|▏         | 12/625 [00:06<02:04,  4.93it/s]Evaluating:   2%|▏         | 14/625 [00:06<01:37,  6.29it/s]Evaluating:   3%|▎         | 17/625 [00:06<01:10,  8.61it/s]Evaluating:   3%|▎         | 19/625 [00:06<01:00, 10.09it/s]Evaluating:   4%|▎         | 22/625 [00:07<00:47, 12.61it/s]Evaluating:   4%|▍         | 24/625 [00:07<00:43, 13.67it/s]Evaluating:   4%|▍         | 27/625 [00:07<00:37, 15.76it/s]Evaluating:   5%|▍         | 30/625 [00:07<00:35, 16.60it/s]Evaluating:   5%|▌         | 33/625 [00:07<00:33, 17.77it/s]Evaluating:   6%|▌         | 35/625 [00:07<00:33, 17.40it/s]Evaluating:   6%|▌         | 38/625 [00:07<00:31, 18.89it/s]Evaluating:   7%|▋         | 41/625 [00:07<00:29, 19.65it/s]Evaluating:   7%|▋         | 44/625 [00:08<00:30, 18.87it/s]Evaluating:   8%|▊         | 47/625 [00:08<00:29, 19.55it/s]Evaluating:   8%|▊         | 50/625 [00:08<00:49, 11.68it/s]Evaluating:   8%|▊         | 53/625 [00:08<00:42, 13.36it/s]Evaluating:   9%|▉         | 55/625 [00:09<00:40, 14.04it/s]Evaluating:   9%|▉         | 58/625 [00:09<00:36, 15.63it/s]Evaluating:  10%|▉         | 60/625 [00:09<00:34, 16.28it/s]Evaluating:  10%|▉         | 62/625 [00:10<02:07,  4.40it/s]Evaluating:  10%|█         | 64/625 [00:10<01:42,  5.50it/s]Evaluating:  11%|█         | 67/625 [00:10<01:13,  7.57it/s]Evaluating:  11%|█         | 69/625 [00:11<01:01,  8.99it/s]Evaluating:  12%|█▏        | 72/625 [00:11<00:48, 11.46it/s]Evaluating:  12%|█▏        | 74/625 [00:12<02:07,  4.33it/s]Evaluating:  12%|█▏        | 77/625 [00:12<01:30,  6.08it/s]Evaluating:  13%|█▎        | 79/625 [00:12<01:14,  7.31it/s]Evaluating:  13%|█▎        | 82/625 [00:12<00:56,  9.62it/s]Evaluating:  13%|█▎        | 84/625 [00:13<00:49, 10.89it/s]Evaluating:  14%|█▍        | 86/625 [00:13<01:03,  8.44it/s]Evaluating:  14%|█▍        | 88/625 [00:13<00:54,  9.88it/s]Evaluating:  15%|█▍        | 91/625 [00:13<00:42, 12.61it/s]Evaluating:  15%|█▍        | 93/625 [00:13<00:38, 13.78it/s]Evaluating:  15%|█▌        | 95/625 [00:13<00:35, 14.94it/s]Evaluating:  16%|█▌        | 97/625 [00:14<01:19,  6.66it/s]Evaluating:  16%|█▌        | 99/625 [00:14<01:05,  8.05it/s]Evaluating:  16%|█▋        | 102/625 [00:14<00:48, 10.84it/s]Evaluating:  17%|█▋        | 104/625 [00:14<00:42, 12.34it/s]Evaluating:  17%|█▋        | 107/625 [00:15<00:34, 14.92it/s]Evaluating:  18%|█▊        | 110/625 [00:15<01:07,  7.66it/s]Evaluating:  18%|█▊        | 113/625 [00:15<00:52,  9.67it/s]Evaluating:  18%|█▊        | 115/625 [00:16<00:46, 10.89it/s]Evaluating:  19%|█▉        | 118/625 [00:16<00:38, 13.18it/s]Evaluating:  19%|█▉        | 120/625 [00:16<00:35, 14.32it/s]Evaluating:  20%|█▉        | 122/625 [00:17<01:33,  5.39it/s]Evaluating:  20%|██        | 125/625 [00:17<01:08,  7.27it/s]Evaluating:  20%|██        | 128/625 [00:17<00:51,  9.59it/s]Evaluating:  21%|██        | 130/625 [00:17<00:45, 10.83it/s]Evaluating:  21%|██▏       | 133/625 [00:18<00:51,  9.57it/s]Evaluating:  22%|██▏       | 135/625 [00:18<01:08,  7.18it/s]Evaluating:  22%|██▏       | 138/625 [00:18<00:52,  9.36it/s]Evaluating:  23%|██▎       | 141/625 [00:18<00:40, 11.90it/s]Evaluating:  23%|██▎       | 143/625 [00:18<00:36, 13.12it/s]Evaluating:  23%|██▎       | 145/625 [00:19<00:42, 11.26it/s]Evaluating:  24%|██▎       | 147/625 [00:19<01:22,  5.79it/s]Evaluating:  24%|██▍       | 149/625 [00:20<01:06,  7.14it/s]Evaluating:  24%|██▍       | 151/625 [00:20<00:56,  8.42it/s]Evaluating:  25%|██▍       | 154/625 [00:20<00:43, 10.88it/s]Evaluating:  25%|██▌       | 157/625 [00:20<00:34, 13.65it/s]Evaluating:  25%|██▌       | 159/625 [00:21<01:02,  7.50it/s]Evaluating:  26%|██▌       | 162/625 [00:21<00:47,  9.68it/s]Evaluating:  26%|██▌       | 164/625 [00:21<01:01,  7.51it/s]Evaluating:  27%|██▋       | 167/625 [00:21<00:46,  9.81it/s]Evaluating:  27%|██▋       | 170/625 [00:22<00:56,  8.01it/s]Evaluating:  28%|██▊       | 173/625 [00:22<00:44, 10.17it/s]Evaluating:  28%|██▊       | 175/625 [00:23<01:17,  5.81it/s]Evaluating:  28%|██▊       | 178/625 [00:23<00:57,  7.80it/s]Evaluating:  29%|██▉       | 181/625 [00:23<00:44, 10.01it/s]Evaluating:  29%|██▉       | 183/625 [00:24<01:06,  6.65it/s]Evaluating:  30%|██▉       | 186/625 [00:24<00:49,  8.80it/s]Evaluating:  30%|███       | 188/625 [00:24<00:56,  7.80it/s]Evaluating:  30%|███       | 190/625 [00:24<00:47,  9.23it/s]Evaluating:  31%|███       | 193/625 [00:24<00:37, 11.65it/s]Evaluating:  31%|███       | 195/625 [00:25<01:03,  6.80it/s]Evaluating:  32%|███▏      | 198/625 [00:25<00:48,  8.85it/s]Evaluating:  32%|███▏      | 200/625 [00:25<00:41, 10.22it/s]Evaluating:  32%|███▏      | 203/625 [00:25<00:32, 12.85it/s]Evaluating:  33%|███▎      | 205/625 [00:26<00:29, 14.10it/s]Evaluating:  33%|███▎      | 207/625 [00:26<00:53,  7.78it/s]Evaluating:  33%|███▎      | 209/625 [00:26<00:45,  9.22it/s]Evaluating:  34%|███▍      | 211/625 [00:26<00:42,  9.67it/s]Evaluating:  34%|███▍      | 214/625 [00:27<00:34, 12.08it/s]Evaluating:  35%|███▍      | 217/625 [00:27<00:27, 14.65it/s]Evaluating:  35%|███▌      | 219/625 [00:27<00:54,  7.50it/s]Evaluating:  36%|███▌      | 222/625 [00:27<00:41,  9.64it/s]Evaluating:  36%|███▌      | 224/625 [00:28<00:52,  7.62it/s]Evaluating:  36%|███▋      | 227/625 [00:28<00:39, 10.05it/s]Evaluating:  37%|███▋      | 229/625 [00:28<00:34, 11.35it/s]Evaluating:  37%|███▋      | 231/625 [00:28<00:37, 10.54it/s]Evaluating:  37%|███▋      | 233/625 [00:28<00:32, 12.02it/s]Evaluating:  38%|███▊      | 235/625 [00:29<00:55,  7.07it/s]Evaluating:  38%|███▊      | 238/625 [00:29<00:40,  9.65it/s]Evaluating:  38%|███▊      | 240/625 [00:29<00:34, 11.01it/s]Evaluating:  39%|███▊      | 242/625 [00:30<00:53,  7.11it/s]Evaluating:  39%|███▉      | 245/625 [00:30<00:40,  9.31it/s]Evaluating:  40%|███▉      | 247/625 [00:31<01:31,  4.11it/s]Evaluating:  40%|███▉      | 249/625 [00:31<01:17,  4.84it/s]Evaluating:  40%|████      | 252/625 [00:32<00:54,  6.78it/s]Evaluating:  41%|████      | 254/625 [00:32<00:47,  7.79it/s]Evaluating:  41%|████      | 257/625 [00:32<00:35, 10.24it/s]Evaluating:  41%|████▏     | 259/625 [00:32<00:37,  9.81it/s]Evaluating:  42%|████▏     | 262/625 [00:32<00:29, 12.18it/s]Evaluating:  42%|████▏     | 264/625 [00:32<00:27, 13.31it/s]Evaluating:  43%|████▎     | 267/625 [00:32<00:23, 15.52it/s]Evaluating:  43%|████▎     | 269/625 [00:33<00:21, 16.28it/s]Evaluating:  43%|████▎     | 271/625 [00:33<00:56,  6.30it/s]Evaluating:  44%|████▎     | 273/625 [00:34<00:45,  7.67it/s]Evaluating:  44%|████▍     | 275/625 [00:34<00:37,  9.24it/s]Evaluating:  44%|████▍     | 278/625 [00:34<00:28, 12.02it/s]Evaluating:  45%|████▍     | 281/625 [00:34<00:23, 14.73it/s]Evaluating:  45%|████▌     | 284/625 [00:36<01:24,  4.04it/s]Evaluating:  46%|████▌     | 287/625 [00:36<01:01,  5.52it/s]Evaluating:  46%|████▌     | 289/625 [00:36<00:50,  6.64it/s]Evaluating:  47%|████▋     | 292/625 [00:36<00:37,  8.83it/s]Evaluating:  47%|████▋     | 295/625 [00:36<00:33,  9.86it/s]Evaluating:  48%|████▊     | 298/625 [00:36<00:27, 12.08it/s]Evaluating:  48%|████▊     | 300/625 [00:36<00:24, 13.29it/s]Evaluating:  48%|████▊     | 303/625 [00:37<00:20, 15.53it/s]Evaluating:  49%|████▉     | 306/625 [00:37<00:17, 17.75it/s]Evaluating:  49%|████▉     | 309/625 [00:38<00:47,  6.70it/s]Evaluating:  50%|████▉     | 312/625 [00:38<00:36,  8.55it/s]Evaluating:  50%|█████     | 314/625 [00:38<00:31,  9.78it/s]Evaluating:  51%|█████     | 317/625 [00:38<00:25, 11.94it/s]Evaluating:  51%|█████     | 319/625 [00:39<01:07,  4.53it/s]Evaluating:  52%|█████▏    | 322/625 [00:40<00:48,  6.28it/s]Evaluating:  52%|█████▏    | 324/625 [00:40<00:39,  7.53it/s]Evaluating:  52%|█████▏    | 327/625 [00:40<00:30,  9.85it/s]Evaluating:  53%|█████▎    | 329/625 [00:40<00:26, 11.23it/s]Evaluating:  53%|█████▎    | 331/625 [00:40<00:35,  8.35it/s]Evaluating:  53%|█████▎    | 334/625 [00:40<00:27, 10.67it/s]Evaluating:  54%|█████▍    | 337/625 [00:41<00:21, 13.29it/s]Evaluating:  54%|█████▍    | 339/625 [00:41<00:19, 14.36it/s]Evaluating:  55%|█████▍    | 342/625 [00:41<00:16, 16.80it/s]Evaluating:  55%|█████▌    | 345/625 [00:42<00:42,  6.61it/s]Evaluating:  56%|█████▌    | 348/625 [00:42<00:32,  8.61it/s]Evaluating:  56%|█████▌    | 350/625 [00:42<00:27,  9.90it/s]Evaluating:  56%|█████▋    | 353/625 [00:42<00:21, 12.50it/s]Evaluating:  57%|█████▋    | 356/625 [00:43<00:40,  6.67it/s]Evaluating:  57%|█████▋    | 359/625 [00:43<00:31,  8.51it/s]Evaluating:  58%|█████▊    | 362/625 [00:43<00:24, 10.67it/s]Evaluating:  58%|█████▊    | 365/625 [00:43<00:21, 12.32it/s]Evaluating:  59%|█████▊    | 367/625 [00:44<00:38,  6.72it/s]Evaluating:  59%|█████▉    | 369/625 [00:44<00:32,  7.95it/s]Evaluating:  60%|█████▉    | 372/625 [00:44<00:24, 10.36it/s]Evaluating:  60%|█████▉    | 374/625 [00:45<00:21, 11.75it/s]Evaluating:  60%|██████    | 377/625 [00:45<00:17, 14.13it/s]Evaluating:  61%|██████    | 379/625 [00:45<00:34,  7.20it/s]Evaluating:  61%|██████    | 382/625 [00:46<00:25,  9.45it/s]Evaluating:  61%|██████▏   | 384/625 [00:46<00:22, 10.71it/s]Evaluating:  62%|██████▏   | 386/625 [00:46<00:24,  9.60it/s]Evaluating:  62%|██████▏   | 388/625 [00:46<00:21, 11.11it/s]Evaluating:  63%|██████▎   | 391/625 [00:47<00:30,  7.58it/s]Evaluating:  63%|██████▎   | 393/625 [00:47<00:25,  9.01it/s]Evaluating:  63%|██████▎   | 396/625 [00:47<00:19, 11.67it/s]Evaluating:  64%|██████▎   | 398/625 [00:47<00:25,  9.05it/s]Evaluating:  64%|██████▍   | 400/625 [00:47<00:21, 10.40it/s]Evaluating:  64%|██████▍   | 403/625 [00:48<00:33,  6.59it/s]Evaluating:  65%|██████▍   | 405/625 [00:48<00:28,  7.79it/s]Evaluating:  65%|██████▌   | 408/625 [00:48<00:21, 10.15it/s]Evaluating:  66%|██████▌   | 410/625 [00:49<00:21, 10.14it/s]Evaluating:  66%|██████▌   | 413/625 [00:49<00:16, 12.75it/s]Evaluating:  66%|██████▋   | 415/625 [00:49<00:32,  6.47it/s]Evaluating:  67%|██████▋   | 418/625 [00:50<00:23,  8.65it/s]Evaluating:  67%|██████▋   | 420/625 [00:50<00:20,  9.93it/s]Evaluating:  68%|██████▊   | 422/625 [00:50<00:22,  9.07it/s]Evaluating:  68%|██████▊   | 424/625 [00:50<00:19, 10.53it/s]Evaluating:  68%|██████▊   | 427/625 [00:51<00:24,  8.06it/s]Evaluating:  69%|██████▊   | 429/625 [00:51<00:20,  9.48it/s]Evaluating:  69%|██████▉   | 432/625 [00:51<00:16, 11.93it/s]Evaluating:  69%|██████▉   | 434/625 [00:51<00:24,  7.88it/s]Evaluating:  70%|██████▉   | 437/625 [00:51<00:18, 10.43it/s]Evaluating:  70%|███████   | 439/625 [00:52<00:26,  6.93it/s]Evaluating:  71%|███████   | 442/625 [00:52<00:20,  9.08it/s]Evaluating:  71%|███████   | 444/625 [00:52<00:17, 10.40it/s]Evaluating:  71%|███████▏  | 446/625 [00:53<00:25,  7.14it/s]Evaluating:  72%|███████▏  | 449/625 [00:53<00:19,  9.17it/s]Evaluating:  72%|███████▏  | 451/625 [00:53<00:20,  8.50it/s]Evaluating:  72%|███████▏  | 453/625 [00:53<00:17, 10.03it/s]Evaluating:  73%|███████▎  | 455/625 [00:53<00:14, 11.40it/s]Evaluating:  73%|███████▎  | 457/625 [00:54<00:22,  7.51it/s]Evaluating:  74%|███████▎  | 460/625 [00:54<00:16,  9.86it/s]Evaluating:  74%|███████▍  | 463/625 [00:54<00:16,  9.90it/s]Evaluating:  74%|███████▍  | 465/625 [00:54<00:14, 11.30it/s]Evaluating:  75%|███████▍  | 468/625 [00:55<00:11, 13.83it/s]Evaluating:  75%|███████▌  | 470/625 [00:55<00:17,  9.09it/s]Evaluating:  76%|███████▌  | 473/625 [00:55<00:13, 11.64it/s]Evaluating:  76%|███████▌  | 475/625 [00:55<00:15,  9.90it/s]Evaluating:  76%|███████▋  | 478/625 [00:56<00:11, 12.37it/s]Evaluating:  77%|███████▋  | 481/625 [00:56<00:15,  9.12it/s]Evaluating:  77%|███████▋  | 483/625 [00:56<00:13, 10.43it/s]Evaluating:  78%|███████▊  | 485/625 [00:56<00:12, 11.50it/s]Evaluating:  78%|███████▊  | 487/625 [00:57<00:13, 10.53it/s]Evaluating:  78%|███████▊  | 489/625 [00:57<00:11, 11.86it/s]Evaluating:  79%|███████▊  | 492/625 [00:57<00:09, 14.74it/s]Evaluating:  79%|███████▉  | 494/625 [00:57<00:17,  7.49it/s]Evaluating:  80%|███████▉  | 497/625 [00:58<00:13,  9.84it/s]Evaluating:  80%|███████▉  | 499/625 [00:58<00:13,  9.25it/s]Evaluating:  80%|████████  | 502/625 [00:58<00:10, 11.81it/s]Evaluating:  81%|████████  | 505/625 [00:58<00:13,  8.93it/s]Evaluating:  81%|████████▏ | 508/625 [00:59<00:10, 11.39it/s]Evaluating:  82%|████████▏ | 511/625 [00:59<00:11,  9.77it/s]Evaluating:  82%|████████▏ | 514/625 [00:59<00:09, 11.76it/s]Evaluating:  83%|████████▎ | 517/625 [01:00<00:18,  5.95it/s]Evaluating:  83%|████████▎ | 519/625 [01:00<00:15,  7.02it/s]Evaluating:  84%|████████▎ | 522/625 [01:00<00:11,  9.22it/s]Evaluating:  84%|████████▍ | 525/625 [01:01<00:08, 11.24it/s]Evaluating:  84%|████████▍ | 528/625 [01:01<00:07, 13.42it/s]Evaluating:  85%|████████▍ | 531/625 [01:02<00:15,  5.88it/s]Evaluating:  85%|████████▌ | 533/625 [01:02<00:13,  6.96it/s]Evaluating:  86%|████████▌ | 536/625 [01:02<00:09,  9.04it/s]Evaluating:  86%|████████▌ | 538/625 [01:02<00:08, 10.07it/s]Evaluating:  87%|████████▋ | 541/625 [01:03<00:13,  6.41it/s]Evaluating:  87%|████████▋ | 544/625 [01:03<00:09,  8.27it/s]Evaluating:  88%|████████▊ | 547/625 [01:03<00:07, 10.48it/s]Evaluating:  88%|████████▊ | 550/625 [01:03<00:06, 12.17it/s]Evaluating:  88%|████████▊ | 553/625 [01:05<00:12,  5.90it/s]Evaluating:  89%|████████▉ | 556/625 [01:05<00:08,  7.70it/s]Evaluating:  89%|████████▉ | 558/625 [01:05<00:07,  8.74it/s]Evaluating:  90%|████████▉ | 561/625 [01:05<00:05, 11.10it/s]Evaluating:  90%|█████████ | 564/625 [01:05<00:04, 13.04it/s]Evaluating:  91%|█████████ | 566/625 [01:06<00:13,  4.34it/s]Evaluating:  91%|█████████ | 568/625 [01:07<00:10,  5.34it/s]Evaluating:  91%|█████████▏| 571/625 [01:07<00:07,  7.37it/s]Evaluating:  92%|█████████▏| 573/625 [01:07<00:06,  8.61it/s]Evaluating:  92%|█████████▏| 576/625 [01:07<00:04, 11.12it/s]Evaluating:  93%|█████████▎| 579/625 [01:08<00:06,  6.97it/s]Evaluating:  93%|█████████▎| 582/625 [01:08<00:04,  9.09it/s]Evaluating:  93%|█████████▎| 584/625 [01:08<00:03, 10.28it/s]Evaluating:  94%|█████████▍| 587/625 [01:08<00:03, 12.66it/s]Evaluating:  94%|█████████▍| 589/625 [01:09<00:06,  5.66it/s]Evaluating:  95%|█████████▍| 592/625 [01:09<00:04,  7.75it/s]Evaluating:  95%|█████████▌| 594/625 [01:09<00:03,  9.11it/s]Evaluating:  96%|█████████▌| 597/625 [01:09<00:02, 11.71it/s]Evaluating:  96%|█████████▌| 600/625 [01:10<00:01, 13.56it/s]Evaluating:  96%|█████████▋| 603/625 [01:10<00:03,  6.77it/s]Evaluating:  97%|█████████▋| 606/625 [01:11<00:02,  8.91it/s]Evaluating:  97%|█████████▋| 609/625 [01:11<00:01, 11.04it/s]Evaluating:  98%|█████████▊| 612/625 [01:11<00:00, 13.63it/s]Evaluating:  98%|█████████▊| 615/625 [01:12<00:01,  5.87it/s]Evaluating:  99%|█████████▉| 618/625 [01:12<00:00,  7.73it/s]Evaluating:  99%|█████████▉| 621/625 [01:12<00:00,  9.91it/s]Evaluating: 100%|█████████▉| 624/625 [01:12<00:00, 12.00it/s]                                                             08/18/2026 21:58:03 - INFO -   	 Using Dual Softmax evaluation (temperature=2.000).
+08/18/2026 21:58:03 - INFO -   before reshape, sim matrix size: 10000 x 500
+08/18/2026 21:58:03 - INFO -   after reshape, sim matrix size: 500 x 20 x 500
+08/18/2026 21:58:04 - INFO -     T2V | R@1:  75.9  R@5:  94.8  R@10:  97.3  MdR:   1.0  MnR:   2.5
+08/18/2026 21:58:04 - INFO -     V2T | R@1:  93.0  R@5:  99.8  R@10: 100.0  MdR:   1.0  MnR:   1.1
+08/18/2026 21:58:06 - INFO -     T2V risk | rho=+0.5122 AUROC=0.8324 AURC=0.0817
+08/18/2026 21:58:06 - INFO -     V2T risk | rho=+0.1264 AUROC=0.7294 AURC=0.0099
+08/18/2026 21:58:09 - INFO -     T2V contextual risk | rho=-0.4450 AUROC=0.2110 AURC=0.4300
+08/18/2026 21:58:09 - INFO -     V2T contextual risk | rho=-0.2391 AUROC=0.2296 AURC=0.1526
+08/18/2026 21:58:47 - INFO -   ============================================================
+08/18/2026 21:58:47 - INFO -   [SMOKE_STEPS] cap=3 — will exit train_epoch after 3 step(s)
+08/18/2026 21:59:46 - INFO -   [SMOKE_STEPS] reached step=3 cap=3 — breaking
+08/18/2026 21:59:46 - INFO -   [Epoch 1/3] Training complete | Avg Loss: 0.0059 | Time: 59.1s
+08/18/2026 21:59:46 - INFO -     GPU Memory | Cur: 1.29 GB, Peak: 11.11 GB, Reserved: 17.97 GB
+08/18/2026 21:59:56 - INFO -   Model saved to ckpts/ckpt_msrvtt_20260818_215400_fix1_smoke/pytorch_model.bin.0
+08/18/2026 21:59:56 - INFO -   Optimizer saved to ckpts/ckpt_msrvtt_20260818_215400_fix1_smoke/pytorch_opt.bin.0
+08/18/2026 21:59:56 - INFO -   [SMOKE_STEPS] skipping validation eval — smoke run only verifies the training-step pipeline.
+[2026-08-18 22:00:44,351] torch.distributed.elastic.agent.server.api: [WARNING] Received Signals.SIGTERM death signal, shutting down workers
+[2026-08-18 22:00:44,352] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 481602 closing signal SIGTERM
+[2026-08-18 22:00:44,353] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 481603 closing signal SIGTERM
+Traceback (most recent call last):
+  File "/home/xujie/.conda/envs/tvr/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 255, in launch_agent
+    result = agent.run()
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/elastic/metrics/api.py", line 124, in wrapper
+    result = f(*args, **kwargs)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/elastic/agent/server/api.py", line 736, in run
+    result = self._invoke_run(role)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/elastic/agent/server/api.py", line 877, in _invoke_run
+    time.sleep(monitor_interval)
+  File "/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 62, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 481588 got signal: 15

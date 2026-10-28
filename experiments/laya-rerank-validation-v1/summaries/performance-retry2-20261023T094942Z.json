@@ -1,0 +1,53 @@
+{
+  "phase": "performance-retry2-20261023T094942Z",
+  "phase_path": "experiments/laya-rerank-validation-v1/phases/performance-retry2-20261023T094942Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "6e30ca74f99cb868b13d175bf5f60a57dfea96d89966b57f9dbb6d61f952bb32",
+      "output_hashes": {
+        "arrays/sha256/19/19cf62c0528a06db4444f698843ac39a8de9a7a29ad60c25fb4de9a962f97f4a.npy": "537fc8bb687595c7eba6163b0b52006410677a21ffa0008cf1fcdbba25408fa4",
+        "arrays/sha256/20/20709137ea4655295ca85335d6901486f29e12661c089f019381db7eb69e03b3.npy": "392afe8deda4b239644e1a5c5e1640bdd20b3f1290e2e2c332df5d3b68565d49",
+        "arrays/sha256/29/2908baa9907f4a5e5ecb0a13bbc7afb162130d6861b186b5a2725fc761d24b9e.npy": "385ac2aa73bff466746b2cfab07991776698228893c9bbadfa3512ce3793520e",
+        "arrays/sha256/31/31b28febeadb59450ae2a9a857199d5022eb81852d23ec38918ac1ced16906e9.npy": "ac006e6a1167179696b0e8c5bc7dd8296e82f1c74e36331a6e3acce5c3ea0b13",
+        "arrays/sha256/3c/3c862120556476a4d4af96db4308dcdd8c47207c95700af1acb150fe7db92945.npy": "6cb136171ecd52cb2936db1ba1ce79941a7521a75e11dc0a37b209d0ec44d639",
+        "arrays/sha256/88/880ef2f1e3e9b1160074ecf9abf1c818d7caa57029ff4d5aa54de4d374894664.npy": "5eab2efd9fef80f29ae677b6fb05239496248f47db959ef210a25725e58b2ba0",
+        "arrays/sha256/9d/9da5a5730b423fd022fb94cebb2868989aacabc6b2abaa222c4ec86fbc621161.npy": "8e6b69f460e80c554c28c4904d60a4194cd3d25091586dfc8acc7a9aeea5c974",
+        "arrays/sha256/cf/cf97fe9a01dcbc3dc0904ddcaedbf8b85381bba0519c5e58a773ac46d1759e5b.npy": "48599b50254bfc2dcd71f2568b913aa6f84666235fd511556b35b2979d0df624",
+        "arrays/sha256/fd/fda511144986b03179487747c3d989eac61b105cd74d8409352a7e9b77cf2b4f.npy": "709e32ba0152b4701ee5f921471d06b3527bb5871fd07a75b7c5f0f59bd76c54",
+        "command.sh": "5fb285d0bdd9fef6bc5e70b008864e4947d2fe0ac03c7b305f77f66e3e273f31",
+        "logs/baseline-r0.log": "0334848d9f93adc8e075588e72e509faaf2d5e14f3221915cc0bf69128a5d2d8",
+        "logs/baseline-r1.log": "ddf672d22df8d02873dc25807c8a6426ce24978c6217f13d94fcde32bd67ce24",
+        "logs/baseline-r2.log": "e74f6b527eea01d35d038c093df2454e486efd5c1b7a6db5e0b26d3500ca2217",
+        "logs/enhanced-r0.log": "49e4a7fb2e6d8810d635ce87660401e3622ff536e147596cc20ffababd4ba971",
+        "logs/enhanced-r1.log": "d6c7f60d4b3709620e4634b7bf7b7cb2906f78de60dc82b6978a21b870795aab",
+        "logs/enhanced-r2.log": "56918c80394f5a063e66de1a596b90fd6680fb472c3b8eba932638857e711c17",
+        "logs/prepare.log": "9bb58de440893d8346fe6956c6bab469f1d3de85356c78da7237bb5b3b0bfbc7",
+        "metrics/val_eval_000.json": "7ffc8e9d5749c6b4dfc8d41782857cb16a2f9f51464840e98f18024448046b9e",
+        "provenance/controller-live.json": "e00c9ee32767404a62090d63904e707466b34f42d0277d16e09f0b22658e952b",
+        "provenance/controller-result.json": "005c49ccf5c946f955be47a27f0c4fe0f4422c2088388de22054b6d0a5e6d581",
+        "provenance/launch-baseline-r0.json": "03034a1f625b7cdaf94454982264fd9f8ca952138153c01b8063f86e6e62f0d4",
+        "provenance/launch-baseline-r1.json": "bad5aabdb4c7ac6db467af375da8af890501b4990c50d0cc3ecb495c6f23145d",
+        "provenance/launch-baseline-r2.json": "82e011f70194a98a215221f4317b2b522e5279e9d397f6264ebd675f2949dfe1",
+        "provenance/launch-enhanced-r0.json": "77cdf57802dcf3bfa0a699fe0629c46889939d4ac560f5d64f32f156324a493a",
+        "provenance/launch-enhanced-r1.json": "b793dbcea5752acbc7463b8aa57beb2c7b642e50120bcaae9d9398fcd491a96a",
+        "provenance/launch-enhanced-r2.json": "8cc3c2f5127112bd3505f7d828976de99ae9f43cb28e61864cd998fa9c946b4b",
+        "provenance/launch-prepare.json": "dde5571a5fb401e84b437e63169ca526e37c6c89698046d8b3217c1ec9e61a74",
+        "provenance/laya-performance.json": "0fa976e487ade05c5810def8b1cb04326b63b0ecc24356ffe027cbbc6965a07d",
+        "provenance/original-cache.json": "9e4f6496ddf887ff5359da0075a248c77031e1466837216032a982b67ae55898",
+        "provenance/performance-baseline-r0.json": "f5ddd14a97d25f7b9786ebedb273fc0cd6544ccbd2c07eb09d5136daf3fc3b58",
+        "provenance/performance-baseline-r1.json": "799e86d914f652d678c1c823dd537ce6234c366f275e004fc461fb1f46abaf61",
+        "provenance/performance-baseline-r2.json": "0a05ea94897419a569db0d087759c016f0d70cad384a663cccb1d0ff2a2d6161",
+        "provenance/performance-enhanced-r0.json": "9e2dcf91ebd0a13b971d2a4f0ba99122cdda2cbec8bcce732bceaabfb653f460",
+        "provenance/performance-enhanced-r1.json": "5e93964356690e220544a6154f59242e36a425774310cbecc85356e028d9c06f",
+        "provenance/performance-enhanced-r2.json": "b5c3dc7464daa74a454e65ce317d9d86608606f6d99cb57c2ebf267236dd95c4"
+      },
+      "run_id": "msrvtt-efficiency-laya-performance-retry2-seed713-20261023T094942Z-06464a9df9f4",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "laya-rerank-validation-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}

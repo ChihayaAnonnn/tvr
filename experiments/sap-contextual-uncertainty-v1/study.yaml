@@ -1,0 +1,455 @@
+# Pre-registered protocol: does SAP's own uncertainty predict retrieval failure?
+#
+# WHY THIS STUDY EXISTS
+# ---------------------
+# The sap-failure-supervision v1/v2 campaigns measured the A3 contextual risk
+# sidecar's `failure_risk` AUROC and reported PASS (v2 mean 0.7239 over 3 seeds).
+# A code trace afterwards established that the A3 sidecar never receives ANY
+# SAP uncertainty output. Its inputs are:
+#     top-k score geometry + pooled query/candidate/context means,
+# where the video mean is SAP's `mu_raw`. `u_mode`, `alpha_dir`,
+# `epistemic_cont` and `logsigma` reach A3 through no channel at all.
+#
+# So v1/v2 validated "score margin predicts retrieval error" — a standard
+# selective-prediction baseline — NOT the paper's SAP / Dirichlet / anchor
+# uncertainty design. This study tests the design that v1/v2 was assumed to be
+# testing.
+#
+# WHAT CHANGED IN CODE
+# --------------------
+# A new `sap_uncertainty` feature block carries a per-video descriptor into the
+# sidecar (prob_models/contextual_retrieval_risk.py):
+#     u_mode           discrete modal uncertainty K/S
+#     log_evidence     log of the Dirichlet total evidence S = sum(alpha_dir)
+#     modal_entropy    normalized entropy of alpha_dir / S
+#     epistemic_scale  RMS of epistemic_cont
+#     aleatoric_scale  mean of logsigma
+# Because SAP uncertainty is per-VIDEO, it occupies three slots by direction:
+# query slot (live for v2t, where the video is the query) and top-1 + attention-
+# weighted context slots (live for t2v, where videos are candidates).
+#
+# The block only exists for the `full_sap` / `sap_only` feature sets. For every
+# other feature set the sidecar is bit-identical to the pre-change head: same
+# feature width (426), same parameter count (186_113), same block offsets. This
+# is enforced by tests/test_contextual_retrieval_risk.py.
+
+study: sap-contextual-uncertainty-v1
+protocol_version: 1
+control_plane: experiments/sap-contextual-uncertainty-v1
+data_plane: artifacts/sap-contextual-uncertainty-v1
+registry: experiments/sap-contextual-uncertainty-v1/registry.jsonl
+
+lineage:
+  parent_study: sap-failure-supervision-v2
+  parent_run_ids:
+    - ckpt_msrvtt_20260819_212850_fix1_v2_s0   # v2 seed 0, winner bin.2
+    - ckpt_msrvtt_20260820_150233_fix1_v2_s1   # v2 seed 1, winner bin.0
+    - ckpt_msrvtt_20260820_174558_fix1_v2_s2   # v2 seed 2, winner bin.2
+  selection_lineage: >
+    sap-failure-supervision-v2 passed every pre-registered gate but its metric
+    is not sensitive to SAP's uncertainty heads, because those heads are not
+    wired to the scored sidecar. This study adds that wiring and contrasts
+    with/without, so the v2 result becomes the matched control rather than the
+    conclusion.
+
+# ---------------------------------------------------------------------------
+# CONTROL ARM PROVENANCE — read this before interpreting any delta.
+#
+# The control arm is NOT re-trained here. sap-failure-supervision-v2 already
+# ran exactly this configuration with `contextual_risk_feature_set=full`, and
+# the code change is inert for that feature set. Reusing it is conditional on
+# the equivalence check below; if that check fails, the control arm must be
+# re-trained under the new code before any delta is reported.
+#
+# control_equivalence_check:
+#   Re-run validation only (--do_eval, no training) on each v2 winner
+#   checkpoint under the current tree with feature_set=full, and require the
+#   V2T contextual failure AUROC to reproduce the v2 value exactly.
+# ---------------------------------------------------------------------------
+control_arm:
+  source_study: sap-failure-supervision-v2
+  retrained_here: false
+  equivalence_check:
+    method: eval_only_replay_of_v2_winner_checkpoints
+    feature_set: full
+    required: exact_match
+    expected_a3_contextual_failure_auroc_v2t:
+      seed0: 0.7230
+      seed1: 0.7233
+      seed2: 0.7254
+    # EXECUTED 2026-08-21, before any run of this study. PASS on all 3 seeds.
+    observed_a3_contextual_failure_auroc_v2t:
+      seed0: 0.7230
+      seed1: 0.7233
+      seed2: 0.7254
+    outcome: pass
+    control_arm_reuse: authorized
+    also_observed:
+      retrieval_r1_v2t: 93.0        # all 3 seeds, unchanged
+      retrieval_r1_t2v: 75.9        # all 3 seeds, unchanged
+      a1_failure_auroc_v2t: 0.7294  # all 3 seeds, bit-identical
+
+stages:
+  - sap_feature_contrast
+
+variants:
+  sap_feature_contrast:
+    # Treatment: everything the control sees, plus SAP's uncertainty heads.
+    - {name: full_sap_s0, contextual_risk_feature_set: full_sap, seed: 0}
+    - {name: full_sap_s1, contextual_risk_feature_set: full_sap, seed: 1}
+    - {name: full_sap_s2, contextual_risk_feature_set: full_sap, seed: 2}
+    # Isolation: SAP uncertainty + direction code only. No score geometry, no
+    # semantics. This is the direct test of the paper's claim.
+    - {name: sap_only_s0, contextual_risk_feature_set: sap_only, seed: 0}
+    - {name: sap_only_s1, contextual_risk_feature_set: sap_only, seed: 1}
+    - {name: sap_only_s2, contextual_risk_feature_set: sap_only, seed: 2}
+
+# ---------------------------------------------------------------------------
+# Success criteria — pre-registered before any run of this study.
+#
+# NOTE ON POWER. The v2 validation split has 500 v2t queries with only ~35
+# failures, giving CI95 half-widths near +/-0.09 on AUROC. A 3-seed mean has a
+# small seed-variance component (v2 sd = 0.0013) but the sampling CI does NOT
+# shrink with seeds — the same 500 queries are reused. The primary gate is
+# therefore deliberately set at a delta large enough to clear that noise, and a
+# null result here is informative rather than a failure of the study.
+# ---------------------------------------------------------------------------
+stop_gates:
+  sap_feature_contrast:
+    primary:
+      name: sap_features_add_signal
+      metric: a3_contextual_failure_auroc_v2t
+      metric_source: >
+        main_task_retrieval.py "V2T contextual risk | AUROC=" ;
+        score = ContextualRetrievalRiskSidecar.failure_risk
+        = sigmoid(failure_logit), prob_models/contextual_retrieval_risk.py
+      comparison: full_sap_mean_over_seeds - control_mean_over_seeds
+      control_mean: 0.7239           # sap-failure-supervision-v2, 3 seeds
+      threshold_gte: 0.03
+      rationale: >
+        A +3pp mean gain is the smallest effect worth reporting given the
+        +/-0.09 sampling CI on a single arm; below it the honest statement is
+        "SAP uncertainty adds nothing measurable over score geometry at this
+        sample size", which is itself the answer this study is asked for.
+    secondary_gates:
+      - name: sap_alone_beats_chance
+        metric: a3_contextual_failure_auroc_v2t
+        arm: sap_only
+        threshold_gte: 0.60
+        rationale: >
+          If SAP uncertainty carries failure signal at all, the sap_only arm
+          must beat chance. This is the strongest single test of the paper's
+          claim and it is independent of the full_sap delta.
+      - name: raw_head_direct_auroc
+        metric: sap_uncertainty_direct.*            # all five descriptor fields
+        metric_source: >
+          main_task_retrieval.py "V2T SAP direct | <field> AUROC=" ;
+          _sap_uncertainty_direct_auroc(), no trained head involved
+        threshold_gte: 0.55
+        applies_to_arm: any
+        rationale: >
+          Measured on the RAW SAP outputs with no trained head between them and
+          the label. This is the one number that cannot be explained by the
+          sidecar learning score geometry. Recorded for every arm including the
+          control, since the descriptor is emitted regardless of whether the
+          sidecar consumes it.
+    secondary_monitor:
+      - retrieval_r1_v2t
+      - retrieval_r1_t2v
+      - a3_contextual_failure_auroc_t2v
+    non_regression_guard:
+      metric: retrieval_r1_v2t
+      absolute_floor: 92.0
+      baseline_reference: 93.0
+      rationale: >
+        contextual_risk_sidecar_only freezes the CLIP backbone, so R@1 must be
+        unchanged at 93.0. Any movement means the sidecar leaked into the
+        retrieval path and invalidates the arm.
+    reproducibility_guard:
+      metric_stddev_across_seeds:
+        a3_contextual_failure_auroc_v2t_stddev_lte: 0.04
+      rationale: same criterion as v2.
+
+# Interpretation committed in advance, so the outcome cannot be re-read later.
+prespecified_interpretation:
+  primary_pass_and_sap_only_pass: >
+    SAP uncertainty carries failure signal that score geometry does not. The
+    paper's uncertainty design is supported and v2 understated it.
+  primary_fail_and_sap_only_fail: >
+    SAP's uncertainty heads are not failure-predictive on this split. The
+    reportable A3 result is a score-geometry baseline, and any paper claim
+    about SAP/Dirichlet uncertainty predicting retrieval failure must be
+    withdrawn or restricted to what v2 actually measured.
+  primary_fail_and_sap_only_pass: >
+    SAP carries signal but it is redundant with score geometry. Report as a
+    redundancy finding, not as an improvement.
+  primary_pass_and_sap_only_fail: >
+    Treat as suspect: an interaction effect this small on 35 failures is more
+    likely overfitting of the wider head than a real gain. Requires a held-out
+    replication before any claim.
+
+hardware_policy:
+  required_gpu_model: A800
+  required_gpu_count: 4
+  topology: [0, 1, 2, 3]
+  precision: fp32
+  distributed_topology: torchrun-4-rank
+  note: >
+    Same topology as sap-failure-supervision-v2, which is a precondition for
+    reusing v2 as the control arm. GPU 4 remains occupied by an external VLLM
+    service.
+
+training_config:
+  base_launcher: run_train_msrvtt_bg.sh
+  new_launcher: run_train_msrvtt_sap_features_bg.sh
+  epochs: 3
+  batch_size_global: 256
+  frozen_from_v2:
+    - init_model: ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4
+    - contextual_risk_sidecar_only: true
+    - w_sap_failure_bce: 0.1
+    - w_retrieval_risk: 0.0
+    - contextual_risk_projection_dim: 128
+    - contextual_risk_hidden_dim: 128
+    - contextual_risk_temperature: 1.0
+    - retriever + WTI + DSL T=2.0
+  only_variable: contextual_risk_feature_set
+
+bootstrap:
+  samples: 10000
+  seed: 0
+  confidence_level: 0.95
+
+test_sealed:
+  authorize_only_after: sap_feature_contrast_passes_primary_gate
+  retry_policy:
+    terminal_in_place_retry: forbidden
+    authorized_successor: subsequent_phase_with_new_unique_run_id
+    predecessor_lineage: parent_run_ids
+    authorization_reason: selection_lineage
+
+archive_rules:
+  phase_batched_registry: true
+  runtime_may_modify_tracked_files: false
+  externalize_numeric_payloads_over_bytes: 1048576
+  preserve_failed_evidence: true
+  new_legacy_output_forbidden: true
+
+known_limits:
+  - >
+    SAP IS FROZEN IN EVERY ARM, INCLUDING THE CONTROL. contextual_risk_sidecar_only
+    routes through configure_contextual_risk_sidecar_training()
+    (main_task_retrieval.py), which sets requires_grad=False on every parameter
+    and then re-enables only `contextual_risk_sidecar.*`. So the SAP descriptor
+    is a FIXED function of the video, identical across seeds and across arms.
+    Two consequences:
+      (a) w_sap_failure_bce ("Fix 1", weight 0.1) is a NO-OP in this training
+          mode. The loss term is computed and added, but its only gradient path
+          is into u_mode, which is produced by frozen SAP parameters. This means
+          sap-failure-supervision-v1/v2 did not actually supervise SAP either.
+          Confirmed empirically: the eval-only replay of all three v2 winners
+          returns bit-identical SAP direct AUROCs and a bit-identical A1
+          failure AUROC (0.7294), which is only possible if SAP never moved.
+      (b) These arms therefore measure "is SAP's PRETRAINED uncertainty
+          failure-predictive", not "can SAP be TRAINED to be failure-predictive".
+          A negative result here does not rule out the latter; testing that
+          requires unfreezing SAP, which is a different study.
+  - >
+    Archive plane not wired. scripts/manage_experiment_run.py restricts
+    REGISTERED_A3_FEATURE_SETS to the five pre-SAP sets, and its allowlist is
+    test-bound to the A3 feature-ablation study's yaml, so it was deliberately
+    NOT extended for this study. That tool is offline and off the training
+    path, so it cannot abort a run; but registry.jsonl / artifacts/ for this
+    study must be produced by another route. Same gap as
+    sap-failure-supervision-v2.
+  - >
+    Control arm is reused from v2 rather than re-trained, conditional on the
+    equivalence check. Stated explicitly under control_arm above.
+  - >
+    ~35 V2T failures in 500 queries. Every AUROC here carries a CI95 half-width
+    near 0.09. Seed replication does not reduce it.
+  - >
+    Winner selection inside each run is by min-rho, not by the gated AUROC,
+    inherited unchanged from v2.
+
+# =====================================================================
+# OUTCOME. Written 2026-08-21 after the campaign was terminated.
+# This study is CLOSED as a falsification. It is not resumable: the
+# terminal-run rule forbids retrying an aborted arm without human
+# authorization and parent_run_ids, and no such authorization was sought
+# because the result below is already decisive.
+# =====================================================================
+outcome:
+  status: falsified
+  completeness: partial
+  arms_planned: 6            # {full_sap, sap_only} x seed {0,1,2}
+  arms_started: 1            # full_sap seed 0
+  arms_completed: 0
+  epochs_completed: 2        # of 3, for the one arm that started
+
+  execution_log:
+    - at: "2026-08-21T16:37"
+      event: launch_1_failed_fail_closed
+      detail: >
+        Aborted after 29 s, before any training step, because
+        experiment_tracking._CONTEXTUAL_FEATURE_BLOCKS is a duplicate of the
+        sidecar's registry and did not know full_sap / sap_only. No GPU time
+        burned. Fixed, plus a drift-guard test
+        (tests/test_experiment_tracking.py::
+        test_manifest_feature_set_registry_matches_the_sidecar).
+    - at: "2026-08-21T16:41"
+      event: launch_2_started
+      run_id: "20260821_164109_sapfeat_full_sap_s0"
+    - at: "2026-08-21T17:38"
+      event: sigkill
+      rc: 137
+      detail: >
+        Killed during epoch 3. Cause not determined: dmesg unreadable, host RAM
+        20/1007 GB used, peak GPU memory 5.64 GB. Not attributable to a resource
+        limit; most consistent with external intervention. The driver honoured
+        fail-closed and aborted arms 2-6 rather than continuing past a failure.
+
+  # ---------------------------------------------------------------
+  # Gate adjudication. Gates are those declared under stop_gates above.
+  # ---------------------------------------------------------------
+  gates:
+    raw_head_direct_auroc:
+      threshold: ">= 0.55"
+      observed_v2t:              # stable to 4 dp across all three evals
+        u_mode: 0.5441
+        modal_entropy: 0.5397
+        epistemic_scale: 0.5138
+        aleatoric_scale: 0.4734
+        log_evidence: 0.4561
+      verdict: fail
+      note: >
+        All five descriptor fields are at chance. Two of them (log_evidence,
+        aleatoric_scale) are below 0.50, i.e. weakly anti-predictive. This is
+        the primary gate and it fails unambiguously.
+
+    contextual_auroc_beats_control:
+      verdict: fail
+      note: >
+        The SAP feature block moves the sidecar by less than the control's own
+        seed-to-seed spread. See comparison table below.
+
+    retrieval_not_degraded:
+      verdict: pass_but_vacuous
+      note: >
+        T2V R@1 75.9 and V2T R@1 93.0 in every eval of every arm and every
+        control seed, identical to one decimal. Vacuous because the A3 sidecar
+        does not enter the ranking function at all: the retrieval score is
+        `retrieve_logits = logit_scale * wti_logits` and carries no sigma.
+
+  # ---------------------------------------------------------------
+  # The comparison that settles it.
+  # Control = sap-failure-supervision-v2 winners, feature_set=full (no SAP
+  # block), re-evaluated under this study's code by the equivalence check.
+  # Treatment = this study's full_sap seed 0 (SAP block present).
+  # ---------------------------------------------------------------
+  measured:
+    t2v_contextual:
+      control_seed0: {auroc: 0.8796, aurc: 0.0615, rho: +0.5661}
+      control_seed1: {auroc: 0.8576, aurc: 0.0713, rho: +0.5403}
+      control_seed2: {auroc: 0.8792, aurc: 0.0617, rho: +0.5654}
+      full_sap_s0_epoch1: {auroc: 0.8572, aurc: 0.0713, rho: +0.5400}
+      full_sap_s0_epoch2: {auroc: 0.8766, aurc: 0.0627, rho: +0.5627}
+    v2t_contextual:
+      control_seed0: {auroc: 0.7230, aurc: 0.0306, rho: +0.1974}
+      control_seed1: {auroc: 0.7233, aurc: 0.0308, rho: +0.1976}
+      control_seed2: {auroc: 0.7254, aurc: 0.0302, rho: +0.1995}
+      full_sap_s0_epoch1: {auroc: 0.7267, aurc: 0.0304, rho: +0.2006}
+      full_sap_s0_epoch2: {auroc: 0.7201, aurc: 0.0311, rho: +0.1948}
+    a1_failure_auroc_v2t: 0.7294   # identical in control and treatment
+    retrieval_r1: {t2v: 75.9, v2t: 93.0}   # identical everywhere
+
+  findings:
+    - id: F1
+      claim: >
+        The SAP uncertainty block contributes nothing measurable to the A3
+        contextual risk sidecar.
+      evidence: >
+        Control T2V contextual AUROC spans 0.8576-0.8796 across three seeds
+        (width 0.0220). Both full_sap evals land inside that band. The tightest
+        pairing is full_sap epoch 1 (0.8572 / AURC 0.0713) against control seed 1
+        (0.8576 / AURC 0.0713): AUROC differs by 0.0004 and AURC is identical to
+        4 dp. V2T tells the same story: control 0.7230-0.7254, full_sap
+        0.7201-0.7267. The 1920 extra parameters (186113 -> 188033, = 3 top-k
+        slots x 5 fields x 128) buy zero.
+    - id: F2
+      claim: >
+        The signal lives in the features, not in the model. Training the sidecar
+        adds little over a random projection of the same features.
+      evidence: >
+        The init-time eval (2026-08-21 16:45, sidecar weights untrained) gives
+        T2V contextual AUROC 0.1660 with rho -0.4959. Sign-inverted that is an
+        effective 0.834. Two epochs of training reach 0.8766. So the learned
+        sidecar improves on a random linear readout of the same top-k score
+        geometry by roughly 0.04 AUROC. Whatever predicts failure here is the
+        score geometry itself.
+    - id: F3
+      claim: >
+        Nothing in the training objective ever asked SAP's variance to carry
+        information, so its being uninformative is the expected outcome, not a
+        surprise.
+      evidence: >
+        (a) SAP is frozen in every arm (see known_limits entry 1), so
+        w_sap_failure_bce is a no-op. (b) Independently of freezing, sigma never
+        enters the retrieval score: modules/modeling.py:748 computes
+        `retrieve_logits = logit_scale * wti_logits` and the probabilistic branch
+        is discarded at inference. (c) The only standing pressure on logsigma is
+        vib_loss (weight 1e-4), whose KL-to-N(0,I) term
+        (prob_models/probemb.py:157) is minimised at logsigma = 0, i.e. it pushes
+        the variance toward a constant.
+    - id: F4
+      claim: >
+        External corroboration. DAB (arXiv 2607.20984, ECCV 2026) argues the
+        opposite thesis and reports the same thing in its own selective-
+        prediction section.
+      evidence: >
+        Its section 4.4 obtains AURC 0.429 -> 0.256 using the top1-top2 KL
+        margin, and states the signal "emerges from the bridge-induced
+        distributional gap rather than from text variance alone". See
+        related_work/dab_eccv2026/NOTES.md.
+
+    - id: F5
+      claim: >
+        Corroborating (not independent) mechanistic evidence: the trained sidecar
+        attenuated the SAP input block more than any other block, while
+        amplifying score geometry.
+      evidence: >
+        Extracted from contextual_risk_sidecar.network.0.weight [128, 441] in
+        pytorch_model.bin.1 of run 20260821_164109_sapfeat_full_sap_s0, compared
+        against a freshly initialised sidecar of identical shape. Per-input RMS
+        weight, trained / init:
+          score_distribution 1.372 | score_gaps 1.200 | topk_scores 1.020 |
+          query_semantics 0.955 | top1_semantics 0.882 | direction 0.836 |
+          context_semantics 0.774 | sap_uncertainty 0.751
+        Initialisation is flat across blocks (RMS 0.0274-0.0280), so the ordering
+        is a training effect. The three score-geometry blocks occupy the top
+        three positions; sap_uncertainty is last.
+      caveat: >
+        Weight norm is not feature attribution. The sidecar does not standardise
+        its inputs, so a block whose raw inputs have larger scale will carry
+        smaller weights for the same influence, and will also receive larger
+        gradient updates. A rigorous attribution needs standardised inputs or a
+        leave-one-block-out ablation; the latter was the sap_only arm, which
+        never ran. F5 therefore supports F1/F2 but does not stand alone.
+      single_arm: true
+
+  conclusion: >
+    Encoder-internal evidential uncertainty (K=16 anchors, Dirichlet evidence,
+    mixture logsigma) is not a usable failure signal for this retrieval model,
+    and the A3 sidecar's demonstrated skill comes from top-k score geometry.
+    The SAP line is closed. Note the scope limit already recorded in
+    known_limits (a)/(b): this falsifies PRETRAINED SAP uncertainty. Whether a
+    jointly TRAINED SAP could work is untested, and we are choosing not to test
+    it, because finding F3 shows the architecture gives sigma no path to the
+    ranking function in the first place - that path, not the uncertainty head,
+    is the thing worth changing.
+
+  not_produced:
+    - arms 2-6 (full_sap seeds 1-2, sap_only seeds 0-2)
+    - registry.jsonl for this study
+    - artifacts/sap-contextual-uncertainty-v1/
+  do_not_resume: true

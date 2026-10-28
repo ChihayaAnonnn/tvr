@@ -1,0 +1,21 @@
+{
+  "schema_version": "evidence-stage-gate-v1",
+  "stage": "reference",
+  "run_id": "msrvtt-baseline-evidence-reference-seed713-20261010T004033Z-b357001f8b8f",
+  "manifest_sha256": "9271ea8ceb3ed96fbf9c2b5123d13e64754cfe647f5ad2aada8b22a77aae62d6",
+  "reference_parts": {
+    "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-reference-seed713-20261010T004033Z-b357001f8b8f/checkpoints/reference-parts.pt",
+    "sha256": "eef8bfc6b6d9ac925152be9ec6ea632ed1790ff104bb5286cfc98e75641de722"
+  },
+  "training_summary": {
+    "optimizer_steps": 110.0,
+    "pc_sum": 2.0184383392333984
+  },
+  "summary_scope": "training final visited query loss; not validation performance",
+  "cursor": 128,
+  "actual_optimizer_steps": 110,
+  "controller_seconds": 679.7740992370527,
+  "allocated_gpu_hours": 0.18882613867695908,
+  "array_references_verified": 1283,
+  "test_authorized": false
+}

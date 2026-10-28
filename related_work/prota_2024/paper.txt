@@ -1,0 +1,845 @@
+                                              PROTA: PROBABILISTIC TOKEN AGGREGATION FOR TEXT-VIDEO RETRIEVAL
+
+                                                    Han Fang∗ , Xianghao Zang∗ , Chao Ban, Zerun Feng, Lanxiang Zhou, Zhongjiang He,
+                                                                                  Yongxiang Li, Hao Sun†
+
+                                                                     China Telecom Corporation Ltd. Data&AI Technology Company
+
+
+                                                                     ABSTRACT                                                                  Query      Dancing person with black shoes and blue jacket
+arXiv:2404.12216v2 [cs.CV] 20 Apr 2024
+
+
+
+
+                                                                                                                           Video
+                                                                                                                  Query
+                                         Text-video retrieval aims to find the most relevant cross-
+                                         modal samples for a given query. Recent methods focus                                                                        …                     …
+                                                                                                           (a) Intra-pair Uncertainty         Postive
+                                         on modeling the whole spatial-temporal relations. How-                                                video
+                                         ever, since video clips contain more diverse content than cap-      Positive                                    Captions
+                                                                                                                                                                      •
+                                                                                                                                                                      •
+                                                                                                                                                                          a boy is giving a girl a gift
+                                                                                                                                                                          a man is opening a box of glasses
+                                                                                                              video
+                                                                                                                                                                      •
+                                         tions, the model aligning these asymmetric video-text pairs                         Query                                        people sitting and dancing in unison
+
+
+                                         has a high risk of retrieving many false positive results.          Negative
+                                                                                                              video
+
+                                         In this paper, we propose Probabilistic Token Aggregation         (b) Inter-pair Uncertainty
+                                                                                                                                                                      …                     …
+                                         (ProTA) to handle cross-modal interaction with content asym-                                         Negative
+                                                                                                                           Query
+                                         metry. Specifically, we propose dual partial-related aggrega-                                         video
+                                                                                                                                                                      •   teens preform a pop song
+                                         tion to disentangle and re-aggregate token representations in      Positive
+                                                                                                             video
+                                                                                                                                   Negative
+                                                                                                                                                         Captions     •
+                                                                                                                                                                      •
+                                                                                                                                                                          kids are dancing musical on the beach
+                                                                                                                                                                          people are singing on the beach
+                                         both low-dimension and high-dimension spaces. We propose                                   video
+
+                                                                                                               (c) ProTA (Ours)                                      (d) Examples in MSR-VTT
+                                         token-based probabilistic alignment to generate token-level
+                                         probabilistic representation and maintain the feature repre-
+                                                                                                           Fig. 1.     (a) Intra-pair uncertainty. Videos often contain
+                                         sentation diversity. In addition, an adaptive contrastive loss
+                                                                                                           more information than their captions. (b) Inter-pair uncer-
+                                         is proposed to learn compact cross-modal distribution space.
+                                                                                                           tainty. The query is easy to match negative videos with sim-
+                                         Based on extensive experiments, ProTA achieves significant
+                                                                                                           ilar semantics. (c) ProTA can align cross-modality tokens at
+                                         improvements on MSR-VTT (50.9%), LSMDC (25.8%), and
+                                                                                                           a fine-grained level and adaptively adjust the token-level dis-
+                                         DiDeMo (47.2%).
+                                                                                                           tribution, which handles these two kinds of uncertainty in a
+                                            Index Terms— Text-video Retrieval, Token Aggregation,          unified manner. (d) Intra/inter-pair examples from MSR-VTT
+                                         Probabilistic Distribution.                                       [9].
+
+                                                             1. INTRODUCTION                                   The above concerns are summarized into two kinds of
+                                                                                                           data uncertainty: 1) Intra-pair uncertainty. The main con-
+                                         Text-video retrieval is an important cross-modal task for text-   tent conveyed by each text-video pair is often partially related
+                                         video semantics alignment, introducing more and more inter-       [8]. As illustrated in Fig. 1(d), the caption only describes a
+                                         est from the computer vision community [1, 2]. Most tra-          short range of the original video. Selecting the most discrim-
+                                         ditional methods fixed the pre-trained expert networks [3, 4]     inative parts of different modalities and aligning them is not
+                                         to provide prior knowledge and focus on multi-modal inter-        reasonable because they may be irrelevant. Besides, the re-
+                                         action. However, the caption often describes the partial re-      dundant information in a video and the ambiguous words in a
+                                         gion of its corresponding video, and it is hard to match them     caption also hinder the content alignment. 2) Inter-pair un-
+                                         due to content asymmetry. Recently, transferring large-scale      certainty. One video can be expressed through different texts,
+                                         pre-training models to text-video retrieval has demonstrated      and one caption can describe some similar videos, which is
+                                         its power. Several works aim to model the temporal rela-          easy to result in many false positive pairs. The point-based
+                                         tions [5, 6] and achieve cross-modality content alignment [7].    representation methods describe the feature as a fixed point
+                                         These works employ point-based representations to describe        in embedding space, which loses the representation diversity.
+                                         the video or text features. However, there are some ambigu-       Meanwhile, there are multiple understanding perspectives for
+                                         ous words in captions, such as “teens” in Fig. 1(d). The word     the same video or text. Thus, the method reserving the repre-
+                                         “teens” refers to “boy” or “girl” is unknown, and point-based     sentation diversity is more suited to text-video retrieval.
+                                         representation lacks enough ability to describe them.                 In this paper, we propose Probabilistic Token Aggrega-
+                                            * Equal contributions.                                         tion (ProTA) to tackle intra-pair and inter-pair uncertainty
+                                            Corresponding authors.                                         simultaneously. Concretely, to solve the intra-pair uncer-
+tainty caused by content asymmetry, we propose Dual Partial-       each input to a latent embedding space. PCME [8] mod-
+related Aggregation (DPA), including low-dimension and             els image/text as a probability distribution and measure their
+high-dimension aggregations. The low-dimension aggrega-            distance by Monte-Carlo estimation. ProViCo [15] supposes
+tion assigns different attention to each token. The high-          each clip has different distributions and can be embedded into
+dimension aggregation employs a Gram matrix with multi-            the same probabilistic space. Instead, we model each token as
+ple radial basis functions to obtain intra-modality and inter-     a separate distribution, measuring the probabilistic similarity
+modality similarities. Then the video or text distributions        at the token level.
+are aggregated using a double-weighting strategy to capture
+partially related content. Besides, we propose Token-based                             3. METHODOLOGY
+Probabilistic Alignment (TPA) to deal with inter-pair uncer-
+tainty. The token representation is formulated as a probabilis-    The proposed Probabilistic Token Aggregation (ProTA) is
+tic distribution, and negative 2-Wasserstein distance is used      illustrated in Fig. 2. Each text is added with two spe-
+to calculate the similarity between tokens. Then dual partial-     cial tokens <SOS> and <EOS>, which indicate the start
+related aggregation and token-based probabilistic representa-      and end of input text. Then a 12-layer Transformer from
+tion are gracefully combined. A KL regularization and an           CLIP [11] is employed to generate the text sequence tokens
+adaptive contrastive loss are introduced to keep feature repre-    ft = {tSOS , t1 , · · · , tN −2 , tEOS }, where N is the text token
+sentation diverse and pull the positive pair closer, which ef-     number. As for the video, we uniformly sample M frames
+fectively handles the problem of inter-pair uncertainty.           and adopt ViT to extract their spatial embeddings. Then
+    Our main contributions are as follows: (i) We pro-             these embeddings are processed by a temporal transformer
+pose a novel dual partial-related aggregation. The double-         [2] to model the temporal correlation, outputting video token
+weighting strategy effectively handles the partially related       fv = {v0 , v1 , · · · , vM −1 }, where M is the token number.
+cross-modality contents. (ii) We propose token-based proba-
+bilistic alignment to generate token-level probabilistic repre-    3.1. Dual Partial-related Aggregation
+sentation and adaptive margin with contrastive loss to enlarge
+the inter-pair distance. (iii) The experimental results show our   Low-dimension Aggregation. For the tokens of different
+proposed model achieves significant improvements.                  modalities, token-level similarity matrix is formulated as:
+
+                                                                                           s11       s12     ···
+                                                                                                                  
+                   2. RELATED WORK                                                                   ..
+                                                                                                         .    ··· ,
+                                                                                                                   
+                                                                                     Lm = s                                      (1)
+                                                                                           21
+                                                                                             ..       ..            
+Video-text Retrieval. Early works often utilize offline fea-
+                                                                                              .        .     sti vj
+ture extractors and focus on designing cross-modality fusion
+methods [10, 3]. Recent works have begun to employ an
+end-to-end manner to train their models. CLIP4Clip [2] and         where sti vj is computed using dot product of ith text token
+CLIP2video [5] transfer the prior knowledge from CLIP [11]         and j th video token to represent their similarity.
+to video-text retrieval and propose a temporal modeling mod-           To simplify the description, we only explain the text-
+ule. Following CLIP [11], these methods adopt infoNCE loss         to-video similarity computation process, and the video-to-
+[12] for optimization. Meanwhile, we follow the end-to-end         text process has the same computation fashion. The cross-
+manner and introduce a novel adaptive contrastive loss.            modality aggregation in low-dimension space is achieved by
+    Cross-modal Interaction. Early works mainly focus on           a weighted manner as follows:
+improving the generalization ability of language and text en-                              M
+coders. They use a simple dot-product between the fea-
+                                                                                           X            exp λsti vj
+                                                                                lti →v =       sti vj PM               ,          (2)
+tures. CE [4] employs the ASR and OCR information to ex-                                   j=1         k=1 exp λsti vk
+tract more cues. To achieve fine-grained video-text retrieval,
+CAMoE [1] utilizes Mixture-of-Experts to obtain the action,        where i ∈ [1, · · · , N ], λ is a temperature coefficient. The Eq.
+scene, and object in each video and align them with the corre-     2 is introduced to tackle the token-level content asymmetry,
+sponding words. TACo [13] pre-defines the weight of tokens         e.g., a verb cannot be summarized by a frame, and a frame
+by computing inverse document frequency. However, these            cannot be described by an adjective. The vector lti →v is the ith
+methods define hand-crafted concepts and attempt to align          element of text-to-video similarity lt→v in a low-dimension
+them. While we propose dual partial-related aggregation to         space.
+achieve the data-driven and token-level interaction.                   High-dimension Aggregation. Since video is a group
+    Probabilistic Representation.        Recent works have         of temporal scenarios, captions may merely describe the
+begun to employ the probabilistic feature to model the             changes in a local region of videos. To further explore
+data/representation uncertainty. HIB [14] models the feature       their partial-related content in multi-dimensional spaces, we
+embedding as a random variable and hedges the location of          propose to project the feature into multiple high-dimension
+                                                                                                Frame Token
+                                                                                                                                          Video Token        Dual Partial-related Aggregation                                                       Token-based Probabilistic Alignment
+                                                   *
+            [CLS] token                                                                                                                     (mean)
+                                                                                                                                   𝜇𝑣0
+
+
+
+
+                                                                                                    Temporal Transformer + MLP
+                                                            Spatial Transformer(ViT)
+                                                                                                                                   𝜎𝑣0        𝜇𝑣0       Low-dimension Aggregation
+                 Linear Projection of Flattened
+
+
+
+
+                                                                                                                                              𝜇𝑣1
+                                                                                                                                                        𝜇𝑣 /𝜎𝑣                                         Inter-modality
+                                                                                                                                                                                                                                𝑙𝑣→𝑡
+
+
+
+
+                                                                                                                                               …
+                                                                                                                                   𝜇𝑣1                                                                  Aggregation
+                                                                                                                                                                                                                                                                                           𝜎𝑣1,+ … , 𝑀
+                                                                                                                                   𝜎𝑣1
+                                                                                                                                              𝜎𝑣0        𝜇𝑡 /𝜎𝑡                                        Inter-modality
+                                                                                                                                                                                                                                𝑙𝑡→𝑣
+                                                   …
+
+
+
+
+                                                                                          …                                                                                                             Aggregation                                                                        𝜇𝑣1,+ … , 𝑀
+
+
+
+
+                                                                                                                                  …
+                                                                                                                                              𝜎𝑣1
+
+
+
+
+                                                                                                                                               …
+                                                                                                                                                                                                                                                                                                                 𝜇𝑣1,− … , 𝑀
+                                                                                                                                          Video Token
+                                                  Patch                                                                                    (Variance)   High-dimension Aggregation                                                             𝒮 𝑝 (𝒩𝑡 , 𝒩𝑣 )
+                                                  Token
+                                                                                                                                                                                                                                                                                                   𝜎𝑣1,− … , 𝑀
+    Patch
+
+
+
+
+                                                                                                                                                                                   Intra-modality
+                                                                                                                                                        𝜇𝑡                          Aggregation                    𝑀𝐿𝑃
+                                                                                        Position                                                                                                                                                                   Change of Probabilistic Token Distribution
+                                                                                       Embedding                                          Text Token
+                                                                                                                                   𝜇𝑡0
+                                                          [SOS]                                                                             (mean)
+                                                                                                                                   𝜎𝑡0
+
+
+
+
+                                                                                                                                                                  Kernel Mapping
+                                                                                                                                                                                                                                                                  Before Training             After Training
+                                                                                                                                                                                                               Inter-modality
+                                                                                                                                                                                                                                ℎ෠ 𝑡
+                                                                                                    Text Transformer + MLP
+
+
+
+
+                                                                                                                                                                                                                                                                                    𝜇𝑡 +
+                                                                                                                                   𝜇𝑡1
+                                                                                                                                              𝜇𝑡0                                    𝐺𝑡→𝑡 𝐺𝑡→𝑣                  Aggregation                                                                          𝜇𝑣 +           𝜇𝑡 +
+                                                          two                                                                                 𝜇𝑡1
+                                                                                                                                   𝜎𝑡1
+                                                                                                                                               …
+
+
+
+
+                                                                                                                                                                                                                                                                 𝜇𝑣 +
+                                                          girls
+                                                                                                                                   𝜇𝑡2                                               𝐺𝑣→𝑡 𝐺𝑣→𝑣                 Inter-modality
+                                                                                                                                                                                                                                ℎ෠ 𝑣
+                                                                                                                                                                                                                Aggregation
+                                                                                                                                   𝜎𝑡2        𝜎𝑡0
+                                                                                                                                              𝜎𝑡1
+                                                                                          …
+
+
+
+
+                                                                                                                                   …
+
+
+
+
+                                                                                                                                                                                                                                                                𝜎𝑣 +                𝜎𝑡 +            𝜎𝑣 +            𝜎𝑡 +
+                                                                                                                                               …
+
+
+
+
+                                                                                                                                  𝜇𝑡𝑁−1                                                       Intra-modality
+                                                          [EOS]                                                                                         𝜇𝑣                                                         𝑀𝐿𝑃
+                                                                                                                                  𝜎𝑡𝑁−1   Text Token                                           Aggregation
+                                                                                       Text Token                                         (Variance)                                                                                                        Change of Probabilistic Instance Distribution
+
+
+
+Fig. 2. Overview of Probabilistic Token Aggregation. The two stream encoders are adopted to estimate the probabilistic
+distribution. We propose dual partial-related aggregation for token-level interaction, handling the problem of intra-pair uncer-
+tainty. The token-based probabilistic alignment is introduced to minimize the representation uncertainty, tackling inter-pair
+uncertainty.
+
+spaces using radial basis functions (RBFs). In multiple high-                                                                                                                                              where Wt is a two-layer MLP network. Intra-modality block
+dimension spaces, the intra-modality and inter-modality rela-                                                                                                                                              matrix Gt→t is adopted to adjust the token-level weight,
+tionships are both explored and formulate a Gram matrix.                                                                                                                                                   where redundant token representation is disentangled and re-
+    We explain the Gram matrix construction process as fol-                                                                                                                                                aggregated to provide more attention to discriminative infor-
+lows. The original text and video features, i.e., ft ∈ RN ×d                                                                                                                                               mation. Meanwhile, the inter-modality aggregation in high-
+and fv ∈ RM ×d , are concatenated into a joint feature f ∈                                                                                                                                                 dimension space is formulated as:
+R(N +M )×d . R kernels are utilized for Gaussian mapping,                                                                                                                                                                                      M +N
+which introduces multiple kinds of high-dimension embed-                                                                                                                                                                                       X              exp ξgti vj
+                                                                                                                                                                                                                                hti →v =             gti vj PM               ,                                                 (6)
+ding spaces. These generated high-dimension token-level                                                                                                                                                                                       j=N +1         k=1 exp ξgti vk
+similarities are averaged as follows:
+                                                                                                                                 R                                                                         where i ∈ [1, · · · , N ], ξ is a temperature coefficient, and
+                                                                                             1 X                                                                                                           hti →v is the ith element in high-dimension text-to-video sim-
+                                                                                       gij =     Kk (fi , fj ),                                                                            (3)
+                                                                                             R                                                                                                             ilarity ht→v . Rather than aligning discriminative textual rep-
+                                                                                                                                 k=1
+                                                                                                                                                                                                           resentations, ht→v is introduced to capture pair-relevant dis-
+where fi represents the ith vector in f and Kk indicates the
+                                                                                                                                                                                                           tribution at the cross-modal level.
+k th kernel function. All high-dimension token-level similar-
+                                                                                                                                                                                                                By introducing Gram matrix with Gaussian mapping as
+ities gij construct the Gram matrix G ∈ R(N +M )×(N +M ) ,
+                                                                                                                                                                                                           an indicator, the re-weighted sequence tokens are formulated
+where i and j are in [1, · · · , N +M ]. With the help of multiple
+                                                                                                                                                                                                           using intra-modality and inter-modality aggregation in high-
+Gaussian kernel mapping, the Gram matrix disentangles the
+                                                                                                                                                                                                           dimension embedding space as follows:
+redundant similarity distribution in multiple high-dimension
+spaces and effectively captures the partially related content                                                                                                                                                                                  hbt = ht→v · ht→t .                                                             (7)
+for alignment. The text-to-text and video-to-video relations
+are dubbed Gt→t and Gv→v to represent the intra-modality                                                                                                                                                       Dual Partial-related Aggregation. The aggregations
+similarities. Gt→v and Gv→t represent the inter-modality                                                                                                                                                   in low-dimension and high-dimension embedding spaces are
+similarities. Therefore, Gram matrix G can be expressed as:                                                                                                                                                combined, exploring more fine-grained relationships. There-
+                                                                                                                                                                                                         fore, the similarity of each video-text pair is formulated as:
+                              Gt→t Gt→v
+                    G=                        .                (4)
+                              Gv→t Gv→v                                                                                                                                                                                                                  lt→v · hbt + lv→t · h
+                                                                                                                                                                                                                                                                             cv
+                                                                                                                                                                                                                                       S(ft , fv ) =                            ,                                              (8)
+   The intra-modality aggregation in high-dimension em-                                                                                                                                                                                                             2
+bedding space is processed as follows:
+                                                                                                                                                                                                           where lv→t and h
+                                                                                                                                                                                                                          cv are obtained using the same manner as
+                                                                                        ht→t = Wt (Gt→t ft ),                                                                              (5)             lt→v and ht .
+                                                                                                                                                                                                                    b
+3.2. Token-based Probabilistic Alignment                             where bi represents the ith mini-batch, Nv+ is the positive dis-
+                                                                     tribution in each mini-batch, τ is the temperature coefficient,
+Token-based Probabilistic Representation. To deal with
+                                                                     η is a hyper-parameter, mt2v is the adaptive margin and gen-
+inter-pair uncertainty, we propose token-level probabilistic
+                                                                     erated using the following equation:
+representation, while existing methods use the video/text-
+level representation. We adopt Gaussian distributions with                    mt2v = exp[−KL(N (µt , σt )||N (µv , σv ))],      (14)
+mean µ and variance σ to represent each token. For text se-
+quence tokens, we parameterize distribution as:                      where the KL divergence plays the role of indicator to adjust
+           µt = W    mean
+                            (ft ),   σt2 = exp W var (ft ),    (9)   penalty dynamically. For example, when a text-video pair has
+                                                                     a close KL divergence distance, the margin penalty mt2v will
+where W mean and W var represent the MLP networks. The               increase, which gives the model a harder learning target and
+mean µt and variance σt2 have the same dimension as ft , i.e.,       results in a discriminative model. The whole contrastive loss
+RN ×d , which represent mean feature and representation un-          is illustrated as:
+certainty of token sequences. The mean µv and variance σv of
+                                                                                                   1
+video are obtained using the same equation as Eq. 9. In this                           Lcontra =     (Lt2v + Lv2t ),            (15)
+                                                                                                   2
+way, the token-level feature is represented by a probabilis-
+tic distribution N (µ, σ), which introduces the representation       where Lv2t is obtained in the same manner as Lt2v . For model
+diversity. For example, ‘person’ in a caption can represent          training, the total objective of the proposed Probabilistic To-
+‘man’, ‘woman’, or some other kinds, while the original fea-         ken Aggregation (ProTA) is formulated as:
+ture only can represent a specific/certain one.
+    Moreover, we propose using the 2-Wasserstein distance to                             Lall = Lcontra + βLkl ,                (16)
+measure the token-level distance first and utilize dual partial-
+related aggregation to obtain the probabilistic similarity of the    where β is the weight to control trade-off.
+video-text pair. The probabilistic token similarity is calcu-
+lated using negative 2-Wasserstein distance as follows:                                  4. EXPERIMENTS
+                      q
+                                                  2
+           spti vj = − ∥µit − µjv ∥2 + ∥σti − σvj ∥2 .
+                                           2
+                                                            (10)     4.1. Experimental Setting
+Then probabilistic similarity spti vj replaces the corresponding     Datasets. MSR-VTT-9k [9] includes 10,000 videos, where
+sti vj in Eq. 1 and generates the probabilistic low-dimension        each video contains 20 captions. we report results on the 1k-
+similarity matrix Lpm . Then, the low-dimension text-to-video        A split (9000 for training, 1000 for testing). LSMDC [17]
+             p
+similarity lt→v  can be obtained using Eq. 2 in the same man-        is composed of 118,081 videos, where 1,000 videos are se-
+ner. Since mean µt and µv contain most of the semantics, we          lected for evaluation. DiDeMo [18] includes over 10k videos.
+utilize them to construct high-dimension Gram matrix Gp and          Following the same setting as [19, 20, 2], we concatenate all
+obtain h        cpv with the same operation as high-dimension
+         cp and h                                                    descriptions of a video as a caption and treat this dataset as a
+          t
+aggregation. Therefore, the probabilistic similarity of each         video-paragraph retrieval task.
+video-text pair is aggregated as:                                        Evaluation Metric. Following [21], we report Recall at
+                                                                     rank K (R@K), median rank (MdR), and mean rank (MnR)
+                             lp · h
+                                  cp + lp · h
+                                            cpv
+                                                                     as metrics, where the higher R@K, and lower MdR and MnR
+            S p (Nt , Nv ) = t→v t      v→t
+                                                .             (11)
+                                     2                               represent the better performance.
+    To prevent δ 2 degrading into point representations, a               Implementation Details. We follow the same experi-
+Kullback-Liebler (KL) regularization is adopted to keep the          mental setting of prior work [5] to initialize parameters for
+feature distribution in accordance with the normal distribu-         both datasets. Besides, R, λ and ξ for relation-aware aggre-
+tion N (0, I) as:                                                    gation are set to 5, 100, and 100. We choose η and β as 5e-4 in
+                                                                     uncertainty-based alignment. We use the AdamW optimizer
+                     1                                               and set the batch size to 128. The learning rate is 1e-7 for
+             Lkl =     [KL(N (µt , σt )||N (0, I))+
+                     2                                        (12)   frame and text encoder, and 1e-3 for the proposed modules.
+                        KL(N (µv , σv )||N (0, I))].                 More details are listed in the supplemental material.
+   Adaptive Contrastive Loss. For model training, we pro-
+pose an adaptive margin with infoNCE [16] to supervise the           4.2. Ablation Studies
+proposed framework. We only present the text-to-video loss
+                                                                     Effectiveness of DPA. In Tab. 1, compared with the global
+function to simplify the description as follows:
+                                                                     based method [2], Mean-Max [22] brings improvements by
+                     exp[(S p (Nt , Nv+ ) − η · mt2v )/τ ]           providing fine-grained tokens. However, these methods ad-
+ Lt2v = − E log           P                                , (13)    justed weights within one modality, which did not consider
+            t∈bi              exp[S d (Nt , Nv )/τ ]
+Table 1. Performance on MSR-VTT-9k [9]. ‘LdA’: Low-
+dimension aggregation. ‘intra’: intra-modality aggregation.
+‘inter’: inter-modality aggregation. ‘G’: Gram matrix with
+Gaussian kernel. ‘AC’: adaptive contrastive loss. ‘G† ’: Gram
+matrix using dot product. ‘§’: probabilistic similarity.
+                             Text =⇒ Video         Video =⇒ Text
+        Method            R@1 R@5 R@10          R@1 R@5 R@10
+   Global Pooling [2]     44.5    71.4  81.6    42.7   70.9   80.6
+    Mean-Max [22]         46.3    73.7  83.2    44.0   73.5   82.1                  (a)                           (b)
+         LdA              46.5    74.0  83.4    44.2   74.1   82.6
+      LdA+G†intra         46.2    74.2  83.3    44.0   73.9   83.0   Fig. 3. (a) Analysis of Lkl by training with MSR-VTT-9k
+    LdA+G†intra+inter     46.7    74.3  83.7    44.3   74.1   83.3   [9]. (b) Adaptive margin versus performance in MSR-VTT-
+      LdA+Gintra          46.8    74.5  83.9    44.2   74.4   83.6   9k 1kA test, where m represents average of mt2v + mv2t .
+ LdA+Gintra+inter (DPA)   47.0    75.0  84.1    44.6   74.6   84.0
+         DPA§             46.7    74.4  83.2    43.9   73.4   83.8
+       DPA§ +Lkl          47.7    75.1  83.8    45.4   74.8   84.0
+ DPA§ +Lkl +AC (ProTA)    48.1    75.4  84.3    45.9   75.5   84.6    Table 3. Text-to-video results on LSMDC [17] testing set.
+                                                                            Method        R@1     R@5    R@10      MdR    MnR
+                                                                           MMT [3]        12.9    29.9    40.1     19.3   65.0
+     Table 2. Text-to-video results on MSR-VTT-9k [9].                   FROZEN [23]      15.0    30.8    39.8     20.0    -
+              Method             R@1    R@5    R@10    MdR   MnR         TeachText [27]   17.2    36.5    46.3     13.7    -
+           FROZEN [23]           31.0   59.5    70.5   3.0    -          MDMMT [10]       18.8    38.5    47.9     12.3   58.0
+             HIT [20]            30.7   60.9    73.2   2.6    -          CLIP4Clip [2]    22.6    41.0    49.1     11.0   61.0
+          MDMMT [10]             38.9   69.0    79.7   2.0   16.5
+                                                                          TS2-Net [25]    23.4    42.3    50.9      9.0   56.9
+          CLIP4Clip [2]          44.5   71.4    81.6   2.0   15.3
+          CLIP2Video [5]         45.6   72.6    81.7   2.0   14.6         X-Pool [24]     25.2    43.7    53.5      8.0   53.2
+            X-pool [24]          46.9   72.8    82.2   2.0   14.3        ProTA (Ours)     25.8    47.3    57.7      7.0   45.3
+            TS2Net [25]          47.0   74.5    83.8   2.0   13.0
+          ProTA (Ours)           48.1   75.4    84.3   2.0   12.5
+     CLIP2TV + ViT-B/16 [6]      48.3   74.6    82.8   2.0   14.9
+    CenterCLIP + ViT-B/16 [26]   48.4   73.8    82.0   2.0   13.8
+                                                                     training progresses, the model ends its warm-up, and the ef-
+      TS2Net+ ViT-B/16 [25]      49.4   75.6    85.3   2.0   13.5
+     ProTA (Ours) + ViT-B/16     50.9   77.0    85.4   1.0   11.1    fect of the adaptive margin appears gradually. The model with
+                                                                     adaptive margin performs better than the one without margin.
+
+
+the alignment of partially related content. Instead, we pro-         4.3. Comparisons with State-of-the-art Methods
+pose Low-dimension Aggregation (LdA) that assigns differ-            We compare with other state-of-the-art methods on three
+ent weights based on token distribution. Then to disentan-           datasets. The text-to-video results are reported in Tab. 5, 3,
+gle the redundant information and re-aggregate partially re-         and 4. As observed, without any augmentation [1, 28], our
+lated content in multiple high-dimension spaces, we adopt            method still achieves significant progress, which improves
+the Gram matrix with multiple radial basis functions as the          R@1 by at least 2.0% across different evaluation metrics.
+indicator ‘G’. Based on ‘LdA’, we utilize the intra-modality         Moreover, we observe that the improvement is more remark-
+blocks ‘Gintra ’ to enhance the weight of the discriminative to-     able in Tab. 4. We adopt the same token length as other state-
+ken. We add inter-blocks ‘Ginter ’ to generate ‘LdA+Gintra+inter ’   of-the-art methods, which use a longer token length. Promi-
+and introduce aligned relations, which achieves better perfor-       nent results represent that ProTA works well on cross-modal
+mance. Besides, we show the results of Gram matrix (G† ) us-         pairs with diverse content and prove its generalization. Be-
+ing dot product. Without kernel mapping for high-dimension           sides, we also conduct the experiments adopting ViT-B/16
+aggregation, G† brings limited improvement.                          backbone and report results in the bottom of Tab. 5, which
+    Effectiveness of TPA. The results are shown in the last
+four lines of Tab. 1. Dual partial-related aggregation is ex-
+tended to measure the distribution distance (‘DPA§ ’). The KL
+                                                                      Table 4. Text-to-video results on DiDeMo [18] testing set.
+regularization is added to keep the token-level distribution di-
+                                                                             Method       R@1     R@5     R@10     MdR    MnR
+versity, which generates ‘DPA§ +LKL ’. In Fig. 3(a), we also             ClipBERT [19]    20.4    48.0     60.8    6.0     -
+depict the uncertainty change represented by log σt2 . As de-            TeachText [27]   21.1    47.3     61.1    6.3     -
+picted, the KL regularization keeps the distribution to a proper         FROZEN [23]      31.0    59.8     72.4    3.0     -
+range, where the representation uncertainty is decreased. In             CLIP4Clip [2]    43.4    70.2     80.6    2.0    17.5
+addition, applying the adaptive margin in the loss function in-           TS2-Net [25]    41.8    71.6     82.0    2.0    14.8
+troduces further improvement (‘DPA§ +LKL +AC’). In Figure                ProTA (Ours)     47.2    74.6     83.0    2.0    11.6
+3(b), we illustrate the change of model performance. As the
+         Query: an old man shakes hands with another man and then they hug each other    [4] Yang Liu, Samuel Albanie, Arsha Nagrani, and Andrew Zisserman,
+                                                                                             “Use what you have: Video retrieval using representations from collab-
+  Positive                                                                                   orative experts,” arXiv preprint arXiv:1907.13487, 2019.
+   Video
+                                                                                         [5] Han Fang, Pengfei Xiong, Luhui Xu, and Wenhan Luo, “Transferring
+                                                                                             image-clip to video-text retrieval via temporal relations,” IEEE Trans-
+ Negative                                                                                    actions on Multimedia, 2022.
+  Video
+                                                                                         [6] Zijian Gao, Jingyu Liu, Sheng Chen, Dedan Chang, Hao Zhang, and
+                                                                                             Jinwei Yuan, “Clip2tv: An empirical study on transformer-based meth-
+                                                                                             ods for video-text retrieval,” arXiv preprint arXiv:2111.05610, 2021.
+                                                                                         [7] Xiaohan Wang, Linchao Zhu, and Yi Yang, “T2vlad: global-local se-
+                                                                                             quence alignment for text-video retrieval,” in CVPR, 2021.
+                                                                                         [8] Sanghyuk Chun, Seong Joon Oh, Rafael Sampaio De Rezende, Yan-
+                                                                                             nis Kalantidis, and Diane Larlus, “Probabilistic embeddings for cross-
+                                                                                             modal retrieval,” in CVPR, 2021.
+                                                                                         [9] Jun Xu, Tao Mei, Ting Yao, and Yong Rui, “Msr-vtt: A large video
+                      (a) w/o ProTA.                      (b) With ProTA.
+                                                                                             description dataset for bridging video and language,” in CVPR, 2016.
+                                                                                        [10] Maksim Dzabraev, Maksim Kalashnikov, Stepan Komkov, and Alek-
+         Fig. 4. Visualization of probabilistic distribution.                                sandr Petiushko, “MDMMT: multidomain multimodal transformer for
+                                                                                             video retrieval,” in CVPR Workshops, 2021.
+outperforms the previous best method by a large margin of                               [11] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh,
+                                                                                             Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela
++1.5% in terms of text-to-video R@1 metric. The video-to-                                    Mishkin, and Jack Clark, “Learning transferable visual models from
+text results can be found in the supplementary material.                                     natural language supervision,” in ICML, 2021.
+                                                                                        [12] Aaron van den Oord, Yazhe Li, and Oriol Vinyals, “Representation
+                                                                                             learning with contrastive predictive coding,” 2018.
+4.4. Qualitative Comparisons.                                                           [13] Jianwei Yang, Yonatan Bisk, and Jianfeng Gao, “Taco: Token-aware
+                                                                                             cascade contrastive learning for video-text alignment,” in CVPR, 2021.
+In Fig. 4, we visualize the features to verify the effective-                           [14] Seong Joon Oh, Kevin Murphy, Jiyan Pan, Joseph Roth, Florian
+ness of proposed ProTA. Concretely, we select text-to-video                                  Schroff, and Andrew Gallagher, “Modeling uncertainty with hedged
+results from MSR-VTT, where the negative video is wrongly                                    instance embedding,” arXiv preprint arXiv:1810.00319, 2018.
+                                                                                        [15] Jungin Park, Jiyoung Lee, Ig-Jae Kim, and Kwanghoon Sohn, “Proba-
+retrieved without DPA and TPA. We adopt t-SNE [29] to de-                                    bilistic representations for video contrastive learning,” in CVPR, 2022.
+pict their distributions, where each ellipse represents one to-                         [16] Aaron van den Oord, Yazhe Li, and Oriol Vinyals, “Represen-
+ken distribution. With limited textual descriptions and a lot                                tation learning with contrastive predictive coding,” arXiv preprint
+of scenario changes in the video, these pairs contain much                                   arXiv:1807.03748, 2018.
+                                                                                        [17] Anna Rohrbach, Atousa Torabi, Marcus Rohrbach, Niket Tandon,
+uncertainty. Without ProTA, the negative pairs easily overlap                                Christopher Pal, Hugo Larochelle, Aaron Courville, and Bernt Schiele,
+each other, causing the wrong matching. After introducing                                    “Movie description,” International Journal of Computer Vision, vol.
+ProTA, the distance between the positive pair decreases, and                                 123, no. 1, pp. 94–120, 2017.
+the distance between the negative pair increases, while the to-                         [18] Lisa Anne Hendricks, Oliver Wang, Eli Shechtman, Josef Sivic, Trevor
+                                                                                             Darrell, and Bryan Russell, “Localizing moments in video with natural
+ken uncertainty is significantly decreased.                                                  language,” in ICCV, 2017.
+                                                                                        [19] Jie Lei, Linjie Li, Luowei Zhou, Zhe Gan, Tamara L Berg, Mohit
+                                                                                             Bansal, and Jingjing Liu, “Less is more: Clipbert for video-and-
+                               5. CONCLUSION                                                 language learning via sparse sampling,” in CVPR, 2021.
+                                                                                        [20] Song Liu, Haoqi Fan, Shengsheng Qian, Yiru Chen, Wenkui Ding,
+This paper proposes a novel method called Probabilistic To-                                  and Zhongyuan Wang, “Hit: Hierarchical transformer with momen-
+ken Aggregation (ProTA). In this work, ProTA introduces                                      tum contrast for video-text retrieval,” in Proceedings of the IEEE/CVF
+                                                                                             International Conference on Computer Vision, 2021, pp. 11915–11925.
+dual partial-related aggregation to distinguish cross-modal                             [21] Antoine Miech, Ivan Laptev, and Josef Sivic, “Learning a text-video
+pairs in multi-dimension space, alleviating the intra-pair un-                               embedding from incomplete and heterogeneous data,” arXiv preprint
+certainty. Furthermore, token-based probabilistic alignment                                  arXiv:1804.02516, 2018.
+is employed to represent token as probabilistic distribution,                           [22] Qiang Wang, Yanhao Zhang, Yun Zheng, Pan Pan, and Xian-Sheng
+                                                                                             Hua, “Disentangled representation learning for text-video retrieval,”
+reducing the inter-pair uncertainty in the token level.                                      arXiv preprint arXiv:2203.07111, 2022.
+                                                                                        [23] Max Bain, Arsha Nagrani, Gül Varol, and Andrew Zisserman, “Frozen
+                                  6. REFERENCES                                              in time: A joint video and image encoder for end-to-end retrieval,” in
+                                                                                             ICCV, 2021.
+ [1] Xing Cheng, Hezheng Lin, Xiangyu Wu, Fan Yang, and Dong Shen,                      [24] Satya Krishna Gorti, Noël Vouitsis, Junwei Ma, Keyvan Golestan,
+     “Improving video-text retrieval by multi-stream corpus alignment and                    Maksims Volkovs, Animesh Garg, and Guangwei Yu, “X-pool: Cross-
+     dual softmax loss,” arXiv preprint arXiv:2109.04290, 2021.                              modal language-video attention for text-video retrieval,” in CVPR,
+ [2] Huaishao Luo, Lei Ji, Ming Zhong, Yang Chen, Wen Lei, Nan Duan,                         2022.
+     and Tianrui Li, “Clip4clip: An empirical study of clip for end to end              [25] Yuqi Liu, Pengfei Xiong, Luhui Xu, Shengming Cao, and Qin Jin,
+     video clip retrieval and captioning,” Neurocomputing, vol. 508, pp.                     “Ts2-net: Token shift and selection transformer for text-video re-
+     293–304, 2022.                                                                          trieval,” in ECCV. Springer, 2022.
+ [3] Valentin Gabeur, Chen Sun, Karteek Alahari, and Cordelia Schmid,                   [26] Shuai Zhao, Linchao Zhu, Xiaohan Wang, and Yi Yang, “Center-
+     “Multi-modal transformer for video retrieval,” in European Conference                   clip: Token clustering for efficient text-video retrieval,” arXiv preprint
+     on Computer Vision (ECCV). Springer, 2020, vol. 5.                                      arXiv:2205.00823, 2022.
+[27] Ioana Croitoru, Simion-Vlad Bogolin, Marius Leordeanu, Hailin Jin,
+     Andrew Zisserman, Samuel Albanie, and Yang Liu, “Teachtext: Cross-
+     modal generalized distillation for text-video retrieval,” in CVPR, 2021,
+     pp. 11583–11593.
+[28] Wenhao Wu, Haipeng Luo, Bo Fang, Jingdong Wang, and Wanli
+     Ouyang, “Cap4video: What can auxiliary captions do for text-video
+     retrieval?,” arXiv preprint arXiv:2301.00184, 2022.
+[29] Jeff Donahue, Yangqing Jia, Oriol Vinyals, Judy Hoffman, Ning Zhang,
+     Eric Tzeng, and Trevor Darrell, “Decaf: A deep convolutional activa-
+     tion feature for generic visual recognition,” in ICML, 2014.
+[30] Mandela Patrick, Po-Yao Huang, Yuki Markus Asano, Florian Metze,
+     Alexander G. Hauptmann, João F. Henriques, and Andrea Vedaldi,
+     “Support-set bottlenecks for video-text representation learning,” in In-
+     ternational Conference on Learning Representations (ICLR), 2021.
+[31] Jesús Andrés Portillo-Quintero, José Carlos Ortiz-Bayliss, and Hugo
+     Terashima-Marı́n, “A straightforward framework for video retrieval
+     using CLIP,” in MCPR, Mexico City, Mexico, Edgar Roman-Rangel,
+     Ángel Fernando Kuri Morales, José Francisco Martı́nez Trinidad,
+     Jesús Ariel Carrasco-Ochoa, and José Arturo Olvera-López, Eds. 2021,
+     vol. 12725 of Lecture Notes in Computer Science, pp. 3–12, Springer.
+[32] Huaishao Luo, Lei Ji, Botian Shi, Haoyang Huang, Nan Duan, Tian-
+     rui Li, Xilin Chen, and Ming Zhou, “Univilm: A unified video and
+     language pre-training model for multimodal understanding and gener-
+     ation,” arXiv preprint arXiv:2002.06353, 2020.
+[33] Bowen Zhang, Hexiang Hu, and Fei Sha, “Cross-modal and hierar-
+     chical modeling of video and text,” in Proceedings of the European
+     Conference on Computer Vision (ECCV), 2018, pp. 374–390.
+[34] Youngjae Yu, Jongseok Kim, and Gunhee Kim, “A joint sequence fu-
+     sion model for video question answering and retrieval,” in Proceedings
+     of the European Conference on Computer Vision (ECCV), 2018, pp.
+     471–487.
+     In this supplementary material, we present detailed information includ-                                 D. ABLATION STUDIES
+ing: 1. Introduction of used datasets and evaluation protocols; 2. Imple-
+mentation Details. 3. More video-to-text comparisons with state-of-the-art          D.1. Temperature in DPA
+methods; 4. Ablation studies; 5. More qualitative results.
+                                                                                    We propose different temperature coefficients of dual partial-related aggre-
+                                                                                    gation (DPA) in Eq. 2 and Eq. 6 in the main paper to balance the weight of
+                                                                                    every token towards the corresponding modality. Only considering the sim-
+                               A. DATASETS
+                                                                                    ilarity of the most important token, the model is easily disturbed by a few
+                                                                                    tokens, ignoring other discriminative frames and words. Meanwhile, it is not
+     • MSR-VTT [9] contains 10,000 videos, where each video contains 20             suitable to utilize a single frame to represent the word with temporal descrip-
+       captions. We adopt two protocols to evaluate our proposed method.            tions like the verb, and vice versa. Therefore, we adopt a weighted similarity
+       In the main paper, we report results trained on MSR-VTT-9k and test          with temperature coefficient λ and ξ for low-dimension and high-dimension
+       in 1k-A protocol. In supplementary material, we demonstrate the              aggregation respectively. The results of different settings are reported in Tab.
+       results of the full protocol. Specifically, full protocol [10, 32] is the    10. We choose 100 for λ and 100 for ξ, which empirically yields the best
+       standard split which includes 6,513 videos for train, 497 videos for         overall performance.
+       validation, and 2,990 videos for testing. In this protocol, each video             Number of Kernels. In Tab. 11, we conduct comparisons to explore
+       contains multiple independent captions, which are all used in text-to-       the effects of kernel numbers. The performance of dual partial-related ag-
+       video retrieval. When reporting the results of video-to-text retrieval,      gregation is improved as the kernel number increases. Employing several
+       we adopt the maximum similarity among all corresponding captions             kernels for mappings, the redundant semantics is well disentangled and re-
+       for a given video query.                                                     aggregated in multiple high-dimensional spaces to capture partially related
+     • LSMDC [17] is composed of 118,081 videos collected from 202                  content. Besides, when the number is too large, the mapping generates more
+       movies. Each video has only one caption. There are about 100k                noisy information due to the limited representation in low-dimension space.
+       videos in the training set and 1k videos are utilized as the test set.
+                                                                                                      E. MORE QUALITATIVE RESULTS
+     • DiDeMo [18] is the dataset with dense localization by natural lan-
+       guage queries, which is proposed for temporal video grounding. Fol-          We visualize more samples to prove the effectiveness of adjusting token
+       lowing [19, 20, 2], we utilize this dataset for text-video retrieval, con-   weight, where Fig. 5 depicts the ablation of intra-modality aggregation and
+       catenate all descriptions of a video as a caption and treat this dataset     Fig. 6 represents the ablation of inter-modality aggregation. In Fig. 5, the
+       as a video-paragraph retrieval task. The dataset contains over 10k           token weight is re-weighted within the modality. The model learns to focus
+       videos, which adopts 8,395 videos for training, 1,065 videos for val-        more on distinguishing pairs according to detailed descriptions like ”beauti-
+       idation, and 1,004 for testing. Note that the methods we compare             ful”, ”nation” and ”hair”. In Fig. 6, we demonstrate the cases that adding
+       in the paper and supplementary material follow the same setting,             inter-modal aggregation, where the text-to-video weight is determined by
+       including the same length of video and text tokens and video-                both relations of word tokens and aligned frame tokens. As observed, the
+       paragraph retrieval task.                                                    weight of word token is adjusted according to different scenarios, e.g., , the
+                                                                                    importance of ”usa” is larger when matching with the positive pairs, and the
+                                                                                    first frame in the positive video is highlighted as the most discriminated sce-
+                   B. IMPLEMENTATION DETAILS.                                       nario. By introducing the inter-modality relations, the weight of tokens can
+                                                                                    be dynamically adjusted to capture the most relevant representations in pairs.
+The frame encoder and text encoder are initialized by CLIP (ViT-B/32). We                 In Fig. 7, we demonstrate the failure cases of text-to-video retrieval and
+reuse parameters of CLIP to initialize temporal transformer. The layer, head,       video-to-text retrieval, where our model fails to retrieve the corresponding
+and width of spatial and temporal transformer in video encoder is 12, 8, 768,       cross-modal pair at the top. However, we find that the most relevant videos
+and 4, 8, 512, respectively. The text encoder is a 12-layer transformer with        and text are actually retrieved. The failed reason may come from ambiguous
+8 attention heads and 768 widths. To match the representation of different          annotations such as ‘gives a speech’ and ‘laughing’. For example, the video
+modalities, two linear projections are utilized to encode them into dimension       query in Fig. 7(b) can be well described by the two captions, due to the
+of 512. The length of video and caption is 12 and 32 for MSR-VTT [9] and            polysemous description without specific details.
+LSMDC [17]. As for DiDeMo [18], we set the length of video and caption
+to 64, which is the same setting as existing methods [4, 33]. R, λ and ξ for
+relation-aware aggregation are set to 5, 100, and 100. We choose η and β
+as 5e-4 in uncertainty-based alignment. We fine-tune our model with Adam
+optimizer with cosine schedule decay. The batch size is 128. The training
+epoch is 5 for MSR-VTT [9] and LSMDC [17], and 10 for DiDeMo [18].
+The learning rate is 1e-7 for frame encoder and text encoder, and 1e-3 for the
+proposed modules.
+
+
+    C. COMPARISONS WITH STATE-OF-THE-ART METHODS
+
+We compare our proposed ProTA with state-of-the-art methods on video-
+to-text benchmarks including MSR-VTT-9k [9], LSMDC [17] and DiDemo
+[18] The detailed results are demonstrated in Tab. 5, 6 and 7. Note that since
+MSR-VTT-9k is the most commonly used data set, we demonstrate all the
+text-to-video and video-to-text results in Tab. 5, where some text-to-video
+results are also presented in the main paper. To further demonstrate the effec-
+tiveness and generalization ability of our method, we also show the results of
+the full protocol in MSR-VTT. The full protocols require the model to find
+videos based on multiple corresponding captions, while the maximum sim-
+ilarity among all corresponding captions is needed for a given video query,
+increasing the difficulty of matching. In Tab. 8 and 9, our proposed method
+still shows priority compared with others.
+                            Table 5. Retrieval performance comparison trained on MSR-VTT-9k [9] and evaluated on 1k-A test.
+                                                                                        Text =⇒ Video                                                                        Video =⇒ Text
+                                           Method                             R@1    R@5 R@10 MdR                                             MnR         R@1             R@5 R@10 MdR                              MnR
+                                           CE [4]                             20.9   48.8    62.4    6.0                                      28.2        20.6            50.3    64.0   5.3                        25.1
+                                          MMT [3]                             26.6   57.1    69.6    4.0                                      24.0        27.0            57.5    69.7   3.7                        21.3
+                                    SUPPORT-SET [30]                          27.4   56.3    67.7    3.0                                       -          26.6            55.1    67.5   3.0                          -
+                                        T2VLAD [7]                            29.5   59.0    70.1    4.0                                       -          31.8            60.0    71.1   3.0                          -
+                                        FROZEN [23]                           31.0   59.5    70.5    3.0                                       -           -               -        -      -                          -
+                                      CLIPforward [31]                        31.2   53.7    64.2    4.0                                       -          27.2            51.7    62.6   5.0                          -
+                                          HIT [20]                            30.7   60.9    73.2    2.6                                       -          32.1            62.7    74.1   3.0                          -
+                                       MDMMT [10]                             38.9   69.0    79.7    2.0                                      16.5         -               -        -      -                          -
+                                       CLIP4Clip [2]                          44.5   71.4    81.6    2.0                                      15.3        42.7            70.9    80.6   2.0                        11.6
+                                       CLIP2Video [5]                         45.6   72.6    81.7    2.0                                      14.6        43.5            72.3    82.1   2.0                        10.2
+                                         X-pool [24]                          46.9   72.8    82.2    2.0                                      14.3         -               -        -      -                          -
+                                         TS2Net [25]                          47.0   74.5    83.8    2.0                                      13.0        45.3            74.1    83.7   2.0                         9.2
+                                        ProTA (Ours)                          48.1   75.4    84.3    2.0                                      12.5        45.9            75.5    84.6   2.0                         9.0
+                                  CLIP2TV + ViT-B/16 [6]                      48.3   74.6    82.8    2.0                                      14.9        46.5            75.4    84.9   2.0                        10.2
+                                 CenterCLIP + ViT-B/16 [26]                   48.4   73.8    82.0    2.0                                      13.8        47.7            75.0    83.3   2.0                        10.2
+                                   TS2Net+ ViT-B/16 [25]                      49.4   75.6    85.3    2.0                                      13.5        46.6            75.9    84.9   2.0                         8.9
+                                  ProTA (Ours) + ViT-B/16                     50.9   77.0    85.4    1.0                                      11.1        48.5            77.0    87.0   2.0                         7.9
+
+
+
+
+                                                                                                𝐿𝑑A           𝐿𝑑𝐴 + 𝐺𝑖𝑛𝑡𝑟𝑎
+
+                  the view of a boat and the water is blocked by clouds and fog                                                        several women in pink outfits and various other styles are standing and smiling
+
+
+                                     …                …                   …                                                                                   …                    …                     …
+Negative                                                                                                 Negative
+ Video                                                                                                    Video
+                                                                                           Frame-query
+
+
+
+
+                                                                                                                                                                                                                         Frame-query
+                                                                                              Weight
+
+
+
+
+                                                                                                                                                                                                                            Weight
+           Word-video
+
+
+
+
+                                                                                                            Word-video
+            Weight
+
+
+
+
+                                                                                                             Weight
+
+
+
+
+ Query                   [SOS]    the beautiful scene on           the     screen [EOS]                   Query              [SOS]         women    of    a       foreign nation   comb   their   hair   and   perform   in traditional costumes [EOS]
+                                                                                                                         Frame-query
+           Frame-query
+
+
+
+
+                                                                                                                            Weight
+              Weight
+
+
+
+
+                                     …                …                   …                                                                                …                       …                     …
+Positive                                                                                                 Positive
+ Video                                                                                                    Video
+                  the beautiful scene on the screen                                                                                      women of a foreign nation comb their hair and perform in traditional costumes
+
+
+                                                                                          ⅹ 𝐿𝑑𝐴 √ 𝐿𝑑𝐴 + 𝐺𝑖𝑛𝑡𝑟𝑎
+
+
+Fig. 5. Ablation of intra-modality aggregation. We adopt the same sampling strategy as paper and select 4 frames uniformly
+from frame sequences.
+                                                                                               𝐿𝑑𝐴 + 𝐺𝑖𝑛𝑡𝑟𝑎              𝐿𝑑𝐴 + 𝐺𝑖𝑛𝑡𝑟𝑎+𝑖𝑛𝑡𝑒𝑟
+                         a soccer team walking out on the field                                                                        a man discussed a few products
+
+Negative                                                                                                      Negative
+                                         …                  …              …                                   Video                                      …                    …                       …
+ Video
+
+                                                                                                                                                              Frame-caption Weight of Negative Pair
+
+
+
+
+                                                                                                                                                                                                                         Frame-query
+                                                                                               Frame-query
+
+
+
+
+                                                                                                                                                                                                                            Weight
+                                                                                                  Weight
+           Word-video
+
+
+
+
+                                                                                                                         Word-video
+            Weight
+
+
+
+
+                                                                                                                          Weight
+ Query                   [SOS]     a    football match between usa         and   japan [EOS]                   Query                   [SOS]          a           kid unwrapping             his       presents [EOS]
+
+
+
+
+                                                                                                                                                                                                                         Word-video
+                                                                                               Word-video
+
+
+
+
+                                                                                                                                                                                                                          Weight
+                                                                                                Weight
+           Frame-query
+
+
+
+
+                                                                                                                         Frame-query
+              Weight
+
+
+
+
+                                                                                                                            Weight
+                                                                                                                                                               Frame-caption weight of Positive Pair
+
+                          a football match between usa and japan                                                                       a kid unwrapping his presents
+
+Positive                                                                                                      Positive
+ Video                                   …                   …             …                                   Video                                    …                       …                      …
+
+
+                                                                                     ⅹ 𝐿𝑑𝐴 + 𝐺𝑖𝑛𝑡𝑟𝑎 √ 𝐿𝑑𝐴 + 𝐺𝑖𝑛𝑡𝑟𝑎+𝑖𝑛𝑡𝑒𝑟
+
+Fig. 6. Ablation of inter-modality aggregation. We adopt the same sampling strategy as paper and select 4 frames uniformly
+from frame sequences.
+
+
+
+Table 6. Video-to-text retrieval results on the LSMDC [17]
+testing set.                                                                                                 Table 9. Text-to-video retrieval results on the MSR-VTT-full
+                                                                                                             [9].
+        Method                             R@1          R@5        R@10        MdR      MnR
+     JSFusion [34]                         12.3         28.6        38.9       20.0      -                            Method                              R@1             R@5            R@10              MdR    MnR
+    CLIPforward [31]                        6.8         16.4        22.1       73.0      -                            CE [4]                              10.0            29.0            41.2             16.0   86.8
+     CLIP4Clip [2]                         20.8         39.0        48.6       12.0     54.2                        T2VLAD [7]                            12.7            34.8            47.1             12.0    -
+     ProTA (Ours)                          24.5         46.8        56.6        7.0     41.7                      CLIPfowrard [31]                        21.4            41.1            50.4             10.0    -
+                                                                                                                   CLIP4Clip [2]                          28.9            54.1            64.8             4.0    48.4
+                                                                                                                   CLIP2Video [5]                         29.8            55.5            66.2             4.0    45.5
+                                                                                                                   ProTA (Ours)                           31.1            56.4            67.4              4.0   44.7
+Table 7. Video-to-text results on the DiDeMo [18] testing set.
+
+       Method                           R@1           R@5          R@10        MdR     MnR
+        CE [4]                          15.6          40.9           -         8.2     42.4
+    TeachText [27]                      21.1          47.3          61.1       6.3       -                   Table 10. Comparison results with different settings of λ
+    CLIP4Clip [2]                       42.5          70.6          80.2       2.0     11.6                  and ξ on MSR-VTT-9k [9]. Note that we report the results
+    ProTA (Ours)                        46.2          73.2          83.4       2.0      9.6                  based on dual partial-related aggregation without probabilis-
+                                                                                                             tic alignment.
+
+                                                                                                                                                Text =⇒ Video                                  Video =⇒ Text
+Table 8. Video-to-text retrieval results on the MSR-VTT-full                                                    λ                 ξ          R@1 R@5 R@10                                   R@1 R@5 R@10
+[9].                                                                                                           max                -          46.3    74.0  83.4                             44.0   74.0   82.8
+                                                                                                               200                -          46.5    74.2  83.5                             44.0   74.1   83.2
+        Method                             R@1          R@5        R@10        MdR      MnR                    100                -          46.8    74.5  83.9                             44.2   74.4   83.6
+        CE [4]                             15.6         40.9        55.2       8.2      38.1                   50                 -          46.7    74.2  82.7                             43.8   73.7   82.9
+      T2VLAD [7]                           20.7         48.9        62.1       6.0                             100              max          46.8    74.8  83.8                             44.3   74.5   83.7
+    CLIPforward [31]                       40.3         69.7        79.2       2.0        -                    100              200          47.1    75.4  83.7                             44.3   74.3   83.8
+     CLIP4Clip [2]                         53.8         80.9        88.6       1.0       7.4                   100              100          47.0    75.0  84.1                             44.6   74.6   84.0
+     CLIP2Video [5]                        54.6         82.1        90.8       1.0       5.3                   100               50          46.5    74.8  83.7                             44.0   74.0   83.5
+     ProTA (Ours)                          55.3         83.2        91.3       1.0       4.8
+Table 11. Performance comparison with different numbers of
+Gaussian kernels on MSR-VTT-9k [9].
+
+                                 Text =⇒ Video                         Video =⇒ Text
+    Method                    R@1 R@5 R@10                          R@1 R@5 R@10
+     R=1                      46.7    74.6  83.9                    44.2   74.2   83.5
+     R=3                      46.8    74.9  84.0                    44.4   74.4   83.8
+     R=5                      47.0    75.0  84.1                    44.6   74.6   84.0
+     R=7                      47.0    75.1  84.3                    43.6   74.7   83.6
+     R=9                      46.9    74.7  83.7                    43.4   74.2   83.2
+
+
+
+
+                 Caption Query: a solider gives a speech
+                 Rank 1 a foreign military themed show       Rank 2 a solider gives a speech
+
+     (a)
+Text-to-video                       …                    …                        …                   …
+
+
+
+
+                 Video Query:                                      Rank 1 a woman laughs until she chokes
+     (b)
+ Video-to-text                      …                    …
+                                                                   Rank2 japanese people laughing and dancing
+
+
+
+
+Fig. 7. Failure cases of text-to-video retrieval (a) and video-
+to-text retrieval (b) on MSR-VTT-9k.
+

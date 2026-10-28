@@ -1,0 +1,69 @@
+{
+  "schema_version": "evidence-software-review-v1",
+  "scope": "shared expected-gain MSE for distribution and mean heads; actual selected actions and bound compiled population",
+  "implementation_sha256": {
+    "src/semantic_retrieval/evidence/evaluation.py": "257903928f05a3ef24f801c3d9fd7f50b1ee372bb8065f7911f164bee44c8fcc",
+    "src/semantic_retrieval/evidence/execution.py": "1975ddf4f2ceed8e33cd4e17fbe130aa643d758aaeec95c25eb84587738f6162"
+  },
+  "test_sha256": {
+    "tests/semantic_retrieval/evidence/test_evaluation.py": "8df4d6be896926a7a8a4e0f16e470ce1e172463d157bccbcb6f9d9c5a20a7c80",
+    "tests/semantic_retrieval/evidence/test_runtime.py": "b01220840f4c1fea8ce4bc38b6f6c7fb66717ba0a8575df475bbeb3dc95edb64"
+  },
+  "red_witness": {
+    "tests": 4,
+    "failed": 4,
+    "log": "/tmp/uatvr-gain-evidence-red-witness.log"
+  },
+  "timing_red_witness": {
+    "clock": "controlled monotonic oracle: ten virtual seconds per actual head forward; not a measured hardware runtime",
+    "expected_seconds": 50,
+    "observed_seconds": 0,
+    "log_sha256": "f1fd4e877f15fc371c7e4d394d0fcfc1adf28932dd365cd00aac49dd966cbb55"
+  },
+  "temporary_regression": {
+    "command": "CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/.conda/envs/tvr/bin/python -m pytest -p no:cacheprovider tests/semantic_retrieval/evidence -q",
+    "passed": 131,
+    "seconds": 55.91,
+    "log_sha256": "5c1c51a2c11b42cb87b204d5e1a45bb364fce100328299a23e075ed900555332"
+  },
+  "temporary_unavailable_invocation": {
+    "command_scope": "combined semantic and top-level archive tests",
+    "exit_code": 4,
+    "tests_run": 0,
+    "reason": "temporary copy lacks tests/test_experiment_artifacts.py",
+    "log_sha256": "419ec007a42945950dcd3d7615e95980cd30448e053aac3501bf430a98f247bc"
+  },
+  "temporary_extended_regression": {
+    "source_scope": "MSE implementation before timing-only correction",
+    "passed": 505,
+    "failed": 2,
+    "seconds": 171.47,
+    "limitations": "Both failures require git ls-files; temporary copy has no Git metadata. Full real-worktree regression remains mandatory after integration.",
+    "log_sha256": "7b1496ef77e66443cafd6579490cdc3f3860c936fc37ee1c488a54d676843931"
+  },
+  "independent_review": {
+    "agent": "final_scientific_code_review",
+    "blocking_findings": 0,
+    "tests_passed": 9,
+    "seconds": 5.51,
+    "scope": "numerical equivalence, valid worsen, unknown, nonfinite and ambiguous scopes; real OpenCV frozen CLIP compiled transitions and two-query selected actions; complete post-episode diagnostic timing"
+  },
+  "scientific_policy_hyperparameters_changed": false,
+  "B1_source_frozen_during_execution": true,
+  "next_required": "new-chain four CUDA rank qualification before additional science",
+  "test_authorized": false,
+  "scientific_protocol_changed": false,
+  "root_narrow_regression": {
+    "tests_passed": 9,
+    "seconds": 5.42,
+    "command": "CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/.conda/envs/tvr/bin/python -m pytest -p no:cacheprovider tests/semantic_retrieval/evidence/test_evaluation.py tests/semantic_retrieval/evidence/test_runtime.py::test_real_video_mean_policy_exports_selected_gain -q"
+  },
+  "root_regression": {
+    "tests_passed": 690,
+    "failed": 0,
+    "seconds": 306.44,
+    "command": "CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/.conda/envs/tvr/bin/python -m pytest -p no:cacheprovider tests/semantic_retrieval tests/test_experiment_artifacts.py tests/test_experiment_tracking.py tests/test_manage_experiment_run.py tests/test_experiment_archive_e2e.py tests/test_experiment_artifact_docs.py tests/test_legacy_artifact_migration.py tests/test_evidence_analysis_archive.py -q",
+    "log_sha256": "1db5818f4407dc884887b98eca38c867574aa4f748c6673d27cc639dccb7e47d",
+    "temporary_git_environment_failures_resolved": true
+  }
+}

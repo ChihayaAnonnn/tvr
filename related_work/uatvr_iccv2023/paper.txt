@@ -1,0 +1,689 @@
+                                                                  UATVR: Uncertainty-Adaptive Text-Video Retrieval
+
+                                                       Bo Fang1∗      Wenhao Wu2,3∗      Chang Liu4∗    Yu Zhou1†       Yuxin Song3
+                                                          Weiping Wang1      Xiangbo Shu5      Xiangyang Ji4     Jingdong Wang3
+                                            1
+                                              Institute of Information Engineering, Chinese Academy of Sciences 2 The University of Sydney
+                                                    3
+                                                      Baidu Inc. 4 Tsinghua University 5 Nanjing University of Science and Technology
+                                                     {fangbo,zhouyu,wangweiping}@iie.ac.cn, {songyuxin02,wangjingdong}@baidu.com,
+arXiv:2301.06309v2 [cs.CV] 19 Aug 2023
+
+
+
+
+                                                 {liuchang2022,xyji}@tsinghua.edu.cn, wenhao.wu@sydney.edu.au, shuxb@njust.edu.cn
+
+
+
+                                                                    Abstract                                     1                                        Textual Queries:
+                                                                                                                                                          (Video-Sentence Matching:)
+                                                                                                                                             2            various scenes from
+                                             With the explosive growth of web videos and emerg-                                             1 3
+                                                                                                                 2                                        different football games
+                                         ing large-scale vision-language pre-training models, e.g.,
+                                         CLIP, retrieving videos of interest with text instructions has                                 4 5               (Frame-Sentence Matching:)
+                                                                                                                                         6                 football player scores a
+                                         attracted increasing attention. A common practice is to                 3                                        touchdown
+                                         transfer text-video pairs to the same embedding space and
+                                                                                                                                                          (Frame-Word Matching:)
+                                         craft cross-modal interactions with certain entities in spe-                             (a) Uncertain problem
+                                                                                                                 4                                        football players celebrate
+                                         cific granularities for semantic correspondence. Unfortu-                                                        and another player makes an
+                                         nately, the intrinsic uncertainties of optimal entity combina-                                                   amazing touchdown
+
+                                         tions in appropriate granularities for cross-modal queries              5                     𝒩"
+                                         are understudied, which is especially critical for modalities                                                             frame embedding
+                                                                                                                                             𝒩!
+                                         with hierarchical semantics, e.g., video, text, etc. In this            6                                                 word embedding
+                                         paper, we propose an Uncertainty-Adaptive Text-Video Re-
+                                                                                                                                                                   Representation
+                                         trieval approach, termed UATVR, which models each look-                                                                   distribution
+                                                                                                                                       (b) Ours
+                                         up as a distribution matching procedure. Concretely, we
+                                         add additional learnable tokens in the encoders to adap-               Figure 1. Motivation. A video has numerous descriptions con-
+                                                                                                                taining different level information, (a) which shows inconsistent
+                                         tively aggregate multi-grained semantics for flexible high-
+                                                                                                                text-video correspondences in the common embedding space. The
+                                         level reasoning. In the refined embedding space, we rep-               former three frames depict a ‘celebrate’ action, while the last three
+                                         resent text-video pairs as probabilistic distributions where           frames are about a ‘touchdown’. This video diversity thus makes
+                                         prototypes are sampled for matching evaluation. Com-                   the optimal text-video matching in uncertain granularities, which
+                                         prehensive experiments on four benchmarks justify the su-              we call an uncertain matching problem. Moreover, previous deter-
+                                         periority of our UATVR, which achieves new state-of-the-               ministic works can only handle one-to-one text-video mappings,
+                                         art results on MSR-VTT (50.8%), VATEX (64.5%), MSVD                    yet a realistic relationship between two modalities is one-to-many.
+                                         (49.7%), and DiDeMo (45.8%). The code is available at                  (b) The above problems motivate our uncertainty-adaptive model
+                                         https://github.com/bofang98/UATVR.                                     through distribution matching procedures.
+
+
+
+                                         1. Introduction                                                        text-video retrieval (TVR) techniques. Given a query text
+                                                                                                                (video), TVR aims to find the most relevant video (text) in
+                                                                                                                the database, which is typically overwhelmed with sophisti-
+                                            With surging portable filming devices and emerging                  cated vague semantic combinations varying with hierarchi-
+                                         video media platforms, searching videos of interest with               cal text structures or spatiotemporal video spans.
+                                         human instructions, typically as texts, has been a part of                 Recent breakthroughs in the large-scale image and/or
+                                         daily lives, which urgently requires effective and robust              text pre-training [48, 22, 61] benefit TVR significantly. A
+                                             ∗ Co-first authorship. This work was done when Bo Fang was a re-   serial of seminal works employ a separated encoder archi-
+                                         search intern at Baidu Inc.                                            tecture to respectively project texts and videos into a pre-
+                                             † Corresponding author.                                            trained joint embedding space for compact cross-modal in-
+teraction [30, 4, 39, 31].                                       adding additional learnable tokens, allowing deterministic
+    Since a video inherently contains information beyond         semantic uncertainty adaptation in videos/texts. (iii) Com-
+texts, simply pooling all frames as a whole video expres-        prehensive experimental explorations demonstrate the supe-
+sion brings distraction during matching specific text enti-      riority of our UATVR, which obtains state-of-the-art results
+ties [39, 17]. Therefore, inspired by fine-grained image-        across public TVR benchmarks including MSR-VTT [57],
+text pre-training, e.g., FILIP [59] and ALBEF [32], multi-       MSVD [56], VATEX [54], and DiDeMo [1].
+grained TVR paradigms are introduced to build multi-level
+cross-modal interactions with sentence-frame level [20, 34],     2. Related Work
+word-frame level [52], or hierarchical correspondences in-
+                                                                 Vision-Language Pre-training. Cross-modal vision lan-
+cluding phrase-clip level [43, 25]. However, these methods
+                                                                 guage understanding [51, 8] is a challenging task for both
+are still far from satisfying in handling the intrinsic uncer-
+                                                                 computer vision and natural language processing communi-
+tainties of determining the optimal entity combinations with
+                                                                 ties. Recent breakthroughs are large-scale image-text con-
+appropriate granularities during text-video matching.
+                                                                 trastive pre-training, which employs a contrastive loss to
+    In Fig. 1, we illustrate the uncertain matching problem      jointly align image-text semantics into a unified embed-
+in TVR. Since different frame/word combinations can plau-        ding space, on more than 100M samples [48, 22]. Vision-
+sibly correspond to semantics in various perspectives, given     language pre-training with this paradigm [61, 60, 32, 33,
+the same video, successful retrieval can achieve in varying      6] has significantly boosted numerous cross-modal tasks
+granularities involving discrepant text-video entities, i.e.,    such as VQA [2], image captioning [58], text-image re-
+video-sentence matching, frame-sentence matching, frame-         trieval [27], etc. For the video counterparts, large-scale
+word matching, etc. Previous works determine particular          video caption datasets, e.g., HowTo100M [42] and Web-
+cross-modal mapping strategies in certain granularities, yet     Vid2M [4], also boost promising cross-modal video un-
+none have studied the intrinsic uncertainties of optimal text-   derstanding. However, due to the high cost of collecting
+video entity combinations. Besides, existing deterministic       wild videos and huge computing resources requirement, we
+cross-modal retrieval can only handle one-to-one mapping         bootstrap from CLIP like [39, 47] for text-video retrieval.
+scenarios [12]. However, a video can be described by mul-        Text-Video Retrieval is to find the most semantic-relevant
+tiple sentences typically (and vice versa), which formulates     video given a text query (text → video). Early research de-
+realistic one-to-many relationships.                             votes to distilling knowledge from “expert” models based
+    In this paper, we propose a novel TVR framework              on offline-extracted single-modality features [17, 35, 53, 9,
+to tackle the uncertainty problem in cross-modal match-          15, 38]. Recent dominant TVR benefits from end-to-end
+ing, termed Uncertainty-Adaptive Text-Video Retrieval            pre-training on large-scale text-video datasets [42, 4, 41].
+(UATVR). Generally, UATVR models each text-video                 Strategies that can improve training efficiency are essen-
+lookup as a distribution matching procedure in comple-           tial for end-to-end paradigms like ClipBERT [30] and
+mentary deterministic and probabilistic views. It is mate-       Frozen [4]. In TMVM [34], masked-based prototypes for
+rialized upon word-frame token-wise interactions and con-        aggregating video features are proposed, which play a sim-
+sists of a dynamic semantic adaptation (DSA) module and          ilar role to our DSA tokens. However, only visual RGB
+a distribution-based uncertainty adaptation (DUA) module.        frames are modeled in TMVM, ignoring the hierarchical at-
+    Concretely, DSA module enhances token-wise matching          tributes in the textual counterpart.
+by introducing additional learnable multi-class tokens. We           Another idea of TVR transfers knowledge from pub-
+find these simple-yet-effective tokens can adaptively aggre-     licly available CLIP models pre-trained on large-scale text-
+gate multi-grained video (or text) semantics during match-       image pairs and then align text-video modalities with chore-
+ing, thus allowing for flexible high-level reasoning. For        ographed mapping strategies [39, 62, 20, 40, 18, 16, 10, 24,
+DUA, we represent samples from each modality as distribu-        26]. Considering the discrepancy problem that videos al-
+tions rather than feature points and convert the deterministic   ways express more information than texts can capture [20],
+matching process to probabilistic distribution alignment. To     subsequent works devote to crafting cross-modal interac-
+simulate one-to-many text-video mappings, we pull proba-         tions with certain entities in specific granularities, e.g.,
+bilistic embeddings sampled from each distribution closer        sentence-frame level [20, 34], word-frame level [52], and
+via multi-instance contrastive loss [41].                        hierarchical level interactions [43, 25, 55]. TS2-Net [37]
+    Our contributions can be summarized as (i) We innova-        selects top-k informative tokens per frame, representing
+tively model video and text representations as probabilis-       salient semantics, for frame-wise cross-modal matching. It
+tic distributions and align them through multiple-instance       is been designed upon a more fine-grained level. Yet none
+contrast in their common embedding space for uncertainty-        above have studied the intrinsic uncertainties of optimal en-
+adaptive cross-modal matching. (ii) We propose a simple-         tity combinations in appropriate granularities, which moti-
+yet-effective technique for flexible high-level reasoning by     vates our uncertainty-adaptive matching model.
+Probabilistic Representations. The probabilistic theory                                                                                                  In training, a common optimizing method is to use
+has a long history in machine learning [44]. For the vi-                                                                                              a symmetric cross-entropy loss in both text-to-video and
+sion domain, HIB [45] first introduces probabilistic embed-                                                                                           video-to-text directions. Given a batch of B text-video
+dings to capture the uncertainty of image representations                                                                                             pairs, the model updates its parameters by maximizing the
+whilst handling the one-to-many correspondences for deep                                                                                              sum of the main diagonal of a B × B similarity matrix:
+metric learning. Moreover, they have also been success-
+fully applied to other tasks like face recognition [49, 7],
+pose estimation [50], etc. PCME [12] employs probabilis-                                                                                                                                         \mathcal {L}_{t2v} = -\frac {1}{B}\sum _{i}^{B} \mathrm {log} \frac {\mathrm {exp}(s(\mathbf {t}_i, \mathbf {v}_i))}{\sum _{j=1}^{B} \mathrm {exp} (s(\mathbf {t}_i, \mathbf {v}_j))}, \label {eq:t2v}                                           (4)
+tic embeddings for text-image retrieval to perform one-to-
+many matching between the multiplicity of visual concepts,
+which inspires us to expand them to videos, as videos typ-
+                                                                                                                                                                                                 \mathcal {L}_{v2t} = -\frac {1}{B}\sum _{i}^{B} \mathrm {log} \frac {\mathrm {exp}(s(\mathbf {v}_i, \mathbf {t}_i))}{\sum _{j=1}^{B} \mathrm {exp} (s(\mathbf {v}_i, \mathbf {t}_j))}, \label {eq:v2t}                                           (5)
+ically contain more complex semantic concepts for their
+temporal dynamics. Moreover, we find that soft contrastive
+loss [45] used in PCME is sub-optimal for text-video mod-                                                                                                                                                                                                      \mathcal {L} = \mathcal {L}_{t2v} + \mathcal {L}_{v2t}. \label {eq:t2v-v2t}                                                                                                        (6)
+elling. Instead, we introduce multi-instance contrast for a
+more appropriate one-to-many relation simulating. From                                                                                                   Fine-grained Interactions. Before the late cross-modal
+this, our uncertainty-adaptive matching model tackles the                                                                                             fusion, the key point lies in how to extract accurate video in-
+uncertain matching problem and remarkably surpasses pre-                                                                                              formation best described by corresponding textual queries.
+vious methods.                                                                                                                                        The naive method pools all frame embeddings equally [39]
+                                                                                                                                                      yet ignores the discrepancy problem that a video contains
+3. Method                                                                                                                                             more information than a single caption can depict [20]. Re-
+                                                                                                                                                      cent work attempts to ameliorate the above problem by de-
+   In this section, we first introduce our token-wise word-                                                                                           voting to constructing multi-grained cross-modal interac-
+frame matching baseline. Then we propose two essential                                                                                                tions, including sentence-frame [20, 34], word-frame [52],
+modules of UATVR, e.g., dynamic semantic adaptation and                                                                                               or multiple hierarchical interactions [43, 40]. In this paper,
+adaptive distribution matching, for tackling the uncertainty                                                                                          we take the token-wise word-frame matching paradigm as a
+problem in text-video retrieval.                                                                                                                      solid baseline due to its successful application in image-text
+3.1. Preliminary                                                                                                                                      pre-training [59] and strong TVR performance [52]. The
+                                                                                                                                                      text-video similarity thus comes from the mean of the max-
+    Problem Definition. TVR aims to learn a similarity cal-                                                                                           imum similarities between each frame with all word-level
+culation function s(·), which ought to maximize the similar-                                                                                          embeddings in bi-directions, formulated as:
+ity score of positive cross-modal samples and assign lower
+similarity for irrelevant pairs. Formally, given a pair of text
+ti ∈ RN +1 and video vi ∈ RM ×3×H×W , we formulate                                                                                                      s(\mathbf {t}_i, \mathbf {v}_i) = \frac {1}{2} \left ( \sum _{n=1}^N \mathop {\mathrm {max}}\limits _{m=1}^M \langle \mathbf {w}_i^n, \mathbf {f}_i^m \rangle + \sum _{m=1}^M \mathop {\mathrm {max}}\limits _{n=1}^N \langle \mathbf {w}_i^n, \mathbf {f}_i^m \rangle \right ), \label {eq:token-wise-ti} 
+them as collections of N words and M frames with ti =
+[wi0 , wi1 , wi2 , · · · , wiN ]T , vi = [fi1 , fi2 , · · · , fiM ]T , where                                                                                                                                  (7)
+wi0 represents the [CLS] token and H × W denotes the                                                                                                  where M, N denote frame and word number in the ith sam-
+resolution. We feed ti and vi into a text encoder and a video                                                                                         ple pair. win , fim , which are channel-wise normalized be-
+encoder respectively to get their corresponding embeddings                                                                                            fore calculating, refer to the nth word embedding and mth
+ti = [wi0 , wi1 , · · · , wiN ]T and vi = [fi1 , fi2 , · · · , fiM ]T . The                                                                           frame embedding, respectively. Eq.7 would produce larger
+frame embedding fim comes from the distinct [CLS] to-                                                                                                 similarity sums for longer video and text input. Therefore,
+ken from the transformer-based vision encoder for the mth                                                                                             an average operation is attached before addition.
+frame. Normally, we represent the whole video by average                                                                                              3.2. Dynamic Semantic Adaptation
+pooling all frame embeddings in Eq. 1 and represent the
+sentence with the first [CLS] token feature wi0 in Eq. 2.                                                                                                 To a certain extent, vanila token-wise matching brings
+The similarity of the text-video is calculated as the inner                                                                                           more accurate text-video correspondences. However, fine-
+production of ti , vi , c.f. Eq. 3.                                                                                                                   grained TVR interaction in a deterministic matching granu-
+                                                                                                                                                      larity does not consider the uncertain matching problem. To
+                \mathbf {v}_i = \mathrm {meanPool}([\mathbf {f}_i^1, \mathbf {f}_i^2, \cdots , \mathbf {f}_i^M]^T), \label {eq:meanpool}        (1)   tackle the problem, we introduce multiple additional learn-
+                                                                                                                                                      able tokens to dynamically aggregate multi-level video and
+                                                                                                                                                      text information while retaining the advance of local context
+                                                                      \mathbf {t}_i = \mathbf {w}_i^0, \label {eq:word-cls}                     (2)
+                                                                                                                                                      matching in the token-wise baseline, c.f. Fig. 2.
+                                                                                                                                                          Given sequential frame embeddings {fm     M
+                                                                                                                                                                                                 i }m=1 and word
+                                                                                                                                                                       n N
+                                            s(\mathbf {t}_i, \mathbf {v}_i) = \langle \mathbf {t}_i, \mathbf {v}_i \rangle . \label {eq:sim}    (3)   embeddings {wi }n=1 extracted from backbone encoders,
+                                                                                                                                                                                                                                                                                      𝑘
+                                                                                                                                                                                                                                                                            𝑘
+                                                                                                                                                     𝑘-sample                                                                                                                                                                                                                        𝑘-sample
+                                                 𝑝(𝑧|𝑇)
+
+
+
+
+                                                                                                                                                                                                                                                                                                  …
+
+
+
+
+                                                                                                                                                                                                                                                                                                                               …
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  𝑝(𝑧|𝑉)
+
+
+
+
+                                                                                                                                                                                                                      …
+                                                                                                                                                                                                                                                                                                               𝑘
+                                                                                                                                                                                                                                                                                                         𝑘
+                                                                                                                                                                                                                                                           Multi-instance contrast
+
+                                                                                                                                                                                                                                                        unit-Gaussian constraint
+                                                                                                                                                                                                                                                                                                  max
+                                                                                                                                                                                                                                                                   𝐶"
+
+
+
+
+                                                                                                                                                                                                                                SeqTransf
+
+
+
+
+                                                                                                                                                                                                                                                                                                                   SeqTransf
+                                                                                                    …                                      +                               …                                                                                                                                                                                                                               …                                                        +                                                                                                                                                                                  …
+
+
+
+
+                                                                                                                                                                                                                                                                                                         max
+                                                                                                                                                                                                                                                                   𝑁
+
+
+                                                                                                                                                                                                                                                                                            𝑀           𝐶!
+                                  Text Encoder                                                                                                                                                                                                                                                                                                                                                                                                                                                                               Video Encoder
+                                                                                                                                                                                                                                                                 token-wise matching
+
+                                                                                                      …
+                                                                                                                                                                                                                                                            extra learnable multi-class tokens                                                                                                                                                                                                                                                                                                                                                                …
+                                                                                                                                                                                                                                                             text probabilistic embeddings
+       “football players celebrate
+                                                                                                                                                                                                                                                             video probabilistic embeddings                                                                                                                                                                                                                                                                                                                                                                   …
+         and score touchdowns”
+Figure 2. UATVR pipeline. We concatenate numerous extra learnable tokens with sequential frame/word embeddings and feed them into a
+lightweight SeqTransf [39] for adaptive token-wise matching. Besides, we model all visual and textual tokens as probabilistic distributions
+and sample k probabilistic embeddings from each distribution with gradient propagating to construct multi-instance contrasts in a batch.
+
+
+we append additional Cv and Ct learnable multi-class to-                                                                                                                                                                                                                                                3.3. Adaptive Distribution Matching
+kens respectively at the sequences’ beginning (or end). The
+extra class tokens are randomly initialized and the position                                                                                                                                                                                                                                                Since deterministic methods can only handle one-to-
+embeddings are omitted for brevity in Fig. 2. Then we feed                                                                                                                                                                                                                                              one mapping scenarios [12], videos typically have mul-
+the enlarged (M + Cv ) frame embeddings set into another                                                                                                                                                                                                                                                tiple descriptions, formulating realistic one-to-many text-
+lightweight sequential Transformer (following the same se-                                                                                                                                                                                                                                              video relationships instead. We propose adaptive distribu-
+qTransf structure in [39]) to further model relations between                                                                                                                                                                                                                                           tion matching for probabilistic TVR to tackle the inherent
+learnable tokens and frames depending on the correspond-                                                                                                                                                                                                                                                inconsistency in text-video distributions, c.f . Fig. 2.
+ing text queries. We adopt the same operation symmetri-                                                                                                                                                                                                                                                    Let ti , vi denote the output of each backbone. We rep-
+cally for the (N + Ct ) word embeddings. All enlarged                                                                                                                                                                                                                                                   resent the text caption ti and the video vi as normal distri-
+frame and word embeddings are channel-wise normalized                                                                                                                                                                                                                                                   butions p(z|ti ) and p(z|vi ) with mean vectors and diagonal
+before similarity calculation. Similar to token-wise interac-                                                                                                                                                                                                                                           covariance matrices in RD , respectively:
+tions, we finally calculate our modified text-video similar-
+ity function upon the union of frame/word tokens and extra                                                                                                                                                                                                                                                                       \begin {split} p(z|t_i) &\sim \mathcal {N} (h_{\mathcal {T}}^{\mu }(\mathbf {t}_i), \mathrm {diag}(h_{\mathcal {T}}^{\sigma }(\mathbf {t}_i))), \\ p(z|v_i) &\sim \mathcal {N} (h_{\mathcal {V}}^{\mu }(\mathbf {v}_i), \mathrm {diag}(h_{\mathcal {V}}^{\sigma }(\mathbf {v}_i))), \end {split} \label {eq:distribution} 
+learnable class tokens, formulated as:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            (9)
+
+
+
+  s = \frac {1}{2} \Bigg ( \sum _{n=1}^{N+C_t} \mathop {\mathrm {max}}\limits _{m=1}^{M+C_v} \langle \mathbf {w}_i^n, \mathbf {f}_i^m \rangle + \sum _{m=1}^{M+C_v} \mathop {\mathrm {max}}\limits _{n=1}^{N+C_t} \langle \mathbf {w}_i^n, \mathbf {f}_i^m \rangle \Bigg ). \\ \label {eq:DSA}          where head module hµ is a fully-connected layer followed
+                                                                                                                                                                                                                                                                                                        by LayerNorm [3] and l2 normalization, and head hσ is a
+                                                                                                                                                                                                                                                                                    (8)                 separate fully-connected layer without any normalization
+                                                                                                                                                                                                                                                                                                        following [12]. The textual head hT and visual head hV
+   We define our dynamic semantic adaption loss LDSA
+                                                                                                                                                                                                                                                                                                        share the same parametric structure but optimize indepen-
+in the same formulation as Eq. 4,5,6, in which the modi-
+                                                                                                                                                                                                                                                                                                        dently upon transformer-based feature output. Next, two
+fied similarity function in Eq. 8 is employed for text-video                                                                                                                                                                                                                                                                                     (1)        (K) iid
+cross-modal matching. The additional semantic-aggregated                                                                                                                                                                                                                                                groups of K probabilistic embeddings {ti , · · · , ti } ∼
+                                                                                                                                                                                                                                                                                                                                                                (1)                                                                                   (K)                                              iid
+tokens introduce negligible parameters and training over-                                                                                                                                                                                                                                               p(z|ti ) and {vi , · · · , vi } ∼ p(z|vi ) are generated by
+head, Tab. 2, which is entirely simple yet effective. We give                                                                                                                                                                                                                                           sampling from the distributions of ti and vi with gradi-
+a deep analysis of DSA tokens in Sec. 4.2 and appendix,                                                                                                                                                                                                                                                 ent propagating. To enable stable training, we use the
+emphatically interpreting their working mechanisms.                                                                                                                                                                                                                                                     reparametrization trick [29] during the generation, formu-
+lated as follows:                                                                                                                                                                                                                                                                                                          Methods         R@1 R@5 R@10 MdR↓ MnR↓
+                                                                                                                                                                                                                                                                                                                           CLIP4Clip [39] 47.1 74.1 81.8  2.0 14.9
+                                                                                      \begin {split} \mathbf {t}_i^{(k)} &= \sigma (t_i)\cdot \epsilon ^{k} + \mu (t_i), \\ \mathbf {v}_i^{(k)} &= \sigma (v_i)\cdot \epsilon ^{k} + \mu (v_i), \end {split} \label {eq:sample}                                            TI (Token-Wise) 48.4 74.2 83.3 2.0 14.1
+                                                                                                                                                                                                                                                                                                (10)
+                                                                                                                                                                                                                                                                                                                           + DSA           49.6 75.5 84.9 2.0 12.5
+                                                                                                                                                                                                                                                                                                                           + DUA†          50.1 75.8 84.6 1.5 12.8
+                                                           iid                                                                                                                                                                                                                                                             + KL† (UATVR) 50.8 76.3 85.5   1.0 12.4
+where ϵ(k) ∼ N (0, I) and µ, σ denote the mean and the
+                                                                                                                                                                                                                                                                                                                           + DUA*          50.0 75.8 83.9 1.5 12.9
+standard deviation of p(z|ti ), p(z|vi ).
+                                                                                                                                                                                                                                                                                                                           + KL*           50.6 75.9 84.9 1.0 12.8
+    Unlike previous methods [45, 12] using soft contrastive
+loss (a binary classification loss based on the softmax cross-                                                                                                                                                                                                                                                            Table 1. Ablation study of different components. † denotes the im-
+entropy) via Monte-Carlo estimation for distribution align-                                                                                                                                                                                                                                                               plementation with MIL-NCE contrast and * is implemented with
+ment, we treat all probabilistic embeddings from a matched                                                                                                                                                                                                                                                                soft contrastive loss via Monte-Carlo estimation [45].
+text-video pair as positive samples to simulate one-to-many
+cross-modal matching. We update the model with a Multi-                                                                                                                                                                                                                                                                    Methods          Time Complexity Params Time
+Instance InfoNCE [41] loss, and the training target is to                                                                                                                                                                                                                                                                  CLIP4Clip [39]         O(B 2 )          162.3M 75.04h
+minimize the distance between video (text) probabilistic                                                                                                                                                                                                                                                                   TI (Token-Wise)    O(B 2 M N )          162.8M 82.00h
+embeddings and all corresponding text (video) embeddings.                                                                                                                                                                                                                                                                  w/ DSA             O(B 2 M ′ N ′ )      162.8M 82.24h
+Further comparisons are made in the appendix. Given a spe-                                                                                                                                                                                                                                                                 w/ DUA          O(B 2 (M ′ N ′ + K 2 )) 164.9M 84.08h
+                                                    (k)
+cific textual probabilistic embedding ti ∈ {ti }K       k=1 , we
+define the positive set Pi for ti as all video probabilistic em-                                                                                                                                                                                                                                                          Table 2. Comparisons of different components. B denotes sample
+                                             (k)
+beddings from vi , formulated as Pi = {vi }K      k=1 . The neg-
+                                                                                                                                                                                                                                                                                                                          size. M, N denote the length of frame tokens and text tokens resp.
+ative set thus is formed as probabilistic embeddings from                                                                                                                                                                                                                                                                 M ′ , N ′ are slightly enlarged with additional learnable tokens. K
+                             ei = {v(k) }j,k , j ̸= i. We define                                                                                                                                                                                                                                                          is the number of probabilistic embeddings. Training time denotes
+other videos in the batch, P          j                                                                                                                                                                                                                                                                                   GPU hours calculated by a single P40 card.
+the distribution-based uncertainty adaptation loss as:
+                                                                                                                                                                                                                                                                                                                          10K video clips in total with 20 captions for each. Follow-
+                                                                                                                                                                                                                                                                                                                          ing the data splits from [17, 42, 39], we train models on the
+     \mathcal {L}_{\mathrm {DUA}} = -\frac {1}{B}\sum _{i}^{B} \mathrm {log} \frac {\sum _{\mathbf {v}_i \in \mathcal {P}_i} \mathrm {exp} (s(\mathbf {t}_i, \mathbf {v}_i))} {\sum _{\mathbf {v}_j \in \{ \mathcal {P}_i \cup \widetilde {\mathcal {P}}_i \} } \mathrm {exp} (s(\mathbf {t}_i, \mathbf {v}_j))}.  (11)
+                                                                                                                                                                                                                                                                                                                          Training-9K set with corresponding captions and report
+                                                                                                                                                                                                                                                                                                                          results on the test 1K-A set. (b) MSVD [56] includes
+3.4. Total Objectives                                                                                                                                                                                                                                                                                                     1,970 videos and 80K captions, with ∼40 captions on av-
+                                                                                                                                                                                                                                                                                                                          erage per video. Train, validation, and test set have 1,200,
+   Following [45], we introduce additional KL divergence                                                                                                                                                                                                                                                                  100, and 670 videos respectively. (c) DiDeMo [1] contains
+loss between the distributions and the unit Gaussian prior                                                                                                                                                                                                                                                                10K videos paired with 40K descriptions. Following previ-
+N (0, I) to constraint the learned variances from collapsing                                                                                                                                                                                                                                                              ous [39, 4, 30], we concatenate all descriptions of one video
+to zero, which can be formulated as:                                                                                                                                                                                                                                                                                      to a single query. (d) VATEX [54] collects ∼35K videos
+                                                                                                                                                                                                                                                                                                                          with multiple annotations for each. There are ∼26K videos
+   \mathcal {L}_{\mathrm {KL}} = \mathrm {KL}(p(z|t_i), \mathcal {N}(0, I)) + \mathrm {KL}(p(z|v_i), \mathcal {N}(0, I)). \label {eq:KL} 
+                                                                                                                                                                                                                                                                                                                          for training, 1,500 for validating, and 1,500 for testing.
+                                                                                                                                    (12)
+Therefore, the total objectives can be defined as:                                                                                                                                                                                                                                                                        Evaluation Metrics. For brevity, we abbreviate Recall at K
+                                                                                                                                                                                                                                                                                                                          to R@K (K = 1, 5, 10) upon all datasets, which calculates
+                                                            \mathcal {L} = \mathcal {L}_{\mathrm {DSA}} + \alpha \cdot \mathcal {L}_{\mathrm {DUA}} + \beta \cdot \mathcal {L}_{\mathrm {KL}}, \label {eq:all}                                                                                  (13)                      the percentage of correct videos among the top K retrieved
+                                                                                                                                                                                                                                                                                                                          videos given textual queries (Text→Video, and vice versa).
+where α and β control the trade-off among three terms.                                                                                                                                                                                                                                                                    MdR, Median Rank, calculates the median of the ground
+                                                                                                                                                                                                                                                                                                                          truth in the retrieval ranking list. MnR, Mean Rank, cal-
+4. Experiments                                                                                                                                                                                                                                                                                                            culates the mean rank of the correct results in the retrieval
+                                                                                                                                                                                                                                                                                                                          ranking list. Note that for MdR and MnR, the lower score
+   We first describe the experimental settings. Then thor-                                                                                                                                                                                                                                                                means the better (indicated as ↓).
+ough ablation studies are conducted to demonstrate the ef-                                                                                                                                                                                                                                                                Implementation Details. We initialize our visual and lan-
+fectiveness of our proposed UATVR. Finally, we make com-                                                                                                                                                                                                                                                                  guage backbone with CLIP [48] pre-trained weight. Fol-
+parisons of our model to existing state-of-the-art methods                                                                                                                                                                                                                                                                lowing [39], we further use a four-layer lightweight sequen-
+on various TVR benchmarks.                                                                                                                                                                                                                                                                                                tial transformer to encode extra learnable class tokens with
+                                                                                                                                                                                                                                                                                                                          frame and word embeddings. In ablations, we take ViT/B-
+4.1. Experimental Settings
+                                                                                                                                                                                                                                                                                                                          16 by default. The textual token length is 32 and the frame
+Datasets. Experiments are conducted on 4 common video-                                                                                                                                                                                                                                                                    length is 12 for all datasets except DiDeMo (64 max query
+text retrieval benchmarks: (a) MSR-VTT [57] contains                                                                                                                                                                                                                                                                      words and 64 frames). A uniform frame sampling strat-
+                                                                      Prob-Embeds #        R@1    R@5 R@10 MdR↓ MnR↓
+                                                                     (Cv = 3, Ct = 2)      49.6   75.5 84.9 2.0 12.5
+                                                                              1            49.6   76.5 84.3 2.0 12.5
+                                                                              3            49.8   76.1 84.9 2.0 12.9
+                                                                     K        5            50.5   77.1 84.4 1.0 12.6
+                                                                              7            50.8   76.3 85.5 1.0 12.4
+                                                                              9             -      -    -    -   -
+Figure 3. Uncertainty level versus R@1 on MSR-VTT dataset.
+                                                                    Table 4. Ablation for the number of probabilistic embeddings.
+(Left) Results on ViT-B/32. (Right) Results on ViT-B/16.
+
+  Extra-Tokens # R@1 R@5 R@10 MdR↓ MnR↓                               Frames #      R@1      R@5      R@10      MdR↓       MnR↓
+   baseline   0  48.4 74.2 83.3 2.0 14.1                                 4          44.9     74.0      82.2      2.0       15.1
+              1  48.9 75.3 84.6 2.0 12.3                                 8          50.6     76.0      83.9      1.0       12.9
+              2  49.6 75.5 84.6 2.0 12.5                                 12         50.8     76.3      85.5      1.0       12.4
+     Cv       3  49.6 75.7 84.6 2.0 11.9                                 16         51.0     76.4      85.5      1.0       13.5
+  (Ct = 0) 4     49.3 75.2 84.2 2.0 12.4                                 20         50.8     76.0      84.9      1.0       13.4
+              8  48.8 75.2 84.7 2.0 12.5                                        Table 5. Impact of visual frame numbers.
+             12 49.2 75.4 84.2  2.0 12.4
+     Ct       2  49.6 75.5 84.9 2.0 12.5                            instance contrast, marked as †). Further analysis is shown
+  (Cv = 3) 4     49.1 75.4 84.4 2.0 13.3                            in the appendix. All the above results prove the significance
+                                                                    of distribution-based cross-modal matching in tackling the
+Table 3. Ablation study for the number of extra learnable tokens.   proposed uncertainty problem.
+                                                                        Tab. 2 compares time complexity and params for each
+egy with one frame per second sampling rate is employed.            component, in which feature dimension D is omitted for
+The dimension of video (text) distributions is 512 by de-           brevity. Despite the relatively larger time complexity taken
+fault. Following [39, 20, 37], we train UATVR model for 5           by DSA and DUA, it is still limited in quadratic time for one
+epochs with Adam [28] optimizer and adopt a warmup [21]             text-video pair. Note that our extra learnable tokens do not
+strategy. We set the batch size as 64 and the initial learning      bring more model parameters, meanwhile having negligible
+rate as 5e-5. The coefficient is 1e-2 for α and 1e-4 for β.         additional training cost. A similar conclusion can be drawn
+                                                                    for the distribution-based matching module. Therefore, our
+4.2. Ablation Study                                                 proposed UATVR is simple-yet-effective.
+    We evaluate the effectiveness of different components in        Dynamic Semantic Adaptation Tokens. In Tab. 3, we
+UATVR by comprehensive experiments. The default visual              study the impact of additional appended Cv and Ct multi-
+encoder is ViT-B/16 [14] and the t2v retrieval results are          class learnable tokens. It shows distinct t2v retrieval im-
+reported on the widely-used MSR-VTT [57] dataset.                   provements once extra visual tokens are added (i.e., Cv >
+Uncertainty-Adaptive Matching. The baseline of UATVR                0), which reflects that this simple-yet-effective technology
+is fine-grained token-wise interaction (TI), which provides         can aggregate multi-grained video semantics depending on
+minimal granularity tokens for retrieval. As shown in               the uncertain captions. Cv = 3 is the best among all.
+Tab. 1, with extra multi-class learnable tokens appended,           When Cv is larger than 3, the performance starts to de-
+we observe a 1.2% R@1 improvement (48.4% vs. 49.6%)                 grade. We observe a similar phenomenon in TMVM [34]
+and a lower MnR (14.1 vs. 12.5) compared to the base-               that more video prototypes would significantly degrade the
+line. We explain that additional tokens can aggregate multi-        performance. Too many extra tokens would become noise
+grained information extracted from video frames and tex-            rather than representative, negatively influencing the normal
+tual words, which adapts to flexible cross-modal matching           matching process. In subsequent experiments, we set final
+in different granularities. Moreover, distribution-based un-        Cv = 3 and Ct = 2. Additional Ct text tokens further pro-
+certainty adaptation with KL divergence constraint further          mote v2t R@1 to 47.8%. We analyze the corresponding v2t
+obtains the highest 50.8% R@1 and the lowest 1.0 MdR                retrieval results in the appendix.
+and 12.4 MnR, which demonstrates the effectiveness of the           Distribution-Based Uncertainty Adaptation. A larger
+proposed distribution alignment mechanism. Also, we for-            number of probabilistic embeddings can better simulate
+mulate a soft contrastive loss following [45], which is a bi-       video and caption distributions but can also lead to more
+nary classification loss based on the softmax cross-entropy         computing requirements. In Tab. 4, we report the perfor-
+via Monte-Carlo estimation (marked as *). We observe very           mance according to the number of sampled probabilistic
+close but slightly lower performance than MIL-NCE (multi-           embeddings K based on our optimal DSA branch. We
+                                                      Text → Video                                 Video → Text
+   Method                    Date
+                                         R@1     R@5 R@10 MdR↓              MnR↓      R@1     R@5 R@10 MdR↓              MnR↓
+   MMT [17]           ECCV’20            26.6    57.1    69.6    4.0         -        27.0    57.5    69.7    3.7        21.3
+   SupportSet [46]    ICLR’21            30.1    58.5    69.3    3.0         -        28.5    58.6    71.6    3.0         -
+   Frozen [4]         ICCV’21            32.5    61.5    71.2    3.0         -         -       -        -       -         -
+   BridgeFormer [19] CVPR’22             37.6    64.8    75.1      -         -         -       -        -       -         -
+   TMVM [34]         NeurIPS’22          36.2    64.2    75.7    3.0         -        34.8    63.8    73.7    3.0         -
+   CLIP-ViT-B/32
+   CLIP4Clip [39]     ArXiv’21            44.5    71.4      81.6     2.0      15.3    42.7     70.9     80.6      2.0     11.6
+   CenterCLIP [62]    SIGIR’22            44.2    71.6      82.1     2.0      15.1    42.8     71.7     82.2      2.0     10.9
+   CAMoE [11]‡        ArXiv’21            44.6    72.6      81.8     2.0      13.3    45.1     72.4     83.1      2.0     10.0
+   CLIP2Video [16]    ArXiv’21            45.6    72.6      81.7     2.0      14.6    43.5     72.3     82.1      2.0     10.2
+   X-Pool [20]        CVPR’22             46.9    72.8      82.2     2.0      14.3     -        -        -         -        -
+   QB-Norm [5]‡       CVPR’22             47.2    73.0      83.0     2.0       -       -        -        -         -        -
+   EMCL [23]         NeurIPS’22           46.8    73.1      83.1     2.0       -      46.5     73.5     83.5      2.0       -
+   TS2-Net [37]       ECCV’22             47.0    74.5      83.8     2.0      13.0    45.3     74.1     83.7      2.0      9.2
+   UATVR                                  47.5    73.9      83.5     2.0      12.3    46.9     73.8     83.8      2.0      8.6
+   UATVR‡                                 49.8    76.1      85.5     2.0      12.9    51.1     74.8     85.1      1.0      8.3
+   CLIP-ViT-B/16
+   CLIP2TV [18]       ArXiv’21            48.3    74.6      82.8     2.0      14.9    46.5     75.4     84.9      2.0     10.2
+   CenterCLIP [62]    SIGIR’22            48.4    73.8      82.0     2.0      13.8    47.7     75.0     83.3      2.0     10.2
+   TS2-Net [37]       ECCV’22             49.4    75.6      85.3     2.0      13.5    46.6     75.9     84.9      2.0      8.9
+   UATVR                                  50.8    76.3      85.5     1.0      12.4    48.1     76.3     85.4      2.0      8.0
+   UATVR‡                                 53.5    79.5      88.1     1.0      10.2    54.5     79.1     87.9      1.0      7.6
+
+Table 6. t2v and v2t comparisons on MSR-VTT [57]. ‡ denotes using inverted dual softmax [11] or QB-Norm [5] for post-processing.
+
+ Method               R@1     R@5 R@10 MdR↓ MnR↓                     nally. Moreover, we have attempted sampling different K
+ HGR [9]              35.1    73.5 83.5 2.0   -                      for text and video distributions in the appendix and obtain
+ CLIP [48]            39.7    72.3 82.2 2.0 12.8                     a similar conclusion to Tab. 4. Overall, our DUA surpasses
+ SUPPORT [46]         44.9    82.1 89.7 1.0   -                      the baseline by a large margin, which demonstrates the ef-
+ CLIP4Clip [39]       55.9    89.2 95.0 1.0  3.9                     fectiveness of the distribution alignment mechanism.
+ Clip2Video [16]      57.3    90.0 95.5 1.0  3.6                         In Fig. 3, we measure the inherent uncertainty (geomet-
+ QB-Norm [5]          58.8    88.3 93.8 1.0   -                      ric mean over the σ ∈ RD ) of test set texts and videos and
+ TS2-Net [37]         59.1    90.0 95.2 1.0  3.5                     report the R@1 performance in each epoch. We show com-
+ UATVR(ViT-B32)       61.3    91.0 95.6 1.0  3.3                     parisons on two visual encoders to analyze the correlation
+ UATVR(ViT-B16)       64.5    92.6 96.8 1.0  2.8                     between the uncertainty and the discriminability of learned
+                                                                     representations. Generally, we observe performance im-
+     Table 7. t2v comparisons on the VATEX [54] dataset.             provements with decreasing uncertainty, which verifies the
+ Method               R@1     R@5 R@10 MdR↓ MnR↓                     positive effects of distribution-based uncertain adaptation.
+ ClipBERT [30]        20.4    48.0 60.8 6.0  -                       The Number of Visual Frames. The impact of frame num-
+ TT-CE [13]           21.6    48.6 62.9 6.0  -                       bers is studied in Tab. 5. UATVR achieves a decent 50.6%
+ Frozen [4]           31.0    59.8 72.4 3.0  -                       R@1 with only 8 frames. The performance starts to saturate
+ TMVM [34]            36.5    64.9 75.4 3.0  -                       with more than 12 frames. Here, we only use 12 frames by
+ CLIP4Clip [39]       42.8    68.5 79.2 2.0 18.9                     default for fair comparisons with others.
+ TS2-Net [37]         41.8    71.6 82.0 2.0 14.8
+ UATVR(ViT-B32)       43.1    71.8 82.3 2.0 15.1                     4.3. Comparison with State-of-the-arts
+ UATVR(ViT-B16)       45.8    73.7 83.3 2.0 13.5                        To evaluate the generalization of our uncertainty-
+                                                                     adaptive models, we compare UATVR with SOTA methods
+      Table 8. t2v comparisons on the DiDeMo [1] dataset.
+                                                                     on various text-video retrieval benchmarks, including MSR-
+find that t2v retrieval performance increases as K increases.        VTT [57], MSVD [56], VATEX [54], and DiDeMo [1].
+When K is larger than 7, the performance starts to saturate.            Tab. 6 shows detailed comparisons on MSR-VTT test
+Considering the computational costs, we choose K = 7 fi-             1k-A set. We divide current approaches into Training-
+                                                                      Query: a man runs into the crowd when trying to catch a basketball
+                                                                     0.31                0.31                 0.26            0.23
+
+
+ (1) a young boy hugging his teddy bear while watching the news
+      0.4693             0.5007             0.2374         0.2533     (basketball: 0.20, into: 0.17 )                                ❌
+ two additional learnable video tokens: (0.6350, 0.6180)             0.28                0.36                 0.39            0.40
+
+ (2) an animated little boy watches the news and appears scared
+      0.3992              0.4001              0.2982       0.3086
+ two additional learnable video tokens: (0.6131, 0.5949)              (basketball: 0.30, crowd: 0.28, catch: 0.21)                   ✓
+ (3) someone is playing a game                                        Query: fried potatoes are being eaten
+      0.2513              0.2450             0.3166        0.3081    0.25                0.26                 0.29            0.23
+ two additional learnable video tokens: (0.5941, 0.5776)
+
+
+                                                                      (potatoes: 0.19, being: 0.18 )                                 ❌
+                                                                     0.38                0.37                 0.25            0.35
+
+ (1) a man is talking later a couple is dancing
+      0.4046             0.4470             0.4418         0.4118
+                                                                      (potatoes: 0.32, eaten: 0.27, fried: 0.27)                     ✓
+ two additional learnable video tokens: (0.6481, 0.6316)
+
+ (2) some people are dancing                                        Figure 5. Visualization of TVR results and attention weights for
+      0.3596              0.2285              0.3192       0.3284   each frame and significant words. Red: incorrect results of the
+ two additional learnable video tokens: (0.6288, 0.6095)            token-wise baseline model. Green: correct results of our UATVR.
+ (3) a man discusses his choreography of a play
+      0.2513              0.4026             0.2541        0.2469     Method         R@1 R@5 R@10 MdR↓ MnR↓
+ two additional learnable video tokens: (0.6157, 0.5920)              CE [36]        19.8 49.0 63.8 6.0   -
+Figure 4. Impact of additional learnable tokens. Darker back-
+                                                                      SUPPORT [46]   28.4 60.0 72.9 4.0   -
+ground color denotes higher frame attention.                          CLIP [48]      37.0 64.1 73.8 3.0   -
+                                                                      Frozen [4]     33.7 64.7 76.3 3.0   -
+                                                                      TMVM [34]      36.7 67.4 81.3 2.5   -
+from-scratch (upper rows) and CLIP-Driven [48]. Transfer-
+                                                                      CLIP4Clip [39] 45.2 75.5 84.3 2.0 10.3
+ring knowledge from CLIP has distinctly surpassed models
+                                                                      X-Pool [20]    47.2 77.4 86.0 2.0  9.3
+w/o initialization, which demonstrates that spatial seman-
+tics learned from image-text pairs are essential for the TVR          UATVR(ViT-B32) 46.0 76.3 85.1 2.0 10.4
+task. Our proposed UATVR falls into the CLIP-Driven                   UATVR(ViT-B16) 49.7 79.0 87.3 2.0  8.9
+paradigm. For the ViT-B/32 encoder, UATVR obtains                           Table 9. t2v comparisons on the MSVD [56] dataset.
+higher R@1 performance than the previous best method
+(47.5% vs. 47.2% in t2v retrieval, and 46.9% vs. 46.5%              ViT-B/16. Prominent results demonstrate good generaliza-
+in v2t retrieval). The improvement is more significant on           tion and robustness of our dynamic semantic-aggregation
+the ViT-B/16 backbone. Specifically, UATVR outperforms              and distribution-based uncertainty adaption paradigms.
+previous best TS2-Net [37] by 1.4% in t2v and 1.5% in v2t
+retrieval, yielding a remarkable t2v R@1 50.8%. Notice              4.4. Qualitative Results
+that our method firstly reduces the MdR metric from 2.0 to             To better understand the impact of additional learnable
+1.0 and has the lowest 12.4 MnR, which means UATVR is               tokens, we show specific attention weights computed by
+more robust to wrong retrieval samples. In the appendix,            Eq.8 for each frame and the extra tokens under different
+we further report results with dual softmax learning (DSL)          text descriptions in v2t retrieval. As shown in Fig. 4, our
+operation. Our results again surpass methods with post-             model shows higher weights on text-related frames, such as
+processing operations like QB-Norm [5] and CAMoE [11].              “some people are dancing” and “a man discusses his chore-
+   Moreover, we conduct evaluations on multiple other               ography of a play”, resulting in quite a contrary frame at-
+TVR benchmarks, including VATEX [54] in Tab. 7,                     tention in the second video. Moreover, our additional to-
+DiDeMo [1] in Tab. 8, and MSVD [56] in Tab. 9. Despite              kens assign higher attention scores to more accurate texts,
+possible sub-optimal hyper-parameters (e.g., Cv , Ct , K) for       benefiting text-depended video semantic aggregation during
+the specific dataset, UATVR achieves consistent improve-            cross-modal matching. In Fig. 5, we show correct UATVR
+ments across various datasets, e.g., 61.3% vs. 59.1% for            t2v retrieval results compared to the token-wise baseline.
+VATEX, and 43.1% vs. 42.8% for DiDeMo. UATVR out-                   Attention weights for each frame and the most significant
+performs SOTAs by a large margin with better-performed              words are highlighted. Due to the matching uncertainty,
+token-wise baseline easily falls into local context match-          [10] Yizhen Chen, Jie Wang, Lijian Lin, Zhongang Qi, Jin Ma,
+ing with specific queries like ‘basketball’ and ‘potatoes’.              and Ying Shan. Tagging before alignment: Integrating
+Nevertheless, UATVR retrieves correct videos with multi-                 multi-modal tags for video-text retrieval. arXiv preprint
+grained high-level reasoning, showing advance in recogniz-               arXiv:2301.12644, 2023. 2
+ing subtle clues and global semantics simultaneously. We            [11] Xing Cheng, Hezheng Lin, Xiangyu Wu, Fan Yang, and
+show further visualization and analysis in the appendix.                 Dong Shen. Improving video-text retrieval by multi-stream
+                                                                         corpus alignment and dual softmax loss. arXiv preprint
+                                                                         arXiv:2109.04290, 2021. 7, 8
+5. Conclusion
+                                                                    [12] Sanghyuk Chun, Seong Joon Oh, Rafael Sampaio
+    In this work, we analyze the uncertain matching problem              De Rezende, Yannis Kalantidis, and Diane Larlus. Prob-
+in existing multi-grained text-video retrieval and propose a             abilistic embeddings for cross-modal retrieval. In CVPR,
+novel uncertainty-adaptive matching framework (UATVR)                    pages 8415–8424, 2021. 2, 3, 4, 5
+in complementary deterministic and probabilistic views.             [13] Ioana Croitoru, Simion-Vlad Bogolin, Marius Leordeanu,
+We model each text-video lookup as a distribution match-                 Hailin Jin, Andrew Zisserman, Samuel Albanie, and Yang
+ing procedure by introducing semantic aggregation learn-                 Liu. Teachtext: Crossmodal generalized distillation for text-
+                                                                         video retrieval. In ICCV, pages 11583–11593, 2021. 7
+able tokens and distribution-based probabilistic embed-
+                                                                    [14] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov,
+dings. UATVR adaptively addresses the uncertain matching
+                                                                         Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner,
+problem and formulates realistic one-to-many text-video                  Mostafa Dehghani, Matthias Minderer, Georg Heigold, Syl-
+correspondences. Thorough ablation studies and remark-                   vain Gelly, et al. An image is worth 16x16 words: Trans-
+able performance demonstrate the effectiveness of UATVR.                 formers for image recognition at scale. In ICLR, 2021. 6
+We leave more sophisticated and refined distribution mod-           [15] Bo Fang, Wenhao Wu, Chang Liu, Yu Zhou, Dongliang
+elling, like a Mixture of Gaussians, as part of future work.             He, and Weipinng Wang. Mamico: Macro-to-micro seman-
+                                                                         tic correspondence for self-supervised video representation
+References                                                               learning. In ACM MM, pages 1348–1357, 2022. 2
+                                                                    [16] Han Fang, Pengfei Xiong, Luhui Xu, and Yu Chen.
+ [1] Lisa Anne Hendricks, Oliver Wang, Eli Shechtman, Josef
+                                                                         Clip2video: Mastering video-text retrieval via image clip.
+     Sivic, Trevor Darrell, and Bryan Russell. Localizing mo-
+                                                                         arXiv preprint arXiv:2106.11097, 2021. 2, 7
+     ments in video with natural language. In ICCV, pages 5803–
+     5812, 2017. 2, 5, 7, 8                                         [17] Valentin Gabeur, Chen Sun, Karteek Alahari, and Cordelia
+ [2] Stanislaw Antol, Aishwarya Agrawal, Jiasen Lu, Margaret             Schmid. Multi-modal transformer for video retrieval. In
+     Mitchell, Dhruv Batra, C Lawrence Zitnick, and Devi Parikh.         ECCV, pages 214–229. Springer, 2020. 2, 5, 7
+     Vqa: Visual question answering. In ICCV, pages 2425–2433,      [18] Zijian Gao, Jingyu Liu, Sheng Chen, Dedan Chang, Hao
+     2015. 2                                                             Zhang, and Jinwei Yuan. Clip2tv: An empirical study on
+ [3] Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hin-                 transformer-based methods for video-text retrieval. arXiv
+     ton. Layer normalization. arXiv preprint arXiv:1607.06450,          preprint arXiv:2111.05610, 2021. 2, 7
+     2016. 4                                                        [19] Yuying Ge, Yixiao Ge, Xihui Liu, Dian Li, Ying Shan, Xi-
+ [4] Max Bain, Arsha Nagrani, Gül Varol, and Andrew Zisser-             aohu Qie, and Ping Luo. Bridging video-text retrieval with
+     man. Frozen in time: A joint video and image encoder for            multiple choice questions. In CVPR, pages 16167–16176,
+     end-to-end retrieval. In ICCV, pages 1728–1738, 2021. 2, 5,         2022. 7
+     7, 8                                                           [20] Satya Krishna Gorti, Noël Vouitsis, Junwei Ma, Keyvan
+ [5] Simion-Vlad Bogolin, Ioana Croitoru, Hailin Jin, Yang Liu,          Golestan, Maksims Volkovs, Animesh Garg, and Guangwei
+     and Samuel Albanie. Cross modal retrieval with querybank            Yu. X-pool: Cross-modal language-video attention for text-
+     normalisation. In CVPR, pages 5194–5205, 2022. 7, 8                 video retrieval. In CVPR, pages 5006–5015, 2022. 2, 3, 6, 7,
+ [6] Shyamal Buch, Cristóbal Eyzaguirre, Adrien Gaidon, Jiajun          8
+     Wu, Li Fei-Fei, and Juan Carlos Niebles. Revisiting the”       [21] Priya Goyal, Piotr Dollár, Ross Girshick, Pieter Noord-
+     video” in video-language understanding. In CVPR, pages              huis, Lukasz Wesolowski, Aapo Kyrola, Andrew Tulloch,
+     2917–2927, 2022. 2                                                  Yangqing Jia, and Kaiming He. Accurate, large mini-
+ [7] Jie Chang, Zhonghao Lan, Changmao Cheng, and Yichen                 batch sgd: Training imagenet in 1 hour. arXiv preprint
+     Wei. Data uncertainty learning in face recognition. In CVPR,        arXiv:1706.02677, 2017. 6
+     pages 5710–5719, 2020. 3                                       [22] Chao Jia, Yinfei Yang, Ye Xia, Yi-Ting Chen, Zarana Parekh,
+ [8] Soravit Changpinyo, Piyush Sharma, Nan Ding, and Radu               Hieu Pham, Quoc Le, Yun-Hsuan Sung, Zhen Li, and Tom
+     Soricut. Conceptual 12m: Pushing web-scale image-text pre-          Duerig. Scaling up visual and vision-language representation
+     training to recognize long-tail visual concepts. In CVPR,           learning with noisy text supervision. In ICML, pages 4904–
+     pages 3558–3568, 2021. 2                                            4916. PMLR, 2021. 1, 2
+ [9] Shizhe Chen, Yida Zhao, Qin Jin, and Qi Wu. Fine-grained       [23] Peng Jin, Jinfa Huang, Fenglin Liu, Xian Wu, Shen Ge,
+     video-text retrieval with hierarchical graph reasoning. In          Guoli Song, David A Clifton, and Jie Chen. Expectation-
+     CVPR, pages 10638–10647, 2020. 2, 7                                 maximization contrastive learning for compact video-and-
+     language representations. arXiv preprint arXiv:2211.11427,       [38] Dezhao Luo, Yu Zhou, Bo Fang, Yucan Zhou, Dayan Wu,
+     2022. 7                                                               and Weiping Wang. Exploring relations in untrimmed videos
+[24] Peng Jin, Jinfa Huang, Pengfei Xiong, Shangxuan Tian,                 for self-supervised learning. TOMM, 18(1s):1–21, 2022. 2
+     Chang Liu, Xiangyang Ji, Li Yuan, and Jie Chen. Video-text       [39] Huaishao Luo, Lei Ji, Ming Zhong, Yang Chen, Wen Lei,
+     as game players: Hierarchical banzhaf interaction for cross-          Nan Duan, and Tianrui Li. Clip4clip: An empirical study
+     modal representation learning. In CVPR, pages 2472–2482,              of clip for end to end video clip retrieval. arXiv preprint
+     2023. 2                                                               arXiv:2104.08860, 2021. 2, 3, 4, 5, 6, 7, 8
+[25] Peng Jin, Hao Li, Zesen Cheng, Jinfa Huang, Zhennan              [40] Yiwei Ma, Guohai Xu, Xiaoshuai Sun, Ming Yan, Ji Zhang,
+     Wang, Li Yuan, Chang Liu, and Jie Chen. Text-video                    and Rongrong Ji. X-clip: End-to-end multi-grained con-
+     retrieval with disentangled conceptualization and set-to-set          trastive learning for video-text retrieval. In ACM MM, pages
+     alignment. arXiv preprint arXiv:2305.12218, 2023. 2                   638–647, 2022. 2, 3
+                                                                      [41] Antoine Miech, Jean-Baptiste Alayrac, Lucas Smaira, Ivan
+[26] Peng Jin, Hao Li, Zesen Cheng, Kehan Li, Xiangyang Ji,
+                                                                           Laptev, Josef Sivic, and Andrew Zisserman. End-to-end
+     Chang Liu, Li Yuan, and Jie Chen. Diffusionret: Genera-
+                                                                           learning of visual representations from uncurated instruc-
+     tive text-video retrieval with diffusion model. arXiv preprint
+                                                                           tional videos. In CVPR, pages 9879–9889, 2020. 2, 5
+     arXiv:2303.09867, 2023. 2
+                                                                      [42] Antoine Miech, Dimitri Zhukov, Jean-Baptiste Alayrac,
+[27] Andrej Karpathy and Li Fei-Fei. Deep visual-semantic align-
+                                                                           Makarand Tapaswi, Ivan Laptev, and Josef Sivic.
+     ments for generating image descriptions. In CVPR, pages
+                                                                           Howto100m: Learning a text-video embedding by watching
+     3128–3137, 2015. 2
+                                                                           hundred million narrated video clips. In ICCV, pages
+[28] Diederik P Kingma and Jimmy Ba. Adam: A method for                    2630–2640, 2019. 2, 5
+     stochastic optimization. In ICLR, 2015. 6                        [43] Shaobo Min, Weijie Kong, Rong-Cheng Tu, Dihong Gong,
+[29] Diederik P Kingma and Max Welling. Auto-encoding varia-               Chengfei Cai, Wenzhe Zhao, Chenyang Liu, Sixiao Zheng,
+     tional bayes. arXiv preprint arXiv:1312.6114, 2013. 4                 Hongfa Wang, Zhifeng Li, et al. Hunyuan tvr for text-video
+[30] Jie Lei, Linjie Li, Luowei Zhou, Zhe Gan, Tamara L Berg,              retrivial. arXiv preprint arXiv:2204.03382, 2022. 2, 3
+     Mohit Bansal, and Jingjing Liu. Less is more: Clipbert for       [44] Kevin P Murphy. Machine learning: a probabilistic perspec-
+     video-and-language learning via sparse sampling. In CVPR,             tive. MIT press, 2012. 3
+     pages 7331–7341, 2021. 2, 5, 7                                   [45] Seong Joon Oh, Kevin P Murphy, Jiyan Pan, Joseph Roth,
+[31] Hao Li, Peng Jin, Zesen Cheng, Songyang Zhang, Kai                    Florian Schroff, and Andrew C Gallagher. Modeling uncer-
+     Chen, Zhennan Wang, Chang Liu, and Jie Chen. Tg-vqa:                  tainty with hedged instance embeddings. In ICLR, 2018. 3,
+     Ternary game of video question answering. arXiv preprint              5, 6
+     arXiv:2305.10049, 2023. 2                                        [46] Mandela Patrick, Po-Yao Huang, Yuki Asano, Florian
+[32] Junnan Li, Ramprasaath Selvaraju, Akhilesh Gotmare,                   Metze, Alexander G Hauptmann, Joao F Henriques, and An-
+     Shafiq Joty, Caiming Xiong, and Steven Chu Hong Hoi.                  drea Vedaldi. Support-set bottlenecks for video-text repre-
+     Align before fuse: Vision and language representation learn-          sentation learning. In ICLR, 2021. 7, 8
+     ing with momentum distillation. NeurIPS, 34:9694–9705,           [47] Jesús Andrés Portillo-Quintero, José Carlos Ortiz-Bayliss,
+     2021. 2                                                               and Hugo Terashima-Marı́n. A straightforward framework
+                                                                           for video retrieval using clip. In Mexican Conference on Pat-
+[33] Yangguang Li, Feng Liang, Lichen Zhao, Yufeng Cui, Wanli
+                                                                           tern Recognition, pages 3–12. Springer, 2021. 2
+     Ouyang, Jing Shao, Fengwei Yu, and Junjie Yan. Su-
+                                                                      [48] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya
+     pervision exists everywhere: A data efficient contrastive
+                                                                           Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry,
+     language-image pre-training paradigm.          arXiv preprint
+                                                                           Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learn-
+     arXiv:2110.05208, 2021. 2
+                                                                           ing transferable visual models from natural language super-
+[34] Chengzhi Lin, Ancong Wu, Junwei Liang, Jun Zhang, Wen-                vision. In ICML, pages 8748–8763. PMLR, 2021. 1, 2, 5, 7,
+     hang Ge, Wei-Shi Zheng, and Chunhua Shen. Text-adaptive               8
+     multiple visual prototype matching for video-text retrieval.
+                                                                      [49] Yichun Shi and Anil K Jain. Probabilistic face embeddings.
+     arXiv preprint arXiv:2209.13307, 2022. 2, 3, 6, 7, 8
+                                                                           In ICCV, pages 6902–6911, 2019. 3
+[35] Yang Liu, Samuel Albanie, Arsha Nagrani, and Andrew              [50] Jennifer J Sun, Jiaping Zhao, Liang-Chieh Chen, Florian
+     Zisserman. Use what you have: Video retrieval using                   Schroff, Hartwig Adam, and Ting Liu. View-invariant prob-
+     representations from collaborative experts. arXiv preprint            abilistic embedding for human pose. In ECCV, pages 53–70.
+     arXiv:1907.13487, 2019. 2                                             Springer, 2020. 3
+[36] Yang Liu, Samuel Albanie, Arsha Nagrani, and Andrew              [51] Bart Thomee, David A Shamma, Gerald Friedland, Ben-
+     Zisserman. Use what you have: Video retrieval using                   jamin Elizalde, Karl Ni, Douglas Poland, Damian Borth, and
+     representations from collaborative experts. arXiv preprint            Li-Jia Li. Yfcc100m: The new data in multimedia research.
+     arXiv:1907.13487, 2019. 8                                             Communications of the ACM, 59(2):64–73, 2016. 2
+[37] Yuqi Liu, Pengfei Xiong, Luhui Xu, Shengming Cao, and            [52] Qiang Wang, Yanhao Zhang, Yun Zheng, Pan Pan, and Xian-
+     Qin Jin. Ts2-net: Token shift and selection transformer               Sheng Hua. Disentangled representation learning for text-
+     for text-video retrieval. In ECCV, pages 319–335. Springer,           video retrieval. arXiv preprint arXiv:2203.07111, 2022. 2,
+     2022. 2, 6, 7, 8                                                      3
+[53] Wenzhe Wang, Mengdan Zhang, Runnan Chen, Guanyu Cai,
+     Penghao Zhou, Pai Peng, Xiaowei Guo, Jian Wu, and Xing
+     Sun. Dig into multi-modal cues for video retrieval with hier-
+     archical alignment. In IJCAI, pages 1113–1121, 2021. 2
+[54] Xin Wang, Jiawei Wu, Junkun Chen, Lei Li, Yuan-Fang
+     Wang, and William Yang Wang. Vatex: A large-scale, high-
+     quality multilingual dataset for video-and-language research.
+     In ICCV, pages 4581–4591, 2019. 2, 5, 7, 8
+[55] Wenhao Wu, Haipeng Luo, Bo Fang, Jingdong Wang, and
+     Wanli Ouyang. Cap4video: What can auxiliary captions
+     do for text-video retrieval? In CVPR, pages 10704–10713,
+     2023. 2
+[56] Zuxuan Wu, Ting Yao, Yanwei Fu, and Yu-Gang Jiang. Deep
+     learning for video classification and captioning. In Frontiers
+     of multimedia research, pages 3–29. 2017. 2, 5, 7, 8
+[57] Jun Xu, Tao Mei, Ting Yao, and Yong Rui. Msr-vtt: A large
+     video description dataset for bridging video and language. In
+     CVPR, pages 5288–5296, 2016. 2, 5, 6, 7
+[58] Kelvin Xu, Jimmy Ba, Ryan Kiros, Kyunghyun Cho, Aaron
+     Courville, Ruslan Salakhudinov, Rich Zemel, and Yoshua
+     Bengio. Show, attend and tell: Neural image caption gen-
+     eration with visual attention. In ICML, pages 2048–2057.
+     PMLR, 2015. 2
+[59] Lewei Yao, Runhui Huang, Lu Hou, Guansong Lu, Minzhe
+     Niu, Hang Xu, Xiaodan Liang, Zhenguo Li, Xin Jiang, and
+     Chunjing Xu. Filip: Fine-grained interactive language-image
+     pre-training. In ICLR, 2021. 2, 3
+[60] Jiahui Yu, Zirui Wang, Vijay Vasudevan, Legg Yeung, Mo-
+     jtaba Seyedhosseini, and Yonghui Wu. Coca: Contrastive
+     captioners are image-text foundation models. arXiv preprint
+     arXiv:2205.01917, 2022. 2
+[61] Lu Yuan, Dongdong Chen, Yi-Ling Chen, Noel Codella,
+     Xiyang Dai, Jianfeng Gao, Houdong Hu, Xuedong Huang,
+     Boxin Li, Chunyuan Li, et al.              Florence: A new
+     foundation model for computer vision. arXiv preprint
+     arXiv:2111.11432, 2021. 1, 2
+[62] Shuai Zhao, Linchao Zhu, Xiaohan Wang, and Yi Yang. Cen-
+     terclip: Token clustering for efficient text-video retrieval. In
+     SIGIR, pages 970–981, 2022. 2, 7
+

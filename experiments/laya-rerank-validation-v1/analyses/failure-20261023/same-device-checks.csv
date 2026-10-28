@@ -1,0 +1,3 @@
+video_id,native_vs_cpu_cached_max,raw_pixels_vs_cpu_cached_max,probability,option_labels,tokenizer_pad_id,text_embedding_vocab,actual_max_input_id
+video1011,0.0,0.0,0.8012604346471232,"['match', 'not_supported']",2,49280,49279
+video7644,0.0,0.0,0.3881576984076466,"['match', 'not_supported']",2,49280,49279

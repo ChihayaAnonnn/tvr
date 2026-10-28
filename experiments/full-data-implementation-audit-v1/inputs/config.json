@@ -1,0 +1,52 @@
+{
+  "batch": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-implementation-audit-v1/inputs/train-batch.json",
+  "parents": [
+    {
+      "manifest_sha256": "5ee7d938e312d5182bc549e4393f638ef3069506930f5c8d76edd314f8ddfd71",
+      "method": "uatvr",
+      "root": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502",
+      "seed": 713
+    },
+    {
+      "manifest_sha256": "e7b3558697fc5057a3b234cbb7f89616ebca5d2864a39250f68712a47bd5e89b",
+      "method": "clip4clip",
+      "root": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed713-20261011T042528Z-6d2095e3d502",
+      "seed": 713
+    },
+    {
+      "manifest_sha256": "5ce7ac7d200bc137209bdba96925534b5a76c211795413d7120d997ffc55b1e1",
+      "method": "uatvr",
+      "root": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed714-20261011T163252Z-3c720544401a",
+      "seed": 714
+    },
+    {
+      "manifest_sha256": "f1284e8d3ecb3b552ea4447138f7f49269237a08d4d2b493d6f4f5deb90925e5",
+      "method": "clip4clip",
+      "root": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed714-20261011T163252Z-3c720544401a",
+      "seed": 714
+    },
+    {
+      "manifest_sha256": "42a14d72e232cb5f75e51ea0dc1acf1f54526bf3377a08da712d271f0350b59c",
+      "method": "uatvr",
+      "root": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca",
+      "seed": 715
+    },
+    {
+      "manifest_sha256": "846daf49aa8b377fb0dc57d57a7d62e4b2ee55df916218cc02955186fa9484d4",
+      "method": "clip4clip",
+      "root": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed715-20261012T013316Z-c9c06753e2ca",
+      "seed": 715
+    }
+  ],
+  "references": {
+    "clip4clip": {
+      "commit": "508ffa3de39ba0563a03199c440ab602a72e9b6f",
+      "path": "/tmp/clip4clip-official-fullscale-reference"
+    },
+    "uatvr": {
+      "commit": "db0062a77d9e7ab6eed801fa5e27c3085939d182",
+      "path": "/tmp/uatvr-official-fullscale-reference"
+    }
+  },
+  "training_registry_snapshot": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-implementation-audit-v1/inputs/training-terminal-registry.json"
+}

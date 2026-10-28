@@ -1,0 +1,282 @@
+{
+  "phase": "T-jsfusion-completed-factors-20261021T162046Z",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=0,3",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nnodes=1",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/evaluate_full_data_test.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "checkpoint": {
+            "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-temporal_offset-seed713-20261016T150148Z-37ef7f83cc30/checkpoints/epoch-05.pt",
+            "sha256": "a064c34fb293d08f3c8d76869e76873153f81d086d63f6577388b2aaa0e392d1",
+            "sidecar_sha256": "e88f2919714afe991b345d7593c3d218b1069ed613fb95cdf95a5dbdb950eec9"
+          },
+          "config_kind": "full-data-test-v1",
+          "deterministic_algorithms": true,
+          "dsl": false,
+          "eval_split": "test",
+          "frames": 12,
+          "full_data_stage": "test_evaluation",
+          "memory_limit_gib": 60,
+          "parent_run_id": "msrvtt-baseline-uatvr-temporal_offset-seed713-20261016T150148Z-37ef7f83cc30",
+          "seed": 713,
+          "selected_epoch": 5,
+          "selection": "frozen_validation_earliest_raw_t2v_r1",
+          "synthetic": false,
+          "test_csv": {
+            "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+            "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+          },
+          "text_length": 32,
+          "video_indices": [
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+              "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+            },
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+              "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+            }
+          ],
+          "world_size": 2
+        },
+        "loss": {},
+        "model": {
+          "architecture": "full-data-baseline-v1",
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "extra_text_tokens": 2,
+          "extra_video_tokens": 2,
+          "freeze_layer_num": 0,
+          "method": "uatvr",
+          "samples": 7,
+          "temporal_layers": 4
+        },
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+          "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+          "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+          "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-temporal_offset-seed713-20261016T150148Z-37ef7f83cc30/checkpoints/epoch-05.pt",
+          "sha256": "a064c34fb293d08f3c8d76869e76873153f81d086d63f6577388b2aaa0e392d1"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-temporal_offset-seed713-20261016T150148Z-37ef7f83cc30/checkpoints/epoch-05.json",
+          "sha256": "e88f2919714afe991b345d7593c3d218b1069ed613fb95cdf95a5dbdb950eec9"
+        }
+      ],
+      "parent_run_ids": [
+        "msrvtt-baseline-uatvr-temporal_offset-seed713-20261016T150148Z-37ef7f83cc30",
+        "synthetic-baseline-full-data-q0-seed713-20261021T161027Z-e280d9890f5b"
+      ],
+      "scheduled_timestamp_utc": "20261021T162044Z",
+      "seed": 713,
+      "selection_lineage": [
+        "experiments/full-data-retrieval-v1/FACTOR_TEST_PROTOCOL.md"
+      ],
+      "stage": "final",
+      "test_authorized": true,
+      "validation_authorized": false,
+      "variant": "test-uatvr-temporal_offset"
+    },
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=0,3",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nnodes=1",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/evaluate_full_data_test.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "checkpoint": {
+            "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-caption_shuffle-seed713-20261016T194309Z-ebcc5b543283/checkpoints/epoch-03.pt",
+            "sha256": "6e5c874c9d40459d63dc179ee2a4b4d95966b74487139917987970a9807359e9",
+            "sidecar_sha256": "7d29e87adc7688cd328cac4ae3b30e241eebe5e88111f0bad31bc59d5d04f1e4"
+          },
+          "config_kind": "full-data-test-v1",
+          "deterministic_algorithms": true,
+          "dsl": false,
+          "eval_split": "test",
+          "frames": 12,
+          "full_data_stage": "test_evaluation",
+          "memory_limit_gib": 60,
+          "parent_run_id": "msrvtt-baseline-uatvr-caption_shuffle-seed713-20261016T194309Z-ebcc5b543283",
+          "seed": 713,
+          "selected_epoch": 3,
+          "selection": "frozen_validation_earliest_raw_t2v_r1",
+          "synthetic": false,
+          "test_csv": {
+            "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+            "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+          },
+          "text_length": 32,
+          "video_indices": [
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+              "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+            },
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+              "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+            }
+          ],
+          "world_size": 2
+        },
+        "loss": {},
+        "model": {
+          "architecture": "full-data-baseline-v1",
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "extra_text_tokens": 2,
+          "extra_video_tokens": 2,
+          "freeze_layer_num": 0,
+          "method": "uatvr",
+          "samples": 7,
+          "temporal_layers": 4
+        },
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+          "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+          "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+          "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-caption_shuffle-seed713-20261016T194309Z-ebcc5b543283/checkpoints/epoch-03.pt",
+          "sha256": "6e5c874c9d40459d63dc179ee2a4b4d95966b74487139917987970a9807359e9"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-caption_shuffle-seed713-20261016T194309Z-ebcc5b543283/checkpoints/epoch-03.json",
+          "sha256": "7d29e87adc7688cd328cac4ae3b30e241eebe5e88111f0bad31bc59d5d04f1e4"
+        }
+      ],
+      "parent_run_ids": [
+        "msrvtt-baseline-uatvr-caption_shuffle-seed713-20261016T194309Z-ebcc5b543283",
+        "synthetic-baseline-full-data-q0-seed713-20261021T161027Z-e280d9890f5b"
+      ],
+      "scheduled_timestamp_utc": "20261021T162044Z",
+      "seed": 713,
+      "selection_lineage": [
+        "experiments/full-data-retrieval-v1/FACTOR_TEST_PROTOCOL.md"
+      ],
+      "stage": "final",
+      "test_authorized": true,
+      "validation_authorized": false,
+      "variant": "test-uatvr-caption_shuffle"
+    }
+  ],
+  "study": "full-data-retrieval-v1"
+}

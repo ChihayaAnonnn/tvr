@@ -1,0 +1,62 @@
+{
+  "checked_on": "2026-10-09",
+  "recent_window": {
+    "from": "2026-04-09",
+    "to": "2026-10-09"
+  },
+  "method": "Web-index searches and primary-paper abstracts/method/related-work sections; venue sites where available",
+  "claims": [
+    {
+      "id": "C1",
+      "claim": "概率对比匹配与观测不足不确定性",
+      "queries": [
+        "probabilistic contrastive text video retrieval 2024 2025 2026",
+        "query-conditioned probabilistic text video retrieval",
+        "probabilistic contrastive learning uncertainty text video retrieval 2024 2025 2026"
+      ]
+    },
+    {
+      "id": "C2",
+      "claim": "查询条件的缺失视觉证据",
+      "queries": [
+        "query uncertainty frame selection 2025 2026",
+        "query-conditioned evidence keyframe sampling",
+        "video retrieval uncertainty frame sampling 2026"
+      ]
+    },
+    {
+      "id": "C3",
+      "claim": "不确定性指导追加视觉观测",
+      "queries": [
+        "video retrieval uncertainty frame acquisition contrastive",
+        "video uncertainty predict additional frames 2026",
+        "contrastive information acquisition uncertainty video 2025 2026"
+      ]
+    },
+    {
+      "id": "C4",
+      "claim": "预测补充证据的检索纠错价值",
+      "queries": [
+        "video retrieval value of information",
+        "video retrieval risk reduction",
+        "video uncertainty expected improvement frames",
+        "recoverable uncertainty video frames"
+      ]
+    }
+  ],
+  "cross_checks": [
+    "site:scholar.google.com video retrieval uncertainty sampling",
+    "site:semanticscholar.org video retrieval uncertainty frame",
+    "site:proceedings.neurips.cc 2025 video uncertainty frames",
+    "site:proceedings.mlr.press 2025 2026 video uncertainty contrastive",
+    "site:openreview.net 2026 uncertainty guided selection contrastive retrieval",
+    "site:arxiv.org video expected information gain 2026"
+  ],
+  "limitations": [
+    "Queries are normalized formulations of this session's searches, not a network-tool transcript.",
+    "Google Scholar and Semantic Scholar direct database coverage unavailable; site-search results were insufficient.",
+    "Conference-site queries are not an exhaustive enumeration of accepted papers.",
+    "Primary text not fully read for every contextual/background paper; closest five inspected at methodology level.",
+    "No absence proof and no empirical validation."
+  ]
+}

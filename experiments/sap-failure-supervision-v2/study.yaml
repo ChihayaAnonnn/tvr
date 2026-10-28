@@ -1,0 +1,152 @@
+# Pre-registered protocol for SAP failure-supervision v2 campaign.
+#
+# Purpose: promote Fix 1 (BCE on SAP u_mode) from single-seed 2-GPU PoC
+# (study sap-failure-supervision-v1) to a publication-grade result with
+# multi-seed + bootstrap CI + 4-GPU registered environment.
+#
+# Predecessor: sap-failure-supervision-v1 (single-seed 2-GPU pilot) PASSED
+#   primary gate V2T A3 contextual failure AUROC ≥ 0.70 with observed 0.7175
+#   (winner ep2), 0.7244 (ep3). Non-regression R@1 unchanged at 93.0.
+
+# ---------------------------------------------------------------------------
+# AMENDMENT 2026-08-20 — metric naming correction, made after seed 0 completed
+# and BEFORE seeds 1/2 were launched. No threshold and no recorded number
+# changes; identifiers and provenance only.
+#
+# Original name `sap_u_mode_val_auroc_v2t` was WRONG: no AUROC is computed on
+# SAP `u_mode` anywhere in this repository. The gated quantity is the
+# `V2T contextual risk | AUROC=` line at main_task_retrieval.py:4637, whose
+# score is the A3 contextual risk sidecar's
+# `failure_risk = sigmoid(failure_logit)`
+# (prob_models/contextual_retrieval_risk.py:259). Renamed throughout to
+# `a3_contextual_failure_auroc_{v2t,t2v}`.
+#
+# Interpretation limit this exposes: Fix 1's path to the gated metric is
+# INDIRECT (BCE on u_mode -> SAP weights -> mu_video -> `video_means` fed to
+# the contextual sidecar at main_task_retrieval.py:4523). This campaign
+# therefore measures recovery of the A3 contextual head's discriminability,
+# NOT that `u_mode` itself became failure-predictive. Any claim of the latter
+# needs a separate direct measurement of AUROC(u_mode, failure).
+#
+# Second known limit, recorded here for honesty rather than fixed: there is no
+# matched w_sap_failure_bce=0 control arm inside this campaign. The 0.5661
+# reference comes from contextual-risk-v2 Stage 1 attempt5, a different run.
+# ---------------------------------------------------------------------------
+
+study: sap-failure-supervision-v2
+protocol_version: 1
+control_plane: experiments/sap-failure-supervision-v2
+data_plane: artifacts/sap-failure-supervision-v2
+registry: experiments/sap-failure-supervision-v2/registry.jsonl
+
+lineage:
+  parent_study: sap-failure-supervision-v1
+  parent_pilot_ckpt: ckpts/ckpt_msrvtt_20260818_220203_fix1_poc_w0p1/pytorch_model.bin.2
+  parent_run_ids:
+    - msrvtt-baseline-validation_baselines-seed000-20260818T040000Z-1fdd78f384d1  # Stage 1 attempt5
+  selection_lineage: >
+    v1 PoC (single-seed 2-GPU pilot) demonstrated Fix 1 unblocks the A3
+    contextual failure-AUROC gate observed in contextual-risk-v2 Stage 1
+    (0.5661 -> 0.7175 winner). v2 promotes the intervention to 4-GPU with bootstrap
+    CI, sufficient for paper publication. Fix 1 code is identical to v1;
+    only the training environment scales.
+
+stages:
+  - fix1_multiseed
+
+variants:
+  fix1_multiseed:
+    - {name: sap_failure_bce_w0p1_s0, w_sap_failure_bce: 0.1, seed: 0}
+    - {name: sap_failure_bce_w0p1_s1, w_sap_failure_bce: 0.1, seed: 1}
+    - {name: sap_failure_bce_w0p1_s2, w_sap_failure_bce: 0.1, seed: 2}
+
+# Success criteria — pre-registered before any run.
+stop_gates:
+  fix1_multiseed:
+    primary:
+      metric: a3_contextual_failure_auroc_v2t   # renamed 2026-08-20, see AMENDMENT
+      metric_source: >
+        main_task_retrieval.py:4637 "V2T contextual risk | AUROC=" ;
+        score = ContextualRetrievalRiskSidecar.failure_risk
+        = sigmoid(failure_logit), prob_models/contextual_retrieval_risk.py:259
+      per_seed_threshold_gte: 0.65   # relaxed 5pp from v1's 0.70 to allow one seed dip
+      mean_across_seeds_gte: 0.70    # v1 point estimate
+      bootstrap_ci95_lower_gt: 0.60  # confidence-interval floor
+      rationale: >
+        v1 single seed hit 0.72. Multi-seed variance may drop one seed to
+        0.65-0.68 by chance; require majority to hit 0.70 and the paired
+        CI lower bound to stay above the Stage 1 baseline (0.5661) plus a
+        4pp margin.
+    secondary_monitor:
+      - retrieval_r1_v2t
+      - retrieval_r1_t2v
+      - a3_contextual_failure_auroc_t2v   # renamed 2026-08-20, see AMENDMENT
+    non_regression_guard:
+      metric: retrieval_r1_v2t
+      absolute_floor: 92.0           # same as v1
+      baseline_reference: 93.0
+      rationale: >
+        SAP is sidecar-only, must not perturb the retrieval path.
+    reproducibility_guard:
+      metric_stddev_across_seeds:
+        a3_contextual_failure_auroc_v2t_stddev_lte: 0.04   # renamed 2026-08-20
+      rationale: >
+        Fix 1 is a simple additive loss; seed variance above 4pp indicates
+        the mechanism is unstable and does not warrant publication.
+
+hardware_policy:
+  required_gpu_model: A800
+  required_gpu_count: 4
+  topology: [0, 1, 2, 3]
+  precision: fp32
+  distributed_topology: torchrun-4-rank
+  deviation_from_original_frozen_topology:
+    original: [0, 2, 3, 4]
+    reason: >
+      GPU 4 occupied by external VLLM service. GPUs 0/1/2/3 all free.
+      NUMA note: GPU0/1 on NUMA0, GPU2/3 on NUMA1 — one cross-NUMA edge
+      per all-reduce vs. the original topology's NVLink between GPU2-GPU4.
+      Expected NCCL throughput difference is small (P2P PCIe vs NVLink,
+      256-elem all-reduces every step) and irrelevant to convergence.
+  note: >
+    Original registered A3 environment guards (removed 2026-08-18 for v1
+    pilot) are not restored. v2 relies on the launcher-level protocol
+    (run_train_msrvtt_bg.sh hygiene profile + this study.yaml) rather
+    than the process-startup env assertions.
+
+training_config:
+  base_launcher: run_train_msrvtt_bg.sh
+  new_launcher: run_train_msrvtt_fix1_4gpu_bg.sh   # to be created, mirrors fix1_2gpu but with 4 GPUs
+  epochs: 3
+  batch_size_global: 256  # 4 GPU × 64 per-GPU, matches Stage 1 attempt5
+  new_hyperparameters:
+    w_sap_failure_bce: 0.1
+  frozen_from_v1:
+    - init_model: ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4
+    - contextual_risk_sidecar_only: true
+    - retriever + WTI + DSL T=2.0
+
+bootstrap:
+  samples: 10000
+  seed: 0
+  confidence_level: 0.95
+
+test_sealed:
+  authorize_only_after: fix1_multiseed_passes_all_gates
+  retry_policy:
+    terminal_in_place_retry: forbidden
+    authorized_successor: subsequent_phase_with_new_unique_run_id
+    predecessor_lineage: parent_run_ids
+    authorization_reason: selection_lineage
+
+archive_rules:
+  phase_batched_registry: true
+  runtime_may_modify_tracked_files: false
+  externalize_numeric_payloads_over_bytes: 1048576
+  preserve_failed_evidence: true
+  new_legacy_output_forbidden: true
+
+launch_prerequisite:
+  - "GPUs 0,1,2,3 free (2026-08-19: satisfied; GPU 4 remains occupied by VLLM)"
+  - "Fix 1 code frozen (currently in tree)"
+  - "v1 PoC ckpt preserved as parent lineage evidence"

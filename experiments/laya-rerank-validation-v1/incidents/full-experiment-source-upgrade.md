@@ -1,0 +1,3 @@
+# Source upgrade qualification
+
+User authorized the complete experiment on 2026-10-23. Complete validation aggregation, paired bootstrap, serial single-query performance measurement, budget accounting and owned worker launch have now been implemented. The previous completed synthetic qualification is retained; the modified executable source must pass a new unique two-GPU synthetic qualification before science. No scientific parameters, retry limits, budgets or test permissions change. CPU regression: 27 passed, two opt-in native CPU tests skipped; prior real-model GPU qualification covers the native path and is rerun here. Independent code review identified timing overhead, measurement GPU ownership and a launch-receipt race; these have been corrected.

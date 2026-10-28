@@ -1,0 +1,20 @@
+{
+  "phase": "Q0-dual-20261023T082006Z",
+  "phase_path": "experiments/laya-rerank-validation-v1/phases/Q0-dual-20261023T082006Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "59de0fec62ad51535232c42667b13f792b60d83a27e46aad46f1a056227a60d7",
+      "output_hashes": {
+        "command.sh": "6b57747b960c61f97a0348f182931369cb954193808be5072ebc149f84d06d88",
+        "provenance/controller-result.json": "0fba028c47debf41ad8b4f4d790e0b914290d8a77e04dc8dd3d44cd0fc216576"
+      },
+      "run_id": "synthetic-baseline-laya-q0-dual-seed713-20261023T082006Z-19b6f564873d",
+      "state": "cancelled",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "laya-rerank-validation-v1",
+  "terminal_counts": {
+    "cancelled": 1
+  }
+}

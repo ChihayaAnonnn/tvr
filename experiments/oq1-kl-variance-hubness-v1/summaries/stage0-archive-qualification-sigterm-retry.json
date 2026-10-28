@@ -1,0 +1,26 @@
+{
+  "phase": "stage0-archive-qualification-sigterm-retry",
+  "phase_path": "experiments/oq1-kl-variance-hubness-v1/phases/stage0-archive-qualification-sigterm-retry.json",
+  "runs": [
+    {
+      "manifest_sha256": "8a344471162818f17a489b6fa435382c64f30b4d6d1dfa9e46ad252b4aac63ed",
+      "output_hashes": {
+        "command.sh": "9306cd5ed0de2b19650e0043f8ca26ca5454b06bb6a42bc80ecce21961c2fda8",
+        "logs/controller.log": "6cfc336ec9a67f3e732a156efdd31934122d7b76ee7219cc1bd89278a851cec4",
+        "logs/controller.log.process-group-drain.txt": "222b368b68297cec42f2df498586fb526091998c93156e2ea3baf71a66684055",
+        "provenance/gpu-probe-launch.json": "564c368c0e8699f89e40faa224e5c6a08adb385ad662a902905664f760b2ecd8",
+        "provenance/qualification-rank-0.json": "0ffa5a9a98108c45cbe84801f521e8df57c72bd9e04fb5b1451fcab9407c7309",
+        "provenance/qualification-rank-1.json": "97f3b5fda6ac0107f4dfd016fa58062352c183670cd9a800d5019e62a6588204",
+        "provenance/qualification-rank-2.json": "1c5afd650b6b1a1fcd5092b2edbef24cce94ad42a4d817983841f755605ed347",
+        "provenance/qualification-rank-3.json": "d249acd6448e13f43c64f0fbc1222a5e970693ba2d9ae52b123813578c4da266"
+      },
+      "run_id": "msrvtt-baseline-qual_sigterm_mismatch-seed000-20260829T110000Z-9af92caa39e8",
+      "state": "cancelled",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "oq1-kl-variance-hubness-v1",
+  "terminal_counts": {
+    "cancelled": 1
+  }
+}

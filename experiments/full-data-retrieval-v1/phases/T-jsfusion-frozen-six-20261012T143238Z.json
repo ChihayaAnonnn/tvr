@@ -1,0 +1,822 @@
+{
+  "phase": "T-jsfusion-frozen-six-20261012T143238Z",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=1,0",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nnodes=1",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/evaluate_full_data_test.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "checkpoint": {
+            "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/checkpoints/epoch-05.pt",
+            "sha256": "b86658bf9e7311fe8799d3f68547d48020fc27b87c95f7af22a06d1156d8479f",
+            "sidecar_sha256": "090e6c35bc238a566fbbdf9dc06b6a483705543da4bfb6d477d61108bbccfa04"
+          },
+          "config_kind": "full-data-test-v1",
+          "deterministic_algorithms": true,
+          "dsl": false,
+          "eval_split": "test",
+          "frames": 12,
+          "full_data_stage": "test_evaluation",
+          "memory_limit_gib": 60,
+          "parent_run_id": "msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502",
+          "seed": 713,
+          "selected_epoch": 5,
+          "selection": "frozen_validation_earliest_raw_t2v_r1",
+          "synthetic": false,
+          "test_csv": {
+            "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+            "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+          },
+          "text_length": 32,
+          "video_indices": [
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+              "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+            },
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+              "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+            }
+          ],
+          "world_size": 2
+        },
+        "loss": {},
+        "model": {
+          "architecture": "full-data-baseline-v1",
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "extra_text_tokens": 2,
+          "extra_video_tokens": 2,
+          "freeze_layer_num": 0,
+          "method": "uatvr",
+          "samples": 7,
+          "temporal_layers": 4
+        },
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+          "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+          "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+          "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/checkpoints/epoch-05.pt",
+          "sha256": "b86658bf9e7311fe8799d3f68547d48020fc27b87c95f7af22a06d1156d8479f"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/checkpoints/epoch-05.json",
+          "sha256": "090e6c35bc238a566fbbdf9dc06b6a483705543da4bfb6d477d61108bbccfa04"
+        }
+      ],
+      "parent_run_ids": [
+        "msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502",
+        "synthetic-baseline-full-data-q0-seed713-20261012T142922Z-878dfad2c1f6"
+      ],
+      "scheduled_timestamp_utc": "20261012T143236Z",
+      "seed": 713,
+      "selection_lineage": [],
+      "stage": "final",
+      "test_authorized": true,
+      "validation_authorized": false,
+      "variant": "test-uatvr"
+    },
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=1,0",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nnodes=1",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/evaluate_full_data_test.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "checkpoint": {
+            "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed713-20261011T042528Z-6d2095e3d502/checkpoints/epoch-05.pt",
+            "sha256": "e14a9c6eea2065ce89ff1bd5ccbc991e495906a560b49031fd741076203d9cae",
+            "sidecar_sha256": "cc1347b049e0b29a5f5ca5962a2ff6685ca5374154f74e6092bb0caa1b20db4a"
+          },
+          "config_kind": "full-data-test-v1",
+          "deterministic_algorithms": true,
+          "dsl": false,
+          "eval_split": "test",
+          "frames": 12,
+          "full_data_stage": "test_evaluation",
+          "memory_limit_gib": 60,
+          "parent_run_id": "msrvtt-baseline-clip4clip-seed713-20261011T042528Z-6d2095e3d502",
+          "seed": 713,
+          "selected_epoch": 5,
+          "selection": "frozen_validation_earliest_raw_t2v_r1",
+          "synthetic": false,
+          "test_csv": {
+            "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+            "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+          },
+          "text_length": 32,
+          "video_indices": [
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+              "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+            },
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+              "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+            }
+          ],
+          "world_size": 2
+        },
+        "loss": {},
+        "model": {
+          "architecture": "full-data-baseline-v1",
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "extra_text_tokens": 2,
+          "extra_video_tokens": 2,
+          "freeze_layer_num": 0,
+          "method": "clip4clip",
+          "samples": 7,
+          "temporal_layers": 4
+        },
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+          "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+          "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+          "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed713-20261011T042528Z-6d2095e3d502/checkpoints/epoch-05.pt",
+          "sha256": "e14a9c6eea2065ce89ff1bd5ccbc991e495906a560b49031fd741076203d9cae"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed713-20261011T042528Z-6d2095e3d502/checkpoints/epoch-05.json",
+          "sha256": "cc1347b049e0b29a5f5ca5962a2ff6685ca5374154f74e6092bb0caa1b20db4a"
+        }
+      ],
+      "parent_run_ids": [
+        "msrvtt-baseline-clip4clip-seed713-20261011T042528Z-6d2095e3d502",
+        "synthetic-baseline-full-data-q0-seed713-20261012T142922Z-878dfad2c1f6"
+      ],
+      "scheduled_timestamp_utc": "20261012T143237Z",
+      "seed": 713,
+      "selection_lineage": [],
+      "stage": "final",
+      "test_authorized": true,
+      "validation_authorized": false,
+      "variant": "test-clip4clip"
+    },
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=1,0",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nnodes=1",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/evaluate_full_data_test.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "checkpoint": {
+            "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed714-20261011T163252Z-3c720544401a/checkpoints/epoch-02.pt",
+            "sha256": "08dd936642cbf069ebfb23d53c70fa4f82d8eeb77173813ec8bd054acf3c0a9e",
+            "sidecar_sha256": "76629e5f0413f3bf9fae1d4c3a61f86c30f4e514cfe3a42be522c59f6366b63f"
+          },
+          "config_kind": "full-data-test-v1",
+          "deterministic_algorithms": true,
+          "dsl": false,
+          "eval_split": "test",
+          "frames": 12,
+          "full_data_stage": "test_evaluation",
+          "memory_limit_gib": 60,
+          "parent_run_id": "msrvtt-baseline-uatvr-seed714-20261011T163252Z-3c720544401a",
+          "seed": 714,
+          "selected_epoch": 2,
+          "selection": "frozen_validation_earliest_raw_t2v_r1",
+          "synthetic": false,
+          "test_csv": {
+            "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+            "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+          },
+          "text_length": 32,
+          "video_indices": [
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+              "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+            },
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+              "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+            }
+          ],
+          "world_size": 2
+        },
+        "loss": {},
+        "model": {
+          "architecture": "full-data-baseline-v1",
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "extra_text_tokens": 2,
+          "extra_video_tokens": 2,
+          "freeze_layer_num": 0,
+          "method": "uatvr",
+          "samples": 7,
+          "temporal_layers": 4
+        },
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+          "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+          "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+          "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed714-20261011T163252Z-3c720544401a/checkpoints/epoch-02.pt",
+          "sha256": "08dd936642cbf069ebfb23d53c70fa4f82d8eeb77173813ec8bd054acf3c0a9e"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed714-20261011T163252Z-3c720544401a/checkpoints/epoch-02.json",
+          "sha256": "76629e5f0413f3bf9fae1d4c3a61f86c30f4e514cfe3a42be522c59f6366b63f"
+        }
+      ],
+      "parent_run_ids": [
+        "msrvtt-baseline-uatvr-seed714-20261011T163252Z-3c720544401a",
+        "synthetic-baseline-full-data-q0-seed713-20261012T142922Z-878dfad2c1f6"
+      ],
+      "scheduled_timestamp_utc": "20261012T143237Z",
+      "seed": 714,
+      "selection_lineage": [],
+      "stage": "final",
+      "test_authorized": true,
+      "validation_authorized": false,
+      "variant": "test-uatvr"
+    },
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=1,0",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nnodes=1",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/evaluate_full_data_test.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "checkpoint": {
+            "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed714-20261011T163252Z-3c720544401a/checkpoints/epoch-05.pt",
+            "sha256": "2caac86e25d4fb4cf33f4cfc909022508d3c6e2883381de247f7ca2083620d2f",
+            "sidecar_sha256": "5d637ae9cf182ec4c61a92aa20937d92b67b4452c673f02270e094df916e4e66"
+          },
+          "config_kind": "full-data-test-v1",
+          "deterministic_algorithms": true,
+          "dsl": false,
+          "eval_split": "test",
+          "frames": 12,
+          "full_data_stage": "test_evaluation",
+          "memory_limit_gib": 60,
+          "parent_run_id": "msrvtt-baseline-clip4clip-seed714-20261011T163252Z-3c720544401a",
+          "seed": 714,
+          "selected_epoch": 5,
+          "selection": "frozen_validation_earliest_raw_t2v_r1",
+          "synthetic": false,
+          "test_csv": {
+            "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+            "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+          },
+          "text_length": 32,
+          "video_indices": [
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+              "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+            },
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+              "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+            }
+          ],
+          "world_size": 2
+        },
+        "loss": {},
+        "model": {
+          "architecture": "full-data-baseline-v1",
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "extra_text_tokens": 2,
+          "extra_video_tokens": 2,
+          "freeze_layer_num": 0,
+          "method": "clip4clip",
+          "samples": 7,
+          "temporal_layers": 4
+        },
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+          "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+          "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+          "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed714-20261011T163252Z-3c720544401a/checkpoints/epoch-05.pt",
+          "sha256": "2caac86e25d4fb4cf33f4cfc909022508d3c6e2883381de247f7ca2083620d2f"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed714-20261011T163252Z-3c720544401a/checkpoints/epoch-05.json",
+          "sha256": "5d637ae9cf182ec4c61a92aa20937d92b67b4452c673f02270e094df916e4e66"
+        }
+      ],
+      "parent_run_ids": [
+        "msrvtt-baseline-clip4clip-seed714-20261011T163252Z-3c720544401a",
+        "synthetic-baseline-full-data-q0-seed713-20261012T142922Z-878dfad2c1f6"
+      ],
+      "scheduled_timestamp_utc": "20261012T143237Z",
+      "seed": 714,
+      "selection_lineage": [],
+      "stage": "final",
+      "test_authorized": true,
+      "validation_authorized": false,
+      "variant": "test-clip4clip"
+    },
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=1,0",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nnodes=1",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/evaluate_full_data_test.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "checkpoint": {
+            "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-02.pt",
+            "sha256": "e881c97d4bcb97925518d19226e355c63ef89a2f55c77d6beacaaa63cd4b3723",
+            "sidecar_sha256": "8de01dccd37fd2324a2570411731194177830af53c90fa6cff1153be3e19be28"
+          },
+          "config_kind": "full-data-test-v1",
+          "deterministic_algorithms": true,
+          "dsl": false,
+          "eval_split": "test",
+          "frames": 12,
+          "full_data_stage": "test_evaluation",
+          "memory_limit_gib": 60,
+          "parent_run_id": "msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca",
+          "seed": 715,
+          "selected_epoch": 2,
+          "selection": "frozen_validation_earliest_raw_t2v_r1",
+          "synthetic": false,
+          "test_csv": {
+            "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+            "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+          },
+          "text_length": 32,
+          "video_indices": [
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+              "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+            },
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+              "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+            }
+          ],
+          "world_size": 2
+        },
+        "loss": {},
+        "model": {
+          "architecture": "full-data-baseline-v1",
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "extra_text_tokens": 2,
+          "extra_video_tokens": 2,
+          "freeze_layer_num": 0,
+          "method": "uatvr",
+          "samples": 7,
+          "temporal_layers": 4
+        },
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+          "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+          "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+          "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-02.pt",
+          "sha256": "e881c97d4bcb97925518d19226e355c63ef89a2f55c77d6beacaaa63cd4b3723"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-02.json",
+          "sha256": "8de01dccd37fd2324a2570411731194177830af53c90fa6cff1153be3e19be28"
+        }
+      ],
+      "parent_run_ids": [
+        "msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca",
+        "synthetic-baseline-full-data-q0-seed713-20261012T142922Z-878dfad2c1f6"
+      ],
+      "scheduled_timestamp_utc": "20261012T143238Z",
+      "seed": 715,
+      "selection_lineage": [],
+      "stage": "final",
+      "test_authorized": true,
+      "validation_authorized": false,
+      "variant": "test-uatvr"
+    },
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=1,0",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nnodes=1",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/evaluate_full_data_test.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "checkpoint": {
+            "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-05.pt",
+            "sha256": "6a636cdf62af270b19e995c095d3866de9674d4fb8f31378a4964b0ac68d5045",
+            "sidecar_sha256": "9d3a85a1446b7b41fbdce0e2ba6425aaf77e672f510677ff8d424e37e2701ba3"
+          },
+          "config_kind": "full-data-test-v1",
+          "deterministic_algorithms": true,
+          "dsl": false,
+          "eval_split": "test",
+          "frames": 12,
+          "full_data_stage": "test_evaluation",
+          "memory_limit_gib": 60,
+          "parent_run_id": "msrvtt-baseline-clip4clip-seed715-20261012T013316Z-c9c06753e2ca",
+          "seed": 715,
+          "selected_epoch": 5,
+          "selection": "frozen_validation_earliest_raw_t2v_r1",
+          "synthetic": false,
+          "test_csv": {
+            "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+            "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+          },
+          "text_length": 32,
+          "video_indices": [
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+              "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+            },
+            {
+              "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+              "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+            }
+          ],
+          "world_size": 2
+        },
+        "loss": {},
+        "model": {
+          "architecture": "full-data-baseline-v1",
+          "clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+          "clip_weights": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "extra_text_tokens": 2,
+          "extra_video_tokens": 2,
+          "freeze_layer_num": 0,
+          "method": "clip4clip",
+          "samples": 7,
+          "temporal_layers": 4
+        },
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+          "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+          "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+        },
+        {
+          "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+          "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-05.pt",
+          "sha256": "6a636cdf62af270b19e995c095d3866de9674d4fb8f31378a4964b0ac68d5045"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed715-20261012T013316Z-c9c06753e2ca/checkpoints/epoch-05.json",
+          "sha256": "9d3a85a1446b7b41fbdce0e2ba6425aaf77e672f510677ff8d424e37e2701ba3"
+        }
+      ],
+      "parent_run_ids": [
+        "msrvtt-baseline-clip4clip-seed715-20261012T013316Z-c9c06753e2ca",
+        "synthetic-baseline-full-data-q0-seed713-20261012T142922Z-878dfad2c1f6"
+      ],
+      "scheduled_timestamp_utc": "20261012T143238Z",
+      "seed": 715,
+      "selection_lineage": [],
+      "stage": "final",
+      "test_authorized": true,
+      "validation_authorized": false,
+      "variant": "test-clip4clip"
+    }
+  ],
+  "study": "full-data-retrieval-v1"
+}

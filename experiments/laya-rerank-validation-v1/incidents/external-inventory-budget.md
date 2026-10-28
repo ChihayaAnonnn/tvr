@@ -1,0 +1,3 @@
+# External terminal inventory budget support
+
+Full accuracy completed and was immutably archived. Its 22,032 output entries exceed the 1 MiB summary limit, so standard finalize-phase emits terminal-status-reference-v1. Inspection found budget_rows assumed inline output_hashes. Add authenticated support for the existing external form: exact registered status path, file SHA, run/state/manifest identity, pointer and entry count. Regression first failed due missing support, then passed. No scientific inference changes or accuracy rerun. Performance controller also observes foreign GPU3 processes every second throughout every round. Modified executable source requires another source upgrade qualification.

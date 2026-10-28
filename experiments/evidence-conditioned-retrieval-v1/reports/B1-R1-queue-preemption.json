@@ -1,0 +1,12 @@
+{
+  "schema_version": "evidence-controller-queue-preemption-v1",
+  "phase": "B1-R1",
+  "controller_pid": 4166144,
+  "worker_pid": 4166393,
+  "worker_terminated": true,
+  "controller_paused": true,
+  "other_four_workers_not_spawned": true,
+  "reason": "Cancel software-inefficient evaluation batch before applying independently reviewed query-journal isolation. A temporary committed control report makes queued verify-run checks refuse spawn; restore the exact reserved tree after controller drains, then archive all five terminals.",
+  "scientific_outcomes_inspected": false,
+  "scientific_parameters_changed": false
+}

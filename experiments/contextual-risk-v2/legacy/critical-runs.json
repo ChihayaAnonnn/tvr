@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "runs": [
+    {
+      "name": "msrvtt-a1",
+      "dataset": "msrvtt",
+      "stage": "feature_ablation",
+      "run_id": "msrvtt-feature_ablation-a1_legacy-seed000-20260811T231959Z-2734b9afb484",
+      "classification": "critical",
+      "resolution": "resolved",
+      "sources": [
+        {
+          "path": "ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1",
+          "destination": "checkpoints"
+        },
+        {
+          "path": "logs/20260811/231959_risk_sidecar_a1_train_msrvtt.log",
+          "destination": "logs/train.log"
+        }
+      ]
+    },
+    {
+      "name": "msrvtt-a2-cg",
+      "dataset": "msrvtt",
+      "stage": "loss_ablation",
+      "run_id": "msrvtt-loss_ablation-a2_cg_legacy-seed000-20260812T115504Z-e7c1580c56e5",
+      "classification": "critical",
+      "resolution": "resolved",
+      "sources": [
+        {
+          "path": "ckpts/ckpt_msrvtt_20260812_115504_csd_logvar_a2_cg",
+          "destination": "checkpoints"
+        },
+        {
+          "path": "logs/20260812/115504_csd_logvar_a2_cg_train_msrvtt.log",
+          "destination": "logs/train.log"
+        },
+        {
+          "path": "logs/20260812/124342_csd_logvar_a2_cg_resume_train_msrvtt.log",
+          "destination": "logs/resume.log"
+        }
+      ]
+    },
+    {
+      "name": "msrvtt-a3-selected",
+      "dataset": "msrvtt",
+      "stage": "feature_ablation",
+      "run_id": "msrvtt-feature_ablation-a3_selected_legacy-seed000-20260813T031640Z-3bd3df8befb3",
+      "classification": "critical",
+      "resolution": "resolved",
+      "sources": [
+        {
+          "path": "ckpts/ckpt_msrvtt_20260813_031640_contextual_risk_a3",
+          "destination": "checkpoints"
+        },
+        {
+          "path": "logs/20260813/031640_contextual_risk_a3_train_msrvtt.log",
+          "destination": "logs/train.log"
+        },
+        {
+          "path": "logs/20260813/130047_contextual_risk_a3_resume2_train_msrvtt.log",
+          "destination": "logs/resume.log"
+        }
+      ]
+    },
+    {
+      "name": "msrvtt-a3-dsl-t2",
+      "dataset": "msrvtt",
+      "stage": "calibration",
+      "run_id": "msrvtt-calibration-a3_dsl_t2_legacy-seed000-20260813T214730Z-3bd3df8befb3",
+      "classification": "critical",
+      "resolution": "resolved",
+      "sources": [
+        {
+          "path": "ckpts/ckpt_msrvtt_20260813_214730_a3_dsl_t2_eval",
+          "destination": "metrics/legacy-eval"
+        },
+        {
+          "path": "logs/20260813/214730_a3_dsl_t2_eval_msrvtt.log",
+          "destination": "logs/test.log"
+        }
+      ]
+    },
+    {
+      "name": "msvd-june-baseline",
+      "dataset": "msvd",
+      "stage": "baseline",
+      "run_id": "msvd-baseline-june_legacy-seed000-20260813T034603Z-2168cc686002",
+      "classification": "critical",
+      "resolution": "resolved",
+      "sources": [
+        {
+          "path": "ckpts/ckpt_msvd_20260813_034603_msvd_june_baseline",
+          "destination": "checkpoints"
+        },
+        {
+          "path": "logs/20260813/034603_msvd_june_baseline_train_msvd.log",
+          "destination": "logs/train.log"
+        }
+      ]
+    },
+    {
+      "name": "msvd-a1",
+      "dataset": "msvd",
+      "stage": "feature_ablation",
+      "run_id": null,
+      "classification": "unresolved",
+      "resolution": "unresolved",
+      "sources": []
+    }
+  ]
+}

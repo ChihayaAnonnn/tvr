@@ -1,0 +1,101 @@
+{
+  "schema_version": "evidence-journal-isolation-review-v1",
+  "phase_preempted": "B1-R1",
+  "terminals": {
+    "failed": 1,
+    "cancelled": 4
+  },
+  "gpu_seconds": 832.9750628490001,
+  "gpu_hours": 0.23138196190250002,
+  "scientific_outcomes_inspected": false,
+  "scientific_parameters_changed": false,
+  "successor_number": 2,
+  "benchmark": {
+    "schema_version": "evidence-query-journal-software-benchmark-v1",
+    "query_count": 64,
+    "predictions_per_query": 1,
+    "same_video_observations": true,
+    "real_array_hash_verification": true,
+    "outputs_equal": true,
+    "timings": {
+      "before": {
+        "samples_seconds": [
+          1.2590831629931927,
+          1.2576873459620401,
+          1.268984665046446
+        ],
+        "median_seconds": 1.2590831629931927
+      },
+      "after": {
+        "samples_seconds": [
+          0.04626726300921291,
+          0.04673419799655676,
+          0.045964765013195574
+        ],
+        "median_seconds": 0.04626726300921291
+      }
+    },
+    "speedup": 27.21326227450453
+  },
+  "independent_review": {
+    "initial_P1": "rich diagnostics retained final query journal",
+    "fix": "rebind journals[episode.query_id] for each rich diagnostic",
+    "red": "3 failed with journal query identity mismatch",
+    "green": "3 passed in 3.79s; real OpenCV + CLIP + externalized reference",
+    "other_blockers": [],
+    "final_disposition": "No remaining blockers; independent real-video three-arm regression 3 passed 3.76s."
+  },
+  "test_assertion_correction": "The one-frame synthetic fixture has zero rich targets. Corrected nonexistent rich_nll assertion to rich_valid_count=0 and explicit undefined reason; no production metric or valid correctness assertion weakened.",
+  "prelaunch_recovery": {
+    "source_commit_rejected_before_any_worker": "791fa3a",
+    "exact_tree_restored": "3225959",
+    "outputs_overwritten": false
+  },
+  "queue_preemption": {
+    "pause_own_controller": 4166144,
+    "terminate_own_verified_worker": 4166393,
+    "temporary_queue_guard_commit": "6635bee",
+    "exact_tree_restored_before_archive": "078ab35",
+    "terminal_archive_commit": "c92c980"
+  },
+  "root_evidence_regression": {
+    "command": "CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/.conda/envs/tvr/bin/python -m pytest -p no:cacheprovider tests/semantic_retrieval/evidence -q",
+    "passed": 126,
+    "seconds": 49.77,
+    "warnings": "existing PyTorch TypedStorage deprecation"
+  },
+  "broad_regression": {
+    "passed": 680,
+    "seconds": 263.05,
+    "command": "CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 /home/xujie/.conda/envs/tvr/bin/python -m pytest -p no:cacheprovider tests/semantic_retrieval tests/test_experiment_artifacts.py tests/test_experiment_tracking.py tests/test_manage_experiment_run.py tests/test_experiment_archive_e2e.py tests/test_experiment_artifact_docs.py tests/test_legacy_artifact_migration.py -q",
+    "log_sha256": "884caeb5d72af316d6d27dbb3a3a58133aeeb2146f691269ff2f12d2b2d0e2c7"
+  },
+  "Q0_R4": {
+    "run_id": "synthetic-baseline-evidence-q0-r4-four-gpu-seed713-20261010T020655Z-44ba9f320a01",
+    "manifest_sha256": "15375ba996437a86e9d932f519f2abe6b664d24630e528602368751957c6c7f4",
+    "checks_passed": 13,
+    "array_references_verified": 578,
+    "controller_seconds": 72.10600825806614,
+    "allocated_gpu_hours": 0.08011778695340682
+  },
+  "analysis_certification": {
+    "independent_review": "All three blocking issues resolved; whole phase and parents certified before outcome reading; expected producer derived independently; component details include zero actions/unknown.",
+    "real_temporary_archive_tests": {
+      "passed": 5,
+      "seconds": 13.89
+    },
+    "independent_tests": {
+      "passed": 5,
+      "seconds": 13.06
+    },
+    "real_archived_identity_witness": {
+      "Q0_R4": 1,
+      "D0": 1,
+      "S1": 1,
+      "S2": 5,
+      "scientific_outcomes_read": false
+    },
+    "guards": "18 assertions replaced with explicit optimization-safe require guards; python -O rejection witness passed",
+    "fixture_failure_and_fix": "Initial five fixtures accidentally committed registry.jsonl.lock via git add .; corrected test commit staging to tracked files and explicit summary. Production source and archive guards unchanged."
+  }
+}

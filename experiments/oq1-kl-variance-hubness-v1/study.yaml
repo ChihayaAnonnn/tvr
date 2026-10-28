@@ -1,0 +1,232 @@
+# =============================================================================
+# WHY THIS STUDY EXISTS
+#
+# OQ-1 Tier -1 falsified the family-wide reading of the north-star thesis: the
+# "R@1 flat/down + R@5/R@10 up + MnR collapse" shape is DAB-only (asymmetric KL
+# cost); the six other probabilistic TVR methods are R@1-forward. What survives
+# is a sharper, mechanistic claim:
+#
+#   In asymmetric-KL scoring, the candidate-only variance term (-1/2 log sigma_v^2)
+#   is a LEARNED hubness correction, and its presence/absence explains the gain-
+#   shape divide between DAB and the rest.
+#
+# OQ-1 Tier 0 then showed the frozen trusted-v1 val matrix is a LOW-hubness,
+# near-saturated regime (R@1 76.50, MnR 2.109, S(N10) 0.53) in which any
+# candidate-only correction is a no-op -- DSL is -0.65 there and +2.6 on test.
+# Ablating the (A) term in such a regime would trivially "change nothing" and
+# fire F-A as a FALSE POSITIVE. Hence this study's first gate is a regime gate,
+# not an effect gate, and it introduces a 1000-video x 1-caption validation
+# partition (val1k) that is structurally isomorphic to MSRVTT-1K-A but carved
+# from the train pool, so Stages 1-5 never touch the sealed test split.
+#
+# WHAT THIS STUDY IS FOR, PROTOCOL-WISE
+#
+# PC-4 seals MSRVTT/MSVD test until "a new study's Stages 4/5 pass". This is
+# that study. Passing stage4_multiseed AND stage5_mechanism is the sole
+# authorization path to unseal MSRVTT test in this campaign, and the
+# authorization is scoped to THIS study only (OQ-2 / OQ-3 need their own).
+#
+# WHAT CHANGED IN CODE
+#
+# Nothing yet. This file is the frozen protocol; implementation lands under
+# reserve-phase run ids per PC-8 Scheme A. No A3 sidecar code is used (PC-7 not
+# applicable). No frozen retrieval matrix is reused for training (PC-11 not
+# applicable); Stage 2 freezes arm0's own val1k matrix as its post-processing
+# substrate.
+#
+# Prose pre-registration, falsification map and limitations: PREREGISTRATION.md
+# =============================================================================
+
+study: oq1-kl-variance-hubness-v1
+protocol_version: 1
+status: registered                 # signed off 2026-08-28; this file is now frozen (PC-2)
+registered_at: 2026-08-28
+control_plane: experiments/oq1-kl-variance-hubness-v1
+data_plane: artifacts/oq1-kl-variance-hubness-v1
+registry: experiments/oq1-kl-variance-hubness-v1/registry.jsonl
+
+lineage:
+  parent_study: null               # not a continuation of contextual-risk-v2 or sap-*
+  parent_run_ids: []
+  selection_lineage: []
+  evidence_basis:
+    - research/oq1/tier-minus1-gain-shapes.md        # E-76..E-83, E-89
+    - research/oq1/tier0-correction-envelope.md      # E-84..E-88
+    - research/00-north-star.md                      # F-A, F-B
+    - research/07-protocol-constraints.md            # PC-1..PC-13
+  answers_open_question: OQ-1 Tier 1
+  reused_tooling:
+    - scripts/oq1_tier0_correction_envelope.py       # stage2 re-run, unmodified
+
+# --- research question, as testable statements -------------------------------
+hypothesis:
+  primary: >
+    In an asymmetric Gaussian KL retrieval cost, the candidate-only variance term
+    (A) = -1/2 log sigma_v^2 acts as a learned per-candidate additive hubness
+    correction; removing it removes the hubness gain shape.
+  falsifies_if_unsupported: [F-A, F-B]     # research/00-north-star.md
+  primary_direction: t2v                   # v2t recorded, never gated (PC-12)
+  post_processing_for_primary_metrics: none  # DSL off, QB-Norm off; see PREREGISTRATION.md 3.3
+
+# --- data --------------------------------------------------------------------
+data_plane_splits:
+  train:
+    id: msrvtt_trusted_v1_train7500
+    derived_from: data/generated/msrvtt_trusted_v1/train.csv    # 8500 videos
+    rule: train8500 minus the 1000 videos held out for val1k
+  val1k:
+    id: msrvtt_trusted_v1_val1k
+    videos: 1000
+    captions_per_video: 1
+    caption_selection: lowest_index_in_annotation_list          # deterministic, frozen
+    carved_from: data/generated/msrvtt_trusted_v1/train.csv
+    annotation_source: /data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json
+    rationale: structurally isomorphic to MSRVTT-1K-A (1000 x 1) without touching test
+    assertions:
+      disjoint_from_jsfusion_test_video_ids: required_hard_fail
+      disjoint_from_train7500: required_hard_fail
+      manifest_sha256_recorded: true
+  legacy_val_500x20:
+    id: msrvtt_trusted_v1_val
+    status: retained_for_reference_only
+    reason: low-hubness near-saturated regime (E-84..E-88); not a valid Tier 1 substrate
+  test:
+    id: msrvtt_jsfusion_test
+    path: /data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv
+    sealed: true
+
+# --- arms --------------------------------------------------------------------
+# cost(t,v) = lam_A*(-0.5*log sigma_v^2) + lam_B*(0.5*log sigma_t^2)
+#           + lam_C*(sigma_v^2/(2*sigma_t^2)) + lam_D*(||mu_t-mu_v||^2/(2*sigma_t^2))
+variants:
+  arms:
+    arm0_deterministic: {probabilistic_head: false}
+    arm1_full_akl:      {lam_A: 1, lam_B: 1, lam_C: 1, lam_D: 1}
+    arm2_no_A:          {lam_A: 0, lam_B: 1, lam_C: 1, lam_D: 1}   # F-A arm
+    arm3_D_only:        {lam_A: 0, lam_B: 0, lam_C: 0, lam_D: 1}
+    arm4_unit_sigma_t:  {lam_A: 1, lam_B: 0, lam_C: 1, lam_D: 1, sigma_t: frozen_to_one}
+    arm5_symmetric_kl:  {cost: symmetric_kl}
+    arm6_elk:           {cost: expected_likelihood_kernel}
+  invariants:
+    shared_across_arms: [data, optimizer, schedule, epochs, batch_size, seeds, backbone_init]
+    head_parameter_count_identical_for: [arm1_full_akl, arm2_no_A, arm4_unit_sigma_t,
+                                         arm5_symmetric_kl, arm6_elk]
+    lam_weights_are_fixed_not_tuned: true   # no lambda sweep; see PREREGISTRATION.md 12.5
+
+seeds: [0, 1, 2]
+
+bootstrap:
+  samples: 10000
+  seed: 0
+  confidence_level: 0.95
+  pairing: by_seed_against_same_seed_arm0
+
+# --- frozen metric definitions ----------------------------------------------
+metric_definitions:
+  asymmetry_index_A: "(dR@5 + dR@10)/2 - dR@1, deltas vs same-seed arm0"
+  delta_mnr_pct: "(MnR_arm - MnR_arm0) / MnR_arm0"
+  k_occurrence: "N_k(j) = # of queries with candidate j in their top-k"
+  hubness_skewness: "S(N_k) = Fisher moment skewness of N_k, k in {5,10}"
+  additive_residual_b: "least squares fit S_arm ~ alpha*S_arm0 + 1 b^T + R; report ||R||_F too"
+  number_discipline: "every reported number carries (split, dsl_setting, direction)"   # PC-12
+
+stages:
+  - stage0_qualification
+  - stage1_baseline_regime
+  - stage2_correction_envelope
+  - stage3_arm_ablation
+  - stage4_multiseed
+  - stage5_mechanism
+  - stage6_test_confirmation
+  - stage7_external_replication      # optional, explicitly out of v1 budget
+
+stop_gates:
+  stage0_qualification:
+    four_gpu_qualification_recorded: true          # PC-9
+    val1k_disjoint_from_test: true
+    determinism_first_200_steps_bitwise_equal_same_seed: true
+    source_tree_clean_and_sha_bound: true          # PC-8
+  stage1_baseline_regime:                          # P0 -- regime gate, not effect gate
+    arm0_val1k_hubness_skewness_n10_gte: 1.5
+    arm0_val1k_mnr_gte: 8.0
+    arm0_val1k_r1_lte: 60.0
+    on_failure: halt_study_as_inconclusive         # does NOT fire F-A, does NOT unseal test
+  stage2_correction_envelope:
+    gate: none
+    must_emit: best_label_free_correction_for_stage5_p6
+  stage3_arm_ablation:
+    gate: none
+    exploratory_all_arms_recorded: true
+  stage4_multiseed:                                # P1, P2, P3
+    p1_arm1_asymmetry_index_gte: 2.0
+    p1_arm1_delta_mnr_pct_lte: -0.25
+    p2_arm2_asymmetry_index_lte: 0.5
+    p2_arm2_delta_mnr_pct_gte: -0.10
+    p2_arm1_minus_arm2_asymmetry_gte: 2.0
+    p2_paired_95ci_lower_bound_gt: 0.0
+    p3_arm5_asymmetry_index_lte: 0.5
+    p3_arm6_asymmetry_index_lte: 0.5
+    on_p1_failure: halt_study_as_inconclusive      # one implementation review + one rerun max
+    on_p2_failure: fire_F_A_and_archive_negative_result
+  stage5_mechanism:                                # P4, P5, P6
+    p4_spearman_rho_bhat_vs_n10_lte: -0.30
+    p4_95ci_upper_bound_lt: 0.0
+    p5_additive_component_recovers_recall_fraction_gte: 0.50   # 0.60->0.50 pre-signature, see PREREGISTRATION.md 12.5
+    p5_additive_component_recovers_mnr_fraction_gte: 0.50
+    p6_arm1_incremental_over_explicit_correction_asymmetry_lte: 0.5
+    on_p6_failure: fire_F_B_and_archive_negative_result
+    on_p4_or_p5_failure_only: thesis_major_revision_not_falsification
+  stage6_test_confirmation:
+    performs_no_selection: true
+    frozen_config_artifact: stage6_frozen_config.json
+    frozen_config_sha256_recorded: true
+    one_evaluation_per_arm: true
+
+test_sealed:
+  default: true
+  datasets: [msrvtt, msvd]
+  authorize_only_after: stage4_and_stage5_gates_passed     # PC-4 discharge condition
+  authorization_scope: this_study_only
+  msvd_in_v1: false                                        # sidesteps PC-3 entirely
+  retry_policy:
+    terminal_in_place_retry: forbidden
+    authorized_successor: subsequent_phase_with_new_unique_run_id
+    predecessor_lineage: parent_run_ids
+    authorization_reason: selection_lineage
+
+hardware_policy:
+  required_gpu_model: A800
+  required_gpu_count: 4
+  precision: fp32
+  distributed_topology: torchrun-4-rank
+  stage0_fixture_allows_cpu: true
+  # PC-10 resolution: do NOT hardcode device ids. Probe at reserve time, record what
+  # was actually selected. Measured 2026-08-28: gpu0/1/4 ~74.5 GiB used by external
+  # processes, gpu2 free, gpu3 22.4 GiB used -> a 4-rank launch is NOT possible today.
+  device_selection:
+    mode: probe_at_reserve_time
+    min_free_mib_per_gpu: 70000
+    select: first_n_by_free_memory_descending
+    record_in_manifest: [gpu_uuid, gpu_index, free_mib_at_reserve, driver_version]
+    on_insufficient_gpus: refuse_launch_and_archive_probe_as_evidence
+    hardcoded_device_set: forbidden
+
+deviation_policy:
+  silent_reconfiguration: forbidden                # PC-2
+  any_change_to_this_file_after_registration: new_study_dir_and_new_protocol_version
+  negative_result_must_be_archived: true           # cannot withdraw registration on F-A/F-B
+
+not_applicable_constraints:
+  PC-7:  "no A3 sidecar code is used by this study"
+  PC-11: "this study trains new retrievers; frozen-matrix contract does not bind it"
+  PC-1:  "contextual-risk-v2 stage2 authorization is a different study"
+
+archive_rules:
+  phase_batched_registry: true
+  runtime_may_modify_tracked_files: false
+  externalize_numeric_payloads_over_bytes: 1048576
+  externalize_as: npy_with_sha256                  # sim matrices, N_k vectors, b_hat
+  preserve_failed_evidence: true
+  new_legacy_output_forbidden: true
+  run_id_format: "<dataset>-<stage>-<arm>-seed<NNN>-<utc_iso_basic>-<hash8>"
+  artifact_path: "artifacts/oq1-kl-variance-hubness-v1/<dataset>/<stage>/<run-id>/"

@@ -1,0 +1,22 @@
+{
+  "allowed_root": "/data2/hxj/data/MSRVTT",
+  "allowlist_csv": null,
+  "annotation": {
+    "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/msrvtt/baseline/msrvtt-baseline-source_inventory-seed000-20261001T095959Z-5add32a296d9/provenance/train-only/pilot-annotations.json",
+    "sha256": "2b617b4469f9c07565c671600cb35fdfde75e32bee94994d5378f4f35670698a"
+  },
+  "candidate_orders": null,
+  "catalog": {
+    "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/msrvtt/baseline/msrvtt-baseline-source_inventory-seed000-20261001T095959Z-5add32a296d9/provenance/train-only/catalog.json",
+    "sha256": "454927f3075d57c3c20427c97d50fc61d6219a6c76458ee44bbe041b24fbf297"
+  },
+  "mode": "compile",
+  "protocol_id": "clip4clip-msrvtt-9k-train-pilot-v1",
+  "relevance_space": "benchmark_annotation",
+  "source_annotation": null,
+  "source_confirmation": {
+    "path": "/data2/hxj/project/UATVR/docs/maintenance/2026-10-01-msrvtt-source-confirmation.json",
+    "sha256": "722eaf027a34e9eebaa04778eae72acde35e57c13d46e9258a6b53fdf66b1ff1"
+  },
+  "video_directory": null
+}

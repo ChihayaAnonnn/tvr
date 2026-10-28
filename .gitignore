@@ -3,6 +3,14 @@ logs/
 # docs/
 cache_dir/
 
+# Run-centric experiment data plane.  The companion control plane under
+# experiments/contextual-risk-v2/ remains tracked.
+/artifacts/
+/experiments/contextual-risk-v2/registry.jsonl.lock
+/experiments/full-data-retrieval-v1/registry.jsonl.lock
+/experiments/full-data-retrieval-v1/registry.jsonl.campaign.lock
+/.aris/
+
 /deploy_qwen/
 /ckpts/
 /tmp/
@@ -27,3 +35,7 @@ __pycache__/
 # 以 . 开头的文件/目录一律忽略；仅对 .gitignore 本身做反忽略，否则该文件无法被提交
 .*
 !.gitignore
+
+/experiments/semantic-answerability-pilot-v1/registry.jsonl.lock
+
+/experiments/laya-rerank-validation-v1/registry.jsonl.lock

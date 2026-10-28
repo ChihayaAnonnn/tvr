@@ -1,0 +1,9 @@
+{
+  "python": "3.10.0",
+  "pytorch": "2.1.2+cu121",
+  "cuda": "12.1",
+  "gpu_model": "NVIDIA A800 80GB PCIe",
+  "gpu_count": 4,
+  "precision": "fp32",
+  "distributed_topology": "torchrun-4"
+}

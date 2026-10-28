@@ -1,0 +1,118 @@
+# Frozen protocol for the reliable retrieval / contextual-risk-v2 campaign.
+study: contextual-risk-v2
+rebuilt_code_qualification:
+  scope: synthetic_software_only
+  authorization: user_request_2026-10-01_four_gpu_end_to_end_code_acceptance
+  entrypoint: scripts/qualify_semantic_retrieval.py
+  test_authorized: false
+  max_gpu_hours: 8
+  physical_indices: [0, 2, 3, 4]
+  gpu_uuids:
+    - GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece
+    - GPU-19f58384-1ce3-9658-5a8b-7d79f437289d
+    - GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede
+    - GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a
+  model: production_capacity_random_initialization_vit_b32
+  scientific_study_reactivation: forbidden
+  note: "GPU4 is idle on fresh inspection; retain frozen 0,2,3,4 topology and its 2-4 NVLink pair."
+protocol_version: 1
+control_plane: experiments/contextual-risk-v2
+data_plane: artifacts/contextual-risk-v2
+registry: experiments/contextual-risk-v2/registry.jsonl
+legacy_metrics_contracts:
+  61f65c79af6c88280be5ca9862f2db97d9d3027b7696163fb9b13c14eb4e4831:
+    schema: schemas/metrics-legacy-qualification-v0.schema.json
+    version: archive-qualification-v0
+    new_writes: forbidden
+
+stages:
+  - baseline
+  - feature_ablation
+  - loss_ablation
+  - topk_sweep
+  - multiseed
+  - calibration
+  - robustness
+  - efficiency
+  - final
+
+variants:
+  stage1_baselines: [raw_score, top1_top2_margin, entropy, energy, score_variance, sap, a2_logvar, a1, a3]
+  stage2_features: [score_only, semantic_only, no_context, no_score_geometry, full]
+  stage3_losses: [bce, bce_fit, bce_rank, full]
+  stage3_topk: [1, 4, 8, 16, 32]
+
+seeds: [0, 1, 2]
+registered_a3_launcher:
+  feature_sets: [full, score_only, semantic_only, no_context, no_score_geometry]
+  topk: [1, 4, 8, 16, 32]
+  seeds: [0, 1, 2]
+  epochs: [3, 5]
+  loss_weights:
+    bce: {fit: 0.0, rank: 0.0}
+    bce_fit: {fit: 0.25, rank: 0.0}
+    bce_rank: {fit: 0.0, rank: 0.25}
+    full: {fit: 0.25, rank: 0.25}
+  arbitrary_trailing_argv: forbidden
+bootstrap:
+  samples: 10000
+  seed: 0
+  confidence_level: 0.95
+
+canonical_a1:
+  checkpoint: ckpts/ckpt_msrvtt_20260811_231959_risk_sidecar_a1/pytorch_model.bin.4
+  sha256: a2c074e3988b0e4a115d054c352785271712ffdfb4e4c2da8b372bde424e2607
+
+test_sealed:
+  default: true
+  datasets: [msrvtt, msvd]
+  authorize_only_after: final_configuration_frozen
+  retry_policy:
+    terminal_in_place_retry: forbidden
+    authorized_successor: subsequent_phase_with_new_unique_run_id
+    predecessor_lineage: parent_run_ids
+    authorization_reason: selection_lineage
+
+hardware_policy:
+  required_gpu_model: A800
+  required_gpu_count: 4
+  precision: fp32
+  distributed_topology: torchrun-4-rank
+  stage0_fixture_allows_cpu: true
+
+stop_gates:
+  stage1_baselines:
+    a3_vs_strongest_baseline:
+      mean_directional_auroc_delta_gte: 0.01
+      mean_directional_aurc_delta_lte: -0.01
+      min_directional_auroc_gt: 0.5
+      min_directional_rho_gte: 0.20
+  stage2_features:
+    full_a3_vs_score_only_and_no_context:
+      mean_auroc_delta_gte: 0.005
+      mean_aurc_delta_lte: -0.005
+      max_directional_auroc_loss_lte: 0.01
+      changed_tensors: a3_sidecar_only
+  stage3_loss_topk:
+    min_directional_rho_gte: 0.20
+    retain_within_mean_auroc: 0.005
+    retain_within_mean_aurc: 0.005
+    tie_break_order: [smallest_k, fewest_active_loss_terms, earliest_epoch]
+  stage4_multiseed:
+    both_directional_point_estimates_improve: true
+    accept_if_any_confidence_interval_passes: true
+    paired_95ci_mean_auroc_delta_gt: 0.0
+    paired_95ci_mean_aurc_delta_lt: 0.0
+  stage5_msvd:
+    both_directional_point_estimates_improve: true
+    accept_if_any_confidence_interval_passes: true
+    paired_95ci_mean_auroc_delta_gt: 0.0
+    paired_95ci_mean_aurc_delta_lt: 0.0
+    retrieval_ranks_and_recall_exactly_match_frozen_retriever: true
+
+archive_rules:
+  phase_batched_registry: true
+  runtime_may_modify_tracked_files: false
+  externalize_numeric_payloads_over_bytes: 1048576
+  preserve_failed_evidence: true
+  new_legacy_output_forbidden: true

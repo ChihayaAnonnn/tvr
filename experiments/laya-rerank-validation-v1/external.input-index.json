@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "kind": "file_sha256_index",
+  "files": [
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/__init__.py",
+      "sha256": "d352451296aa9f13a6688432c7c93c41be44b92b25595ad97240867f3601e9fa"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/agent.py",
+      "sha256": "935e9ea3c73c7885822e6316dfec4fd3f9d39f18838c53ec242705dfdd2c18e5"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/atari_data/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/atari_data/atari_head.py",
+      "sha256": "91b472c54bca47c5236a38f45eab247f2ea8e7258295e834cad4a0d34c8c6ef2"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/atari_data/expert.py",
+      "sha256": "dc5dcbe13247b9040fb7cd4736b1ec2cdb653a10a6a87c191a05a3e27418ae67"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/atari_data/jat.py",
+      "sha256": "301d4874934798d5fd85d39ccd84867a0c634365d323bfc71130490cc75d8309"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/atari_train.py",
+      "sha256": "ed0fb2f5d638b5280eb8cf91572e1721c60ca3047f3ae79af5c36e953b4100c6"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/calibration.py",
+      "sha256": "cde1ae8810dbe9d3265ef40e01777e8bf61b62ce17444967f8374f79c52b5b36"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/cauldron.py",
+      "sha256": "193b9d4709ea1de44289b00207e755326a0cc39ae83f52e83ee8e260f0b33d5c"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/common.py",
+      "sha256": "2a7b4e0af6acd62f47e02cd263d6b3613938a472b67384983d2711dec3864923"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/controlgames.py",
+      "sha256": "9f5667f0cf8e9296b6589744c2ca2f35d67535e17641d78e406df4a0452aed44"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/email.py",
+      "sha256": "55138f6044f898bdefdbd8aaba08ce5b4d3e62083c61695edf06f46d71c48d2c"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/evalsets.py",
+      "sha256": "165a1ee0886850ae09805a93eca1e50605258a3666263e3169e6684ec67d897e"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/games.py",
+      "sha256": "d2c9fd319ed31d6c984834d3576b60ccbd522854b2220bcd20e2dc10286fa802"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/gridgames.py",
+      "sha256": "db29f8ebdbfb0f62602d2ba9ae98b67828c5e773a19fe192b15ec5d685a1710d"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/preprocess.py",
+      "sha256": "45a40f702bae0397ddc32665acf38d34a14c48602a0119d7f174cbc686527af1"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/presets.py",
+      "sha256": "2a3370f587cae29696bfa487edcc51caf47a211518733fdb192cf6d4eddbf1ea"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/robustness/__init__.py",
+      "sha256": "e134ec74ae6b372811572ff871ec1f3278fc1976d39bd99be26360d4d63bc512"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/robustness/__main__.py",
+      "sha256": "5913584fa39cce61d4244c85b548dc8518cdc50685c87fb19d42efdb96887454"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/robustness/floor.py",
+      "sha256": "5d891145243ae45448e6b182964d31cdb440e9016a84ae1089240d2ce0c8ad1e"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/robustness/form.py",
+      "sha256": "5f7726d8c9c950c381a16bb9545c3ecb639650e052153109d5b15d6fed63231f"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/robustness/injection.py",
+      "sha256": "cf33691059f36e0361b4a37c6a3a0ef63774f89a6bacc3fcc1218d6b790c2dc2"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/robustness/invariance.py",
+      "sha256": "ef96da5f093a50d32d4352fc9a93cb390f848cc12bc1b1c753f90a38e126c08b"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/robustness/options.py",
+      "sha256": "e25638ddb178099b6f35e630bd5159db7e1908f092b0333e66576b450489611c"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/rubric.py",
+      "sha256": "cea045437b15631e00a5b61fc8616a403c5158d907736a056cfe6485fb3a79aa"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/search.py",
+      "sha256": "7339b002c32c264cb67633acfcff2464d0c1f137ed3702b0aaa684b93f402991"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/static_step.py",
+      "sha256": "289c9b91e9ee183b5acffed8354d2aa453a88b31cd3088f82e9338e31bd90869"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/vlm.py",
+      "sha256": "9277e1af5435f601cba52040a627b8a40c8b116795bce2fa67309f18ef3ec382"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/laya/vlm_train.py",
+      "sha256": "4160ffc3a5e1e8916ab45a018073abbf3854835158bbcc60a72841e1cbae5360"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/code/pyproject.toml",
+      "sha256": "6d15a4aeb4ef2728232f7e41ed3dc13300c72a0484af5e85df06f1d42fa26f16"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/models/.gitattributes",
+      "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/models/backbone/config.json",
+      "sha256": "865861b8d4e8ee99826ff58a72b84e376dddbe191265abb3dfed68aef40c226d"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/models/model.safetensors",
+      "sha256": "31220803f38b44b8b1649b207c632612c9a35dee0da2ef1ea35d21e4b424be68"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/models/processor/chat_template.jinja",
+      "sha256": "830005085ddd94cec605b6e21b885b28ffad6e3f82ee6a212c523533e8f04f01"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/models/processor/processor_config.json",
+      "sha256": "10ed91fcba8f9a8c6c2a1f7ac83d3a13ef1db7664dbcf21825354090c92e865d"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/models/processor/tokenizer.json",
+      "sha256": "2500f374cdc89040032a7d8437b6ed0fe745667b1194c17914d062ee31701605"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/models/processor/tokenizer_config.json",
+      "sha256": "e3dbc4d0735aa794532520ec36b6ab46bc075a306f18a8fa725a8aad6c39caa1"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/models/training_metrics.json",
+      "sha256": "f08184e5dce3ba6c00283fbacc2555ce968364eeb67ba5dd3b0952030403ea85"
+    },
+    {
+      "path": "/data2/hxj/open-models/laya-vision/models/vlm_agent_config.json",
+      "sha256": "543c08bb241ef67a6ef3795cbd2dd34313bea7e94ad200ee1f8798b3e09aa798"
+    }
+  ]
+}

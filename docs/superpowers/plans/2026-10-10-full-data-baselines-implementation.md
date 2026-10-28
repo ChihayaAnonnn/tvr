@@ -1,0 +1,59 @@
+# Full-data Baselines Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans Native, sequential implementation; independent final review only.
+
+**Goal:** Run authenticated strong baselines on all permitted MSRVTT data and report complete validation retrieval metrics.
+
+**Architecture:** Independent full-data study and package reuse Scheme A, tokenizer, video/weight readers. Pinned official algorithms are separate from the prior evidence model. CPU compilation and software qualification precede scientific training.
+
+**Tech Stack:** Existing PyTorch/OpenCV/NumPy environment, official UATVR/CLIP4Clip source.
+
+**Spec:** docs/superpowers/specs/2026-10-10-full-data-baselines-design.md
+
+2026-10-11 explicit amendment: user approved matching two-CUDA-rank Q0 instead of this study's pending four-card requirement, then two-card science with unchanged global batches64/128. Sharing two cards is explicitly authorized with60GiB allocator cap and8GiB additional headroom; no external process stopped/modified. Apply the same tests/lifecycle/review requirements to the revised topology. Historical four-card wording below describes the original plan, superseded only for this study.
+
+## Global Constraints
+
+8246training/500validation videos, every caption,12frames/32tokens,FP32. Test sealed. New chain four CUDA ranks required. New study independent; negative prior B2 unchanged. No tracked edits during workers; all runs reserved/committed/verified/archived. Software8GPUh/science512GPUh;1800/86400seconds per run; at most2 software successors. Active-phase count-aware atomic quota. Complete cohort and strict load; no prior trained retrieval checkpoint.
+
+## Review Focus
+
+Official model fidelity, all-caption evaluation denominator and tied scores; cross-source leakage and test parsing; duplicate-positive contrastive batches; multi-rank gradient scaling; checkpoint/active-quota crash windows. No result inferred from a tiny or partially completed cohort.
+
+### Task 1: Complete input preparation and retrieval metrics
+
+Files: src/semantic_retrieval/full_data/{data.py,metrics.py,authorization.py}; scripts/prepare_full_data_retrieval.py; tests/semantic_retrieval/full_data/test_data_metrics.py; reserve/start guard integration.
+Interfaces: compile_sources(raw,allowlist,trusted,content)->full video/caption records and quarantine; retrieval_metrics(scores,query_video_ids,gallery_ids)->bidirectional ranks/recalls; assert_full_data_authorized(...) at reserve and start.
+- [x] Write tests for all captions, excluded-source train membership, no sealed caption decoding, deterministic ties/permutations and actual best-positive V2T ranks; observe failures.
+- [x] Implement strict compiler, metrics and CPU source worker using bound indices and existing parser/lifecycle.
+- [x] Run narrow tests and affected archive regressions; commit source.
+- [x] Reserve/commit P0 CPU phase, run complete hash/decode compilation, validate/finalize/commit.
+
+### Task 2: Official model fidelity and training
+
+Files: src/semantic_retrieval/full_data/{models.py,training.py,upstream_uatvr/}; tests/semantic_retrieval/full_data/test_models_training.py.
+Interfaces: official model adapter exposes training loss and separable full-gallery features/similarity; all-gather positive-aware loss; strict optimizer/checkpoint/RNG state.
+- [x] Write meanP numerical equivalence, intended gradient and multi-positive behavior tests; observe failures.
+- [x] Namespace pinned source, record original/adapted hashes and patches; implement trainable baseline adapters and exact schedules.
+- [x] Run real CPU forward/backward and exact-resume tests; commit.
+
+### Task 3: Protected worker, controller and four-card qualification
+
+Files: src/semantic_retrieval/full_data/{runtime.py,controller.py,qualification.py}; scripts/{train_full_data_retrieval.py,qualify_full_data_retrieval.py}; qualification/controller tests.
+Interfaces: typed sealed worker config; new study gates at reserve/start; atomic GPU-count-aware active quota and chain successor cap; lifecycle outputs only in run root.
+- [x] Test unqualified/test/config mismatch rejection, concurrent quota reservations, retry cap and interrupted recovery; observe failures.
+- [x] Implement actual end-to-end worker and synthetic full-capacity four-rank qualification.
+- [ ] Run CPU integration/regressions, commit; reserve/commit Q0 and launch only when four GPUs idle.
+- [ ] Authenticate and archive Q0; open science only with committed P0/Q0 evidence.
+
+### Task 4: Full-data scientific runs
+
+- [x] Freeze exact upstream optimizer, decoder and schedule differences before reservation; read current study/registry.
+- [ ] Reserve/commit complete baseline phase; run seed713 complete training/validation with all input hashes. No tracked edits while workers live.
+- [ ] Archive every arm/failure; run remaining frozen seeds where valid and within budget. No scientific hyperparameter rescue.
+- [ ] Compare same-protocol baselines and external paper values with explicit split/candidate/training differences. Do not claim C1/C2 from baseline establishment.
+
+### Task 5: Independent review and final report
+
+- [x] Independent final review of source and archives; both Important software findings fixed with real-process behavioral tests. New GPU qualification remains pending external resources.
+- [ ] Record exact commits/tests/resources/all results, unresolved scientific definitions and external GPU blockage. Source stays clean and committed.

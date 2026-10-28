@@ -1,0 +1,211 @@
+study: evidence-conditioned-retrieval-v1
+kind: evidence-retrieval-v1
+protocol_version: 1
+status: registered
+control_plane: experiments/evidence-conditioned-retrieval-v1
+data_plane: artifacts/evidence-conditioned-retrieval-v1
+registry: experiments/evidence-conditioned-retrieval-v1/registry.jsonl
+test_authorized: false
+user_authorization: 2026-10-10_native_development_and_new_chain_four_gpu_qualification_then_gated_validation_science
+software_authorization:
+  cpu_fixture: true
+  four_gpu: true
+  scope: synthetic_software_only
+  random_clip_sha256: 4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8
+  random_clip_provenance: artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/arrays/random-pilot-clip.npz
+  provenance_policy: reuse_verified_random_input_bytes_only_no_old_study_authorization
+  precision: fp32
+  world_size: 4
+  physical_indices:
+  - 0
+  - 2
+  - 3
+  - 4
+  topology_reason: preserve_known_four_card_topology_if_fresh_device_inspection_confirms_idle
+  scientific_data: forbidden
+four_gpu_qualification:
+  run_id: synthetic-baseline-evidence-q0-r5-four-gpu-seed713-20261010T040014Z-f32bc8290b84
+  manifest_sha256: df5d44523acc6b93f117d0725659cfb52417d301e879be26de1b271f34644d15
+  report_sha256: 7f9aca9c726bf67c80e9901c9cf5851e493bb28cc7b1a2c6de36c7c9f1896631
+campaign:
+  software:
+    max_run_wall_seconds: 1800
+    max_cumulative_gpu_hours: 8
+    max_successors_per_failure: 2
+  scientific_pilot:
+    max_run_wall_seconds: 7200
+    max_cumulative_gpu_hours: 32
+    max_successors_per_failure: 2
+    scaling_after_negative_gate: forbidden
+  identity_checks:
+  - source_sha
+  - manifest_sha256
+  - command_sha256
+  - config_sha256
+  - input_sha256
+  - checkpoint_sha256
+  - action_state
+  - cumulative_consumption
+  terminal_in_place_retry: forbidden
+  source_fix_requires_new_committed_identity: true
+  recovery_first: verify-run
+  repeated_failure_policy: diagnose_before_retry_stop_if_no_new_information
+science:
+  authorized: false
+  authorized_stages: []
+  gates:
+    reference:
+      passed: true
+      reports:
+      - path: experiments/evidence-conditioned-retrieval-v1/reports/prerequisites-2026-10-10.json
+        sha256: 97c92ee00db6e2f0e162946540705b2999f5a75d2badaa42ecea0f848aeba71c
+    matcher:
+      passed: true
+      reports:
+      - path: experiments/evidence-conditioned-retrieval-v1/reports/S1-reference-completion.json
+        sha256: a0f5837146b1aa8f6076844bff207db7044e3ad877490a638308588930698e54
+    transitions:
+      passed: true
+      reports:
+      - path: experiments/evidence-conditioned-retrieval-v1/reports/B1-development-comparison.json
+        sha256: 50896dc40fd854a96d116b9e2f3efeee6c6f865eb93c5c838de5f65da37d13ea
+    value:
+      passed: false
+      reports:
+      - &id001
+        path: experiments/evidence-conditioned-retrieval-v1/reports/B2-transition-gate.json
+        sha256: 3b047ce8fa2709a239b1a8520525ab29c8c9b2119482e4b457103a79dce3029a
+    calibration:
+      passed: false
+      reports: []
+    evaluation:
+      passed: true
+      reports:
+      - path: experiments/evidence-conditioned-retrieval-v1/reports/S2-matcher-completion.json
+        sha256: 3c5975d252e5138759c78a09d534450b5a984933195edd88ffbeabb001cd610e
+    locked_validation:
+      passed: false
+      reports: []
+  required_before_first_training:
+  - committed_new_chain_production_four_cuda_rank_qualification
+  - five_source_disjoint_roles_and_query_connected_components_audited
+  - trusted_v1_validation_membership_and_test_exclusion_proved
+  - pretrained_clip_b32_input_hash_and_full_gallery_index_specification_verified
+  - preregistered_small_pilot_and_matched_baselines_frozen
+  roles:
+    T_match: train_only_reference_and_matcher
+    T_value: disjoint_train_sources_for_frozen_transition_value_training
+    V_development: trusted_v1_only_model_selection_thresholds_K_and_stopping
+    V_calibration: trusted_v1_only_disjoint_temperature_fitting
+    V_locked: trusted_v1_only_frozen_final_validation
+  candidate_selection: fixed_sparse_frozen_clip_index_without_GT_insertion
+  unknown_semantic_labels: excluded_from_supervised_denominators_never_converted_to_negative
+  mandatory_comparisons:
+    matcher:
+    - deterministic
+    - fixed_scale
+    - learned_temperature
+    - standard_probabilistic
+    - gaussian
+    acquisition:
+    - fixed_frames
+    - random
+    - margin
+    - entropy
+    - mean_regressor
+    - distribution
+    value_features:
+    - geometry
+    - distribution
+  fairness: same_initial_candidates_and_observations_same_request_clip_temporal_MC_budget_record_actual_latency
+  proper_metrics:
+  - rich_score_NLL
+  - transition_NLL
+  - transition_Brier
+  uncertainty_incremental_requirement: improvement_beyond_geometry_under_matched_budget_on_locked_validation
+  distribution_claim_requirement: expected_gain_success_alone_does_not_prove_full_distribution_necessity
+  bootstrap_unit: source_connected_component
+  negative_results: archive_all_arms_and_stop_on_preregistered_falsification
+  test: sealed_no_path_to_authorization_in_this_protocol
+  stage_eval_splits:
+    reference:
+    - train
+    matcher:
+    - train
+    transitions:
+    - train
+    - val_development
+    - val_calibration
+    value:
+    - train
+    calibration:
+    - val_calibration
+    evaluation:
+    - val_development
+  pilot_outcome:
+    status: stopped_insufficient_transition_variation
+    gate: *id001
+    criteria_unchanged: true
+    reason: Frozen B2 threshold not met; B3/B4/scaling stopped by preregistration.
+    V_locked_used_for_model_evaluation_or_selection: false
+    test_authorized: false
+weight_preparation:
+  authorized: true
+  scope: cpu_public_pretrained_input_only
+  spec:
+    schema_version: evidence-public-clip-input-v1
+    url: https://openaipublic.azureedge.net/clip/models/40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af/ViT-B-32.pt
+    sha256: 40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af
+    max_bytes: 400000000
+    max_seconds: 600
+    clip:
+      embed_dim: 512
+      image_size: 224
+      vision_width: 768
+      vision_layers: 12
+      patch_size: 32
+      context_length: 77
+      vocab_size: 49408
+      text_width: 512
+      text_heads: 8
+      text_layers: 12
+      fixture: false
+source_definition:
+  version: youtube-id-content-sha256-v1
+  approved_by: 2026-10-10_user_explicit_source_definition_and_training_subset_reply
+  edges:
+  - same_original_youtube_id
+  - same_video_sha256
+  cross_boundary_policy: keep_trusted_validation_500_exclude_all_254_conflicting_training_videos
+  training_eligible_count: 8246
+  unknown_cross_url_visual_duplicates: not_excluded_by_this_operational_definition_report_as_limitation
+  report: experiments/evidence-conditioned-retrieval-v1/reports/source-audit-2026-10-10.md
+source_preparation:
+  authorized: true
+  scope: cpu_training_allowlist_export_and_source_roles
+  spec:
+    schema_version: evidence-source-input-v1
+    source_policy: youtube-id-content-sha256-v1
+    role_seed: 0
+    pilot_seed: 713
+    pilot_components_per_role: 64
+    expected_excluded_train: 254
+    expected_eligible_train: 8246
+    annotation: /data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json
+    annotation_sha256: 8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33
+    allowlist: /data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv
+    allowlist_sha256: 0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3
+    trusted_split: dataloaders/splits/msrvtt_trusted_v1_seed0.json
+    trusted_split_sha256: a0e5a82dddec34fa76753c2323cf560c2afc36f3683b231ccd24db2c268be882
+    video_directory: /data2/hxj/data/MSRVTT/videos/compressed_videos/msrvtt_224_12fps
+    caption_relation_sha256: bc2c06cbbe833d4e504700430a8a96c23bb7a79f2a5418e1a137ab0fe32b123d
+    gallery_version: evidence-msrvtt-source-pilot-v1
+    clip_sha256: 40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af
+    views:
+      pool_size: 16
+      levels:
+      - 4
+      - 8
+      - 16
+      preprocessing_sha256: 8fddcf29db23466cb3d33d41a83510b8b6d9ad29bc56f4da634d02d6993a7972
+      decode_protocol: opencv-rgb-v1

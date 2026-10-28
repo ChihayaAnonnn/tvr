@@ -1,0 +1,29 @@
+{
+  "phase": "stage0-archive-qualification-successor",
+  "phase_path": "experiments/contextual-risk-v2/phases/stage0-archive-qualification-successor.json",
+  "runs": [
+    {
+      "manifest_sha256": "9eedfc3eb1336de9d83ac5de78d6176fa2e3eb65dcbb2e93838eedce3317a7b3",
+      "output_hashes": {
+        "arrays/sha256/90/908251af60385de2b211f1fd4281d4e69cc3ece66815e1ccd2e019d24cace430.npy": "647092735d0f83096419a07a203198e8caba708bd1effbd1b0ff903c75fb910a",
+        "command.sh": "18aa0c64de20318adf4a1b811949fdd2448aabf2a08b15067cdb4288c33ec38a",
+        "logs/train.log": "97f36d485bc451a99ee8b3b55decd642088c3db627c4e611ee12cb03bc70c257",
+        "metrics/selected_validation.json": "61f65c79af6c88280be5ca9862f2db97d9d3027b7696163fb9b13c14eb4e4831",
+        "provenance/lifecycle-owner.json": "4fcd13d26ddfbc70aab4c6bbb3de6c5e4f7990bf6e5711f7260730180cd7388c",
+        "provenance/rank-00.json": "114fe63cc4b45349dc6e1f098c44988860e951165a9dd91de6e32d46d6c00a23",
+        "provenance/rank-01.json": "82bcdf07a287ca32cc346423f7498f1607a8154888c5f12e7bacd055ba5c75c8",
+        "provenance/rank-02.json": "4f1c2d16251be74f8e86c24b356b72a60bbdb5ed42c3825fcda0aa8ee495d35a",
+        "provenance/rank-03.json": "45af69312d51ec16298583bc86ae2d584b3c080b020a88ec88b7b7587be9d442"
+      },
+      "run_id": "msrvtt-baseline-archive_qualification_4gpu_retry1-seed000-20260814T164421Z-82830a3ab21d",
+      "state": "completed",
+      "summary_metrics": {
+        "fixture_loss": 4.1768999099731445
+      }
+    }
+  ],
+  "study": "contextual-risk-v2",
+  "terminal_counts": {
+    "completed": 1
+  }
+}

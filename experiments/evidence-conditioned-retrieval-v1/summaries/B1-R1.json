@@ -1,0 +1,72 @@
+{
+  "output_hashes_format": "terminal-status-reference-v1",
+  "phase": "B1-R1",
+  "phase_path": "experiments/evidence-conditioned-retrieval-v1/phases/B1-R1.json",
+  "runs": [
+    {
+      "manifest_sha256": "115cc3d76fe75386991b96fcd1106746670ef6dd9625fe1776809e3d2e0f5f4e",
+      "output_hashes_reference": {
+        "entry_count": 6469,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-deterministic-r1-seed713-20261010T014914Z-3c222f0f0ef0/status.json",
+        "sha256": "211825cf7f317a7f61aa9b6ee178f974fa41e63ef7e4ed2619a3271e6668ee17"
+      },
+      "run_id": "msrvtt-baseline-evidence-b1-deterministic-r1-seed713-20261010T014914Z-3c222f0f0ef0",
+      "state": "failed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "2815682412d1d02fa510132a3ecd62aec52c89effe07f8b98a4948e6af4315d3",
+      "output_hashes_reference": {
+        "entry_count": 8,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-fixed-scale-r1-seed713-20261010T014914Z-3c222f0f0ef0/status.json",
+        "sha256": "3cdd9e28d87ab6bcdc7346dc3d8d0ce9d12a2c92181ff7614210b672766ff710"
+      },
+      "run_id": "msrvtt-baseline-evidence-b1-fixed-scale-r1-seed713-20261010T014914Z-3c222f0f0ef0",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "8cb685bd7b910c22bbf29993b51f825cd206827f8c84432694c77a705f2133b5",
+      "output_hashes_reference": {
+        "entry_count": 8,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-learned-temperature-r1-seed713-20261010T014914Z-3c222f0f0ef0/status.json",
+        "sha256": "a3e4d651133a27710b17da4ecd0bfa27c0b37f880c462d8d770ef063c6dec1f8"
+      },
+      "run_id": "msrvtt-baseline-evidence-b1-learned-temperature-r1-seed713-20261010T014914Z-3c222f0f0ef0",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "5e43c250548f1c7d3b53c9898b2bd772a2560b04eea74b18d553a72fb99b1a01",
+      "output_hashes_reference": {
+        "entry_count": 8,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-standard-probabilistic-r1-seed713-20261010T014914Z-3c222f0f0ef0/status.json",
+        "sha256": "797ebbf9546676f88a3c95bc382afaee3918aa90cb126878eca7d3f09b5f814e"
+      },
+      "run_id": "msrvtt-baseline-evidence-b1-standard-probabilistic-r1-seed713-20261010T014914Z-3c222f0f0ef0",
+      "state": "cancelled",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "66122868f12e201779a088cf594e1a3aae2c2db81d21e8f17247786507344944",
+      "output_hashes_reference": {
+        "entry_count": 8,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-b1-gaussian-r1-seed713-20261010T014914Z-3c222f0f0ef0/status.json",
+        "sha256": "662e55eed938b013a0bb58ed2f4cae038fcb1d52fb4865169c942f455a98c66a"
+      },
+      "run_id": "msrvtt-baseline-evidence-b1-gaussian-r1-seed713-20261010T014914Z-3c222f0f0ef0",
+      "state": "cancelled",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "evidence-conditioned-retrieval-v1",
+  "terminal_counts": {
+    "cancelled": 4,
+    "failed": 1
+  }
+}

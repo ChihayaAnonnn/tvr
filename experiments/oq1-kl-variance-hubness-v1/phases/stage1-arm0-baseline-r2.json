@@ -1,0 +1,552 @@
+{
+ "phase": "stage1-arm0-baseline-r2",
+ "study": "oq1-kl-variance-hubness-v1",
+ "runs": [
+  {
+   "dataset": "msrvtt",
+   "stage": "baseline",
+   "variant": "arm0",
+   "seed": 0,
+   "scheduled_timestamp_utc": "20260829T214100Z",
+   "environment": {
+    "python": "3.10.0",
+    "pytorch": "2.1.2+cu121",
+    "cuda": "12.1",
+    "gpu_model": "NVIDIA A800 80GB PCIe",
+    "gpu_count": 4,
+    "precision": "fp32",
+    "distributed_topology": "torchrun-4"
+   },
+   "input_checkpoints": [
+    {
+     "path": ".cache/ViT-B-16.pt",
+     "sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f"
+    }
+   ],
+   "dataset_splits": [
+    {
+     "path": "data/generated/msrvtt_trusted_v1_val1k/train.csv",
+     "sha256": "0185e4e5f3c3aa61f8980ab6ade4411d9d8004880d2bb8cb479d7582755fbd72"
+    },
+    {
+     "path": "data/generated/msrvtt_trusted_v1_val1k/val1k.csv",
+     "sha256": "69ca57d803f0cfb7a981afe751e4fb9179617de545077dee94e73a82118c4ec3"
+    },
+    {
+     "path": "data/generated/msrvtt_trusted_v1_val1k/manifest.json",
+     "sha256": "54b84ba462ff669d3eb521b2b1a4e8fa2872486d89dbf32aecd1417e2bed32d1"
+    },
+    {
+     "path": "data/generated/msrvtt_trusted_v1/train.csv",
+     "sha256": "838191d15fefaa8b2898d23a2a8c8579c0e256411f4b47bd3cf16944457a0cfd"
+    },
+    {
+     "path": "dataloaders/splits/msrvtt_trusted_v1_seed0.json",
+     "sha256": "a0e5a82dddec34fa76753c2323cf560c2afc36f3683b231ccd24db2c268be882"
+    },
+    {
+     "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv",
+     "sha256": "0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3"
+    },
+    {
+     "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+     "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+    },
+    {
+     "path": "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json",
+     "sha256": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33"
+    }
+   ],
+   "config": {
+    "model": {
+     "oq1_arm": "arm0_deterministic",
+     "use_uatvr_full": false,
+     "pretrained_clip_name": "ViT-B/16",
+     "sim_header": "seqTransf",
+     "linear_patch": "2d",
+     "extra_video_cls_num": 2,
+     "extra_text_cls_num": 2,
+     "clip_layer_norm_precision": "fp32",
+     "clip_gradient_checkpointing": true,
+     "clip_visual_checkpoint_layers": 4,
+     "freeze_layer_num": -1
+    },
+    "loss": {},
+    "optimizer": {
+     "lr": 0.0001,
+     "coef_lr": 0.001,
+     "batch_size": 256,
+     "gradient_accumulation_steps": 1
+    },
+    "scheduler": {
+     "epochs": 5,
+     "warmup_proportion": 0.1,
+     "lr_decay": 0.9
+    },
+    "evaluation": {
+     "do_train": true,
+     "eval_split": "val1k",
+     "run_final_test": false,
+     "datatype": "msrvtt",
+     "seed": 0,
+     "strict_determinism": true,
+     "determinism_probe_steps": 0,
+     "batch_size_val": 16,
+     "max_words": 32,
+     "max_frames": 8,
+     "slice_framepos": 3,
+     "expand_msrvtt_sentences": true,
+     "num_thread_reader": 12,
+     "prefetch_factor": 4
+    }
+   },
+   "parent_run_ids": [
+    "msrvtt-baseline-arm0-seed000-20260829T194200Z-09641b60cd15"
+   ],
+   "selection_lineage": [
+    "Stage 1 baseline-regime (study.yaml stage1_baseline_regime): arm0_deterministic full training on train7500, per-epoch val1k eval, checkpoint selection = best val1k t2v R@1. P0 regime gate is evaluated post-hoc by scripts/oq1_stage1_p0_metrics.py from the externalized raw similarity matrix; on failure the study halts as inconclusive (no F-A, no test unsealing).",
+    "seed 0 of the registered 3-seed set [0, 1, 2]",
+    "implementation-review successor (PREREGISTRATION allows one implementation review): predecessor phase ran/reserved under bf16-autocast eval, which quantises the val1k similarity matrix to ~198 distinct scores per 1000 candidates (measured on the seed000 predecessor: 1022 exact diagonal ties; compute_metrics t2v R@1 22.65/MnR 115.0 vs exact-fp32 re-eval of the same checkpoint R@1 45.2/MnR 21.5). Fix commit 912a452 moves oq1 eval to exact fp32. Review happened before any stage gate was evaluated; no selection used the quantised numbers.",
+    {
+     "device_selection_probe": {
+      "policy": "study.yaml hardware_policy.device_selection (probe_at_reserve_time, min_free_mib_per_gpu 70000)",
+      "probed_at_utc": "20260829T214104Z",
+      "driver_version": "560.35.05",
+      "selected_cuda_visible_devices": "0,1,3,4",
+      "gpus": [
+       {
+        "index": 0,
+        "uuid": "GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece",
+        "free_mib": 80368
+       },
+       {
+        "index": 1,
+        "uuid": "GPU-4cd26468-4bf3-4a57-cbc1-cab67ea6ff89",
+        "free_mib": 81142
+       },
+       {
+        "index": 3,
+        "uuid": "GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede",
+        "free_mib": 81142
+       },
+       {
+        "index": 4,
+        "uuid": "GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a",
+        "free_mib": 81142
+       }
+      ],
+      "excluded": [
+       {
+        "index": 2,
+        "uuid": "GPU-19f58384-1ce3-9658-5a8b-7d79f437289d",
+        "free_mib": 6630,
+        "reason": "below min_free_mib"
+       }
+      ]
+     }
+    }
+   ],
+   "validation_authorized": true,
+   "test_authorized": false,
+   "expected_scalar_outputs": [
+    "best_epoch",
+    "eval_sequence",
+    "t2v_R1",
+    "t2v_R5",
+    "t2v_R10",
+    "t2v_MR",
+    "t2v_MeanR",
+    "v2t_R1",
+    "v2t_R5",
+    "v2t_R10",
+    "v2t_MR",
+    "v2t_MeanR"
+   ],
+   "array_references": [],
+   "command": [
+    "bash",
+    "scripts/oq1_arm_launch.sh",
+    "--arm",
+    "arm0_deterministic",
+    "--seed",
+    "0",
+    "--run-id",
+    "{run_id}",
+    "--run-dir",
+    "{artifact_run_dir}",
+    "--devices",
+    "0,1,3,4",
+    "--port",
+    "29574",
+    "--probe-steps",
+    "0",
+    "--epochs",
+    "5"
+   ]
+  },
+  {
+   "dataset": "msrvtt",
+   "stage": "baseline",
+   "variant": "arm0",
+   "seed": 1,
+   "scheduled_timestamp_utc": "20260829T214101Z",
+   "environment": {
+    "python": "3.10.0",
+    "pytorch": "2.1.2+cu121",
+    "cuda": "12.1",
+    "gpu_model": "NVIDIA A800 80GB PCIe",
+    "gpu_count": 4,
+    "precision": "fp32",
+    "distributed_topology": "torchrun-4"
+   },
+   "input_checkpoints": [
+    {
+     "path": ".cache/ViT-B-16.pt",
+     "sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f"
+    }
+   ],
+   "dataset_splits": [
+    {
+     "path": "data/generated/msrvtt_trusted_v1_val1k/train.csv",
+     "sha256": "0185e4e5f3c3aa61f8980ab6ade4411d9d8004880d2bb8cb479d7582755fbd72"
+    },
+    {
+     "path": "data/generated/msrvtt_trusted_v1_val1k/val1k.csv",
+     "sha256": "69ca57d803f0cfb7a981afe751e4fb9179617de545077dee94e73a82118c4ec3"
+    },
+    {
+     "path": "data/generated/msrvtt_trusted_v1_val1k/manifest.json",
+     "sha256": "54b84ba462ff669d3eb521b2b1a4e8fa2872486d89dbf32aecd1417e2bed32d1"
+    },
+    {
+     "path": "data/generated/msrvtt_trusted_v1/train.csv",
+     "sha256": "838191d15fefaa8b2898d23a2a8c8579c0e256411f4b47bd3cf16944457a0cfd"
+    },
+    {
+     "path": "dataloaders/splits/msrvtt_trusted_v1_seed0.json",
+     "sha256": "a0e5a82dddec34fa76753c2323cf560c2afc36f3683b231ccd24db2c268be882"
+    },
+    {
+     "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv",
+     "sha256": "0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3"
+    },
+    {
+     "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+     "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+    },
+    {
+     "path": "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json",
+     "sha256": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33"
+    }
+   ],
+   "config": {
+    "model": {
+     "oq1_arm": "arm0_deterministic",
+     "use_uatvr_full": false,
+     "pretrained_clip_name": "ViT-B/16",
+     "sim_header": "seqTransf",
+     "linear_patch": "2d",
+     "extra_video_cls_num": 2,
+     "extra_text_cls_num": 2,
+     "clip_layer_norm_precision": "fp32",
+     "clip_gradient_checkpointing": true,
+     "clip_visual_checkpoint_layers": 4,
+     "freeze_layer_num": -1
+    },
+    "loss": {},
+    "optimizer": {
+     "lr": 0.0001,
+     "coef_lr": 0.001,
+     "batch_size": 256,
+     "gradient_accumulation_steps": 1
+    },
+    "scheduler": {
+     "epochs": 5,
+     "warmup_proportion": 0.1,
+     "lr_decay": 0.9
+    },
+    "evaluation": {
+     "do_train": true,
+     "eval_split": "val1k",
+     "run_final_test": false,
+     "datatype": "msrvtt",
+     "seed": 1,
+     "strict_determinism": true,
+     "determinism_probe_steps": 0,
+     "batch_size_val": 16,
+     "max_words": 32,
+     "max_frames": 8,
+     "slice_framepos": 3,
+     "expand_msrvtt_sentences": true,
+     "num_thread_reader": 12,
+     "prefetch_factor": 4
+    }
+   },
+   "parent_run_ids": [
+    "msrvtt-baseline-arm0-seed001-20260829T194201Z-09641b60cd15"
+   ],
+   "selection_lineage": [
+    "Stage 1 baseline-regime (study.yaml stage1_baseline_regime): arm0_deterministic full training on train7500, per-epoch val1k eval, checkpoint selection = best val1k t2v R@1. P0 regime gate is evaluated post-hoc by scripts/oq1_stage1_p0_metrics.py from the externalized raw similarity matrix; on failure the study halts as inconclusive (no F-A, no test unsealing).",
+    "seed 1 of the registered 3-seed set [0, 1, 2]",
+    "implementation-review successor (PREREGISTRATION allows one implementation review): predecessor phase ran/reserved under bf16-autocast eval, which quantises the val1k similarity matrix to ~198 distinct scores per 1000 candidates (measured on the seed000 predecessor: 1022 exact diagonal ties; compute_metrics t2v R@1 22.65/MnR 115.0 vs exact-fp32 re-eval of the same checkpoint R@1 45.2/MnR 21.5). Fix commit 912a452 moves oq1 eval to exact fp32. Review happened before any stage gate was evaluated; no selection used the quantised numbers.",
+    {
+     "device_selection_probe": {
+      "policy": "study.yaml hardware_policy.device_selection (probe_at_reserve_time, min_free_mib_per_gpu 70000)",
+      "probed_at_utc": "20260829T214104Z",
+      "driver_version": "560.35.05",
+      "selected_cuda_visible_devices": "0,1,3,4",
+      "gpus": [
+       {
+        "index": 0,
+        "uuid": "GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece",
+        "free_mib": 80368
+       },
+       {
+        "index": 1,
+        "uuid": "GPU-4cd26468-4bf3-4a57-cbc1-cab67ea6ff89",
+        "free_mib": 81142
+       },
+       {
+        "index": 3,
+        "uuid": "GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede",
+        "free_mib": 81142
+       },
+       {
+        "index": 4,
+        "uuid": "GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a",
+        "free_mib": 81142
+       }
+      ],
+      "excluded": [
+       {
+        "index": 2,
+        "uuid": "GPU-19f58384-1ce3-9658-5a8b-7d79f437289d",
+        "free_mib": 6630,
+        "reason": "below min_free_mib"
+       }
+      ]
+     }
+    }
+   ],
+   "validation_authorized": true,
+   "test_authorized": false,
+   "expected_scalar_outputs": [
+    "best_epoch",
+    "eval_sequence",
+    "t2v_R1",
+    "t2v_R5",
+    "t2v_R10",
+    "t2v_MR",
+    "t2v_MeanR",
+    "v2t_R1",
+    "v2t_R5",
+    "v2t_R10",
+    "v2t_MR",
+    "v2t_MeanR"
+   ],
+   "array_references": [],
+   "command": [
+    "bash",
+    "scripts/oq1_arm_launch.sh",
+    "--arm",
+    "arm0_deterministic",
+    "--seed",
+    "1",
+    "--run-id",
+    "{run_id}",
+    "--run-dir",
+    "{artifact_run_dir}",
+    "--devices",
+    "0,1,3,4",
+    "--port",
+    "29575",
+    "--probe-steps",
+    "0",
+    "--epochs",
+    "5"
+   ]
+  },
+  {
+   "dataset": "msrvtt",
+   "stage": "baseline",
+   "variant": "arm0",
+   "seed": 2,
+   "scheduled_timestamp_utc": "20260829T214102Z",
+   "environment": {
+    "python": "3.10.0",
+    "pytorch": "2.1.2+cu121",
+    "cuda": "12.1",
+    "gpu_model": "NVIDIA A800 80GB PCIe",
+    "gpu_count": 4,
+    "precision": "fp32",
+    "distributed_topology": "torchrun-4"
+   },
+   "input_checkpoints": [
+    {
+     "path": ".cache/ViT-B-16.pt",
+     "sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f"
+    }
+   ],
+   "dataset_splits": [
+    {
+     "path": "data/generated/msrvtt_trusted_v1_val1k/train.csv",
+     "sha256": "0185e4e5f3c3aa61f8980ab6ade4411d9d8004880d2bb8cb479d7582755fbd72"
+    },
+    {
+     "path": "data/generated/msrvtt_trusted_v1_val1k/val1k.csv",
+     "sha256": "69ca57d803f0cfb7a981afe751e4fb9179617de545077dee94e73a82118c4ec3"
+    },
+    {
+     "path": "data/generated/msrvtt_trusted_v1_val1k/manifest.json",
+     "sha256": "54b84ba462ff669d3eb521b2b1a4e8fa2872486d89dbf32aecd1417e2bed32d1"
+    },
+    {
+     "path": "data/generated/msrvtt_trusted_v1/train.csv",
+     "sha256": "838191d15fefaa8b2898d23a2a8c8579c0e256411f4b47bd3cf16944457a0cfd"
+    },
+    {
+     "path": "dataloaders/splits/msrvtt_trusted_v1_seed0.json",
+     "sha256": "a0e5a82dddec34fa76753c2323cf560c2afc36f3683b231ccd24db2c268be882"
+    },
+    {
+     "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv",
+     "sha256": "0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3"
+    },
+    {
+     "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+     "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+    },
+    {
+     "path": "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json",
+     "sha256": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33"
+    }
+   ],
+   "config": {
+    "model": {
+     "oq1_arm": "arm0_deterministic",
+     "use_uatvr_full": false,
+     "pretrained_clip_name": "ViT-B/16",
+     "sim_header": "seqTransf",
+     "linear_patch": "2d",
+     "extra_video_cls_num": 2,
+     "extra_text_cls_num": 2,
+     "clip_layer_norm_precision": "fp32",
+     "clip_gradient_checkpointing": true,
+     "clip_visual_checkpoint_layers": 4,
+     "freeze_layer_num": -1
+    },
+    "loss": {},
+    "optimizer": {
+     "lr": 0.0001,
+     "coef_lr": 0.001,
+     "batch_size": 256,
+     "gradient_accumulation_steps": 1
+    },
+    "scheduler": {
+     "epochs": 5,
+     "warmup_proportion": 0.1,
+     "lr_decay": 0.9
+    },
+    "evaluation": {
+     "do_train": true,
+     "eval_split": "val1k",
+     "run_final_test": false,
+     "datatype": "msrvtt",
+     "seed": 2,
+     "strict_determinism": true,
+     "determinism_probe_steps": 0,
+     "batch_size_val": 16,
+     "max_words": 32,
+     "max_frames": 8,
+     "slice_framepos": 3,
+     "expand_msrvtt_sentences": true,
+     "num_thread_reader": 12,
+     "prefetch_factor": 4
+    }
+   },
+   "parent_run_ids": [
+    "msrvtt-baseline-arm0-seed002-20260829T194202Z-09641b60cd15"
+   ],
+   "selection_lineage": [
+    "Stage 1 baseline-regime (study.yaml stage1_baseline_regime): arm0_deterministic full training on train7500, per-epoch val1k eval, checkpoint selection = best val1k t2v R@1. P0 regime gate is evaluated post-hoc by scripts/oq1_stage1_p0_metrics.py from the externalized raw similarity matrix; on failure the study halts as inconclusive (no F-A, no test unsealing).",
+    "seed 2 of the registered 3-seed set [0, 1, 2]",
+    "implementation-review successor (PREREGISTRATION allows one implementation review): predecessor phase ran/reserved under bf16-autocast eval, which quantises the val1k similarity matrix to ~198 distinct scores per 1000 candidates (measured on the seed000 predecessor: 1022 exact diagonal ties; compute_metrics t2v R@1 22.65/MnR 115.0 vs exact-fp32 re-eval of the same checkpoint R@1 45.2/MnR 21.5). Fix commit 912a452 moves oq1 eval to exact fp32. Review happened before any stage gate was evaluated; no selection used the quantised numbers.",
+    {
+     "device_selection_probe": {
+      "policy": "study.yaml hardware_policy.device_selection (probe_at_reserve_time, min_free_mib_per_gpu 70000)",
+      "probed_at_utc": "20260829T214104Z",
+      "driver_version": "560.35.05",
+      "selected_cuda_visible_devices": "0,1,3,4",
+      "gpus": [
+       {
+        "index": 0,
+        "uuid": "GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece",
+        "free_mib": 80368
+       },
+       {
+        "index": 1,
+        "uuid": "GPU-4cd26468-4bf3-4a57-cbc1-cab67ea6ff89",
+        "free_mib": 81142
+       },
+       {
+        "index": 3,
+        "uuid": "GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede",
+        "free_mib": 81142
+       },
+       {
+        "index": 4,
+        "uuid": "GPU-258756c4-a25e-4280-c8b7-6811dfbcf49a",
+        "free_mib": 81142
+       }
+      ],
+      "excluded": [
+       {
+        "index": 2,
+        "uuid": "GPU-19f58384-1ce3-9658-5a8b-7d79f437289d",
+        "free_mib": 6630,
+        "reason": "below min_free_mib"
+       }
+      ]
+     }
+    }
+   ],
+   "validation_authorized": true,
+   "test_authorized": false,
+   "expected_scalar_outputs": [
+    "best_epoch",
+    "eval_sequence",
+    "t2v_R1",
+    "t2v_R5",
+    "t2v_R10",
+    "t2v_MR",
+    "t2v_MeanR",
+    "v2t_R1",
+    "v2t_R5",
+    "v2t_R10",
+    "v2t_MR",
+    "v2t_MeanR"
+   ],
+   "array_references": [],
+   "command": [
+    "bash",
+    "scripts/oq1_arm_launch.sh",
+    "--arm",
+    "arm0_deterministic",
+    "--seed",
+    "2",
+    "--run-id",
+    "{run_id}",
+    "--run-dir",
+    "{artifact_run_dir}",
+    "--devices",
+    "0,1,3,4",
+    "--port",
+    "29576",
+    "--probe-steps",
+    "0",
+    "--epochs",
+    "5"
+   ]
+  }
+ ]
+}

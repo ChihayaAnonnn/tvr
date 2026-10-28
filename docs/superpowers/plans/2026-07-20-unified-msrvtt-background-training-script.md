@@ -1,5 +1,7 @@
 # Unified MSR-VTT Background Training Script Implementation Plan
 
+> **Historical note:** This plan was executed as commit `aba86e5 refactor: unify msrvtt background training entry` and subsequent tests/fixups. References below to `docs/superpowers/plans/2026-07-19-rspr-core-implementation.md`, `RSPR shell environment`, `scripts/rspr_shell_config.sh`, `--rspr_mode`, `RSPR_TRAILING_ARGS`, and related test snippets refer to RSPR infrastructure that was later retired. Only the unified controller/worker structure of `run_train_msrvtt_bg.sh` is still in effect.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 `run_train_msrvtt_bg.sh` 与 `train_msrvtt.sh` 合并为单一后台训练入口，同时保持参数校验、GPU/torchrun 配置、日志重定向、PID 文件和前台日志跟随行为。

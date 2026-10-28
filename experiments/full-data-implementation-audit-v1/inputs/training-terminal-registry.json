@@ -1,0 +1,212 @@
+[
+  {
+    "artifact_locator": "artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502",
+    "artifact_path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502",
+    "event": "completed",
+    "manifest_sha256": "5ee7d938e312d5182bc549e4393f638ef3069506930f5c8d76edd314f8ddfd71",
+    "parent_run_ids": [
+      "msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b",
+      "synthetic-baseline-full-data-q0-seed713-20261011T042032Z-dacf4c82eeff"
+    ],
+    "run_id": "msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502",
+    "selected_validation": {
+      "path": "metrics/selected_validation.json",
+      "sha256": "dbe547a7f68e13f403c84f5cb99a0b5cdacd483913dadca74c24b861f3f7e41d"
+    },
+    "state": "completed",
+    "summary_metrics": {
+      "epoch": 5.0,
+      "optimizer_updates": 12885.0,
+      "t2v_mdr": 1.0,
+      "t2v_mnr": 8.9838,
+      "t2v_r1": 53.190000000000005,
+      "t2v_r10": 86.83,
+      "t2v_r5": 79.7,
+      "train_caption_count": 164920.0,
+      "training_mean_loss": 0.9390706419944763,
+      "v2t_mdr": 1.0,
+      "v2t_mnr": 2.064,
+      "v2t_r1": 79.2,
+      "v2t_r10": 98.2,
+      "v2t_r5": 95.0,
+      "validation_caption_count": 10000.0,
+      "validation_video_count": 500.0
+    },
+    "test_authorized": false
+  },
+  {
+    "artifact_locator": "artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed713-20261011T042528Z-6d2095e3d502",
+    "artifact_path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed713-20261011T042528Z-6d2095e3d502",
+    "event": "completed",
+    "manifest_sha256": "e7b3558697fc5057a3b234cbb7f89616ebca5d2864a39250f68712a47bd5e89b",
+    "parent_run_ids": [
+      "msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b",
+      "synthetic-baseline-full-data-q0-seed713-20261011T042032Z-dacf4c82eeff"
+    ],
+    "run_id": "msrvtt-baseline-clip4clip-seed713-20261011T042528Z-6d2095e3d502",
+    "selected_validation": {
+      "path": "metrics/selected_validation.json",
+      "sha256": "7b989be5fe16c035dab805b72febccaaf50212d59841c71d9b5e7e63faaf3cea"
+    },
+    "state": "completed",
+    "summary_metrics": {
+      "epoch": 5.0,
+      "optimizer_updates": 6445.0,
+      "t2v_mdr": 1.0,
+      "t2v_mnr": 9.6001,
+      "t2v_r1": 51.480000000000004,
+      "t2v_r10": 84.96000000000001,
+      "t2v_r5": 77.35,
+      "train_caption_count": 164920.0,
+      "training_mean_loss": 1.050009846687317,
+      "v2t_mdr": 1.0,
+      "v2t_mnr": 1.766,
+      "v2t_r1": 84.39999999999999,
+      "v2t_r10": 98.2,
+      "v2t_r5": 96.0,
+      "validation_caption_count": 10000.0,
+      "validation_video_count": 500.0
+    },
+    "test_authorized": false
+  },
+  {
+    "artifact_locator": "artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed714-20261011T163252Z-3c720544401a",
+    "artifact_path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed714-20261011T163252Z-3c720544401a",
+    "event": "completed",
+    "manifest_sha256": "5ce7ac7d200bc137209bdba96925534b5a76c211795413d7120d997ffc55b1e1",
+    "parent_run_ids": [
+      "msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b",
+      "synthetic-baseline-full-data-q0-seed713-20261011T042032Z-dacf4c82eeff"
+    ],
+    "run_id": "msrvtt-baseline-uatvr-seed714-20261011T163252Z-3c720544401a",
+    "selected_validation": {
+      "path": "metrics/selected_validation.json",
+      "sha256": "15e2ada71edf2de4e60daaa911c0cbf432cb1849b00036339914239d40dbe1cb"
+    },
+    "state": "completed",
+    "summary_metrics": {
+      "epoch": 2.0,
+      "optimizer_updates": 5154.0,
+      "t2v_mdr": 1.0,
+      "t2v_mnr": 8.5954,
+      "t2v_r1": 53.76,
+      "t2v_r10": 86.7,
+      "t2v_r5": 79.91,
+      "train_caption_count": 164920.0,
+      "training_mean_loss": 1.2619366645812988,
+      "v2t_mdr": 1.0,
+      "v2t_mnr": 1.876,
+      "v2t_r1": 83.0,
+      "v2t_r10": 99.0,
+      "v2t_r5": 97.0,
+      "validation_caption_count": 10000.0,
+      "validation_video_count": 500.0
+    },
+    "test_authorized": false
+  },
+  {
+    "artifact_locator": "artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed714-20261011T163252Z-3c720544401a",
+    "artifact_path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed714-20261011T163252Z-3c720544401a",
+    "event": "completed",
+    "manifest_sha256": "f1284e8d3ecb3b552ea4447138f7f49269237a08d4d2b493d6f4f5deb90925e5",
+    "parent_run_ids": [
+      "msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b",
+      "synthetic-baseline-full-data-q0-seed713-20261011T042032Z-dacf4c82eeff"
+    ],
+    "run_id": "msrvtt-baseline-clip4clip-seed714-20261011T163252Z-3c720544401a",
+    "selected_validation": {
+      "path": "metrics/selected_validation.json",
+      "sha256": "65a840777d15a27613b1ab50f19fb399a817100a08c439a44ac61132609a3659"
+    },
+    "state": "completed",
+    "summary_metrics": {
+      "epoch": 5.0,
+      "optimizer_updates": 6445.0,
+      "t2v_mdr": 1.0,
+      "t2v_mnr": 9.5968,
+      "t2v_r1": 51.51,
+      "t2v_r10": 84.99,
+      "t2v_r5": 77.3,
+      "train_caption_count": 164920.0,
+      "training_mean_loss": 1.0485161542892456,
+      "v2t_mdr": 1.0,
+      "v2t_mnr": 1.722,
+      "v2t_r1": 84.6,
+      "v2t_r10": 98.0,
+      "v2t_r5": 96.39999999999999,
+      "validation_caption_count": 10000.0,
+      "validation_video_count": 500.0
+    },
+    "test_authorized": false
+  },
+  {
+    "artifact_locator": "artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca",
+    "artifact_path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca",
+    "event": "completed",
+    "manifest_sha256": "42a14d72e232cb5f75e51ea0dc1acf1f54526bf3377a08da712d271f0350b59c",
+    "parent_run_ids": [
+      "msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b",
+      "synthetic-baseline-full-data-q0-seed713-20261011T042032Z-dacf4c82eeff"
+    ],
+    "run_id": "msrvtt-baseline-uatvr-seed715-20261012T013316Z-c9c06753e2ca",
+    "selected_validation": {
+      "path": "metrics/selected_validation.json",
+      "sha256": "188f94de1add609023981b0b870bd0f14c866972b9a7387b675b28d06ba51ca7"
+    },
+    "state": "completed",
+    "summary_metrics": {
+      "epoch": 2.0,
+      "optimizer_updates": 5154.0,
+      "t2v_mdr": 1.0,
+      "t2v_mnr": 8.6204,
+      "t2v_r1": 53.1,
+      "t2v_r10": 86.55000000000001,
+      "t2v_r5": 79.78,
+      "train_caption_count": 164920.0,
+      "training_mean_loss": 1.2623854875564575,
+      "v2t_mdr": 1.0,
+      "v2t_mnr": 1.582,
+      "v2t_r1": 81.2,
+      "v2t_r10": 99.2,
+      "v2t_r5": 96.6,
+      "validation_caption_count": 10000.0,
+      "validation_video_count": 500.0
+    },
+    "test_authorized": false
+  },
+  {
+    "artifact_locator": "artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed715-20261012T013316Z-c9c06753e2ca",
+    "artifact_path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-clip4clip-seed715-20261012T013316Z-c9c06753e2ca",
+    "event": "completed",
+    "manifest_sha256": "846daf49aa8b377fb0dc57d57a7d62e4b2ee55df916218cc02955186fa9484d4",
+    "parent_run_ids": [
+      "msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b",
+      "synthetic-baseline-full-data-q0-seed713-20261011T042032Z-dacf4c82eeff"
+    ],
+    "run_id": "msrvtt-baseline-clip4clip-seed715-20261012T013316Z-c9c06753e2ca",
+    "selected_validation": {
+      "path": "metrics/selected_validation.json",
+      "sha256": "cb6deb685ce5efbe1fcda869407c30f39b5a851d4b3aee21f864acedf5621fdc"
+    },
+    "state": "completed",
+    "summary_metrics": {
+      "epoch": 5.0,
+      "optimizer_updates": 6445.0,
+      "t2v_mdr": 1.0,
+      "t2v_mnr": 9.6005,
+      "t2v_r1": 51.49,
+      "t2v_r10": 84.95,
+      "t2v_r5": 77.31,
+      "train_caption_count": 164920.0,
+      "training_mean_loss": 1.0482237339019775,
+      "v2t_mdr": 1.0,
+      "v2t_mnr": 1.714,
+      "v2t_r1": 84.6,
+      "v2t_r10": 98.2,
+      "v2t_r5": 96.2,
+      "validation_caption_count": 10000.0,
+      "validation_video_count": 500.0
+    },
+    "test_authorized": false
+  }
+]

@@ -1,0 +1,21 @@
+# Execution status at software handoff
+
+Completed: P0 authenticated all9000 allowed files and actually decoded8746 eligible videos, exporting8246train/500validation videos with every allowed caption. Source compilation9368793, P0 reservationf614e56 and terminal0393288. Actual worker492.565CPU seconds, controller503.431seconds, GPU0. Input certificate is committed in this study; old studies and negative results were not reopened.
+
+Implemented: true pinned UATVR and CLIP4ClipmeanP trainable adapters/strict optimizer-checkpoint recovery (8163f86; vendor whitespace/provenance8ff54a1), typedprotected complete-caption training/full-gallery evaluation and Native campaign (6370ce2). Independent review identified two Important controller/archive issues; corrected with observed failing→passing real process tests in the accompanying fix commit. Related archive/runtime regression229 passed; final full-data/architecture regression53 passed. Details: IMPLEMENTATION.md and REVIEW.md.
+
+Current authorization (2026-10-11): the user explicitly approved replacing this study's pending four-rank gate with production-capacity two-CUDA-rank Q0, retaining global batches UATVR64/CLIP4Clip128, and sharing cards without stopping external jobs. The old resource waiter was stopped before edits; no qualification or science worker was active. The two-card amendment binds topology and allocator limits in manifests/checkpoint recipes and requires at least68GiB free per card before launch (60GiB PyTorch allocator cap plus8GiB headroom). Other studies and test gates remain unchanged.
+
+Amendment verification:248 affected CPU regression tests passed in161.38s; independent bounded review found no Critical/Important/Minor issue and independently passed18 tests in8.42s. Live two-card GPU qualification, actual memory fit and throughput remain pending at this commit; science remains closed until authenticated Q0 completion. No full-data R@1 exists yet.
+
+All scientific runs remain validation-only; test is sealed. Official paper test1k numbers cannot be directly compared with our source-isolated train8246/val500/all10000-caption protocol. Full-data baseline establishment alone cannot establish novelty or the proposed evidence/uncertainty hypothesis. Any new-method change to the approved frozen backbone/teacher/value scientific definitions remains a separate ruling; no such change was silently introduced.
+
+
+Live execution update: first two-rank Q0 failed on non-contiguous NCCL metadata buffers, was archived in a56a6cb (83.415507s,0.04634195GPUh), and did not open science. The shared gather correction passed91 affected CPU tests and independent follow-up review. A new Q0 will qualify the corrected committed source; full-data training/R@1 remain pending at this commit.
+
+
+Optimization handoff (2026-10-11): first UATVR scientific worker completedepoch1 and enteredepoch2; controller was found absent. Verified originalrun before stopping its bound process group; pair sealed73178fe (UATVR failed, CLIP4Clip unlaunched/cancelled), conservatively charged20.072222GPUh. Epoch1 raw validation T2V51.29/V2T78.60 is an intermediate failed-run observation, not a final selected result. Full failure/checkpoint history retained.
+
+User requested supply optimization: four spawned loader workers/rank, ordered prefetch2 and90s timeout now integrated with scientific and formal Q0 paths; tests250 passed and independent review clear. Gate reclosed until new-source Q0. Old executable checkpoint cannot resume changed source, so new training restarts official initialization with fixed global batches/seeds/protocol. Native campaign will be launched inside independent tmux supervision. No optimized scientific R@1 or end-to-end speedup exists at this commit.
+
+2026-10-11 final supply tuning: first four-worker100-update window measured17.29samples/s, data wait2.1499s/update and update1.5511s. Final bounded policy is8 spawned workers/rank, prefetch2; normal controller shutdown archived the four-worker attempt before edits. Final full-data regression46 passed in103.07s; independent review clear with13 tests passed in49.01s. Science reclosed for fresh eight-worker two-rank Q0; strict resume compatibility, batch/optimizer/data/test protocol unchanged. See TRAINING_OPTIMIZATION.md for accounting and limits.

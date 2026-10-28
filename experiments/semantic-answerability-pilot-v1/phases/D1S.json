@@ -1,0 +1,111 @@
+{
+  "phase": "D1S",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "env",
+        "CUDA_VISIBLE_DEVICES=",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "OMP_NUM_THREADS=1",
+        "PYTHONPATH=/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/src:/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/scripts/prepare_semantic_pilot.py",
+        "--config",
+        "{artifact_run_dir}/provenance/preparation-config.json"
+      ],
+      "config": {
+        "evaluation": {
+          "eval_split": "val",
+          "qualification_scenario": "pilot_prepare:0f1f553525e68e8a3497317840cdebbb4aa7d85d841d4cc825f162ee5bbfbe7a"
+        },
+        "loss": {},
+        "model": {},
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/experiments/semantic-answerability-pilot-v1/configs/D1S-training-000.input-index.json",
+          "sha256": "b8d0ea33a0a3f2e8e589198b529a93a4df599d47041ce5742a6b4edfaca5a50c"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/experiments/semantic-answerability-pilot-v1/configs/D1S-training-001.input-index.json",
+          "sha256": "ca91ea6c2e7c74c34f583fbc83dbca2dc3df434f40cc5cd51ffe34b8e8928dea"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/experiments/semantic-answerability-pilot-v1/configs/D1S-training-002.input-index.json",
+          "sha256": "80dbf64f8226f5525066ec1683b76ad547f2314f7a556367a11de1eb2e8fc1ce"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/experiments/semantic-answerability-pilot-v1/configs/D1S-training-003.input-index.json",
+          "sha256": "3f4624ccc89f173c9165fdb3acadeb3d92e91c80fb2d3a7f69999a4c6dbbe1a9"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/experiments/semantic-answerability-pilot-v1/configs/D1S-training-004.input-index.json",
+          "sha256": "0a2a57ff97b29c30b2aa466db17e49d7769599222f592b212f1add1fda6f9846"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/experiments/semantic-answerability-pilot-v1/configs/D1S-training-005.input-index.json",
+          "sha256": "82fc6631a351617ce540bca9e792aeeb17c7ec4edd01c6f07b055ed615a531a9"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/experiments/semantic-answerability-pilot-v1/configs/D1S-training-006.input-index.json",
+          "sha256": "f48593c9c062313a02ff9d9022018245cc6bc68500d9022d622bca4b0f257f4f"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/experiments/semantic-answerability-pilot-v1/configs/D1S-training-007.input-index.json",
+          "sha256": "eb582340f830417e1eee3ecb1882d1464613196d4387f30549f779849fde5f42"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/experiments/semantic-answerability-pilot-v1/configs/D1S-training-008.input-index.json",
+          "sha256": "d04a5cfbc04dad239b6db300b7439bb84a77b73d2744546206d3a738e3c3c2be"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/.worktrees/codex-semantic-pilot/experiments/semantic-answerability-pilot-v1/configs/D1S-training-009.input-index.json",
+          "sha256": "68701371c1d3b6163676b924d3f67d8f00c538fe68341df1f0f9e56c530aec0a"
+        },
+        {
+          "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv",
+          "sha256": "0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3"
+        },
+        {
+          "path": "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json",
+          "sha256": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/docs/maintenance/2026-10-01-msrvtt-source-confirmation.json",
+          "sha256": "722eaf027a34e9eebaa04778eae72acde35e57c13d46e9258a6b53fdf66b1ff1"
+        }
+      ],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "single-process",
+        "gpu_count": 0,
+        "gpu_model": "none",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [
+        "official_video_count",
+        "caption_count",
+        "query_count",
+        "decoded_excluded_caption_count"
+      ],
+      "input_checkpoints": [],
+      "parent_run_ids": [],
+      "scheduled_timestamp_utc": "20261001T095959Z",
+      "seed": 0,
+      "selection_lineage": [
+        "docs/superpowers/plans/2026-10-01-semantic-pilot-c1-data-audit.md#task-7"
+      ],
+      "stage": "baseline",
+      "test_authorized": false,
+      "validation_authorized": true,
+      "variant": "source_inventory"
+    }
+  ],
+  "study": "semantic-answerability-pilot-v1"
+}

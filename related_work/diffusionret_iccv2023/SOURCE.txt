@@ -1,0 +1,6 @@
+title: DiffusionRet: Generative Text-Video Retrieval with Diffusion Model
+arxiv_id: 2303.09867v2
+published: 2023-03-17 10:07:19+00:00
+updated: 2023-08-19 08:31:57+00:00
+pdf_url: https://arxiv.org/pdf/2303.09867v2
+fetched: 2026-08-28 via arxiv==4.0.1

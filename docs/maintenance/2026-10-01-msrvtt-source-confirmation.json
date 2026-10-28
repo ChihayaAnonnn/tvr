@@ -1,0 +1,176 @@
+{
+  "audit_date": "2026-10-01",
+  "controlled_verification_authorization": {
+    "authorizes_caption_export": false,
+    "authorizes_training": false,
+    "changes_general_import_policy": false,
+    "scope": "One-time read-only training-caption source comparison. Filter by the pinned 9000-ID allowlist before decoding caption values; no test caption decoding.",
+    "source": "Current conversation: explicit reply to request_user_input_async question call_aFTxBnH9OAA0Dqxa7oYteBEH",
+    "user_answer": "允许受控核验，仅比较训练 caption（推荐）"
+  },
+  "formatting_identity_check": {
+    "either_local_json_matches_release": false,
+    "local_v1_token_sha256": "55c0fb284b4dbd9162c8cfb32a433d98646db0fbf6b02d7a1b6e67dcccda4419",
+    "local_v2_token_sha256": "cb83fd3e98f4168186e23dd6068d92257e61edd61e12fe7d2e1d84f1921fd1c9",
+    "method": "Hash JSON token bytes after ignoring whitespace outside quoted strings. Do not decode string values. Equality would prove a formatting-only difference; inequality does not prove caption text differs."
+  },
+  "governing_policy": {
+    "path": "docs/superpowers/specs/2026-10-01-semantic-retrieval-experiment-design.md",
+    "quote": "若只能找到含 test 的混合注释文件，先报告缺失训练来源资产，不读取混合文件 caption 后再筛掉 test。",
+    "section": "3.1"
+  },
+  "historical_binding": {
+    "annotation_scope": "mixed_train_and_test",
+    "current_train_csv_and_annotation_and_test_csv_match_historical_hashes": true,
+    "manifest_path": "/data2/hxj/project/UATVR/dataloaders/splits/msrvtt_trusted_v1_seed0.json",
+    "manifest_sha256": "a0e5a82dddec34fa76753c2323cf560c2afc36f3683b231ccd24db2c268be882",
+    "scope_basis": "The hash-matched trusted-v1 manifest was built by a validator requiring annotation video IDs equal train/test source union. The separately approved controlled comparison decodes only training caption values, after ID selection.",
+    "source_training_count": 9000,
+    "training_id_union_matches_current_csv": true,
+    "trusted_train_count": 8500,
+    "trusted_validation_count": 500
+  },
+  "local_assets": [
+    {
+      "byte_size": 88899,
+      "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_train.9k.csv",
+      "role": "published_training_id_allowlist",
+      "sha256": "0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3"
+    },
+    {
+      "byte_size": 68999,
+      "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_train.7k.csv",
+      "role": "published_training_id_allowlist",
+      "sha256": "ca0d04c34310168b620c90c67eaec702b37398943965f5e1f9f44af8f193da7d"
+    },
+    {
+      "byte_size": 24971362,
+      "path": "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v1.json",
+      "role": "unverified_caption_asset",
+      "sha256": "83885bdcade2826b1e8bf406ea243e95adaa36ddec8d9fdc3e929d8feccfc3aa"
+    },
+    {
+      "byte_size": 27473728,
+      "path": "/data2/hxj/data/MSRVTT/annotation/MSRVTT_v2.json",
+      "role": "historically_bound_mixed_caption_asset",
+      "sha256": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33"
+    },
+    {
+      "byte_size": 11953197,
+      "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_ALL.csv",
+      "role": "unverified_caption_asset",
+      "sha256": "79474bf8898d52e69d2ea3c06cadc6ab46535b9cdd7f953fcd3e2c8a8078fa64"
+    },
+    {
+      "byte_size": 26152963,
+      "path": "/data2/hxj/data/MSRVTT/structured-symlinks/raw-captions.pkl",
+      "role": "unverified_caption_asset",
+      "sha256": "4f855cc9cb459ebfeb4264497476b35fa6718f1f4682bcbbb69a492202cf4631"
+    }
+  ],
+  "local_video_coverage": {
+    "decoded_for_this_audit": false,
+    "missing_training_video_files": 0,
+    "training_id_count": 9000
+  },
+  "proposed_next_verification": {
+    "approval_received": true,
+    "completed": true,
+    "report_no_caption_text": true,
+    "requires_explicit_user_approval": true,
+    "task": "One-time controlled read-only comparison: use the exact published 9000-ID training allowlist to select records before decoding caption values; compare only training relations/text with the pinned authors release. Leave all test caption values undecoded. Do not run experiments or alter data."
+  },
+  "published_release": {
+    "annotation_member": "msrvtt_data/MSRVTT_data.json",
+    "annotation_sha256": "3540d91f9fd5f9a56d75b00c6576f30814fd19395d027791a6d438e9dc297014",
+    "annotation_whitespace_insensitive_token_sha256": "b183ba9cffeb3703c47040164f3570ff5cb07f12df13881fa1376da089fae8c9",
+    "archive_bytes": 4067617,
+    "archive_sha256": "93958a5f1c322b32349d0948eba0cb24c25a34d54f45bd5e037027d266ea6e56",
+    "archive_url": "https://github.com/ArrowLuo/CLIP4Clip/releases/download/v0.0/msrvtt_data.zip",
+    "provider": "CLIP4Clip authors release; benchmark packaging, not a claimed download record of these local JSON variants",
+    "release_url": "https://github.com/ArrowLuo/CLIP4Clip/releases/tag/v0.0",
+    "sealed_test_csv_sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a",
+    "training_7k_sha256": "ca0d04c34310168b620c90c67eaec702b37398943965f5e1f9f44af8f193da7d",
+    "training_9k_sha256": "0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3"
+  },
+  "scope": "Completed source identity confirmation plus explicitly user-approved, read-only comparison of captions belonging to the 9000 training IDs. No experiment, evaluation, caption export or dataset modification.",
+  "status": {
+    "independent_train_only_caption_snapshot_found": false,
+    "local_annotation_matches_published_captions": "VERIFIED_EXACT_FOR_V2_TRAINING_ALLOWLIST_ONLY",
+    "local_v2_historical_identity": "VERIFIED_EXACT_HISTORICAL_BYTES",
+    "recommended_caption_source": "MSRVTT_v2.json paired with hash-pinned MSRVTT_train.9k.csv",
+    "remaining_input_requirement": "The mixed JSON remains unsuitable as a direct worker input under the general policy. C1 must produce an independently bound train-only snapshot and implement the benchmark label contract. This audit does not authorize export or scientific training.",
+    "test_caption_decoded": false,
+    "test_evaluation_performed": false,
+    "training_caption_comparison_performed": true,
+    "training_id_source": "VERIFIED_EXACT_PUBLISHED_BYTES",
+    "worker_input_ready": false
+  },
+  "training_caption_comparison": {
+    "audit_parser_sha256": "270521d969cc032efdf9acd254fbaab1facff62aaff332fc5ce7b549a08bd4be",
+    "conclusion": "Local v2 matches every training video caption multiset and per-video sequence exactly. Local v1 lacks four distinct caption occurrences across four training videos; this is not solely duplicate removal. Raw JSON identity differences do not invalidate verified v2 training-caption equivalence.",
+    "local_results": {
+      "MSRVTT_v1.json": {
+        "added_caption_occurrences": 0,
+        "captions_per_video": {
+          "max": 20,
+          "min": 19
+        },
+        "decoded_excluded_caption_values": 0,
+        "decoded_training_caption_values": 179996,
+        "differing_caption_multiset_video_count": 4,
+        "exact_caption_multiset_video_count": 8996,
+        "exact_per_video_caption_sequence_count": 8996,
+        "exact_unique_caption_set_video_count": 8996,
+        "excluded_records": 19998,
+        "missing_caption_occurrences": 4,
+        "missing_distinct_caption_text_occurrences": 4,
+        "missing_duplicate_occurrences": 0,
+        "missing_video_ids": 0,
+        "relation_sha256": "4e0f73b8f5d2ee3641e8965f4beed208f950f1e089215ba1a1499bae44380d40",
+        "schema": "annotations/image_id",
+        "selected_records": 179996,
+        "training_video_count": 9000
+      },
+      "MSRVTT_v2.json": {
+        "added_caption_occurrences": 0,
+        "captions_per_video": {
+          "max": 20,
+          "min": 20
+        },
+        "decoded_excluded_caption_values": 0,
+        "decoded_training_caption_values": 180000,
+        "differing_caption_multiset_video_count": 0,
+        "exact_caption_multiset_video_count": 9000,
+        "exact_per_video_caption_sequence_count": 9000,
+        "exact_unique_caption_set_video_count": 9000,
+        "excluded_records": 20000,
+        "missing_caption_occurrences": 0,
+        "missing_distinct_caption_text_occurrences": 0,
+        "missing_duplicate_occurrences": 0,
+        "missing_video_ids": 0,
+        "relation_sha256": "bc2c06cbbe833d4e504700430a8a96c23bb7a79f2a5418e1a137ab0fe32b123d",
+        "schema": "sentences/video_id",
+        "selected_records": 180000,
+        "training_video_count": 9000
+      }
+    },
+    "method": "Quote-aware byte tokenizer skips unrelated root values opaquely. Sentence/COCO records retain raw value bytes. Decode only video_id/image_id first; decode caption only after membership in the pinned training allowlist. Compare per-video caption Counters (preserving duplicate counts), unique sets and sequences, without stripping or normalizing text.",
+    "parser_privacy_checks": {
+      "cases": "Excluded caption preceding its ID, escaped quotes/braces, nested metadata, Unicode in a selected caption; guarded decoder rejects any excluded caption value.",
+      "coco_schema": "passed",
+      "sentence_schema": "passed"
+    },
+    "protocol_identity": "CLIP4Clip MSRVTT 9k training / JSFUSION 1k test retrieval split, as packaged by the authors release",
+    "published_reference": {
+      "decoded_excluded_caption_values": 0,
+      "decoded_training_caption_values": 180000,
+      "excluded_records": 20000,
+      "relation_sha256": "bc2c06cbbe833d4e504700430a8a96c23bb7a79f2a5418e1a137ab0fe32b123d",
+      "selected_records": 180000,
+      "training_video_count": 9000
+    },
+    "relation_digest_method": "For video IDs sorted lexically, sort Counter(captions).items() lexically and hash UTF-8 compact ensure_ascii=False JSON [video_id, caption, count] followed by LF. Only the digest is persisted; no caption text or per-query arrays are saved.",
+    "unverified": "Global annotation metadata/URL/sen_id equivalence, video content integrity/decodability, excluded caption contents and any scientific effect are outside this comparison."
+  }
+}

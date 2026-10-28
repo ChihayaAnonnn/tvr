@@ -1,0 +1,193 @@
+{
+  "component_details": {
+    "path": "/home/xujie/.codex/worktrees/ad3a/UATVR/experiments/evidence-conditioned-retrieval-v1/reports/B2-component-coverage.md",
+    "sha256": "7748954b07840bfbbe4b59d56536b3f0572bed4e0b24cd7992959782d1a24c22"
+  },
+  "schema_version": "evidence-stage-gate-v1",
+  "stage": "B2-transition-variation",
+  "passed": false,
+  "thresholds": {
+    "corrected_components": 8,
+    "worsened_components": 4
+  },
+  "runs": [
+    {
+      "matcher": "gaussian",
+      "role": "T_value",
+      "run_id": "msrvtt-baseline-evidence-transitions-gaussian-t-value-seed713-20261010T040401Z-8c05fa644df9",
+      "manifest_sha256": "d864de2e41c54595ef03abd62e75e97f6c154f93442f2248508a00680c934f19",
+      "transitions": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-gaussian-t-value-seed713-20261010T040401Z-8c05fa644df9/provenance/transitions.json",
+        "sha256": "5376ee79087b45bb8edb75bacd5054deb730b841077628c66ea15ff79b91db24"
+      },
+      "coverage": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-gaussian-t-value-seed713-20261010T040401Z-8c05fa644df9/provenance/transition-coverage.json",
+        "sha256": "844be6987dd6278963d2d6c1014625527bf06b68457c6dd5729b3d40cc22915b"
+      },
+      "full_cohort_components": 64,
+      "components_with_any_legal_transition": 64,
+      "components_without_legal_transition": 0,
+      "candidate_present_components": 58,
+      "candidate_miss_components": 6,
+      "candidate_unknown_components": 0,
+      "transitions_count": 1526,
+      "valid_transitions": 1526,
+      "unknown_transitions": 0,
+      "corrected_transitions": 8,
+      "unchanged_transitions": 1512,
+      "worsened_transitions": 6,
+      "corrected_components": 4,
+      "worsened_components": 1,
+      "allocated_gpu_hours": 0.2251607938758227
+    },
+    {
+      "matcher": "gaussian",
+      "role": "V_development",
+      "run_id": "msrvtt-baseline-evidence-transitions-gaussian-v-development-seed713-20261010T040401Z-8c05fa644df9",
+      "manifest_sha256": "9071eb247ae7b5ce992129038c28bf898c8a049a0dae943611eacb24e8f99be6",
+      "transitions": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-gaussian-v-development-seed713-20261010T040401Z-8c05fa644df9/provenance/transitions.json",
+        "sha256": "ab555d92edc0d792bb03df19bfa67a27c0f5fad834aa1bd800534a3c16db0d35"
+      },
+      "coverage": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-gaussian-v-development-seed713-20261010T040401Z-8c05fa644df9/provenance/transition-coverage.json",
+        "sha256": "cae20896b460316bfb8c113fc38eb6944d4a7f268480d70280c196b06e8ff48b"
+      },
+      "full_cohort_components": 64,
+      "components_with_any_legal_transition": 64,
+      "components_without_legal_transition": 0,
+      "candidate_present_components": 60,
+      "candidate_miss_components": 4,
+      "candidate_unknown_components": 0,
+      "transitions_count": 1526,
+      "valid_transitions": 1526,
+      "unknown_transitions": 0,
+      "corrected_transitions": 9,
+      "unchanged_transitions": 1505,
+      "worsened_transitions": 12,
+      "corrected_components": 4,
+      "worsened_components": 4,
+      "allocated_gpu_hours": 0.22349549265361726
+    },
+    {
+      "matcher": "gaussian",
+      "role": "V_calibration",
+      "run_id": "msrvtt-baseline-evidence-transitions-gaussian-v-calibration-seed713-20261010T040401Z-8c05fa644df9",
+      "manifest_sha256": "0029c2e1375377ee4e4e986ebb47836bce9e692d5c8d0083c549a8bb36c01b87",
+      "transitions": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-gaussian-v-calibration-seed713-20261010T040401Z-8c05fa644df9/provenance/transitions.json",
+        "sha256": "8283b3e323f7a7d1302b552c57d7220c461830218cb0c49d8ce67085e44c0c28"
+      },
+      "coverage": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-gaussian-v-calibration-seed713-20261010T040401Z-8c05fa644df9/provenance/transition-coverage.json",
+        "sha256": "4b7dda4ce1269569e83f2e946966e0fcfbc134442fb0d4a59b095103313bf3fc"
+      },
+      "full_cohort_components": 64,
+      "components_with_any_legal_transition": 64,
+      "components_without_legal_transition": 0,
+      "candidate_present_components": 59,
+      "candidate_miss_components": 5,
+      "candidate_unknown_components": 0,
+      "transitions_count": 1526,
+      "valid_transitions": 1526,
+      "unknown_transitions": 0,
+      "corrected_transitions": 4,
+      "unchanged_transitions": 1522,
+      "worsened_transitions": 0,
+      "corrected_components": 1,
+      "worsened_components": 0,
+      "allocated_gpu_hours": 0.2227253269097289
+    },
+    {
+      "matcher": "deterministic",
+      "role": "T_value",
+      "run_id": "msrvtt-baseline-evidence-transitions-deterministic-t-value-seed713-20261010T040401Z-ef2fa0a580ad",
+      "manifest_sha256": "aa8869daec85f8a0ecb378361d74e0262c8d4f724deffa07b2de82eab6c45b91",
+      "transitions": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-deterministic-t-value-seed713-20261010T040401Z-ef2fa0a580ad/provenance/transitions.json",
+        "sha256": "d0b7d67239e35db8b8ad15b9535645cd3d14a5b69909236b5d048c65ca319cf7"
+      },
+      "coverage": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-deterministic-t-value-seed713-20261010T040401Z-ef2fa0a580ad/provenance/transition-coverage.json",
+        "sha256": "0f5cc6dc4a96b7d19464a0e5c72f44e24cdd53b8e8b65d24e799d1933a0ade5d"
+      },
+      "full_cohort_components": 64,
+      "components_with_any_legal_transition": 64,
+      "components_without_legal_transition": 0,
+      "candidate_present_components": 58,
+      "candidate_miss_components": 6,
+      "candidate_unknown_components": 0,
+      "transitions_count": 1526,
+      "valid_transitions": 1526,
+      "unknown_transitions": 0,
+      "corrected_transitions": 4,
+      "unchanged_transitions": 1513,
+      "worsened_transitions": 9,
+      "corrected_components": 2,
+      "worsened_components": 2,
+      "allocated_gpu_hours": 0.21919603736527885
+    },
+    {
+      "matcher": "deterministic",
+      "role": "V_development",
+      "run_id": "msrvtt-baseline-evidence-transitions-deterministic-v-development-seed713-20261010T040401Z-ef2fa0a580ad",
+      "manifest_sha256": "17b363014a6f95f697f2e4547a634e8db1e377b9b6022e4bcbd0b0e86868b003",
+      "transitions": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-deterministic-v-development-seed713-20261010T040401Z-ef2fa0a580ad/provenance/transitions.json",
+        "sha256": "0b8853ba29b1ae8652a6f76d46cb2e5b7b325473dae2e003af578d0573f4d591"
+      },
+      "coverage": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-deterministic-v-development-seed713-20261010T040401Z-ef2fa0a580ad/provenance/transition-coverage.json",
+        "sha256": "5c900518bec970129ea3b500c26c33c45ea7f98064dbca1252221b9e8d22249a"
+      },
+      "full_cohort_components": 64,
+      "components_with_any_legal_transition": 64,
+      "components_without_legal_transition": 0,
+      "candidate_present_components": 60,
+      "candidate_miss_components": 4,
+      "candidate_unknown_components": 0,
+      "transitions_count": 1526,
+      "valid_transitions": 1526,
+      "unknown_transitions": 0,
+      "corrected_transitions": 6,
+      "unchanged_transitions": 1513,
+      "worsened_transitions": 7,
+      "corrected_components": 2,
+      "worsened_components": 3,
+      "allocated_gpu_hours": 0.2228622174394291
+    },
+    {
+      "matcher": "deterministic",
+      "role": "V_calibration",
+      "run_id": "msrvtt-baseline-evidence-transitions-deterministic-v-calibration-seed713-20261010T040401Z-ef2fa0a580ad",
+      "manifest_sha256": "72d2cc56b943af032b024f3b0e176921b5b3ce0a61913856850c432fa0688ba1",
+      "transitions": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-deterministic-v-calibration-seed713-20261010T040401Z-ef2fa0a580ad/provenance/transitions.json",
+        "sha256": "5a7f06e85d556ac846407813421ff426c4ca421a7949e01d924f0d916e4f34d8"
+      },
+      "coverage": {
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-transitions-deterministic-v-calibration-seed713-20261010T040401Z-ef2fa0a580ad/provenance/transition-coverage.json",
+        "sha256": "08231415c9458a27f66ebbeb828b1fb6b92be85c61bb10f083987e35cb928a6b"
+      },
+      "full_cohort_components": 64,
+      "components_with_any_legal_transition": 64,
+      "components_without_legal_transition": 0,
+      "candidate_present_components": 59,
+      "candidate_miss_components": 5,
+      "candidate_unknown_components": 0,
+      "transitions_count": 1526,
+      "valid_transitions": 1526,
+      "unknown_transitions": 0,
+      "corrected_transitions": 0,
+      "unchanged_transitions": 1521,
+      "worsened_transitions": 5,
+      "corrected_components": 0,
+      "worsened_components": 2,
+      "allocated_gpu_hours": 0.21789166936945145
+    }
+  ],
+  "allocated_gpu_hours": 1.3313315376133281,
+  "scientific_interpretation": "Insufficient transition variation in this frozen pilot; stop B3/B4 and scaling. This is not a universal refutation of evidence-conditioned retrieval.",
+  "V_locked_model_evaluated": false,
+  "test_authorized": false
+}

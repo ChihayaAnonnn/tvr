@@ -1,0 +1,337 @@
+import pytest
+from test_episodes import episode_manifest
+from semantic_retrieval.evidence.runtime import prepare_evidence_run
+
+
+def test_cli_runtime_cannot_be_omitted(config_factory,tmp_path):
+    with pytest.raises(ValueError):
+        prepare_evidence_run(config_factory(),repo_root=tmp_path)
+
+def test_video_source_distinguishes_decode_failure_from_missing_input(tmp_path):
+    import cv2
+    import numpy as np
+    import torch
+    from semantic_retrieval.evidence.execution import VideoFrameSource, DecodeFailure
+    from semantic_retrieval.evidence.types import CandidateObservation
+    from hashlib import sha256
+    path = tmp_path/'v.avi'
+    writer = cv2.VideoWriter(str(path),cv2.VideoWriter_fourcc(*'MJPG'),5,(16,16))
+    assert writer.isOpened(); writer.write(np.zeros((16,16,3),np.uint8)); writer.release()
+    c = CandidateObservation('a',sha256(path.read_bytes()).hexdigest(),2,(0,1),(0,),(0,))
+    source = VideoFrameSource({'a':(path,c.content_sha256)},8,'a'*64)
+    assert source(c,(0,)).shape == (1,3,8,8)
+    with pytest.raises(DecodeFailure):
+        source(c,(1,))
+    path.unlink()
+    with pytest.raises(FileNotFoundError):
+        source(c,(0,))
+
+def test_protected_evidence_context_rechecks_effective_config(config_factory,tmp_path):
+    from dataclasses import replace
+    from evidence.archive_fixture import reserve_evidence_fixture
+    from semantic_retrieval.runtime.artifacts import start_run
+    repo,cfg = reserve_evidence_fixture(tmp_path,config_factory(stage='cpu_fixture'))
+    context = prepare_evidence_run(cfg,repo_root=repo)
+    context.system_config = replace(cfg,sampling=replace(cfg.sampling,eval_samples=8))
+    with pytest.raises(ValueError):
+        start_run(context)
+    context.system_config = cfg
+    start_run(context)
+    assert context.manifest['test_authorized'] is False
+
+def test_prediction_budget_reserved_before_computation(state_factory,tmp_path):
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.evidence.journal import ActionJournal
+    from semantic_retrieval.evidence.runtime import run_policy_episode
+    from semantic_retrieval.evidence.types import BudgetLedger,ResourceCounts,ZERO
+    state = state_factory()
+    state = replace(state,budget=BudgetLedger(ResourceCounts(0,0,0,0),ZERO,ZERO))
+    calls = []
+    def predict(s):
+        calls.append(s)
+        raise AssertionError('computation must not happen before budget reservation')
+    models = SimpleNamespace(predict=predict,prediction_counts=lambda s:ResourceCounts(0,0,4,8),sampling_sha256='a'*64)
+    store = ArtifactArrayStore(tmp_path/'arrays')
+    journal = ActionJournal(store.run_root/'provenance'/'evidence-actions',store)
+    with pytest.raises(ValueError):
+        run_policy_episode(None,state,models,None,journal=journal)
+    assert calls == []
+
+
+def test_transition_input_rejects_different_frozen_matcher(config_factory,tmp_path):
+    from dataclasses import replace,asdict
+    from hashlib import sha256
+    import json
+    from semantic_retrieval.evidence.config import InputReference
+    from semantic_retrieval.evidence.transitions import TransitionProducerIdentity
+    from semantic_retrieval.evidence.execution import _read_transition_input
+    producer = TransitionProducerIdentity(*(['a'*64]*8))
+    path = tmp_path/'transitions.json'
+    path.write_text(json.dumps(dict(producer=asdict(producer))))
+    cfg = config_factory(stage='value')
+    cfg = replace(cfg,transitions=replace(cfg.transitions,reference=InputReference(path,sha256(path.read_bytes()).hexdigest()),producer_sha256=producer.sha256))
+    with pytest.raises(ValueError,match='frozen matcher'):
+        _read_transition_input(cfg,matcher_sha256='b'*64)
+
+
+@pytest.mark.parametrize('shared_source',[False,True])
+def test_real_video_evaluation_partial_initial_decode_and_successor(config_factory,episode_manifest,tmp_path,monkeypatch,shared_source):
+    """Module integration on synthetic CPU inputs; this does not bypass a scientific CLI gate."""
+    import json
+    import torch
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.config import config_payload
+    from semantic_retrieval.models.clip import ClipBackbone
+    from semantic_retrieval.evidence.config import SplitBinding,InputReference,ParentConfig,EvidenceResumeConfig
+    from semantic_retrieval.evidence.model import EvidenceMatcherModel
+    from semantic_retrieval.evidence.execution import _evaluation
+    from semantic_retrieval.evidence.types import digest
+    from semantic_retrieval.data.episodes import file_sha256
+    cfg = config_factory(stage='evaluation')
+    clip = replace(cfg.model.base.clip,vocab_size=49408)
+    weights = tmp_path/'bpe-clip.pt';torch.save(ClipBackbone(clip).state_dict(),weights)
+    cfg = replace(cfg,model=replace(cfg.model,base=replace(cfg.model.base,clip=clip,clip_weights=weights,clip_sha256=file_sha256(weights))),
+        policy=replace(cfg.policy,baseline='fixed_frames'),parents=ParentConfig(None,cfg.parents.matcher,None,None),
+        transitions=replace(cfg.transitions,reference=None,producer_sha256=None))
+    payload,write,_ = episode_manifest
+    payload.update(schema_version=3,relevance_space='reviewed_semantic')
+    row = payload['episodes'][0];row.update(split='val_development',query_source_ids=['query-source'],query_component_id='d'*64,frame_counts=[2,2])
+    if shared_source:
+        row['source_ids']=['shared-original-video','shared-original-video']
+    episodes = write()
+    index = tmp_path/'index.json'
+    index.write_text(json.dumps(dict(schema_version='evidence-initial-index-v1',clip_sha256=cfg.model.base.clip_sha256,
+        preprocessing_sha256=cfg.views.preprocessing_sha256,view_sha256=digest(config_payload(cfg.views)),gallery_version='g1',roles={'V_development':['a','b']})))
+    cfg = replace(cfg,splits=(SplitBinding('V_development',InputReference(episodes,file_sha256(episodes)),'reviewed_semantic'),),
+        index=replace(cfg.index,reference=InputReference(index,file_sha256(index)),gallery_version='g1'))
+    def context(name):
+        store = ArtifactArrayStore(tmp_path/name/'arrays')
+        return SimpleNamespace(array_store=store,paths=SimpleNamespace(root=store.run_root,provenance=store.run_root/'provenance'),
+            config=SimpleNamespace(eval_split='val_development',source_sha='b'*40))
+    from torch.multiprocessing import spawn
+    training_cfg = replace(cfg,stage='reference',train=replace(cfg.train,loss_weights={'pc':1.,'score':0.,'value':0.}))
+    training_path = tmp_path/'index-training-config.json';training_path.write_text(json.dumps(training_cfg.to_payload()))
+    spawn(_real_index_worker,args=('file://'+str(tmp_path/'index-rendezvous'),str(training_path),str(tmp_path/'distributed-index')),nprocs=2,join=True)
+    first = context('first'); model = EvidenceMatcherModel(cfg.model).eval()
+    import time
+    original_encode = model.clip.encode_frames
+    def timed_real_encode(*args, **kwargs):
+        time.sleep(.02)
+        return original_encode(*args, **kwargs)
+    monkeypatch.setattr(model.clip, 'encode_frames', timed_real_encode)
+    result = _evaluation(first,cfg,model,None)
+    index_report = json.loads((first.paths.provenance/'initial-index-V_development.json').read_text())
+    assert index_report['schema_version'] == 'evidence-initial-index-report-v2'
+    assert index_report['resource_counts'] == dict(frame_requests=4, clip_frames=2, temporal_tokens=0, mc_elements=0)
+    assert index_report['preparation_seconds'] >= .04
+    assert index_report['elapsed_seconds'] == pytest.approx(index_report['preparation_seconds'] + index_report['build_search_publish_seconds'])
+    assert result['summary_metrics']['frame_requests'] == 4
+    assert result['summary_metrics']['clip_frames'] == 2
+    assert result['summary_metrics']['elapsed_seconds'] >= result['summary_metrics']['decode_seconds']
+    report = json.loads((first.paths.provenance/'evidence-report.json').read_text())
+    assert report['array_references'] and 'population_outcomes' in report['undefined_reasons']
+    snapshots = list((first.paths.provenance/'evidence-recovery').glob('*.json'))
+    snapshot = max(snapshots,key=lambda p:json.loads(p.read_text())['file_count'])
+    resumed = replace(cfg,resume=EvidenceResumeConfig(InputReference(snapshot,file_sha256(snapshot)),0))
+    second = context('successor')
+    def repeated_decode(*args,**kwargs):
+        raise AssertionError('successor repeated a restored frame decode')
+    monkeypatch.setattr('semantic_retrieval.evidence.execution.decode_video',repeated_decode)
+    actual = _evaluation(second,resumed,model,None)
+    assert actual['summary_metrics']['frame_requests'] == 4
+    assert actual['summary_metrics']['clip_frames'] == 2
+    assert actual['summary_metrics']['decode_seconds'] == 0
+    successor_index = json.loads((second.paths.provenance/'initial-index-V_development.json').read_text())
+    assert successor_index['resource_counts'] == dict(frame_requests=0, clip_frames=0, temporal_tokens=0, mc_elements=0)
+
+
+def _real_index_worker(rank,rendezvous,config_path,run_root):
+    import torch.distributed as dist
+    from pathlib import Path
+    from types import SimpleNamespace
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.evidence.config import load_evidence_config
+    from semantic_retrieval.evidence.model import EvidenceMatcherModel
+    from semantic_retrieval.evidence.execution import _episodes_and_sources
+    dist.init_process_group('gloo',init_method=rendezvous,rank=rank,world_size=2)
+    try:
+        cfg = load_evidence_config(Path(config_path));model = EvidenceMatcherModel(cfg.model).eval()
+        store = ArtifactArrayStore(Path(run_root)/'arrays')
+        context = SimpleNamespace(array_store=store,paths=SimpleNamespace(provenance=store.run_root/'provenance'))
+        episodes,_,_,cache = _episodes_and_sources(cfg,'V_development',model,context)
+        assert len(episodes) == 1
+        assert cache.store.run_root == store.run_root/'provenance'/f'index-rank-{rank}'
+    finally:
+        dist.destroy_process_group()
+
+
+@pytest.mark.parametrize('variant',['gaussian','fixed_scale','standard_probabilistic'])
+def test_real_video_two_query_evaluation_with_rich_reference(config_factory,episode_manifest,tmp_path,variant):
+    import copy,json
+    from dataclasses import replace
+    from types import SimpleNamespace
+    import torch
+    from experiment_artifacts import ArtifactArrayStore,verify_array_reference
+    from semantic_retrieval.config import config_payload
+    from semantic_retrieval.models.clip import ClipBackbone
+    from semantic_retrieval.evidence.config import SplitBinding,InputReference,ParentConfig
+    from semantic_retrieval.evidence.model import EvidenceMatcherModel
+    from semantic_retrieval.evidence.execution import _evaluation,_write_reference_parts
+    from semantic_retrieval.evidence.types import digest
+    from semantic_retrieval.data.episodes import file_sha256
+    cfg=config_factory(stage='evaluation');clip=replace(cfg.model.base.clip,vocab_size=49408)
+    weights=tmp_path/'bpe-clip.pt';torch.save(ClipBackbone(clip).state_dict(),weights)
+    cfg=replace(cfg,model=replace(cfg.model,variant=variant,base=replace(cfg.model.base,clip=clip,clip_weights=weights,clip_sha256=file_sha256(weights))),policy=replace(cfg.policy,baseline='fixed_frames'),transitions=replace(cfg.transitions,reference=None,producer_sha256=None))
+    payload,write,_=episode_manifest;payload.update(schema_version=3,relevance_space='reviewed_semantic')
+    row=payload['episodes'][0];row.update(split='val_development',query_source_ids=['query-source'],query_component_id='d'*64)
+    other=copy.deepcopy(row);other.update(query_id='q1',query_text='another video query',caption_group_id='caption-1');payload['episodes'].append(other)
+    path=write();binding=SplitBinding('V_development',InputReference(path,file_sha256(path)),'reviewed_semantic')
+    index=tmp_path/'index.json';index.write_text(json.dumps(dict(schema_version='evidence-initial-index-v1',clip_sha256=cfg.model.base.clip_sha256,preprocessing_sha256=cfg.views.preprocessing_sha256,view_sha256=digest(config_payload(cfg.views)),gallery_version='g1',roles={'V_development':['a','b']})))
+    cfg=replace(cfg,splits=(binding,),index=replace(cfg.index,reference=InputReference(index,file_sha256(index)),gallery_version='g1'))
+    model=EvidenceMatcherModel(cfg.model).eval();reference_store=ArtifactArrayStore(tmp_path/'reference'/'arrays');reference_store.run_root.joinpath('checkpoints').mkdir()
+    reference_context=SimpleNamespace(array_store=reference_store,paths=SimpleNamespace(checkpoints=reference_store.run_root/'checkpoints'))
+    _write_reference_parts(reference_context,model);reference_path=reference_context.paths.checkpoints/'reference-parts.pt'
+    cfg=replace(cfg,parents=ParentConfig(InputReference(reference_path,file_sha256(reference_path)),cfg.parents.matcher,None,None))
+    store=ArtifactArrayStore(tmp_path/'evaluation'/'arrays');context=SimpleNamespace(array_store=store,paths=SimpleNamespace(root=store.run_root,provenance=store.run_root/'provenance'),config=SimpleNamespace(eval_split='val_development',source_sha='b'*40))
+    result=_evaluation(context,cfg,model,None);report=json.loads((context.paths.provenance/'evidence-report.json').read_text())
+    assert result['summary_metrics']['rich_valid_count'] == 0
+    assert report['undefined_reasons']['rich_proper_scores'] == 'no valid rich-score targets'
+    arrays={a['key']:verify_array_reference(store.run_root,a) for a in report['array_references']}
+    assert arrays['episode_labels'].shape==(2,3)
+    for query in ['q0','q1']:
+        assert (context.paths.provenance/'evidence-actions'/digest(query)).is_dir()
+
+
+@pytest.mark.parametrize('compiled_population',[False,True])
+def test_real_video_mean_policy_exports_selected_gain(config_factory,episode_manifest,tmp_path,compiled_population,monkeypatch):
+    import copy,json
+    variant='gaussian'
+    from semantic_retrieval.evidence.value import build_value_head
+    from dataclasses import replace
+    from types import SimpleNamespace
+    import torch
+    from experiment_artifacts import ArtifactArrayStore,verify_array_reference
+    from semantic_retrieval.config import config_payload
+    from semantic_retrieval.models.clip import ClipBackbone
+    from semantic_retrieval.evidence.config import SplitBinding,InputReference,ParentConfig
+    from semantic_retrieval.evidence.model import EvidenceMatcherModel
+    from semantic_retrieval.evidence.execution import _evaluation,_write_reference_parts
+    from semantic_retrieval.evidence.types import digest
+    from semantic_retrieval.data.episodes import file_sha256
+    cfg=config_factory(stage='evaluation');clip=replace(cfg.model.base.clip,vocab_size=49408)
+    weights=tmp_path/'bpe-clip.pt';torch.save(ClipBackbone(clip).state_dict(),weights)
+    cfg=replace(cfg,model=replace(cfg.model,variant=variant,base=replace(cfg.model.base,clip=clip,clip_weights=weights,clip_sha256=file_sha256(weights))),value=replace(cfg.value,kind='mean_regressor'),policy=replace(cfg.policy,baseline='mean_regressor'),transitions=replace(cfg.transitions,reference=None,producer_sha256=None))
+    payload,write,_=episode_manifest;payload.update(schema_version=3,relevance_space='reviewed_semantic')
+    row=payload['episodes'][0];row.update(split='val_development',query_source_ids=['query-source'],query_component_id='d'*64,frame_counts=[8,8])
+    other=copy.deepcopy(row);other.update(query_id='q1',query_text='another video query',caption_group_id='caption-1');payload['episodes'].append(other)
+    path=write();binding=SplitBinding('V_development',InputReference(path,file_sha256(path)),'reviewed_semantic')
+    index=tmp_path/'index.json';index.write_text(json.dumps(dict(schema_version='evidence-initial-index-v1',clip_sha256=cfg.model.base.clip_sha256,preprocessing_sha256=cfg.views.preprocessing_sha256,view_sha256=digest(config_payload(cfg.views)),gallery_version='g1',roles={'V_development':['a','b']})))
+    cfg=replace(cfg,splits=(binding,),index=replace(cfg.index,reference=InputReference(index,file_sha256(index)),gallery_version='g1'))
+    model=EvidenceMatcherModel(cfg.model).eval();reference_store=ArtifactArrayStore(tmp_path/'reference'/'arrays');reference_store.run_root.joinpath('checkpoints').mkdir()
+    reference_context=SimpleNamespace(array_store=reference_store,paths=SimpleNamespace(checkpoints=reference_store.run_root/'checkpoints'))
+    _write_reference_parts(reference_context,model);reference_path=reference_context.paths.checkpoints/'reference-parts.pt'
+    head=build_value_head(cfg.value,model.matcher.feature_dim+19).eval()
+    with torch.no_grad():head.network[-1].weight.zero_();head.network[-1].bias.fill_(1.)
+    head_path=tmp_path/'mean-head.pt';torch.save(head.state_dict(),head_path)
+    cfg=replace(cfg,parents=ParentConfig(InputReference(reference_path,file_sha256(reference_path)),cfg.parents.matcher,InputReference(head_path,file_sha256(head_path)),None))
+    store=ArtifactArrayStore(tmp_path/'evaluation'/'arrays');context=SimpleNamespace(array_store=store,paths=SimpleNamespace(root=store.run_root,provenance=store.run_root/'provenance'),config=SimpleNamespace(eval_split='val_development',source_sha='b'*40))
+    if compiled_population:
+        from semantic_retrieval.evidence.training import freeze_reference
+        freeze_reference(model)
+        from semantic_retrieval.config import RuntimeConfig
+        from semantic_retrieval.evidence.execution import _episodes_and_sources,initial_episode_state,EpisodeAdapter,_query,_producer
+        from semantic_retrieval.evidence.transitions import FrozenTransitionModel,compile_transitions
+        from semantic_retrieval.evidence.sampling import SamplingState
+        from semantic_retrieval.evidence.value import build_value_features
+        from semantic_retrieval.evidence.views import propose_actions
+        cfg=replace(cfg,runtime=RuntimeConfig(tmp_path/'study.yaml',tmp_path/'registry.jsonl',store.run_root,'mean-population','a'*64,'b'*40,'val_development'))
+        episodes,_,source,cache=_episodes_and_sources(cfg,'V_development',model,context)
+        producer=_producer(cfg,model,'V_development');sampling=SamplingState(cfg.sampling,mode='eval',model_sha256=producer.matcher_sha256)
+        states=[];adapters={}
+        for wrapper in episodes:
+            state=initial_episode_state(wrapper.episode,cfg,source,cache=cache,model=model,failure_context=context)
+            adapter=EpisodeAdapter(model,_query(model,wrapper.episode.query_text),source,cache,sampling)
+            counts=adapter.prediction_counts(state)
+            state=replace(state,budget=state.budget.reserve(counts).settle(counts,counts))
+            states.append(state);adapters[state.query_id]=adapter
+        frozen=FrozenTransitionModel(model,lambda state:adapters[state.query_id].predict(state),lambda state,action:adapters[state.query_id].observe(state,action),build_value_features)
+        truth={w.episode.query_id:(dict(zip(w.episode.canonical_ids,w.episode.relevance)),(w.episode.query_component_id,)) for w in episodes}
+        refs=compile_transitions(states,propose_actions,frozen,truth,store=ArtifactArrayStore(tmp_path/'population'/'arrays'),producer_identity=producer)
+        cfg=replace(cfg,transitions=replace(cfg.transitions,reference=InputReference(refs.index_path,refs.index_sha256),producer_sha256=producer.sha256))
+    if compiled_population:
+        # Deterministic timing oracle: actual head calls each consume ten virtual seconds.
+        # All decoding, transition compilation, model calls and journal I/O remain real.
+        clock={'seconds':0.}
+        monkeypatch.setattr('semantic_retrieval.evidence.execution.time.monotonic',lambda:clock['seconds'])
+        def charge_head_time(module,args):clock['seconds']+=10.
+        head.register_forward_pre_hook(charge_head_time)
+    result=_evaluation(context,cfg,model,head);report=json.loads((context.paths.provenance/'evidence-report.json').read_text())
+    assert result['summary_metrics']['rich_valid_count'] == 0
+    assert report['undefined_reasons']['rich_proper_scores'] == 'no valid rich-score targets'
+    arrays={a['key']:verify_array_reference(store.run_root,a) for a in report['array_references']}
+    assert arrays['episode_labels'].shape==(2,3)
+    assert result['summary_metrics']['selected_valid_count']==4
+    assert result['summary_metrics']['frame_requests']==32
+    assert result['summary_metrics']['selected_gain_mse']==pytest.approx(1.)
+    assert 'selected_nll' not in result['summary_metrics']
+    assert (arrays['selected_mean_gain']==1.).all()
+    if compiled_population:
+        assert result['summary_metrics']['offline_diagnostic_seconds']==50.
+        assert result['summary_metrics']['population_valid_count']==4
+        assert result['summary_metrics']['population_gain_mse']==pytest.approx(1.)
+        assert (arrays['population_mean_gain']==1.).all()
+    for query in ['q0','q1']:
+        assert (context.paths.provenance/'evidence-actions'/digest(query)).is_dir()
+
+
+@pytest.mark.parametrize('scope', ['episode','index'])
+def test_initial_input_failure_preserves_real_requests_without_prediction(config_factory,episode_manifest,tmp_path,scope):
+    import json
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from experiment_artifacts import ArtifactArrayStore
+    from semantic_retrieval.config import config_payload
+    from semantic_retrieval.evidence.config import InputReference,SplitBinding
+    from semantic_retrieval.evidence.data import read_split_binding
+    from semantic_retrieval.evidence.execution import VideoFrameSource,DecodeFailure,initial_episode_state,_episodes_and_sources
+    from semantic_retrieval.evidence.frame_cache import FrameFeatureCache
+    from semantic_retrieval.evidence.model import EvidenceMatcherModel
+    from semantic_retrieval.evidence.types import digest,ResourceCounts
+    from semantic_retrieval.data.episodes import file_sha256
+    payload,write,paths=episode_manifest;row=payload['episodes'][0]
+    paths[1].write_bytes(b'identity-valid but undecodable source')
+    row.update(canonical_ids=['a','b'],candidate_ids=['a','b'],video_paths=[str(paths[0]),str(paths[1])],
+        content_sha256=[file_sha256(paths[0]),file_sha256(paths[1])],frame_counts=[2,2],split='val_development',
+        query_source_ids=['query-source'],query_component_id='d'*64)
+    payload.update(schema_version=3,relevance_space='reviewed_semantic');manifest=write()
+    cfg=config_factory(stage='evaluation');binding=SplitBinding('V_development',InputReference(manifest,file_sha256(manifest)),'reviewed_semantic')
+    index=tmp_path/'index.json';index.write_text(json.dumps(dict(schema_version='evidence-initial-index-v1',clip_sha256=cfg.model.base.clip_sha256,
+        preprocessing_sha256=cfg.views.preprocessing_sha256,view_sha256=digest(config_payload(cfg.views)),gallery_version='g1',roles={'V_development':['a','b']})))
+    cfg=replace(cfg,splits=(binding,),index=replace(cfg.index,reference=InputReference(index,file_sha256(index)),gallery_version='g1'))
+    model=EvidenceMatcherModel(cfg.model).eval();store=ArtifactArrayStore(tmp_path/'failure-run'/'arrays')
+    context=SimpleNamespace(array_store=store,paths=SimpleNamespace(provenance=store.run_root/'provenance'))
+    episode=read_split_binding(binding)[0].episode
+    source=VideoFrameSource(dict(zip(episode.canonical_ids,zip(episode.video_paths,episode.content_sha256))),cfg.model.base.clip.image_size,cfg.views.preprocessing_sha256)
+    with pytest.raises(DecodeFailure) as caught:
+        if scope=='episode':
+            initial_episode_state(episode,cfg,source,cache=FrameFeatureCache(store),model=model,failure_context=context)
+        else:
+            _episodes_and_sources(cfg,'V_development',model,context)
+    assert caught.value.actual_counts==ResourceCounts(4,1,0,0)
+    reports=list(context.paths.provenance.rglob('input-failures/*.json'))
+    assert len(reports)==1
+    report=json.loads(reports[0].read_text())
+    assert report['schema_version']=='evidence-input-failure-v1'
+    assert report['scope']==scope and report['candidate_id']=='b'
+    assert report['actual_counts']==dict(frame_requests=4,clip_frames=1,temporal_tokens=0,mc_elements=0)
+    assert report['evaluation_complete'] is False and report['overall_metrics_defined'] is False
+    assert report['affected_query_count']==1
+    if scope=='episode':
+        assert report['budget']['spent']==report['actual_counts']
+        assert report['budget']['reserved']==dict(frame_requests=0,clip_frames=0,temporal_tokens=0,mc_elements=0)
+    else:assert report['budget'] is None
+    assert not (context.paths.provenance/'evidence-report.json').exists()

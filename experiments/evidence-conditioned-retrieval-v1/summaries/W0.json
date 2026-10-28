@@ -1,0 +1,28 @@
+{
+  "phase": "W0-public-pretrained-input",
+  "phase_path": "experiments/evidence-conditioned-retrieval-v1/phases/W0.json",
+  "runs": [
+    {
+      "manifest_sha256": "2fd1ceb9126df1ad40e0f56ad4a242bd297e21d72ce496e4b2922f4cee51cee7",
+      "output_hashes": {
+        "arrays/ViT-B-32.pt": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+        "arrays/sha256/42/42b7cb5a5e49b155872a751bf167a1ef1e072af9ad7c821b729af5725fd433ee.npy": "0c38f72b0e392627d25c52dba562eaf99cf37a221c25a236283c6933e5ee27ad",
+        "arrays/sha256/ac/ac8d295b42cff29b7cc8b34d6f3ec4f481ee57c6ba7e7bef2406ecf26f8ce729.npy": "50e02111b3ccfb1417859a5da46ab23fdd5bcb44d290715d9f9e0d4acf382607",
+        "command.sh": "0b07a3661e4295a9e8f13eb5728cb95645e254716606d84e2aefc5391f519f72",
+        "logs/worker.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "metrics/val_eval_000.json": "5ce1639754c74bd482e6e20c1d3e87544e751d4b722f3af5ea6d019fd8af66c4",
+        "provenance/controller-launch.json": "7744eb4f324c9ab3325895aefbd97f936c364a7494bbbfcda5fdfc6057d16853",
+        "provenance/controller-plan.json": "d1553d8b32df0525a92cb20fc0993a5fbeb56a0d85f0de8670e815f1deb5919c",
+        "provenance/controller-result.json": "1c258cc3229608f6c978756f1400cf9e85e345a28fbf7e8c82244e77f086e89c",
+        "provenance/pretrained-input.json": "c4e1c033e360f2a428f293158b916b1e9a7839daba4ff70e239c90352cb377a6"
+      },
+      "run_id": "synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "evidence-conditioned-retrieval-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}

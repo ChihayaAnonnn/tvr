@@ -1,0 +1,139 @@
+# Pre-registered protocol for SAP failure-supervision PoC (Fix 1).
+#
+# Purpose: test whether adding direct BCE supervision on SAP `u_mode`
+# (Fix 1 from todo.md §3) closes the observed calibration gap
+# (A3 contextual failure AUROC = 0.57 in contextual-risk-v2 Stage 1 attempt5).
+#
+# Scope: single-stage PoC. Not part of contextual-risk-v2 campaign
+# (which is finalized as FAIL). Results here do NOT authorize
+# a full new campaign; a passing PoC only justifies opening one.
+
+# ---------------------------------------------------------------------------
+# AMENDMENT 2026-08-20 — metric naming correction (post-hoc, no numbers changed)
+#
+# As originally written this file named the primary metric
+# `sap_u_mode_val_auroc_v2t`. That name was WRONG. No AUROC is computed on
+# SAP `u_mode` anywhere in this repository. The quantity actually gated on —
+# the `V2T contextual risk | AUROC=` line emitted at
+# main_task_retrieval.py:4637 — is the A3 contextual risk sidecar's
+# `failure_risk = sigmoid(failure_logit)`
+# (prob_models/contextual_retrieval_risk.py:259).
+#
+# The metric has been renamed to `a3_contextual_failure_auroc_v2t` below.
+# Thresholds, recorded values, and the PASS verdict are UNCHANGED — only the
+# identifier and its documented provenance are corrected.
+#
+# Consequence for interpretation: Fix 1's effect on this metric is INDIRECT.
+# BCE on `u_mode` updates SAP, which changes `mu_video`, which is passed as
+# `video_means` into the contextual sidecar (main_task_retrieval.py:4523).
+# This study therefore does NOT establish that `u_mode` itself became
+# failure-predictive; it establishes that the A3 contextual head's
+# discriminability recovered under Fix 1 training.
+# ---------------------------------------------------------------------------
+
+study: sap-failure-supervision-v1
+protocol_version: 1
+control_plane: experiments/sap-failure-supervision-v1
+data_plane: artifacts/sap-failure-supervision-v1
+registry: experiments/sap-failure-supervision-v1/registry.jsonl
+
+lineage:
+  parent_study: contextual-risk-v2
+  parent_run_ids:
+    - msrvtt-baseline-validation_baselines-seed000-20260818T040000Z-1fdd78f384d1
+  selection_lineage: >
+    Stage 1 A3 (attempt5) failed the gate with V2T contextual failure AUROC
+    = 0.57 and V2T directional_rho = 0.1974. Diagnosis (todo.md §1) identified
+    absence of direct failure supervision on SAP outputs as the root cause.
+    This PoC adds one BCE loss term (Fix 1) to test that specific hypothesis.
+
+stages:
+  - fix1_poc
+
+variants:
+  fix1_poc:
+    - name: sap_failure_bce_w0p1
+      w_sap_failure_bce: 0.1
+      seed: 0
+
+# Success criteria — pre-registered, must be declared BEFORE launch.
+stop_gates:
+  fix1_poc:
+    primary:
+      metric: a3_contextual_failure_auroc_v2t   # renamed 2026-08-20, see AMENDMENT
+      metric_source: >
+        main_task_retrieval.py:4637 "V2T contextual risk | AUROC=" ;
+        score = ContextualRetrievalRiskSidecar.failure_risk
+        = sigmoid(failure_logit), prob_models/contextual_retrieval_risk.py:259
+      threshold_gte: 0.70
+      rationale: >
+        Baseline (no Fix 1) measured 0.57 in Stage 1 attempt5.
+        0.70 chosen as "clearly above chance and above the observed
+        mixed-signal regime". Below 0.70 → Fix 1 alone insufficient,
+        move to Fix 3 or bundled Fix 1+3.
+    secondary_monitor:
+      # Not gates — recorded for context.
+      - retrieval_r1_v2t
+      - retrieval_r5_v2t
+      - a3_contextual_failure_auroc_t2v   # renamed 2026-08-20, see AMENDMENT
+    non_regression_guard:
+      # Retrieval quality must not collapse; PoC is calibration-only.
+      # Baseline (Stage 1 attempt5, frozen retriever + WTI + DSL T=2.0):
+      #   V2T R@1 = 93.0 ; T2V R@1 = 76.52
+      # SAP is sidecar-only (does NOT participate in retrieval logits),
+      # so R@1 SHOULD remain unchanged. Any deviation > 1 pp indicates
+      # unintended coupling and fails the PoC regardless of AUROC.
+      metric: retrieval_r1_v2t
+      absolute_floor: 92.0
+      baseline_reference: 93.0
+      rationale: >
+        Hard floor at 92.0 (1 pp under Stage 1 attempt5 baseline of 93.0).
+        Fix 1 must not perturb the retrieval path.
+
+hardware_policy:
+  required_gpu_model: A800
+  required_gpu_count: 2
+  pilot_topology: [2, 3]
+  precision: fp32
+  distributed_topology: torchrun-2-rank
+  deviation_from_frozen_topology:
+    frozen_campaign_topology: [0, 2, 3, 4]
+    reason: >
+      GPUs 0 and 4 occupied by external services (sglang, VLLM) with
+      ~74 GB residency each; cannot be freed without disrupting
+      unrelated work. GPUs 1/2/3 free; chose {2,3} for rank-order
+      alignment with the frozen 4-GPU layout.
+    numerics_comparability_note: >
+      Global batch scaling: per-GPU batch doubled (×2) to preserve
+      the effective global batch of the 4-GPU Stage 1 attempt5 runs.
+      Learning rate unchanged. This IS comparable to Stage 1 numerics
+      at the loss/gradient level; downstream AUROC comparability
+      is the object of the PoC.
+
+training_config:
+  base_launcher: run_train_msrvtt_bg.sh
+  pilot_launcher: run_train_msrvtt_fix1_2gpu_bg.sh  # to be created
+  epochs: 3
+  batch_multiplier_vs_stage1_per_gpu: 2
+  new_hyperparameters:
+    w_sap_failure_bce: 0.1
+  frozen_from_stage1:
+    - retriever_ckpt
+    - wti_config
+    - dsl_temperature
+    - all_other_loss_weights
+
+test_sealed:
+  authorize_only_after: fix1_poc_passes_primary_gate_AND_new_campaign_registered
+  retry_policy:
+    terminal_in_place_retry: forbidden
+    authorized_successor: subsequent_phase_with_new_unique_run_id
+    predecessor_lineage: parent_run_ids
+    authorization_reason: selection_lineage
+
+archive_rules:
+  phase_batched_registry: true
+  runtime_may_modify_tracked_files: false
+  externalize_numeric_payloads_over_bytes: 1048576
+  preserve_failed_evidence: true
+  new_legacy_output_forbidden: true

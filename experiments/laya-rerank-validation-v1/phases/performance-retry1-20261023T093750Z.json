@@ -1,0 +1,188 @@
+{
+  "study": "laya-rerank-validation-v1",
+  "phase": "performance-retry1-20261023T093750Z",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=3",
+        "LD_LIBRARY_PATH=/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/nvidia/nccl/lib:/home/xujie/miniconda3/envs/ret/lib/python3.10/site-packages/nvidia/cudnn/lib",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "HF_HUB_OFFLINE=1",
+        "TRANSFORMERS_OFFLINE=1",
+        "/data2/hxj/project/UATVR/.venvs/laya-validation-v1/bin/python",
+        "scripts/evaluate_laya_rerank.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "model": {},
+        "loss": {},
+        "optimizer": {},
+        "scheduler": {},
+        "evaluation": {
+          "config_kind": "laya-rerank-validation-v1",
+          "split": "val",
+          "seed": 713,
+          "top_k": 10,
+          "frames": 4,
+          "precision": "fp32",
+          "dsl": false,
+          "training": false,
+          "query_count": 10000,
+          "video_count": 500,
+          "query_batch": 1,
+          "candidate_microbatch": 8,
+          "option_attention": "block",
+          "option_order": [
+            "match",
+            "not_supported"
+          ],
+          "fusion": false,
+          "language_prefix_cache": false,
+          "temperature": "checkpoint",
+          "world_size_qualification": 2,
+          "bootstrap_seed": 713,
+          "bootstrap_samples": 10000,
+          "latency_sample_queries": 100,
+          "latency_warmup_queries": 5,
+          "latency_rounds": 3,
+          "parent": {
+            "run_id": "msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502",
+            "manifest_sha256": "5ee7d938e312d5182bc549e4393f638ef3069506930f5c8d76edd314f8ddfd71",
+            "method": "uatvr",
+            "seed": 713,
+            "selected_epoch": 5,
+            "result_sha256": "18bcf3e2fcb0e956546a8bdc7e6888804f14831c507ccd7e404ddad9fb69c596",
+            "metrics_sha256": "dbe547a7f68e13f403c84f5cb99a0b5cdacd483913dadca74c24b861f3f7e41d",
+            "checkpoint": {
+              "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/checkpoints/epoch-05.pt",
+              "sha256": "b86658bf9e7311fe8799d3f68547d48020fc27b87c95f7af22a06d1156d8479f",
+              "sidecar_sha256": "090e6c35bc238a566fbbdf9dc06b6a483705543da4bfb6d477d61108bbccfa04"
+            }
+          },
+          "input_certification": {
+            "run_id": "msrvtt-baseline-complete-source-input-seed713-20261010T112251Z-93687931635b",
+            "manifest_sha256": "8e3932a4e5f2d954153be58132af2a3621c27dfb1dbaf38cd8066d1eb40ed545",
+            "report_sha256": "e99bada8bfdb5e11e7337c91884754893a5bae1db8971a04c0d6a5ae92bbd497"
+          },
+          "weights": "/data2/hxj/open-models/laya-vision/models",
+          "external_code": "/data2/hxj/open-models/laya-vision/code",
+          "qualification_uatvr_clip": {
+            "context_length": 77,
+            "embed_dim": 512,
+            "fixture": false,
+            "image_size": 224,
+            "patch_size": 32,
+            "text_heads": 8,
+            "text_layers": 12,
+            "text_width": 512,
+            "vision_layers": 12,
+            "vision_width": 768,
+            "vocab_size": 49408
+          },
+          "operation": "performance",
+          "max_seconds": 3600,
+          "resume_from": null,
+          "accuracy": {
+            "run_id": "msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908",
+            "manifest_sha256": "10cdfb04444791fc7c622d715a54189cdee97f75967469393a02a2f5b5061117",
+            "report_sha256": "66829c3a6f5465a9f56465aaca8d3036838894ae8bd0f3c70a878b92ed6dd5d1",
+            "artifact_path": "/data2/hxj/project/UATVR/artifacts/laya-rerank-validation-v1/msrvtt/baseline/msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908",
+            "input_indices": [
+              {
+                "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-000.input-index.json",
+                "sha256": "73492df87058d24788ba7530bfd6a2d9ce61c6d80aa98b3cceb0f3e489d13456"
+              },
+              {
+                "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-001.input-index.json",
+                "sha256": "f84d52d95452a44c5dd68bddb119ec2e462ba1828cc0b5015c72e8c12eea2ac2"
+              },
+              {
+                "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-002.input-index.json",
+                "sha256": "ac7645864a17cc87e8c7c403b1113a109354f44f025746394d2c3e01ca80e737"
+              }
+            ]
+          }
+        }
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [
+        {
+          "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/external.input-index.json",
+          "sha256": "93b57def84898f0fa01a8dd29b53b8a2d43e267e7209bbe7376fa33b72d7b2e2"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/manifest.json",
+          "sha256": "85e960a104752293fdedab7571375e490d4a8bba8a1b0407bff9330ffdd75d3d"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/validation-000.input-index.json",
+          "sha256": "f07b82910f0d35e3210c7d266b3b84ffdae623aaa86fc8b57c51006c9c9fbf25"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-000.input-index.json",
+          "sha256": "73492df87058d24788ba7530bfd6a2d9ce61c6d80aa98b3cceb0f3e489d13456"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-001.input-index.json",
+          "sha256": "f84d52d95452a44c5dd68bddb119ec2e462ba1828cc0b5015c72e8c12eea2ac2"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/experiments/laya-rerank-validation-v1/inputs/accuracy-cache-002.input-index.json",
+          "sha256": "ac7645864a17cc87e8c7c403b1113a109354f44f025746394d2c3e01ca80e737"
+        }
+      ],
+      "environment": {
+        "cuda": "12.4",
+        "distributed_topology": "single-process",
+        "gpu_count": 1,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32",
+        "python": "3.10.0",
+        "pytorch": "2.5.1+cu124"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/checkpoints/epoch-05.pt",
+          "sha256": "b86658bf9e7311fe8799d3f68547d48020fc27b87c95f7af22a06d1156d8479f"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/full-data-retrieval-v1/msrvtt/baseline/msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502/checkpoints/epoch-05.json",
+          "sha256": "090e6c35bc238a566fbbdf9dc06b6a483705543da4bfb6d477d61108bbccfa04"
+        },
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/synthetic/baseline/synthetic-baseline-pretrained-clip-input-seed713-20261010T002713Z-619e2ff1c63b/arrays/ViT-B-32.pt",
+          "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+        }
+      ],
+      "parent_run_ids": [
+        "synthetic-baseline-laya-q0-singleton-seed713-20261023T093531Z-081ac8c60dcd",
+        "msrvtt-baseline-laya-accuracy-seed713-20261023T085620Z-34d5b5f84908",
+        "msrvtt-baseline-uatvr-seed713-20261011T042527Z-6d2095e3d502",
+        "msrvtt-efficiency-laya-performance-seed713-20261023T092517Z-ea3f763f7930"
+      ],
+      "scheduled_timestamp_utc": "20261023T093750Z",
+      "seed": 713,
+      "selection_lineage": [
+        {
+          "kind": "diagnosed_software_successor",
+          "parent_run_id": "msrvtt-efficiency-laya-performance-seed713-20261023T092517Z-ea3f763f7930",
+          "failure_class": "singleton_pooling_mask_alias",
+          "report_path": "experiments/laya-rerank-validation-v1/incidents/singleton-pooling-mask-alias.md",
+          "report_sha256": "ae27f70ad71d2a1e70fd12861136d3e1bc0ae3cf2620dbf714300ebdb2717de5",
+          "reason": "Protect pooling mask input to preserve original archived multiquery WTI semantics at query batch1"
+        }
+      ],
+      "stage": "efficiency",
+      "test_authorized": false,
+      "validation_authorized": true,
+      "variant": "laya-performance-retry1"
+    }
+  ]
+}

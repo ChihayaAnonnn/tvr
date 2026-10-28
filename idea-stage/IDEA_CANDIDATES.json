@@ -1,0 +1,122 @@
+{
+  "generated_date": "2026-10-09",
+  "status": "proposed_no_experiments",
+  "generated_count": 13,
+  "deduplicated_count": 12,
+  "deduplication": "ordered-clause monotonic alignment duplicate only",
+  "shards": [
+    "/root/ideas",
+    "/root/mechanism_ideas"
+  ],
+  "second_model_warning": "gpt-5.5 not offered by available agent model catalog; complementary same-family lens used, not independent model review",
+  "candidates": [
+    {
+      "dedup_key": "same_event_coherent_wti",
+      "title": "同一事件约束 WTI",
+      "method": "词语的匹配证据必须组成同一真实事件，不能跨无关片段拼接",
+      "prior_work": "VideoComp; Holmes; MSC PRVR",
+      "so_what": "若同词汇、同预算的绑定冲突得到纠正，说明局部最高分存在可修复结构缺陷",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "ordered_clause_frame_alignment",
+      "title": "有序短语—帧对齐",
+      "method": "单调动态规划让事件先后直接进入分数",
+      "prior_work": "VideoComp; MSC PRVR",
+      "so_what": "区分时序证据不足与匹配函数丢失顺序",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "semantic_multiplicity_risk_audit",
+      "title": "语义多答案风险审计",
+      "method": "有限验证库独立审核相关集合，对照官方与语义风险",
+      "prior_work": "Holmes; Moment of Untruth; existing pilot",
+      "so_what": "确定高熵究竟表示错误还是多个正确答案",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "directional_clause_support_retrieval",
+      "title": "必要条件合取匹配",
+      "method": "要求实体、动作和属性等必要条件全部得到支持",
+      "prior_work": "Holmes; TARA; VideoComp",
+      "so_what": "检验相似度能否拒绝仅匹配部分条件的近邻",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "candidate_intervention_risk_transport",
+      "title": "候选干预下风险迁移",
+      "method": "控制 K 与正例，改变干扰类型，检验校准迁移",
+      "prior_work": "TokenBinder; existing pilot",
+      "so_what": "识别风险校准受候选生成机制影响的边界",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "reference_bank_pair_evidence",
+      "title": "固定参照库 pair 证据",
+      "method": "相对训练参照库分数尾部评价 pair，竞争风险另算",
+      "prior_work": "QB-Norm; BLiM CPN; conformal retrieval",
+      "so_what": "检验参照标准能否改善跨库校准",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "expand_gallery_vs_refine_frames",
+      "title": "扩候选还是补帧",
+      "method": "根据初始证据选择扩库、加帧或停止",
+      "prior_work": "AdaVid; VideoRAG; existing pilot",
+      "so_what": "判断两种纠错动作是否互补且可预测",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "adaptive_dsa_token_computation",
+      "title": "自适应 DSA token 预算",
+      "method": "按增量排序收益分配匹配 token",
+      "prior_work": "UATVR; AdaVid; token pruning",
+      "so_what": "检查匹配计算节省能否变成端到端节省",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "dsa-caption-consistent-slot-specialization",
+      "title": "多描述监督 DSA 槽分工",
+      "method": "用训练多 caption 约束直接参与排序的槽保持不同语义",
+      "prior_work": "UATVR DSA; ProTA; MSC PRVR",
+      "so_what": "检查弱语义是否被主事件吞并",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "explicit-hypothesis-mixture-ranking",
+      "title": "显式多语义假设排序",
+      "method": "固定数目视频语义槽，以归一化 logsumexp 直接打分",
+      "prior_work": "UATVR DSA; T-MASS; ProTA",
+      "so_what": "检验保留离散语义模式是否优于辅助高斯正则",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "capacity-constrained-wti-assignment",
+      "title": "容量约束词帧分配",
+      "method": "限制局部证据重复使用并允许 unmatched",
+      "prior_work": "Holmes dustbin OT; token alignment",
+      "so_what": "检查局部最大值复用是否造成误匹配",
+      "feasible": true,
+      "novelty": "unverified"
+    },
+    {
+      "dedup_key": "query-adaptive-temporal-span-slots",
+      "title": "连续片段语义槽",
+      "method": "在等预算的连续窗口内匹配查询",
+      "prior_work": "MSC PRVR; Holmes; PRVR methods",
+      "so_what": "区分连续事件支持与多窗口搜索机会收益",
+      "feasible": true,
+      "novelty": "unverified"
+    }
+  ]
+}

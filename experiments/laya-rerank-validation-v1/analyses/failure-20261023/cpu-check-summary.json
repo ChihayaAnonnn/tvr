@@ -1,0 +1,21 @@
+{
+  "batch8_vs_single_max": 9.5367431640625e-07,
+  "batch_permutation_max": 0.0,
+  "cpu_vs_archived_gpu_logits_max": 3.814697265625e-05,
+  "real_query_count": 4,
+  "real_pair_count": 8,
+  "same_device_pair_count": 2,
+  "same_device_native_cached_max": 0.0,
+  "same_device_pixels_cached_max": 0.0,
+  "native_prefers_original_wrong_winner_all_four": true,
+  "case_selection": "first worsened query of each distinct target video in original query order; four videos; posthoc illustrative cases, not prevalence estimate",
+  "cross_device_probability_max": 6.5443965715505925e-06,
+  "input_frame_count": 4,
+  "image_feature_shape": "4x64x576",
+  "image_token_count": 256,
+  "token_counts_min": 352,
+  "token_counts_max": 372,
+  "tokenizer_pad_id": 2,
+  "text_embedding_vocab": 49280,
+  "actual_max_input_id": 49279
+}

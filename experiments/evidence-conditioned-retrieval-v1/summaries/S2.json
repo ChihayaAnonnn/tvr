@@ -1,0 +1,71 @@
+{
+  "output_hashes_format": "terminal-status-reference-v1",
+  "phase": "S2",
+  "phase_path": "experiments/evidence-conditioned-retrieval-v1/phases/S2.json",
+  "runs": [
+    {
+      "manifest_sha256": "7d9502cba0f9e32fdd2bba4ec9ee85675ec23f4a100468c0ab4b3c9752b0e411",
+      "output_hashes_reference": {
+        "entry_count": 2238,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-deterministic-seed713-20261010T005437Z-1606bfc9898f/status.json",
+        "sha256": "95ec12ed46bfe66b4afcb5dbe2c136591732602240b62eda131bf2d5992a8bf8"
+      },
+      "run_id": "msrvtt-baseline-evidence-matcher-deterministic-seed713-20261010T005437Z-1606bfc9898f",
+      "state": "completed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "5e67838565c50e662c61078a49c27e5d369ddc9f61b405878746b04753488df9",
+      "output_hashes_reference": {
+        "entry_count": 2238,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-fixed-scale-seed713-20261010T005437Z-1606bfc9898f/status.json",
+        "sha256": "7170546e90099c4794dc7762f575ff8a6125c6e431555f821df51fd6dfc6db1e"
+      },
+      "run_id": "msrvtt-baseline-evidence-matcher-fixed-scale-seed713-20261010T005437Z-1606bfc9898f",
+      "state": "completed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "8cf2e268b4ef302f9c8b238024a38fdd16584a622ea614a84336b99c5bb6f93f",
+      "output_hashes_reference": {
+        "entry_count": 2238,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-learned-temperature-seed713-20261010T005437Z-1606bfc9898f/status.json",
+        "sha256": "79017968afbb8f2f46056b1f2af34e1412949bc41b9e46f40d25c481156ac8e8"
+      },
+      "run_id": "msrvtt-baseline-evidence-matcher-learned-temperature-seed713-20261010T005437Z-1606bfc9898f",
+      "state": "completed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "df4275f2536cd8808efaff0b7e3ebc556ca62fe71328c03eca569d36ddd7314c",
+      "output_hashes_reference": {
+        "entry_count": 2243,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-standard-probabilistic-seed713-20261010T005437Z-1606bfc9898f/status.json",
+        "sha256": "c9d2effdb4cbb3aaa63d503c25c23a14f4c7910718804453d774ea83f55763a3"
+      },
+      "run_id": "msrvtt-baseline-evidence-matcher-standard-probabilistic-seed713-20261010T005437Z-1606bfc9898f",
+      "state": "completed",
+      "summary_metrics": {}
+    },
+    {
+      "manifest_sha256": "989d7d99579c1a4a55db2db8c18140178d5e4a3e0e92b735e0af981e73db9df0",
+      "output_hashes_reference": {
+        "entry_count": 2243,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/evidence-conditioned-retrieval-v1/msrvtt/baseline/msrvtt-baseline-evidence-matcher-gaussian-seed713-20261010T005437Z-1606bfc9898f/status.json",
+        "sha256": "e0c83f4abf76d1d5d28eaed24a049914f1fec95961e274464e831d27a57bf0ac"
+      },
+      "run_id": "msrvtt-baseline-evidence-matcher-gaussian-seed713-20261010T005437Z-1606bfc9898f",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "evidence-conditioned-retrieval-v1",
+  "terminal_counts": {
+    "completed": 5
+  }
+}
