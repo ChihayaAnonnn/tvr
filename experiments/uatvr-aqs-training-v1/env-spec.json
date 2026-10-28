@@ -1,0 +1,10 @@
+{
+  "python": "3.10",
+  "executable": "/home/xujie/.conda/envs/tvr/bin/python",
+  "packages": {
+    "torch": "2.1.2+cu121", "numpy": "1.26.4", "opencv-python": "4.11.0.86",
+    "PyYAML": "6.0.2", "regex": "2024.11.6", "ftfy": "6.3.1"
+  },
+  "env": {"OMP_NUM_THREADS": "1", "CUBLAS_WORKSPACE_CONFIG": ":4096:8"},
+  "smoke": "CUDA_VISIBLE_DEVICES=0,1 /home/xujie/.conda/envs/tvr/bin/python scripts/aqs_env_witness.py"
+}
