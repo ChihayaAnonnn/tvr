@@ -109,3 +109,13 @@ def test_model_rejects_wrong_policy_and_global_duplicates(tiny_clip, paired_batc
                              id_mapping_sha256='a'*64, temporal_layers=1)
     with pytest.raises(ValueError, match='unique'):
         model(*paired_batch[:-1], torch.tensor([1, 1]))
+
+
+def test_active_gradient_layout_guard_preserves_values():
+    from semantic_retrieval.aqs.core import _ContiguousBackward
+    value = torch.ones(3, 4, requires_grad=True)
+    upstream = torch.arange(12.).reshape(4, 3).T
+    assert not upstream.is_contiguous()
+    result = torch.autograd.grad(_ContiguousBackward.apply(value), value, upstream)[0]
+    assert result.is_contiguous()
+    torch.testing.assert_close(result, upstream, rtol=0, atol=0)

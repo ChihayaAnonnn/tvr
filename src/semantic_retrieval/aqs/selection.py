@@ -1,4 +1,6 @@
 """Detached, deterministic video selection and side-effect-free representations."""
+from dataclasses import dataclass
+
 import torch
 
 
@@ -32,9 +34,6 @@ def pooled_frames(tokens, mask, frame_count):
     if not torch.isfinite(norms).all() or (norms <= 1e-8).any():
         raise ValueError('invalid pooled video representation')
     return mean / norms
-
-
-from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

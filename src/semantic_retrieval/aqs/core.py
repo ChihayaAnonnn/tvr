@@ -1,13 +1,24 @@
 """Explicit UATVR training extension; vendor sources remain unchanged.
 
 The method below is copied from full_data/upstream_uatvr/modeling.py at
-976f815, with only a keyword-only observer and its call added. An AST
-regression compares it to the original after removing these additions.
+976f815, with a keyword-only observer and an active-only gradient-layout guard.
+An AST regression compares it to the original after removing these additions.
 """
 import torch
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from semantic_retrieval.full_data.upstream_uatvr.modeling import UATVR, allgather
 from .selection import pooled_frames
+
+
+class _ContiguousBackward(torch.autograd.Function):
+    """Gloo receive buffers must not inherit strided all-gather gradients."""
+    @staticmethod
+    def forward(ctx, value):
+        return value
+
+    @staticmethod
+    def backward(ctx, gradient):
+        return gradient.contiguous()
 
 
 class AqsCore(UATVR):
@@ -79,6 +90,10 @@ class AqsCore(UATVR):
             attention_mask = allgather(attention_mask, self.task_config)
             if torch.distributed.is_initialized():
                 torch.distributed.barrier()
+
+        if training_observer is not None:
+            visual_output = _ContiguousBackward.apply(visual_output)
+            text_token = _ContiguousBackward.apply(text_token)
 
         visual_output = visual_output / visual_output.norm(dim=-1, keepdim=True)
         visual_pooled = self._mean_pooling_for_similarity_visual(visual_output[:, 0:frame_num, :].contiguous(), video_mask[:, 0:frame_num].contiguous())
