@@ -20,3 +20,18 @@ def test_launcher_rejects_test_and_wrong_topology():
     for key, value in [('world_size', 4), ('validation_only', False), ('global_batch', 63)]:
         with pytest.raises(ValueError):
             validate_recipe(dict(recipe, **{key: value}))
+
+
+def test_relocated_index_requires_exact_original_bytes(tmp_path):
+    from scripts.prepare_aqs_training import relocate_indices
+    import hashlib
+    path = tmp_path/'experiments/demo/inputs/raw.input-index.json'
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b'original')
+    sha = hashlib.sha256(b'original').hexdigest()
+    old = dict(path='/removed/UATVR/experiments/demo/inputs/raw.input-index.json', sha256=sha)
+    result, lineage = relocate_indices(tmp_path, [old])
+    assert result == [dict(path=str(path), sha256=sha)]
+    assert lineage[0]['original_path'] == old['path']
+    path.write_bytes(b'changed')
+    with pytest.raises(ValueError): relocate_indices(tmp_path, [old])
