@@ -36,7 +36,6 @@ class BaselineModel(nn.Module):
             reference.load_state_dict(clip_state, strict=True)
             self.core = reference.float()
         elif method == 'uatvr':
-            from .upstream_uatvr.modeling import UATVR
             from .upstream_uatvr.nn_components.module_cross import CrossConfig
             if not 1 <= temporal_layers <= clip_config.text_layers:
                 raise ValueError('invalid pretrained temporal layer count')
@@ -48,7 +47,7 @@ class BaselineModel(nn.Module):
             cross = CrossConfig(clip_config.vocab_size, hidden_size=clip_config.text_width,
                                 max_position_embeddings=clip_config.context_length,
                                 num_attention_heads=clip_config.text_heads)
-            self.core = UATVR(cross, dict(clip_state), task).float()
+            self.core = self._uatvr_core_class()(cross, dict(clip_state), task).float()
             state = self.core.state_dict()
             # Explicit complete initialization, rather than upstream's tolerant loader.
             mapped = {'clip.'+k: v for k, v in clip_state.items()}
@@ -64,6 +63,11 @@ class BaselineModel(nn.Module):
         else:
             raise ValueError('unregistered baseline method')
         _freeze_official_bottom(self.clip)
+
+    @staticmethod
+    def _uatvr_core_class():
+        from .upstream_uatvr.modeling import UATVR
+        return UATVR
 
     @property
     def clip(self):
