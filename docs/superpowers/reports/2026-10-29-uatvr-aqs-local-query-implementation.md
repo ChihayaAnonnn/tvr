@@ -1,6 +1,6 @@
 # UATVR + AQS 局部 Query 开发交付记录
 
-日期：2026-10-29。依据 [实施计划](../plans/2026-10-29-uatvr-aqs-local-query-implementation.md)；初始代码 `201bd78`。
+日期：2026-10-29。依据 [实施计划](../plans/2026-10-29-uatvr-aqs-local-query-implementation.md)；初始代码 `201bd78`，最终代码及审查修复 `0f4ec65`，分支 `codex/uatvr-aqs-training-v1`。
 
 ## 实际交付
 
@@ -20,7 +20,7 @@
 CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONPATH=src:. /home/xujie/.conda/envs/tvr/bin/python -m pytest
 ```
 
-新增测试目录 `tests/semantic_retrieval/aqs/local_query`：**51 passed，1条已有PyTorch TypedStorage弃用警告，65.35秒**。覆盖：
+新增测试目录 `tests/semantic_retrieval/aqs/local_query` 最终包含 **56项测试**；首轮 **51 passed，1条已有PyTorch TypedStorage弃用警告，65.35秒**，审查后补充5项。覆盖：
 
 - 窗口交集/覆盖、词mask、窗口外输入隔离、共享参数和有限非零梯度。
 - 原CLS值和梯度严格一致、视觉主模块各调用一次、公共参数keys/冻结不变。
@@ -31,7 +31,19 @@ CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 OPENBLAS_NUM
 - 错误β/τ/窗口/架构/源码/ID/优化器/RNG、损坏外置NPY、KL sidecar拒绝；parent不恢复旧优化器/RNG/步数。
 - 离线严格生产配方、禁止fixture/test授权、互斥parent/resume、新进程屏蔽Laya/QueryMatch/新KL运行模块仍可训练和评分。
 
-完整旧AQS/KL与baseline回归和最终独立审查结果将在最终文档提交中补记。
+修复前的完整旧AQS/KL与baseline回归为 **198 passed，1条已有警告，194.48秒**。独立审查发现三处Important问题，无Critical或Minor；均补充了先失败后通过的回归测试并修复：
+
+1. 恢复阶段增加全rank认证内容哈希一致性检查，拒绝同recipe下的不同合法快照。
+2. 绑定并限定原有BertAdam实现，严格验证step/next_m/next_v字段及非负二阶moment，防止接受另一优化器的状态后在下一step才失败。
+3. 生产配方分别按32个文本token和12帧检查额外token位置容量；实际编码也在进入legacy交互前检查长度。
+
+这五个针对性用例修复后 **5 passed，51 deselected，1条已有警告，10.99秒**。最终完整回归 **203 passed，1条已有PyTorch TypedStorage弃用警告，205.55秒**，包含56项局部模块用例和147项原有回归。完整命令：
+
+```bash
+CUDA_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PYTHONPATH=src:. /home/xujie/.conda/envs/tvr/bin/python -m pytest tests/semantic_retrieval/aqs tests/semantic_retrieval/full_data/test_models_training.py tests/semantic_retrieval/full_data/test_baseline.py -q --tb=short
+```
+
+旧vendor、AQS和KL实现无修改；`git diff --check`通过。独立审查的三项Important均已修复，并通过针对性用例和完整回归验证；没有未处理的审查项。
 
 ## 实施裁定
 

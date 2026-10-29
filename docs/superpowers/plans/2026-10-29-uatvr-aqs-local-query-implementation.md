@@ -8,7 +8,7 @@
 
 **Tech Stack:** 现有 Python、PyTorch、pytest，CPU tiny CLIP 与双 rank Gloo；不安装新依赖。
 
-依据：[局部 Query 设计](../specs/2026-10-29-uatvr-aqs-local-query-design.md)，提交 `6abf6f8`。实施基点同为 `6abf6f8`，后续仅文档提交不改变该代码基点。Task 1–5 已实施并通过对应 CPU 验证；Task 6 正在完成最终回归与审查。详见同日交付报告；软件实现不表示实验获准。
+依据：[局部 Query 设计](../specs/2026-10-29-uatvr-aqs-local-query-design.md)，提交 `6abf6f8`。实施基点同为 `6abf6f8`，后续仅文档提交不改变该代码基点。Task 1–6 已完成，代码及审查修复提交为 `0f4ec65`；最终 CPU 回归 203 passed。详见 [交付报告](../reports/2026-10-29-uatvr-aqs-local-query-implementation.md)。软件实现不表示实验获准。
 
 ## Global Constraints
 
@@ -235,16 +235,16 @@ def restore_local_state(path, model, optimizer, binding): ...
 def local_spec_from_recipe(recipe): ...  # 返回不可变LocalRuntimeSpec，不创建模型/目录/任务
 ```
 
-- [ ] **6.1 写恢复与配置失败测试并运行** `test_resume_runtime.py -q`。测试精确恢复与不中断两步训练的模型、优化器、进度和RNG相等；拒绝错误β/τ、窗口规范、架构ID、源码、ID表、优化器、损坏NPY引用、KL checkpoint，以及未知/缺失配方字段。拒绝后模型、优化器与RNG必须完全未改变。
-- [ ] **6.2 实现纯配方。** `LocalRuntimeSpec` 记录模型/base recipe、local/AQS/fusion、ID摘要、chunk尺寸、父初始化来源或resume身份，互斥 parent/resume。固定架构 `uatvr-aqs-local-query-v1`。生产必须512维224/32，fixture仅显式测试入口允许64维28/4；不允许科学配方带fixture标志。禁用/β0配方返回旧模型语义，不伪造新架构checkpoint。
-- [ ] **6.3 实现parent初始化。** 使用`weights_only=True`读取并校验内容哈希、已声明旧架构、全部公共keys/shape/dtype/finite；仅允许缺失精确的 `local_queries.*` 新参数，其他缺失/多余均拒绝。全量校验后一次加载公共状态，不恢复旧优化器/RNG/步数。返回来源哈希与公共参数摘要；不得使用无审计的 `strict=False`。新query保留本次显式初始化。
-- [ ] **6.4 实现新step。** 参考 `fusion_step` 的错误同步、有限loss/梯度与step前检查，但不导入KL评分实现；复用原 `make_optimizer` 的参数组规则，确认query/MHA/LayerNorm被纳入优化器。输出标量loss/CE/AQS/legacy损失、局部分数统计与有效token计数；不把逐query数组塞进JSON。
-- [ ] **6.5 实现绑定与恢复。** 参考现有训练/恢复事务的验证顺序，使用独立 `.local.json` sidecar，绑定新架构、全部配置、实际涉及的源码字节哈希、ID摘要、输入身份和可训练参数列表。新旧共有源码及新视觉/评分/runtime文件均纳入，不能只绑定local文件。复用底层安全路径、独占发布、NPY外置与引用哈希；不得复制旧架构字符串后冒充新恢复。
+- [x] **6.1 写恢复与配置失败测试并运行** `test_resume_runtime.py -q`。测试精确恢复与不中断两步训练的模型、优化器、进度和RNG相等；拒绝错误β/τ、窗口规范、架构ID、源码、ID表、优化器、损坏NPY引用、KL checkpoint，以及未知/缺失配方字段。拒绝后模型、优化器与RNG必须完全未改变。
+- [x] **6.2 实现纯配方。** `LocalRuntimeSpec` 记录模型/base recipe、local/AQS/fusion、ID摘要、chunk尺寸、父初始化来源或resume身份，互斥 parent/resume。固定架构 `uatvr-aqs-local-query-v1`。生产必须512维224/32，fixture仅显式测试入口允许64维28/4；不允许科学配方带fixture标志。禁用/β0配方返回旧模型语义，不伪造新架构checkpoint。
+- [x] **6.3 实现parent初始化。** 使用`weights_only=True`读取并校验内容哈希、已声明旧架构、全部公共keys/shape/dtype/finite；仅允许缺失精确的 `local_queries.*` 新参数，其他缺失/多余均拒绝。全量校验后一次加载公共状态，不恢复旧优化器/RNG/步数。返回来源哈希与公共参数摘要；不得使用无审计的 `strict=False`。新query保留本次显式初始化。
+- [x] **6.4 实现新step。** 参考 `fusion_step` 的错误同步、有限loss/梯度与step前检查，但不导入KL评分实现；复用原 `make_optimizer` 的参数组规则，确认query/MHA/LayerNorm被纳入优化器。输出标量loss/CE/AQS/legacy损失、局部分数统计与有效token计数；不把逐query数组塞进JSON。
+- [x] **6.5 实现绑定与恢复。** 参考现有训练/恢复事务的验证顺序，使用独立 `.local.json` sidecar，绑定新架构、全部配置、实际涉及的源码字节哈希、ID摘要、输入身份和可训练参数列表。新旧共有源码及新视觉/评分/runtime文件均纳入，不能只绑定local文件。复用底层安全路径、独占发布、NPY外置与引用哈希；不得复制旧架构字符串后冒充新恢复。
 
 恢复阶段先只读校验sidecar、checkpoint内容、所有数组、全模型/优化器/RNG结构和rank状态；所有rank验证通过才修改内存。失败保留原状态；历史产物不覆盖。底层工具若需复用内部校验函数，应先核对其输入合同，不以导入`fusion_*`建立KL运行依赖。
 
-- [ ] **6.6 加隔离与依赖验证。** AST/导入测试确认新增模型链不import Laya或QueryMatch；离线解析不访问文件、创建目录或启动进程。disabled路径在禁止调用视觉双输出和query构造的spy下仍可运行。旧KL测试继续通过，禁止为通过测试改旧断言。
-- [ ] **6.7 更新实际API说明与交付报告并提交** `feat: add local query training and strict recovery`。报告记录命令、输出、源码提交、测试数量、CPU局限；仅勾选有实际验证证据的任务。
+- [x] **6.6 加隔离与依赖验证。** AST/导入测试确认新增模型链不import Laya或QueryMatch；离线解析不访问文件、创建目录或启动进程。disabled路径在禁止调用视觉双输出和query构造的spy下仍可运行。旧KL测试继续通过，禁止为通过测试改旧断言。
+- [x] **6.7 更新实际API说明与交付报告并提交** `feat: add local query training and strict recovery`。报告记录命令、输出、源码提交、测试数量、CPU局限；仅勾选有实际验证证据的任务。
 
 ## 最终验证与停止条件
 
