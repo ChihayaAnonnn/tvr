@@ -12,8 +12,12 @@ new_kl_fusion: false
 resource_policy:
   world_size: 2
   gpu_model: NVIDIA A800 80GB PCIe
-  physical_indices: [0, 3]
-  gpu_uuids: [GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece, GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede]
+  physical_indices:
+  - 0
+  - 3
+  gpu_uuids:
+  - GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece
+  - GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede
   max_memory_gib_per_rank: 60
   stop_other_processes: false
   qualification: production_capacity_random_weights_gradient_and_exact_resume_two_cuda_ranks
@@ -21,7 +25,7 @@ resource_policy:
 recipe:
   epochs: 5
   global_batch: 64
-  learning_rate: 0.00005
+  learning_rate: 5.0e-05
   seed: 713
   world_size: 2
   negatives: 16
@@ -40,3 +44,34 @@ max_training_gpu_hours: 72
 max_successors: 0
 selection: earliest_epoch_with_maximum_raw_validation_t2v_R1
 validation: certified_train8246x20_val500x20_no_DSL
+final_test:
+  authorized: true
+  authorization: 2026-10-30_explicit_user_evaluate_this_ckpt_on_1k_test
+  frozen:
+    parent_run_id: msrvtt-baseline-local-query-train-seed713-20261029T065000Z-2be8f1364078
+    parent_manifest_sha256: 847d4fad7371447c50fcb928a584174777a8f7b3521384de8037eddea8b1b23d
+    parent_result_sha256: 90fdf770cc856ddc240bd5046762862da941d8a743b4b9d8233146702215567f
+    selected_epoch: 3
+    checkpoint:
+      path: /data2/hxj/project/UATVR/artifacts/uatvr-aqs-local-query-training-v1/msrvtt/baseline/msrvtt-baseline-local-query-train-seed713-20261029T065000Z-2be8f1364078/checkpoints/epoch-03.pt
+      sha256: 5277081b88f139ee8dd3e46f5cac21ec8e0400045b3ed3ad4099df1fb0cbbc82
+      metadata_sha256: cec86ee6d49f98e5029d1095518da81efa0b4b454d4364b256077c3ac25ba4b4
+      local_sha256: 51802c2411e659bf55529091cc5405262073cc3604512cb5742705130792598b
+    model_sha256: 1bc08d895d5906c3942501e56e3cf005ebbe1b6c138e22d44756c0a042b11c3b
+  test_csv:
+    path: /data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv
+    sha256: e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a
+  video_indices:
+  - path: /home/xujie/.codex/worktrees/uatvr-aqs-training-v1/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json
+    sha256: 0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8
+  - path: /home/xujie/.codex/worktrees/uatvr-aqs-training-v1/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json
+    sha256: f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4
+  forbidden_ids:
+    path: /home/xujie/.codex/worktrees/uatvr-aqs-training-v1/UATVR/experiments/uatvr-aqs-local-query-training-v1/inputs/train-val-ids.json
+    sha256: 9ca03b97ef523723c2b0e33ae5eba92625987d0388ace95215568dad63c3931b
+  max_evaluations: 1
+  dsl: false
+  beta: 0.2
+  tau: 0.1
+  inference_qualification: fresh_two_rank_production_random_then_frozen_checkpoint_no_test_data
+  max_gpu_hours: 2
