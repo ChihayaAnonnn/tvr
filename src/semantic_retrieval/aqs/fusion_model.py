@@ -33,6 +33,8 @@ class FusionAqsModel(AqsBaselineModel):
         self._fusion_context=context
 
     def _validate_fusion_context(self):
+        if self._aqs_context != (self.aqs_config.recipe(),self.id_mapping_sha256):
+            raise ValueError('AQS configuration or mapping changed after rank validation')
         if (self.fusion_config.recipe()!=self._fusion_context
                 or self.core.fusion_config.recipe()!=self._fusion_context):
             raise ValueError('fusion configuration changed after rank validation')
