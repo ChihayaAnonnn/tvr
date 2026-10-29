@@ -1,0 +1,30 @@
+{
+  "phase": "final-train-20261029T172409Z",
+  "phase_path": "experiments/hvp-net-reproduction-v1/phases/final-train-20261029T172409Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "9a843356e6246c6bb2ad3f1ab3bed0d9595b580b8585418d4768a6961c748ccb",
+      "output_hashes": {
+        "checkpoints/best.pth": "eec48c69be26706b6e61de1733979f5c766421f56a6536578c3b1d7d489bcd05",
+        "checkpoints/checkpoint_epoch_0.pth": "d518d125ba48ad66cc55a9f5c62380327bfa75c7f6110d4a79a12d47280a113a",
+        "checkpoints/checkpoint_epoch_1.pth": "1bd6517c0fc85339f6bd0cb39601f752a1c98b87037eb6ccd5234ff335723061",
+        "checkpoints/checkpoint_epoch_2.pth": "4bf6acf334e7890a9f1559eafbc6fe0c4c32762bbc951758e4546c4fb747a1c3",
+        "checkpoints/checkpoint_epoch_3.pth": "787ae7215052c02585487110db727d6dbee4a52e55f7f169856b2af9dc55a4a1",
+        "checkpoints/checkpoint_epoch_4.pth": "678300cba55c889fe2e47c1d688bbc068db0b9862c0e4208fb2c212e38367c5e",
+        "checkpoints/log.txt": "761b51896d4064377a7d4e27fa8bfb7367a4073a4214683b7da20d7021f7c8fe",
+        "command.sh": "2576e2322041c3d33d6ff88beca000377dd36966a513742e9503a8e74ee32d1b",
+        "logs/train.log": "8153a9dbeac485ce0778050e85d2b976134cfa342bab166ef2b74d91ecc82b9a",
+        "provenance/campaign.json": "a1b9a48585f9825fec9a1ba1fa9783078cb11b3f82cb7b760f615361d9f2aaaf",
+        "provenance/process.json": "de701668bc9838b3f270d68aa8d2479ec1ca97ed8209675752ab7157bdb83665",
+        "provenance/result.json": "76a7079dcda0dc87485e9661a6b551a61c8873e2b37a0c8d8ef65926fdb27351"
+      },
+      "run_id": "msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "hvp-net-reproduction-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
