@@ -1,0 +1,25 @@
+{
+  "phase": "final-test-20261029T163604Z",
+  "phase_path": "experiments/uatvr-aqs-local-query-training-v1/phases/final-test-20261029T163604Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "8479af0a0ce0d676c3397e811d493efe1875e64a9538a6b8a1351758160c44f0",
+      "output_hashes": {
+        "arrays/sha256/9d/9dd7110eb5d509baaed2dad34ee8014133746d91030d6da0af9d6b0fe58f0eb5.npy": "5407c3f636a10af4666a5b238b2d77a1f83b46e56e147fcfea705794b174136c",
+        "command.sh": "ab4bf29d429b083dec8e9912450536a078995acc1948eb81c371f5b8fcddb03d",
+        "logs/test.log": "4b0843568f87a207e08be50a2130f1eab62dbba18f078d8818704fe19f6a9bca",
+        "metrics/final_test.json": "6a6cbaa96f705c038060ad68b1fe5523f1d75998db79bba9f379bbe1906b9d75",
+        "provenance/campaign.json": "df39760e060474b984ef6e17e9d0ca4f44ce7c3e2e3da58716f4e6c77a291e6f",
+        "provenance/process.json": "4cf7caed03f252c453a0d31f81ad78e0dd966056faea110132f0723d66e10588",
+        "provenance/result.json": "a2d0867dc93a1398d4a8b44b5b87491214514003a526110bd6668a8786d23fc7"
+      },
+      "run_id": "msrvtt-final-local-query-jsfusion1k-seed713-20261029T163604Z-edc60b167fd6",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "uatvr-aqs-local-query-training-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
