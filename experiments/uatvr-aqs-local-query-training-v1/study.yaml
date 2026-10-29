@@ -1,0 +1,42 @@
+study: uatvr-aqs-local-query-training-v1
+protocol_version: 1
+status: registered
+authorization: user_request_2026-10-29_launch_local_query_training_on_two_gpus
+scope: independent_spatial_local_query_training
+control_plane: experiments/uatvr-aqs-local-query-training-v1
+data_plane: artifacts/uatvr-aqs-local-query-training-v1
+registry: experiments/uatvr-aqs-local-query-training-v1/registry.jsonl
+test_authorized: false
+laya_enabled: false
+new_kl_fusion: false
+resource_policy:
+  world_size: 2
+  gpu_model: NVIDIA A800 80GB PCIe
+  physical_indices: [0, 3]
+  gpu_uuids: [GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece, GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede]
+  max_memory_gib_per_rank: 60
+  stop_other_processes: false
+  qualification: production_capacity_random_weights_gradient_and_exact_resume_two_cuda_ranks
+  amendment_scope: this_study_only_user_explicit_two_gpu_training_request
+recipe:
+  epochs: 5
+  global_batch: 64
+  learning_rate: 0.00005
+  seed: 713
+  world_size: 2
+  negatives: 16
+  weight: 0.2
+  validation_only: true
+local:
+  enabled: true
+  beta: 0.2
+  tau: 0.1
+  query_chunk: 8
+  video_chunk: 8
+initialization: authenticated_original_clip_vit_b32
+qualification_before_scientific_training: required_completed_archived_matching_code_and_recipe
+max_qualification_gpu_hours: 2
+max_training_gpu_hours: 72
+max_successors: 0
+selection: earliest_epoch_with_maximum_raw_validation_t2v_R1
+validation: certified_train8246x20_val500x20_no_DSL
