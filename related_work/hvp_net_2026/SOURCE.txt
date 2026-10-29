@@ -1,0 +1,11 @@
+Title: Delving Deeper: Hierarchical Visual Perception for Robust Video-Text Retrieval
+Authors: Zequn Xie; Boyun Zhang; Yuxiao Lin; Tao Jin
+arXiv version: 2601.12768v1
+URL: https://arxiv.org/abs/2601.12768v1
+PDF URL: https://arxiv.org/pdf/2601.12768v1
+Retrieved/verified UTC: 2026-10-29T16:49:44.189386+00:00
+PDF SHA-256: 6cf0804726fd318a6284434fffa663ac2f4629426f2de40f77809a40fe06d027
+Official repository: https://github.com/boyun-zhang/HVP-Net
+Local repository: /home/xujie/.codex/worktrees/uatvr-aqs-training-v1/UATVR/research_refs/HVP-Net
+Commit: 7743b5981e12e598a0fdf1aa0f98f98500f089e6
+README currently contains only the project title; model/training files are present.

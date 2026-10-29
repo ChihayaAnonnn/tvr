@@ -43,3 +43,8 @@
 新下载的核心论文统一放到 `related_work/<方法_年份>/`，附 PDF、可选文本和 SOURCE
 （完整标题、来源 URL、版本、获取日期）。阅读结论放 NOTES，区分原文事实与研究猜想。
 聊天中检索过的论文不自动视为已经下载；新增下载以本索引与对应 SOURCE 为准。
+
+## 2026-10-30 下载与仓库核对
+
+- DAB：复用并校验 [PDF](dab_eccv2026/dab.pdf)；与新下载的 arXiv 2607.20984v1 完全一致。[来源记录](dab_eccv2026/SOURCE.txt)。本次未找到可确认的官方代码仓库。
+- HVP-Net：[PDF](hvp_net_2026/paper.pdf)、[文本](hvp_net_2026/paper.txt)、[来源记录](hvp_net_2026/SOURCE.txt)。[作者仓库](https://github.com/boyun-zhang/HVP-Net) 已克隆至本地 `research_refs/HVP-Net/`，固定 commit `7743b5981e12e598a0fdf1aa0f98f98500f089e6`；README 仅含标题，但有模型和训练代码。

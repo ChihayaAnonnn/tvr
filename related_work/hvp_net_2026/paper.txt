@@ -1,0 +1,274 @@
+                                          DELVING DEEPER: HIERARCHICAL VISUAL PERCEPTION FOR ROBUST VIDEO-TEXT
+                                                                       RETRIEVAL
+
+                                                                    Zequn Xie⋆†            Boyun Zhang⋆†            Yuxiao Lin†          Tao Jin†
+                                                                              ⋆
+                                                                                  These authors contributed equally to this work.
+                                                                                             †
+                                                                                               Zhejiang University
+                                                                                      The corresponding author is Tao Jin.
+arXiv:2601.12768v1 [cs.CV] 19 Jan 2026
+
+
+
+
+                                                                   ABSTRACT
+                                         Video-text retrieval (VTR) aims to locate relevant videos us-
+                                         ing natural language queries. Current methods, often based
+                                         on pre-trained models like CLIP, are hindered by video’s
+                                         inherent redundancy and their reliance on coarse, final-layer
+                                         features, limiting matching accuracy. To address this, we
+                                         introduce the HVP-Net (Hierarchical Visual Perception
+                                         Network), a framework that mines richer video semantics by
+                                         extracting and refining features from multiple intermediate
+                                         layers of a vision encoder. Our approach progressively dis-
+                                         tills salient visual concepts from raw patch-tokens at different
+                                         semantic levels, mitigating redundancy while preserving cru-
+                                         cial details for alignment. This results in a more robust video
+                                         representation, leading to new state-of-the-art performance
+                                         on challenging benchmarks including MSRVTT, DiDeMo,                   Fig. 1. Conceptual illustration of our HVP-Net, inspired by
+                                         and ActivityNet. Our work validates the effectiveness of              the human hierarchical perception process. Our model mim-
+                                         exploiting hierarchical features for advancing video-text re-         ics this by processing visual data through shallow, mid, and
+                                         trieval.Our codes are available at https://github.com/boyun-          deep layers to extract concepts ranging from low-level tex-
+                                         zhang/HVP-Net.                                                        tures to high-level events.
+                                             Index Terms— Video-Text Retrieval, Vision Trans-
+                                         former, Cross-modal Alignment, Video Representation Learn-            tokens. More importantly, it overlooks the rich, hierarchical
+                                         ing, Computer Vision                                                  semantics and dynamics encapsulated within the encoder’s in-
+                                                                                                               termediate layers [18], thereby constraining both representa-
+                                                             1. INTRODUCTION                                   tion efficiency and matching precision.
+
+                                         Cross-modal retrieval aims to bridge the inherent heterogene-                           2. METHODOLOGY
+                                         ity gap between different data modalities by projecting them
+                                         into a common latent space for similarity measurement [1, 2].         In this section, we detail our proposed Hierarchical Visual
+                                         This paradigm and advanced feature fusion techniques have             Perception Network (HVP-Net). As illustrated in Figure 2,
+                                         been successfully applied across various domains, including           our core idea is to construct a robust video representation
+                                         text-based person retrieval [3, 4], financial risk analysis [5, 6],   by extracting and refining features from multiple intermedi-
+                                         fake news detection [7, 8], and sequential recommendation             ate layers of a pre-trained vision encoder. The process in-
+                                         [9, 10]. In Video-Text Retrieval (VTR), this is often achieved        volves three main stages: hierarchical feature encoding, a
+                                         by leveraging large pre-trained models like CLIP [11] to learn        novel patch processing module, and multi-granularity align-
+                                         a joint video-text embedding space. However, a critical limi-         ment optimized via contrastive learning.
+                                         tation persists: these approaches, even those employing more
+                                         advanced multi-grained matching strategies [12, 13, 14], pre-
+                                                                                                               2.1. Hierarchical Feature Encoding
+                                         dominantly rely on features from the final layer of the vision
+                                         encoder [15, 16, 17]. This practice leads to significant in-          We use the pre-trained CLIP model [11] as our backbone.
+                                         formation redundancy by indiscriminately encoding all visual          From its text encoder, we extract global sentence features
+Fig. 2. The architecture of our HVP-Net. We first extract hierarchical frame (Fl ) and patch (Pl ) features from a video encoder.
+Then, our Multi-layer Patch Processing module refines the patch features into P̂l . Finally, we perform multi-granularity align-
+ment between text and the multi-level video features (Fl , P̂l ) and aggregate the layer-wise similarity scores for retrieval.
+
+
+Ts ∈ RD and word-level features Tw ∈ RLw ×D .                       2.3. Multi-granularity Alignment and Optimization
+    Distinct from prior work that relies on final-layer outputs,
+                                                                    To ensure precise retrieval, we perform cross-modal align-
+we extract features from a set of intermediate layers L of the
+                                                                    ment across three semantic granularities, spanning all L ex-
+Vision Transformer. For a video with N frames, this pro-
+                                                                    tracted feature levels. For a given text-video pair (i, j), we
+vides hierarchical features for each layer l ∈ L: frame fea-
+                                                                    compute the following similarity scores for each layer l:
+tures Fl ∈ RN ×D (from [CLS] tokens) and patch features
+Pl ∈ RN ×M ×D (from patch tokens, with M patches per                   1. Sentence-Frame (SF) Alignment: Similarity between
+frame). This coarse-to-fine representation is then fed into our           the global sentence feature Tsi and the frame features
+refinement module.                                                        Flj .
+
+2.2. Multi-layer Patch Processing (MPP)                                2. Sentence-Patch (SP) Alignment: Similarity between
+                                                                          Tsi and the refined patch concepts P̂lj .
+To distill semantic concepts from redundant patch features,
+we introduce the Multi-layer Patch Processing (MPP) mod-               3. Word-Patch (WP) Alignment: Similarity between
+ule, which iteratively refines patch features Pl from each layer          word features Twi and refined patch concepts P̂lj .
+l. Each iteration involves a ”compression-refinement” cycle:
+                                                                        For patch-level and word-level features, the final similar-
+   1. Patch Compression Module We first compute a                   ity score is not derived from simple pooling. Instead, we first
+      saliency score for all M patch tokens. A Density-             identify the most relevant patch for each word token (and vice
+      Peak Clustering (DPC) algorithm then dynamically              versa) using max-pooling over the token-to-patch similarity
+      identifies K cluster centers (K ≪ M ) from these to-          matrix. Then, we employ learnable weights, predicted by
+      kens. Finally, tokens are merged into K features via          small MLPs, to perform a weighted aggregation of these max-
+      a saliency-weighted average based on cluster assign-          imum similarity scores. This allows the model to dynamically
+      ments.                                                        emphasize the most salient word and patch contributions. For
+                                                                    a given layer l, the word-to-patch similarity component is cal-
+   2. Attention Block for Patch: The K compressed fea-
+                                                                    culated as:
+      tures act as queries in-a-cross-attention block, attend-
+      ing to the original M tokens to enrich the compressed                            Nw
+                                                                                       X                   Np
+                                                                        (l)
+      representations with fine-grained details.                       Sw→p (i, j) =         WMLP (wik ) · max sim(wik , pjm )   (1)
+                                                                                                          m=1
+                                                                                       k=1
+This iterative process outputs a purified patch feature set P̂l ∈
+RN ×K×D for each layer, forming a distilled multi-level rep-        A symmetric patch-to-word similarity is also computed, and
+resentation of visual entities.                                     the final score is their average.
+Fig. 3. The architecture of the Multi-layer Patch Processing (MPP) module, which iteratively refines input patch features Pl to
+P̂l . In each processing block, a Patch Compression Module (PCM) first distills M tokens into K core concepts using saliency-
+guided clustering. Subsequently, these concepts are refined via a cross-attention mechanism that attends back to the original
+tokens.
+
+
+    Objective Function. We optimize the model using a                 Implementation Details. Our model is built upon the
+symmetric contrastive loss (InfoNCE) [19]. The total loss is      CLIP ViT-B/32 backbone. We uniformly sample 12 frames
+the sum of bidirectional contrastive losses computed for each     per video at 224x224 resolution, with a maximum text length
+alignment granularity at each feature level:                      of 24 tokens. We use an initial learning rate of 1e-4 (a co-
+                                                                  efficient of 0.001 for the CLIP backbone) and a weight de-
+                         L
+                         X   (l)   (l)   (l)                      cay of 0.2. The model is trained for 5 epochs on MSR-VTT
+              Ltotal =     (LSF + LSP + LWP )              (2)    with a batch size of 32. The MPP module processes features
+                         l=1
+                                                                  extracted from three layers of the vision encoder: a shallow
+                               (l)                                (1st), a middle (6th), and a deep (12th) Transformer layer.
+where each component, e.g., LSF , is a standard InfoNCE loss
+calculated on the sentence-frame similarity matrix for layer
+l. This joint optimization across multiple levels and granu-      3.2. Comparison with State-of-the-Art Methods
+larities ensures the learning of a consistent and robust cross-   We compare HVP-Net against recent SOTA methods, includ-
+modal semantic space.                                             ing strong CLIP-based models like CLIP4Clip [15], X-CLIP
+     Inference. At inference time, the final similarity score     [17], BiHSSP[23], MUSE[24].
+between a query text and a candidate video is the sum of all
+similarity scores computed across all granularities and layers,
+maintaining consistency with the training objective.              Table 1. Performance comparison on the MSR-VTT 1k-A
+                                                                  test set. R@K is in percentage (%). Best results are in bold.
+                                                                  Method                R@1 ↑ R@5 ↑ R@10 ↑ MdR ↓ MnR ↓
+                    3. EXPERIMENTS
+                                                                  Text-to-Video (T2V)
+                                                                  CLIP4Clip [15]        44.5    71.4    81.6      2.0    15.3
+We conduct extensive experiments to evaluate our pro-             X-CLIP [17]           49.3    75.8    84.8      2.0    12.2
+posed HVP-Net. We first introduce the experimental setup,         BiHSSP[23]            48.1    74.0    84.1      2.0    12.1
+then compare our method with state-of-the-art (SOTA) ap-          MUSE[24]              50.9    76.7    85.6      1.0    10.9
+                                                                  HVP-Net (ours)        56.7    83.9    90.6      1.0     5.3
+proaches, and finally provide in-depth analysis through abla-
+tion studies and qualitative examples.                            Video-to-Text (V2T)
+                                                                  CLIP4Clip [15]        42.7    70.9    80.6      2.0    11.6
+                                                                  X-CLIP [17]           48.9    76.8    84.5      2.0    8.1
+3.1. Experimental Setup                                           BiHSSP[23]            48.0    74.1    83.5      2.0    9.0
+                                                                  MUSE[24]              49.7    77.8    86.5      2.0    7.4
+Datasets and Metrics. Our evaluation is performed on three        HVP-Net (ours)        50.5    80.5    91.2      2.0    4.4
+mainstream benchmarks: MSR-VTT [20], DiDeMo [21],
+ActivityNet Captions [22]. For MSR-VTT, we follow the                 As shown in Table 1, HVP-Net significantly surpasses
+standard ‘1k-A‘ test split. We use standard retrieval metrics:    all competitors on MSR-VTT. For text-to-video retrieval,
+Recall at K (R@K, K=1, 5, 10) (higher is better), Median          our method achieves an R@1 of 56.7%, outperforming the
+Rank (MdR), and Mean Rank (MnR) (lower is better), for            strongest baseline MUSE by a substantial 5.8% margin. This
+both text-to-video (T2V) and video-to-text (V2T) tasks.           leading performance is consistent across all metrics for both
+text-to-video and video-to-text tasks. Table 2 further confirms
+                                                                   Table 3. Ablation studies on core components, layer selection
+our model’s superiority and generalization, as it establishes
+                                                                   strategy, and loss functions (T2V R@1, %). ∆ denotes the
+new state-of-the-art results on both DiDeMo and ActivityNet,
+                                                                   performance drop from the full model.
+outperforming prior works across all reported recall metrics.
+                                                                   Component Ablation        R@1    Layer Selection       R@1    Loss Ablation    R@1 (∆)
+                                                                   Baseline (Last 1 layer)   54.2   Last 1 layer          54.2   Full Model        56.7 (-)
+                                                                   + Multi-layer (w/o MPP)   22.1   Last 3 layers         55.6   w/o LSF          48.2 (-8.5)
+Table 2. Performance comparison with state-of-the-art meth-        + MPP (Full Model)        56.7   5 layers 1,3,6,9,12   51.9   w/o LSP          53.2 (-3.5)
+                                                                                                    Default 1,6,12        56.7   w/o LW P        33.3 (-23.4)
+ods on DiDeMo and ActivityNet for text-to-video retrieval.
+                       DiDeMo              ActivityNet
+Method
+                 R@1↑ R@5↑ R@10↑ R@1↑ R@5↑ R@10↑                   ventional methods that rely solely on final-layer features. We
+Clip4Clip [15]     -        -       -      40.5   72.4    83.6     proposed the HVP-Net, a novel framework featuring a Multi-
+CLIP-VIP [25]     48.6     77.1    84.4     -      -       -       layer Patch Processing (MPP) Module. This module effec-
+HBI [26]           -        -       -      42.2   73.0    84.6     tively distills salient concepts by refining features from the
+DiffusionRet [27] 46.7     74.7    82.7     -      -       -       intermediate layers of a vision encoder, creating a more ro-
+HVP-Net (Ours) 57.1        83.1    87.0    43.5   78.3    88.2     bust cross-modal embedding space. Our approach establishes
+                                                                   new state-of-the-art performance on multiple benchmarks, in-
+                                                                   cluding a notable R@1 of 56.7% on MSR-VTT. Our work
+                                                                   validates that mining the internal hierarchical features of pre-
+3.3. Ablation Studies and Analysis
+                                                                   trained models is a potent strategy for cross-modal alignment.
+We conduct comprehensive ablation studies on the MSR-VTT           Future work could explore adaptive layer-selection strategies
+dataset to analyze the key components of HVP-Net. All re-          and specific mechanisms to improve video-to-text retrieval
+sults for the T2V task are reported in Table 3.                    performance.
+    Effectiveness of Core Components. We first validate
+our two main contributions: the multi-layer strategy and the                                    5. REFERENCES
+Multi-layer Patch Processing module. As shown in Table 3
+(left), a baseline using only final-layer features achieves an      [1] Zhichao Han, Azreen Bin Azman, Mas Rina Binti
+R@1 of 54.2%. The full HVP-Net model boosts performance                 Mustaffa, and Fatimah Binti Khalid, “Cross-modal re-
+to 56.7%. Notably, simply aggregating raw intermediate fea-             trieval: A review of methodologies, datasets, and fu-
+tures without our proposed MPP module (+ Multi-layer (w/o               ture perspectives,” IEEE Access, vol. 12, pp. 115716–
+MPP)) leads to a dramatic performance collapse (22.1%),                 115741, 2024.
+confirming that our purification process is essential for effec-
+tively fusing multi-layer information.                              [2] Fang Feng, Xiaofei Wang, and Rushi Li, “Cross-modal
+    Impact of Layer Selection. We analyze different layer               retrieval with correspondence autoencoder,” in Proceed-
+selection strategies in Table 3 (middle). While using contigu-          ings of the 22nd ACM international conference on Mul-
+ous Last 3 layers (55.6%) improves over the Last 1 layer base-          timedia, 2014, pp. 7–16.
+line (54.2%), our default strategy of sampling from diverse
+semantic stages (1, 6, 12) performs best (56.7%). This sup-         [3] Zequn Xie, Haoming Ji, Chengxuan Li, and Lingwei
+ports our hypothesis that fusing low-level details with high-           Meng, “Dynamic uncertainty learning with noisy cor-
+level semantics is beneficial. Using more layers (1, 3, 6, 9,           respondence for text-based person search,” 2025.
+12) degrades performance (51.9%), indicating our three-stage
+sampling is an efficient and effective choice.                      [4] Zequn Xie, Chuxin Wang, Yeqiang Wang, Sihang Cai,
+    Impact of Alignment Losses. Finally, ablating each                  Shulei Wang, and Tao Jin, “Chat-driven text generation
+loss component (Table 3, right) confirms their necessity. Re-           and interaction for person retrieval,” in Proceedings of
+moving the sentence-frame (LSF ), sentence-patch (LSP ), or             the 2025 Conference on Empirical Methods in Natural
+word-patch (LW P ) alignment losses leads to performance                Language Processing, 2025, pp. 5259–5270.
+drops of 8.5, 3.5, and a substantial 23.4 points, respectively.
+                                                                    [5] Zong Ke, Yuqing Cao, Zhenrui Chen, Yuchen Yin,
+This demonstrates that all three supervision levels are crucial,
+                                                                        Shouchao He, and Yu Cheng, “Early warning of cryp-
+with the fine-grained word-patch alignment being the most
+                                                                        tocurrency reversal risks via multi-source data,” Finance
+impactful component for robust cross-modal understanding.
+                                                                        Research Letters, p. 107890, 2025.
+
+                     4. CONCLUSION                                  [6] Zong Ke, Jiaqing Shen, Xuanyi Zhao, Xinghao Fu, Yang
+                                                                        Wang, Zichao Li, Lingjie Liu, and Huailing Mu, “A sta-
+In this paper, we addressed the critical challenge of informa-          ble technical feature with gru-cnn-ga fusion,” Applied
+tion redundancy in text-video retrieval, a limitation of con-           Soft Computing, p. 114302, 2025.
+ [7] Weihai Lu, Yu Tong, and Zhiqiu Ye, “Dammfnd:                [18] Yao Lu, Wen Yang, Yunzhe Zhang, Zuohui Chen, Jinyin
+     Domain-aware multimodal multi-view fake news detec-              Chen, Qi Xuan, Zhen Wang, and Xiaoniu Yang, “Under-
+     tion,” in Proceedings of the AAAI Conference on Artifi-          standing the dynamics of dnns using graph modularity,”
+     cial Intelligence, 2025, vol. 39, pp. 559–567.                   in European Conference on Computer Vision. Springer,
+                                                                      2022, pp. 225–242.
+ [8] Yu Tong, Weihai Lu, Xiaoxi Cui, Yifan Mao, and Zhe-
+     jun Zhao, “Dapt: Domain-aware prompt-tuning for mul-        [19] Aäron van den Oord, Yazhe Li, and Oriol Vinyals, “Rep-
+     timodal fake news detection,” in Proceedings of the 33rd         resentation learning with contrastive predictive coding,”
+     ACM International Conference on Multimedia, 2025,                ArXiv, vol. abs/1807.03748, 2018.
+     pp. 7902–7911.
+                                                                 [20] Jun Xu, Tao Mei, Ting Yao, and Yong Rui, “Msr-vtt:
+ [9] Weihai Lu and Li Yin, “Dmmd4sr: Diffusion model-                 A large video description dataset for bridging video and
+     based multi-level multimodal denoising for sequential            language,” in 2016 IEEE Conference on Computer Vi-
+     recommendation,” in Proceedings of the 33rd ACM In-              sion and Pattern Recognition (CVPR), 2016, pp. 5288–
+     ternational Conference on Multimedia, 2025, pp. 6363–            5296.
+     6372.
+                                                                 [21] Lisa Anne Hendricks, Oliver Wang, Eli Shechtman,
+[10] Xiaoxi Cui, Weihai Lu, Yu Tong, Yiheng Li, and Zhejun            Josef Sivic, Trevor Darrell, and Bryan Russell, “Local-
+     Zhao, “Multi-modal multi-behavior sequential recom-              izing moments in video with natural language,” 2017.
+     mendation with conditional diffusion-based feature de-
+     noising,” in Proceedings of the 48th International ACM      [22] Ranjay Krishna, Kenji Hata, Frederic Ren, Li Fei-Fei,
+     SIGIR Conference on Research and Development in In-              and Juan Carlos Niebles, “Dense-captioning events in
+     formation Retrieval, 2025, pp. 1593–1602.                        videos,” in 2017 IEEE International Conference on
+                                                                      Computer Vision (ICCV), 2017, pp. 706–715.
+[11] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya
+     Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry,       [23] Yang Liu, Shudong Huang, Deng Xiong, and Jiancheng
+     Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen              Lv, “Learning dynamic similarity by bidirectional hier-
+     Krueger, and Ilya Sutskever, “Learning transferable vi-          archical sliding semantic probe for efficient text video
+     sual models from natural language supervision,” 2021.            retrieval,” Proceedings of the AAAI Conference on Ar-
+                                                                      tificial Intelligence, vol. 39, no. 6, pp. 5667–5675, Apr.
+[12] Xiaohan Wang, Linchao Zhu, and Yi Yang, “T2vlad:                 2025.
+     Global-local sequence alignment for text-video re-
+     trieval,” 2021.                                             [24] Haoran Tang, Meng Cao, Jinfa Huang, Ruyang Liu,
+                                                                      Peng Jin, Ge Li, and Xiaodan Liang, “Muse: Mamba
+[13] Shaobo Min, Weijie Kong, Rong-Cheng Tu, Dihong                   is efficient multi-scale learner for text-video retrieval,”
+     Gong, Chengfei Cai, Wenzhe Zhao, Chenyang Liu, Six-              2025.
+     iao Zheng, Hongfa Wang, Zhifeng Li, and Wei Liu,
+     “Hunyuan tvr for text-video retrivial,” 2022.               [25] Hong Xue, Yuchong Sun, Bei Liu, Jianlong Fu, Rui
+                                                                      Song, Houqiang Li, and Jiebo Luo, “Clip-vip: Adapting
+[14] Lisai Zhang, Hong Wu, Qing Chen, Yuan Deng, Jochen               pre-trained image-text model to video-language align-
+     Siebert, Zili Li, Yuhan Han, Dong Kong, and Zhe                  ment,” in The Eleventh International Conference on
+     Cao, “Vldeformer: Vision–language decomposed trans-              Learning Representations, 2022.
+     former for fast cross-modal retrieval,” Knowledge-
+     Based Systems, vol. 252, pp. 109316, 2022.                  [26] Peng Jin, Jin Huang, Peng Xiong, Shizhe Tian, Chang
+                                                                      Liu, Xiang Ji, Li Yuan, and Jian Chen, “Video-text
+[15] Huaishao Luo, Lei Ji, Ming Zhong, Yang Chen, Wen                 as game players: Hierarchical banzhaf interaction for
+     Lei, Nan Duan, and Tianrui Li, “Clip4clip: An empirical          cross-modal representation learning,” in Proceedings of
+     study of clip for end to end video clip retrieval,” 2021.        the IEEE/CVF Conference on Computer Vision and Pat-
+                                                                      tern Recognition, 2023, pp. 2472–2482.
+[16] Xun Yang, Jianfeng Dong, Yixin Cao, Xun Wang, Meng
+     Wang, and Tat-Seng Chua, “Tree-augmented cross-             [27] Peng Jin, Hao Li, Zekai Cheng, Ke Li, Xiang Ji, Chang
+     modal encoding for complex-query video retrieval,”               Liu, Li Yuan, and Jian Chen, “Diffusionret: Genera-
+     2020.                                                            tive text-video retrieval with diffusion model,” in Pro-
+                                                                      ceedings of the IEEE/CVF international conference on
+[17] Yiwei Ma, Guohai Xu, Xiaoshuai Sun, Ming Yan,
+                                                                      computer vision, 2023, pp. 2470–2481.
+     Ji Zhang, and Rongrong Ji, “X-clip: End-to-end multi-
+     grained contrastive learning for video-text retrieval,”
+     2022.
+

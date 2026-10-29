@@ -1,0 +1,10 @@
+Title: Distribution-Alignment Bridge for Uncertainty-Aware Text-to-Video Retrieval
+Authors: Kyeongmo Chae; Jihoon Lee; Sangtae Ahn
+arXiv version: 2607.20984v1
+URL: https://arxiv.org/abs/2607.20984v1
+PDF URL: https://arxiv.org/pdf/2607.20984v1
+Retrieved/verified UTC: 2026-10-29T16:49:44.189386+00:00
+PDF SHA-256: ce1fb968ec65b7ca0fb056545a48a1ac70846f6148f27de0236a882aa5950085
+Official code repository: not found during this check.
+Checked arXiv abstract/full text, https://knu-brainai.github.io/publications/ and public GitHub-targeted web searches.
+This is a search limitation, not proof that no repository exists. Existing local PDF matches a fresh arXiv v1 download byte-for-byte.
