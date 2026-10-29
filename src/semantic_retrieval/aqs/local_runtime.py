@@ -56,7 +56,8 @@ def local_spec_from_recipe(recipe):
     if model['batching']!='unique_video_all_captions_v1':raise ValueError('invalid local batching')
     for key in ('temporal_layers','extra_video_tokens','extra_text_tokens','video_samples','text_samples'):_integer(model[key])
     if (model['temporal_layers']>clip.text_layers or model['video_samples']!=model['text_samples']
-            or max(model['extra_video_tokens'],model['extra_text_tokens'])+12>clip.context_length):
+            or model['extra_video_tokens']+12>clip.context_length
+            or model['extra_text_tokens']+min(32,clip.context_length)>clip.context_length):
         raise ValueError('invalid UATVR adaptation dimensions')
     names=model['trainable_parameters']
     if (not isinstance(names,list) or not names or any(not isinstance(n,str)

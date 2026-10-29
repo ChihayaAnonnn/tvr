@@ -69,6 +69,8 @@ class LocalQueryAqsModel(AqsBaselineModel):
 
     def encode_text(self,input_ids,mask):
         result=super().encode_text(input_ids,mask)
+        if result['tokens'].shape[1]+self.core.extra_cls_text_num > self.core.word_position_embeddings.num_embeddings:
+            raise ValueError('text plus aggregation tokens exceed position capacity')
         return dict(result,local_tokens=result['tokens'],local_mask=lexical_mask(mask))
 
     def encode_video(self,video,mask):
@@ -78,6 +80,8 @@ class LocalQueryAqsModel(AqsBaselineModel):
         if video.shape[-2:] != (cfg.image_size,cfg.image_size) or video.shape[1]>12:
             raise ValueError('invalid local video spatial/frame dimensions')
         b,f=video.shape[:2]
+        if f+self.core.extra_cls_frame_num > self.core.frame_position_embeddings.num_embeddings:
+            raise ValueError('frames plus aggregation tokens exceed position capacity')
         cls,patches=visual_tokens(self.clip.visual,video.flatten(0,1),video_frame=f)
         local=self.local_queries(patches.reshape(b,f,49,-1),mask)
         return dict(tokens=cls.reshape(b,f,-1),mask=mask,local_tokens=local)

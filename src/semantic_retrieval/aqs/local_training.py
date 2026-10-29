@@ -9,11 +9,11 @@ import torch.distributed as dist
 from experiment_artifacts import artifact_json_bytes, strict_json_load
 from semantic_retrieval.evidence.frame_cache import safe_path
 from semantic_retrieval.runtime.checkpoint import _publish_file, restore_rng
-from semantic_retrieval.full_data.training import save_state, _optimizer_state, _progress
+from semantic_retrieval.full_data.training import save_state, _progress
 from semantic_retrieval.full_data.worker import _collective_call
 from .training import CheckpointBinding, model_recipe, _validate_optimizer_binding
 from .local_model import LocalQueryAqsModel
-from .local_checkpoint import stage_checkpoint, stage_local
+from .local_checkpoint import stage_checkpoint, stage_local, validate_local_optimizer
 
 ARCHITECTURE='uatvr-aqs-local-query-v1'
 
@@ -46,6 +46,7 @@ def _record(model,optimizer,binding):
     def prepare():
         if not isinstance(binding,LocalBinding):raise ValueError('expected LocalBinding')
         model._validate_local_context();_validate_optimizer_binding(model,optimizer)
+        validate_local_optimizer(optimizer)
         if any(binding.base_recipe.get(k)!=v for k,v in local_recipe(model).items()):
             raise ValueError('local checkpoint recipe mismatch')
         if binding.id_mapping_sha256!=model.id_mapping_sha256:raise ValueError('local ID mapping mismatch')
@@ -56,7 +57,8 @@ def _record(model,optimizer,binding):
         opt_recipe=[dict(parameters=[names[id(p)] for p in g['params']],
             **{k:v for k,v in g.items() if k!='params'}) for g in optimizer.param_groups]
         payload=dict(architecture=ARCHITECTURE,base_recipe=binding.base_recipe,
-            id_mapping_sha256=binding.id_mapping_sha256,sources=local_source_identity(),optimizer=opt_recipe)
+            id_mapping_sha256=binding.id_mapping_sha256,sources=local_source_identity(),optimizer=opt_recipe,
+            optimizer_implementation=type(optimizer).__module__+'.'+type(optimizer).__qualname__)
         identity['recipe_sha256']=hashlib.sha256(artifact_json_bytes(payload)).hexdigest()
         return dict(schema='uatvr-aqs-local-checkpoint-v1',architecture=ARCHITECTURE,identity=identity,recipe=payload)
     record=_collective_call(prepare)
@@ -69,7 +71,7 @@ def _record(model,optimizer,binding):
 def save_local_state(path,model,optimizer,binding,progress,store):
     record=_record(model,optimizer,binding);path=Path(path)
     def validate():
-        _progress(progress);_optimizer_state(optimizer.state_dict(),optimizer)
+        _progress(progress);validate_local_optimizer(optimizer)
         if any(not torch.isfinite(t).all() for t in model.state_dict().values()):raise ValueError('nonfinite local state')
     _collective_call(validate)
     def publish():
@@ -90,7 +92,12 @@ def restore_local_state(path,model,optimizer,binding):
         with sidecar.open() as stream:actual=strict_json_load(stream)
         if actual!=record:raise ValueError('local checkpoint provenance mismatch')
     _collective_call(verify)
-    payload=_collective_call(lambda:stage_local(path,model,optimizer,record['identity']))
+    payload,content_sha256=_collective_call(lambda:stage_local(path,model,optimizer,record['identity']))
+    if dist.is_initialized():
+        hashes=[None]*dist.get_world_size()
+        dist.all_gather_object(hashes,content_sha256)
+        if any(value!=content_sha256 for value in hashes):
+            raise ValueError('local checkpoint content differs across ranks')
     # Every rank has staged every field before the first live mutation.
     model.load_state_dict(payload['model'],strict=True)
     optimizer.load_state_dict(payload['optimizer'])
@@ -137,6 +144,7 @@ def local_step(model,network,optimizer,batch):
         if not isinstance(model,LocalQueryAqsModel) or getattr(network,'module',network) is not model:
             raise ValueError('network must wrap supplied local model')
         model._validate_local_context();_validate_optimizer_binding(model,optimizer)
+        validate_local_optimizer(optimizer)
         if any(not torch.isfinite(p).all() for p in model.parameters()):raise ValueError('nonfinite local parameter')
     _collective_call(prepare)
     model.train();optimizer.zero_grad(set_to_none=True)
@@ -155,7 +163,7 @@ def local_step(model,network,optimizer,batch):
     with torch.no_grad():model.clip.logit_scale.clamp_(max=math.log(100))
     def finite():
         if any(not torch.isfinite(p).all() for p in model.parameters()):raise ValueError('nonfinite local update')
-        _optimizer_state(optimizer.state_dict(),optimizer)
+        validate_local_optimizer(optimizer)
     _collective_call(finite)
     result={k:float(output[k].detach()) for k in ('loss','contrastive','mil','kl','aqs')}
     result.update(output['aqs_stats']);result.update(output['local_stats']);result.update(diagnostics)

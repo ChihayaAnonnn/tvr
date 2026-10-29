@@ -9,6 +9,23 @@ from experiment_artifacts import strict_json_load
 from semantic_retrieval.evidence.frame_cache import safe_path
 from semantic_retrieval.runtime.checkpoint import _hydrate_array_references
 from semantic_retrieval.full_data.training import _identity, _progress, _optimizer_state
+from semantic_retrieval.full_data.upstream_uatvr.nn_components.optimization import BertAdam
+
+
+def validate_local_optimizer(optimizer, state=None):
+    """The pinned update rule and its moments are part of exact recovery."""
+    if type(optimizer) is not BertAdam:
+        raise ValueError('local query requires the pinned BertAdam implementation')
+    state = optimizer.state_dict() if state is None else state
+    _optimizer_state(state, optimizer)
+    for moments in state['state'].values():
+        # get_lr can materialize an empty, not-yet-updated parameter state.
+        if not moments:
+            continue
+        if (set(moments) != {'step', 'next_m', 'next_v'}
+                or type(moments['step']) is not int or moments['step'] < 0
+                or (moments['next_v'] < 0).any()):
+            raise ValueError('invalid BertAdam moment schema or second moment')
 
 
 def stage_checkpoint(path):
@@ -47,7 +64,7 @@ def stage_local(path,model,optimizer,identity):
     current=model.state_dict();saved=payload['model']
     if (saved.keys()!=current.keys() or any(saved[k].shape!=v.shape or saved[k].dtype!=v.dtype for k,v in current.items())):
         raise ValueError('checkpoint strict model state mismatch')
-    _optimizer_state(payload['optimizer'],optimizer)
+    validate_local_optimizer(optimizer,payload['optimizer'])
     world=dist.get_world_size() if dist.is_initialized() else 1
     states=payload['rng']
     if not isinstance(states,list) or len(states)!=world or world!=identity['world_size']:
@@ -62,4 +79,4 @@ def stage_local(path,model,optimizer,identity):
         if not isinstance(rng['cuda'],list) or len(rng['cuda'])!=torch.cuda.device_count():
             raise ValueError('checkpoint CUDA RNG count mismatch')
         for i,state in enumerate(rng['cuda']):torch.Generator(device=torch.device('cuda',i)).set_state(state)
-    return payload
+    return payload,meta['sha256']

@@ -192,3 +192,34 @@ print('ISOLATED')
     result=subprocess.run([sys.executable,'-c',script],capture_output=True,text=True,timeout=45,env=env)
     assert result.returncode==0,result.stderr
     assert 'ISOLATED' in result.stdout
+
+
+def test_reject_wrong_optimizer_algorithm(local_clip):
+    import semantic_retrieval.aqs.local_training as training
+    model=build(local_clip)
+    optimizer=torch.optim.AdamW((p for p in model.parameters() if p.requires_grad),lr=5e-5)
+    with pytest.raises((ValueError,RuntimeError),match='BertAdam'):
+        training._record(model,optimizer,binding_for(model))
+
+
+def test_reject_foreign_optimizer_moments_before_mutation(tmp_path,local_clip,local_batch):
+    model=build(local_clip);opt=make_optimizer(model,learning_rate=5e-5,total_steps=10)
+    binding=binding_for(model);local_step(model,model,opt,local_batch)
+    (tmp_path/'checkpoints').mkdir();path=tmp_path/'checkpoints/one.pt'
+    save_local_state(path,model,opt,binding,dict(epoch=0,batch_cursor=1,update=1),ArtifactArrayStore(tmp_path/'arrays'))
+    payload=torch.load(path,weights_only=True)
+    for state in payload['optimizer']['state'].values():
+        state['exp_avg']=state.pop('next_m');state['exp_avg_sq']=state.pop('next_v')
+    torch.save(payload,path)
+    meta=json.loads(path.with_suffix('.json').read_text());meta['sha256']=hashlib.sha256(path.read_bytes()).hexdigest()
+    path.with_suffix('.json').write_text(json.dumps(meta))
+    before=fingerprint(model,opt)
+    with pytest.raises((ValueError,RuntimeError),match='BertAdam'):
+        restore_local_state(path,model,opt,binding)
+    assert fingerprint(model,opt)==before
+
+
+def test_runtime_reserves_full_text_position_range(local_clip):
+    r=runtime_recipe(build(local_clip));r['model']['extra_text_tokens']=50
+    with pytest.raises(ValueError,match='dimensions'):
+        local_spec_from_recipe(r)

@@ -101,3 +101,10 @@ def test_selection_reads_fused_raw_and_keeps_loss_gradients(local_clip,local_bat
     result['aqs'].backward()
     assert fixed.grad is not None and fixed.grad.abs().sum()>0
     assert not out.indices.requires_grad
+
+
+def test_text_adaptation_position_overflow_rejected_before_core(local_clip):
+    model=build(local_clip)
+    ids=torch.full((1,31),4,dtype=torch.long);ids[0,0]=126;ids[0,-1]=127
+    with pytest.raises(ValueError,match='position'):
+        model.encode_text(ids,torch.ones_like(ids,dtype=torch.bool))

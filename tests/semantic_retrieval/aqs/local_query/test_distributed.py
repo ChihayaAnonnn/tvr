@@ -27,7 +27,7 @@ def worker(rank, group, directory, config, clip, initial, batch, mode):
             if mode=='nonfinite' and rank: local[2][0,0,0,0,0]=float('nan')
             if mode=='shape' and rank:local=local[:2]+(local[2][:,:2],local[3][:,:2],local[4])
             network=torch.nn.parallel.DistributedDataParallel(model,find_unused_parameters=True)
-            if mode in ('resume','restore_fault','optimizer_order'):
+            if mode in ('resume','restore_fault','optimizer_order','divergent_restore'):
                 from semantic_retrieval.aqs.local_training import local_step,save_local_state,restore_local_state
                 from semantic_retrieval.full_data.training import make_optimizer
                 from .test_resume_runtime import binding_for,fingerprint
@@ -43,6 +43,16 @@ def worker(rank, group, directory, config, clip, initial, batch, mode):
                 if mode=='optimizer_order':raise AssertionError('expected optimizer rank identity refusal')
                 expected=local_step(model,network,opt,local);end=fingerprint(model,opt)
                 before=fingerprint(model,opt)
+                if mode=='divergent_restore':
+                    second=root/'checkpoints/two.pt'
+                    save_local_state(second,model,opt,binding,dict(epoch=0,batch_cursor=2,update=2),ArtifactArrayStore(root/'arrays'))
+                    failure=None
+                    try:restore_local_state(checkpoint if rank==0 else second,model,opt,binding)
+                    except (ValueError,RuntimeError) as exc:failure=str(exc)
+                    outcomes=[None]*2
+                    dist.all_gather_object(outcomes,(failure is not None,before==fingerprint(model,opt)))
+                    assert all(refused and unchanged for refused,unchanged in outcomes),outcomes
+                    torch.save(dict(refused=True),Path(directory)/f'{rank}.pt');return
                 if mode=='restore_fault':
                     original=Path.read_bytes
                     def faulty_read(p):
@@ -67,7 +77,7 @@ def worker(rank, group, directory, config, clip, initial, batch, mode):
             torch.save(dict(loss=out['loss'].detach(),logits=out['logits'].detach(),
                 grads={n:p.grad for n,p in model.named_parameters() if p.grad is not None}),Path(directory)/f'{rank}.pt')
         except (ValueError,RuntimeError) as exc:
-            if mode in ('normal','resume','restore_fault'):raise
+            if mode in ('normal','resume','restore_fault','divergent_restore'):raise
             assert 'timed out' not in str(exc).lower() and 'timeout' not in str(exc).lower()
             expected={'config':'configuration','ids':'mapping','duplicate':'unique','empty':'lexical','nonfinite':'finite','shape':'shape','optimizer_order':'identity'}[mode]
             assert expected in str(exc),str(exc)
@@ -75,7 +85,7 @@ def worker(rank, group, directory, config, clip, initial, batch, mode):
     finally:dist.destroy_process_group()
 
 
-@pytest.mark.parametrize('mode',['normal','config','ids','duplicate','empty','nonfinite','shape','resume','restore_fault','optimizer_order'])
+@pytest.mark.parametrize('mode',['normal','config','ids','duplicate','empty','nonfinite','shape','resume','restore_fault','optimizer_order','divergent_restore'])
 def test_distributed_gradient_and_collective_rejection(tmp_path,local_clip,local_batch,mode):
     from .test_model import build
     model=build(local_clip)
