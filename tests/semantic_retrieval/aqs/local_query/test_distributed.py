@@ -27,21 +27,55 @@ def worker(rank, group, directory, config, clip, initial, batch, mode):
             if mode=='nonfinite' and rank: local[2][0,0,0,0,0]=float('nan')
             if mode=='shape' and rank:local=local[:2]+(local[2][:,:2],local[3][:,:2],local[4])
             network=torch.nn.parallel.DistributedDataParallel(model,find_unused_parameters=True)
+            if mode in ('resume','restore_fault','optimizer_order'):
+                from semantic_retrieval.aqs.local_training import local_step,save_local_state,restore_local_state
+                from semantic_retrieval.full_data.training import make_optimizer
+                from .test_resume_runtime import binding_for,fingerprint
+                from experiment_artifacts import ArtifactArrayStore
+                opt=make_optimizer(model,learning_rate=5e-5,total_steps=10)
+                binding=binding_for(model,world=2)
+                root=Path(directory)/'resume';(root/'checkpoints').mkdir(parents=True,exist_ok=True)
+                checkpoint=root/'checkpoints/one.pt'
+                if mode=='optimizer_order' and rank:
+                    opt.param_groups[-1]['params'].reverse()
+                if mode!='optimizer_order':local_step(model,network,opt,local)
+                save_local_state(checkpoint,model,opt,binding,dict(epoch=0,batch_cursor=1,update=1),ArtifactArrayStore(root/'arrays'))
+                if mode=='optimizer_order':raise AssertionError('expected optimizer rank identity refusal')
+                expected=local_step(model,network,opt,local);end=fingerprint(model,opt)
+                before=fingerprint(model,opt)
+                if mode=='restore_fault':
+                    original=Path.read_bytes
+                    def faulty_read(p):
+                        if rank==1 and p==checkpoint:raise OSError('injected checkpoint read failure')
+                        return original(p)
+                    Path.read_bytes=faulty_read
+                    failure=None
+                    try:restore_local_state(checkpoint,model,opt,binding)
+                    except RuntimeError as exc:failure=str(exc)
+                    finally:Path.read_bytes=original
+                    outcomes=[None]*2
+                    dist.all_gather_object(outcomes,(failure is not None,before==fingerprint(model,opt)))
+                    assert all(refused and unchanged for refused,unchanged in outcomes)
+                    torch.save(dict(refused=True),Path(directory)/f'{rank}.pt');return
+                restore_local_state(checkpoint,model,opt,binding)
+                assert local_step(model,network,opt,local)==expected
+                assert fingerprint(model,opt)==end
+                torch.save(dict(resumed=True),Path(directory)/f'{rank}.pt');return
             torch.manual_seed(99)
             out=network(*local);out['loss'].backward()
             if mode!='normal': raise AssertionError('expected rejection')
             torch.save(dict(loss=out['loss'].detach(),logits=out['logits'].detach(),
                 grads={n:p.grad for n,p in model.named_parameters() if p.grad is not None}),Path(directory)/f'{rank}.pt')
         except (ValueError,RuntimeError) as exc:
-            if mode=='normal':raise
+            if mode in ('normal','resume','restore_fault'):raise
             assert 'timed out' not in str(exc).lower() and 'timeout' not in str(exc).lower()
-            expected={'config':'configuration','ids':'mapping','duplicate':'unique','empty':'lexical','nonfinite':'finite','shape':'shape'}[mode]
+            expected={'config':'configuration','ids':'mapping','duplicate':'unique','empty':'lexical','nonfinite':'finite','shape':'shape','optimizer_order':'identity'}[mode]
             assert expected in str(exc),str(exc)
             torch.save(dict(refused=True),Path(directory)/f'{rank}.pt')
     finally:dist.destroy_process_group()
 
 
-@pytest.mark.parametrize('mode',['normal','config','ids','duplicate','empty','nonfinite','shape'])
+@pytest.mark.parametrize('mode',['normal','config','ids','duplicate','empty','nonfinite','shape','resume','restore_fault','optimizer_order'])
 def test_distributed_gradient_and_collective_rejection(tmp_path,local_clip,local_batch,mode):
     from .test_model import build
     model=build(local_clip)
@@ -63,6 +97,7 @@ def test_distributed_gradient_and_collective_rejection(tmp_path,local_clip,local
             p.join(timeout=5)
     for rank in range(2):
         got=torch.load(tmp_path/f'{rank}.pt',weights_only=True)
+        if mode=='resume':assert got['resumed'];continue
         if mode!='normal': assert got['refused'];continue
         torch.testing.assert_close(got['loss'],expected['loss'],atol=2e-6,rtol=2e-4)
         torch.testing.assert_close(got['logits'],expected['logits'],atol=2e-6,rtol=2e-4)

@@ -1,6 +1,6 @@
 # UATVR + AQS Local Query Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 实现每帧 9 个重叠窗口的局部语义 query，将局部匹配加入 UATVR + AQS 的训练与检索评分，保留原路径。
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** 现有 Python、PyTorch、pytest，CPU tiny CLIP 与双 rank Gloo；不安装新依赖。
 
-依据：[局部 Query 设计](../specs/2026-10-29-uatvr-aqs-local-query-design.md)，提交 `6abf6f8`。实施基点同为 `6abf6f8`，后续仅文档提交不改变该代码基点。本文任务均未执行，不代表代码已实现或实验获准。
+依据：[局部 Query 设计](../specs/2026-10-29-uatvr-aqs-local-query-design.md)，提交 `6abf6f8`。实施基点同为 `6abf6f8`，后续仅文档提交不改变该代码基点。Task 1–5 已实施并通过对应 CPU 验证；Task 6 正在完成最终回归与审查。详见同日交付报告；软件实现不表示实验获准。
 
 ## Global Constraints
 
@@ -87,7 +87,7 @@ class LocalQueryTokens(nn.Module):
 
 `dim` 仅支持正整数且能被 8 整除；生产由模型强制为 512，fixture 可为 64。配置拒绝 bool 冒充数值、NaN/Inf、负 β、非正 τ、非 bool 开关。`recipe()` 必须含固定窗口版本 `grid7-window3-stride2-v1`、query数9、head数8、`uniform-lexical` 聚合和 epsilon `1e-6`；不可变常量被修改则拒绝。
 
-- [ ] **1.1 写失败测试并运行** `test_config_tokens.py -q`。覆盖完整覆盖率、精确 row-major 顺序、非相邻交集为零、相邻交集和配置严格往返。最小几何断言：
+- [x] **1.1 写失败测试并运行** `test_config_tokens.py -q`。覆盖完整覆盖率、精确 row-major 顺序、非相邻交集为零、相邻交集和配置严格往返。最小几何断言：
 
 ```python
 w = window_indices()
@@ -99,7 +99,7 @@ assert len(set(w[0].tolist()) & set(w[4].tolist())) == 1
 assert not (set(w[0].tolist()) & set(w[2].tolist()))
 ```
 
-- [ ] **1.2 实现配置与 token 模块。** `LocalQueryTokens` 创建 `query: Parameter[9,d]`（正态初始化 std=`d**-0.5`）、`MultiheadAttention(d,8,dropout=0,batch_first=True)` 与 `LayerNorm(d)`。索引用 nonpersistent buffer，避免将确定性索引变成 checkpoint 可变状态。attention 核心如下：
+- [x] **1.2 实现配置与 token 模块。** `LocalQueryTokens` 创建 `query: Parameter[9,d]`（正态初始化 std=`d**-0.5`）、`MultiheadAttention(d,8,dropout=0,batch_first=True)` 与 `LayerNorm(d)`。索引用 nonpersistent buffer，避免将确定性索引变成 checkpoint 可变状态。attention 核心如下：
 
 ```python
 b, f, _, d = patches.shape
@@ -113,8 +113,8 @@ return out.masked_fill(~frame_mask[..., None, None], 0)
 
 入口检查浮点、有限值、shape/device、bool mask、每视频至少一帧；`lexical_mask` 使用已经通过原文本 BOS/EOS/连续 padding 校验的 mask，并拒绝空词集合。不得添加相邻 query 相似性目标。
 
-- [ ] **1.3 增加可辨识行为测试。** 在 attention 输入层改变窗口0以外的 patch，窗口0输出保持一致；改变共享 patch 时允许两个相邻窗口改变。复制同一帧到两个时间位置，输出一致。对非退化随机输入反传，query 与投影均有有限、非零梯度；padding 帧输出为零。
-- [ ] **1.4 重跑窄测试并提交** `feat: add overlapping local query tokens`。fixture 使用 `ClipConfig(64,28,64,1,4,32,128,64,1,1,fixture=True)`，维持 7×7 网格；新 paired batch 图像改为28×28，不改父目录旧 fixture。
+- [x] **1.3 增加可辨识行为测试。** 在 attention 输入层改变窗口0以外的 patch，窗口0输出保持一致；改变共享 patch 时允许两个相邻窗口改变。复制同一帧到两个时间位置，输出一致。对非退化随机输入反传，query 与投影均有有限、非零梯度；padding 帧输出为零。
+- [x] **1.4 重跑窄测试并提交** `feat: add overlapping local query tokens`。fixture 使用 `ClipConfig(64,28,64,1,4,32,128,64,1,1,fixture=True)`，维持 7×7 网格；新 paired batch 图像改为28×28，不改父目录旧 fixture。
 
 ## Task 2：单次视觉前向暴露 CLS 和 patch
 
@@ -122,8 +122,8 @@ return out.masked_fill(~frame_mask[..., None, None], 0)
 
 **Interfaces:** `visual_tokens(visual, images, *, video_frame) -> (cls, patches)`，输入 `[B*F,3,H,W]`，输出 `[B*F,d]` 与 `[B*F,49,d]`。函数只使用传入的原视觉模块参数，不持有、复制或重新注册骨干。
 
-- [ ] **2.1 写失败测试并运行** `test_visual.py -q`。在同一份 tiny 视觉权重上比较原 `visual(images,video_frame=F)` 与双输出 CLS 的逐元素一致性、梯度和 state_dict keys；检查49个patch的顺序，不允许仅复制CLS填充。
-- [ ] **2.2 实现双输出。** 显式按原 `VisualTransformer.forward` 的 2D 分支执行 conv1、展平、CLS拼接、位置嵌入、ln_pre、transformer、ln_post/proj；最后返回整序列切片，不再调用原 forward 第二次。核心末段：
+- [x] **2.1 写失败测试并运行** `test_visual.py -q`。在同一份 tiny 视觉权重上比较原 `visual(images,video_frame=F)` 与双输出 CLS 的逐元素一致性、梯度和 state_dict keys；检查49个patch的顺序，不允许仅复制CLS填充。
+- [x] **2.2 实现双输出。** 显式按原 `VisualTransformer.forward` 的 2D 分支执行 conv1、展平、CLS拼接、位置嵌入、ln_pre、transformer、ln_post/proj；最后返回整序列切片，不再调用原 forward 第二次。核心末段：
 
 ```python
 x = visual.transformer(x.permute(1, 0, 2), video_frame=video_frame)
@@ -132,8 +132,8 @@ return x[:, 0, :].float(), x[:, 1:, :].float()
 ```
 
 显式拒绝 `linear_patch!='2d'`、非7×7网格、错误帧数/空间维度。输入 dtype 转换和原 `encode_image` 保持一致。所有 CLS、位置和投影操作保持原顺序；不使用 monkey-patch 或 hook 实现功能。
-- [ ] **2.3 验证调用次数与输入独立性。** 测试允许使用临时 spy 统计 conv1/transformer 各一次；非均匀 patch 输入产生不同 patch 输出；公共参数梯度与原 CLS-only 前向在相同 CLS 标量目标下相等。检查底层冻结参数集合未变。
-- [ ] **2.4 重跑本项及 Task1 测试并提交** `feat: expose CLIP patches in a single visual pass`。
+- [x] **2.3 验证调用次数与输入独立性。** 测试允许使用临时 spy 统计 conv1/transformer 各一次；非均匀 patch 输入产生不同 patch 输出；公共参数梯度与原 CLS-only 前向在相同 CLS 标量目标下相等。检查底层冻结参数集合未变。
+- [x] **2.4 重跑本项及 Task1 测试并提交** `feat: expose CLIP patches in a single visual pass`。
 
 ## Task 3：局部评分与可微分分块
 
@@ -154,8 +154,8 @@ def add_local_logits(global_logits, local_raw, logit_scale, *, beta):
 
 最后一个函数接收**已经缩放**的旧 logits；不得再对旧 logits 乘 scale。这样保留其梯度，无需除以 logit scale 再乘回。
 
-- [ ] **3.1 写失败测试并运行** `test_scoring.py -q`。手算 oracle 用 Python 循环逐文本、逐视频、逐有效词计算 `softmax(c/tau)·c`，对有效词取平均；验证矩形 Q≠V、mask、负相似度及温度变化。
-- [ ] **3.2 实现每块核心。** 先按有效 mask 置零无效特征并用 epsilon归一化，避免 padding 内容影响结果，再计算：
+- [x] **3.1 写失败测试并运行** `test_scoring.py -q`。手算 oracle 用 Python 循环逐文本、逐视频、逐有效词计算 `softmax(c/tau)·c`，对有效词取平均；验证矩形 Q≠V、mask、负相似度及温度变化。
+- [x] **3.2 实现每块核心。** 先按有效 mask 置零无效特征并用 epsilon归一化，避免 padding 内容影响结果，再计算：
 
 ```python
 # t:[q,L,d], o:[v,F*9,d], valid:[v,F*9]
@@ -166,8 +166,8 @@ score = (word_score*word_mask[:, None, :]).sum(-1) / word_mask.sum(-1)[:, None]
 ```
 
 入口在 softmax 前拒绝空词、空视频、错维度、非有限输入和无效 τ/chunk。展平 frame mask 时每帧重复9次；FP32算分。双重循环分块，行列使用 `torch.cat` 连接，禁止 detached/NumPy拼接。启用梯度时用 `torch.utils.checkpoint.checkpoint(..., use_reentrant=False)` 重算每块，避免所有 `[q,v,L,F*9]` 中间量同时被反向图保留；接受必须保留的最终 `[Q,V]` 分数矩阵。
-- [ ] **3.3 验证全部梯度。** 比较未分块 oracle 与多种chunk边界的输出、text/local/logit_scale梯度，FP64 oracle 建议误差 `atol=1e-6,rtol=1e-5`；CPU FP32按实测明确阈值，不放宽掩盖错误。padding值扰动、增加padding帧/词不改变结果。用 saved-tensor检查确认没有保存完整跨批四维相似度中间量。
-- [ ] **3.4 重跑窄测试并提交** `feat: add chunked local semantic matching`。
+- [x] **3.3 验证全部梯度。** 比较未分块 oracle 与多种chunk边界的输出、text/local/logit_scale梯度，FP64 oracle 建议误差 `atol=1e-6,rtol=1e-5`；CPU FP32按实测明确阈值，不放宽掩盖错误。padding值扰动、增加padding帧/词不改变结果。用 saved-tensor检查确认没有保存完整跨批四维相似度中间量。
+- [x] **3.4 重跑窄测试并提交** `feat: add chunked local semantic matching`。
 
 ## Task 4：训练、AQS 与推理集成
 
@@ -188,9 +188,9 @@ class LocalQueryAqsModel(AqsBaselineModel):
     def validate_rank_context(self): ...
 ```
 
-- [ ] **4.1 写失败测试并运行** `test_model.py -q`。同一 seed 下新工厂 disabled/β0 与直接旧构造比较参数 keys、参数值、构造后的 RNG、前向损失及梯度；active模式即使 AQS关闭也必须保持局部分数。测试 fusion enabled 或 eta非零时拒绝，避免只检查 `fusion.active` 而放过冲突组合。
-- [ ] **4.2 实现工厂与编码。** 配置校验后，inactive直接构造 `AqsBaselineModel`；active先完整构造旧骨干，再创建 `local_queries`，确保新参数不改变骨干初始化。扩展 `encode_text` 字典加入 `local_tokens`（原tokens）和 `local_mask`；扩展 `encode_video` 使用 Task2单次前向得到原CLS `tokens` 和 Task1 `local_tokens`，原 `mask`不变。保留 `EncoderInputs` 与原空间/帧数校验，不跳过旧输入约束。
-- [ ] **4.3 实现训练合流。** 复用 `AqsCore.training_components` 返回的 `global_logits,mil,kl,global_raw,representation`；其 `global_raw` 已 detached，只能用于选样。新增特征独立通过 `gather_with_grad` 汇集一次，mask通过 `gather_metadata`一次，与旧 core 和全局 IDs 同 rank顺序。禁止对已经汇集的旧输入二次 gather。关键合流：
+- [x] **4.1 写失败测试并运行** `test_model.py -q`。同一 seed 下新工厂 disabled/β0 与直接旧构造比较参数 keys、参数值、构造后的 RNG、前向损失及梯度；active模式即使 AQS关闭也必须保持局部分数。测试 fusion enabled 或 eta非零时拒绝，避免只检查 `fusion.active` 而放过冲突组合。
+- [x] **4.2 实现工厂与编码。** 配置校验后，inactive直接构造 `AqsBaselineModel`；active先完整构造旧骨干，再创建 `local_queries`，确保新参数不改变骨干初始化。扩展 `encode_text` 字典加入 `local_tokens`（原tokens）和 `local_mask`；扩展 `encode_video` 使用 Task2单次前向得到原CLS `tokens` 和 Task1 `local_tokens`，原 `mask`不变。保留 `EncoderInputs` 与原空间/帧数校验，不跳过旧输入约束。
+- [x] **4.3 实现训练合流。** 复用 `AqsCore.training_components` 返回的 `global_logits,mil,kl,global_raw,representation`；其 `global_raw` 已 detached，只能用于选样。新增特征独立通过 `gather_with_grad` 汇集一次，mask通过 `gather_metadata`一次，与旧 core 和全局 IDs 同 rank顺序。禁止对已经汇集的旧输入二次 gather。关键合流：
 
 ```python
 local_raw = local_scores(global_text, global_words, global_local, global_frames,
@@ -204,9 +204,9 @@ loss = contrastive + mil + kl + self.aqs_config.weight * aqs_loss
 ```
 
 局部全局训练分支不能经旧 `AqsBaselineModel.forward` 的 AQS关闭早退漏掉新功能。未启用AQS时 `aqs_loss=logits.sum()*0`；视频唯一性及形状仍检查。selection沿用 `select_negatives(raw_for_selection, representation, global_ids, M)`，保持原表示多样性等既有策略；这里只替换困难程度用的分数。
-- [ ] **4.4 实现评估。** `_logits` 在eval时取原全局已缩放logits，加同一个局部算子输出，返回 `(logits,None,None)`；继承 `score` 的 RNG保护和有限值检查。不在eval执行AQS或gather。支持独立文本/视频缓存和矩形评分，不改变输入字典。
-- [ ] **4.5 增加集成行为测试。** 隔离局部CE反传，检查query/attention及允许训练的视觉参数有限非零梯度；仅对hardness选样无法反传。构造分数使局部项改变负视频顺序，验证损失选中的是同一融合矩阵。扰动padding不改变全模型分数；不把正视频窗口制造为负例；公共参数相同且前向开始前恢复相同RNG时，legacy损失保持旧值，不能把新增模块初始化消耗的RNG误当作公式变化。
-- [ ] **4.6 核对rank上下文并提交** `feat: integrate local scoring into UATVR AQS`。调用父 `validate_rank_context` 保持原 `_aqs_context` 结构不变；另存 `_local_context`，包含local/fusion/AQS/ID摘要和chunk规范，并在每次训练前检查，防止初始化后修改配置。父构造会调用 `validate_rank_context`，因此必须在 `super().__init__` 前设置无参数配置，不能提前创建新nn.Module。
+- [x] **4.4 实现评估。** `_logits` 在eval时取原全局已缩放logits，加同一个局部算子输出，返回 `(logits,None,None)`；继承 `score` 的 RNG保护和有限值检查。不在eval执行AQS或gather。支持独立文本/视频缓存和矩形评分，不改变输入字典。
+- [x] **4.5 增加集成行为测试。** 隔离局部CE反传，检查query/attention及允许训练的视觉参数有限非零梯度；仅对hardness选样无法反传。构造分数使局部项改变负视频顺序，验证损失选中的是同一融合矩阵。扰动padding不改变全模型分数；不把正视频窗口制造为负例；公共参数相同且前向开始前恢复相同RNG时，legacy损失保持旧值，不能把新增模块初始化消耗的RNG误当作公式变化。
+- [x] **4.6 核对rank上下文并提交** `feat: integrate local scoring into UATVR AQS`。调用父 `validate_rank_context` 保持原 `_aqs_context` 结构不变；另存 `_local_context`，包含local/fusion/AQS/ID摘要和chunk规范，并在每次训练前检查，防止初始化后修改配置。父构造会调用 `validate_rank_context`，因此必须在 `super().__init__` 前设置无参数配置，不能提前创建新nn.Module。
 
 ## Task 5：分布式数值与失败行为
 
@@ -214,9 +214,9 @@ loss = contrastive + mil + kl + self.aqs_config.weight * aqs_loss
 
 **Interfaces:** 复用现有 `runtime.distributed.gather_with_grad/gather_metadata`，生产全局 batch 等于各rank本地batch之和；不得新增自定义 backward 绕过数值核验。
 
-- [ ] **5.1 写CPU双rank Gloo失败测试并运行** `test_distributed.py -q`。在临时目录使用进程组和超时，统一微型权重/数据，比较分布式每rank loss与单进程global-batch参考，以及DDP平均后的局部参数和骨干梯度。明确全局loss被每rank计算的缩放语义，不能仅比较两rank相互一致。
-- [ ] **5.2 补充分支与拒绝用例。** 验证跨rank负视频可被选中、全局ID顺序和mask一致。重复ID按现有unique-video合同拒绝，不将其误选为负样本。β/τ/ID或rank shape失配、单rank空词/非有限输入要通过 `_collective_call` 等统一边界使所有rank有界失败，不得另一个rank挂在gather。
-- [ ] **5.3 验证并提交** `test: verify distributed local query gradients`。若数值未通过，不进入Task6，也不以CPU测试替代未来所需CUDA资格。
+- [x] **5.1 写CPU双rank Gloo失败测试并运行** `test_distributed.py -q`。在临时目录使用进程组和超时，统一微型权重/数据，比较分布式每rank loss与单进程global-batch参考，以及DDP平均后的局部参数和骨干梯度。明确全局loss被每rank计算的缩放语义，不能仅比较两rank相互一致。
+- [x] **5.2 补充分支与拒绝用例。** 验证跨rank负视频可被选中、全局ID顺序和mask一致。重复ID按现有unique-video合同拒绝，不将其误选为负样本。β/τ/ID或rank shape失配、单rank空词/非有限输入要通过 `_collective_call` 等统一边界使所有rank有界失败，不得另一个rank挂在gather。
+- [x] **5.3 验证并提交** `test: verify distributed local query gradients`。若数值未通过，不进入Task6，也不以CPU测试替代未来所需CUDA资格。
 
 ## Task 6：软件训练、身份绑定、恢复与交付
 
