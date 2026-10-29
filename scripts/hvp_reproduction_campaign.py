@@ -37,9 +37,11 @@ def prepare(mode):
     study=yaml.safe_load((REPO/CONTROL/'study.yaml').read_text());records=load_registry(REPO/CONTROL/'registry.jsonl')
     terminal={r['run_id'] for r in records if r['event'] in ('completed','failed','cancelled')}
     if any(r['event']=='reserved' and r['run_id'] not in terminal for r in records):raise ValueError('unresolved reservation')
-    if any(r['event']=='reserved' and ('hvp-q0' if mode=='qualify' else 'hvp-train') in r['run_id'] for r in records):raise ValueError('one attempt per phase')
+    attempts=[r for r in records if r['event']=='reserved' and ('hvp-q0' if mode=='qualify' else 'hvp-train') in r['run_id']]
+    if len(attempts)>=(3 if mode=='qualify' else 1):raise ValueError('attempt budget exhausted')
     chosen=devices(study);files=source_files();parents=[]
     ev=dict(mode=mode,hvp_root=str(HVP),hvp_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=HVP,text=True).strip(),source_files=files,qualification=None)
+    if mode=='qualify' and attempts:parents=[attempts[-1]['run_id']]
     if mode=='train':
         done=[r for r in records if r['event']=='completed' and 'hvp-q0' in r['run_id']]
         if len(done)!=1:raise ValueError('one completed qualification required')
@@ -51,7 +53,7 @@ def prepare(mode):
     command=['/usr/bin/env','CUDA_VISIBLE_DEVICES='+','.join(chosen),'OMP_NUM_THREADS=1','OPENBLAS_NUM_THREADS=1','PYTHONDONTWRITEBYTECODE=1','CUBLAS_WORKSPACE_CONFIG=:4096:8','PYTHONPATH=src:.',sys.executable,
         '-m','torch.distributed.run','--standalone','--nproc_per_node=2','--log-dir','{artifact_run_dir}/logs/elastic','scripts/hvp_reproduction_worker.py','--run-dir','{artifact_run_dir}']
     stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-    spec=dict(dataset='msrvtt' if mode=='train' else 'synthetic',stage='baseline',variant='hvp-train' if mode=='train' else 'hvp-q0',seed=42,scheduled_timestamp_utc=stamp,
+    spec=dict(dataset='msrvtt' if mode=='train' else 'synthetic',stage='baseline',variant='hvp-train' if mode=='train' else 'hvp-q0-attempt'+str(len(attempts)+1),seed=42,scheduled_timestamp_utc=stamp,
         environment=dict(python=platform.python_version(),pytorch=str(torch.__version__),cuda=str(torch.version.cuda),gpu_model='NVIDIA A800 80GB PCIe',gpu_count=2,precision='mixed_fp16' if mode=='train' else 'fp32',distributed_topology='torchrun-2'),
         input_checkpoints=[dict(path=str(weights),sha256=file_sha256(weights))],dataset_splits=inputs,
         config=dict(model=study['recipe'],loss=dict(kind='three_granularity_bidirectional_CE'),optimizer=dict(kind='BertAdam'),scheduler=dict(kind='warmup_cosine'),evaluation=ev),
@@ -86,7 +88,9 @@ def execute(root):
     if code==0:
         manager.transition_run(SimpleNamespace(**vars(args),expected='running',next_state='validating',exit_code=None,output=[]))
         manager.transition_run(SimpleNamespace(**vars(args),expected='validating',next_state='completed',exit_code=0,output=[]))
-    else:manager.transition_run(SimpleNamespace(**vars(args),expected='running',next_state='failed',exit_code=code,output=[]))
+    else:
+        manager.transition_run(SimpleNamespace(**vars(args),expected='running',next_state='validating',exit_code=None,output=[]))
+        manager.transition_run(SimpleNamespace(**vars(args),expected='validating',next_state='failed',exit_code=code,output=[]))
     phase=read(root/'provenance/campaign.json')['phase'];summary=CONTROL/'summaries'/(Path(phase).stem+'.json')
     manager.finalize_phase(SimpleNamespace(repo_root=str(REPO),phase=phase,registry=m['registry_path'],artifact_root=str(ARTIFACTS),summary=str(summary)))
     commit(REPO,[CONTROL/'registry.jsonl',summary],f'archive: finalize HVP {mode}')

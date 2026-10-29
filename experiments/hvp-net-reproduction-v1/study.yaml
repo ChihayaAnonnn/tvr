@@ -37,4 +37,6 @@ budget:
   qualify_wall_seconds: 3600
   train_wall_seconds: 129600
   max_training_attempts: 1
-  automatic_retry: false
+  automatic_training_retry: false
+  max_qualification_attempts: 3
+  qualification_successors: documented_software_fixes_only_new_identity
