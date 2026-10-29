@@ -58,3 +58,34 @@ def test_eval_rectangular_chunks_no_sampling_or_mutation(tiny_clip,paired_batch,
     assert torch.equal(rng,torch.get_rng_state())
     for before,after in zip(original,(text,video)):
         for k in before: assert torch.equal(before[k],after[k])
+
+
+def test_eval_permutation_distribution_independence_and_rng(fusion_factory,paired_batch,monkeypatch):
+    import random
+    import numpy as np
+    model=fusion_factory().eval()
+    text=model.encode_text(*paired_batch[:2]);video=model.encode_video(*paired_batch[2:4])
+    before=(random.getstate(),np.random.get_state(),torch.get_rng_state().clone())
+    with torch.no_grad():
+        expected=model.score(text,video)
+        perm=torch.tensor([1,0])
+        actual=model.score({k:v[perm] for k,v in text.items()},{k:v[perm] for k,v in video.items()})
+        torch.testing.assert_close(actual[perm][:,perm],expected,atol=2e-6,rtol=2e-4)
+        tp,vp=model.core.prepare_modalities(text,video,gather=False)
+        single,_=model.core.prepare_modalities({k:v[:1] for k,v in text.items()},video,gather=False)
+        p=model.core.distribution_parameters(tp,modality='text')
+        ps=model.core.distribution_parameters(single,modality='text')
+        for k in p: torch.testing.assert_close(p[k][:1],ps[k],atol=2e-6,rtol=2e-4)
+    assert random.getstate()==before[0]
+    after=np.random.get_state()
+    assert after[0]==before[1][0] and np.array_equal(after[1],before[1][1]) and after[2:]==before[1][2:]
+    assert torch.equal(before[2],torch.get_rng_state())
+
+
+def test_score_rejects_training_and_changed_configuration(fusion_factory,paired_batch):
+    from semantic_retrieval.aqs.fusion_config import FusionConfig
+    model=fusion_factory()
+    text=model.encode_text(*paired_batch[:2]);video=model.encode_video(*paired_batch[2:4])
+    with pytest.raises(ValueError,match='evaluation'): model.score(text,video)
+    model.eval();model.fusion_config=FusionConfig(True,.2)
+    with pytest.raises(ValueError,match='configuration changed'): model.score(text,video)
