@@ -1,0 +1,23 @@
+{
+  "output_hashes_format": "terminal-status-reference-v1",
+  "phase": "train-20261029T065000Z",
+  "phase_path": "experiments/uatvr-aqs-local-query-training-v1/phases/train-20261029T065000Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "847d4fad7371447c50fcb928a584174777a8f7b3521384de8037eddea8b1b23d",
+      "output_hashes_reference": {
+        "entry_count": 8934,
+        "json_pointer": "/output_hashes",
+        "path": "/data2/hxj/project/UATVR/artifacts/uatvr-aqs-local-query-training-v1/msrvtt/baseline/msrvtt-baseline-local-query-train-seed713-20261029T065000Z-2be8f1364078/status.json",
+        "sha256": "f22b7b89ed58c247d0e3e73070c71ad648e73ddc69618a1d0d8b80b235904f2f"
+      },
+      "run_id": "msrvtt-baseline-local-query-train-seed713-20261029T065000Z-2be8f1364078",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "uatvr-aqs-local-query-training-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
