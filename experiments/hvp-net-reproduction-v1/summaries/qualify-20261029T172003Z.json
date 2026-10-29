@@ -1,0 +1,24 @@
+{
+  "phase": "qualify-20261029T172003Z",
+  "phase_path": "experiments/hvp-net-reproduction-v1/phases/qualify-20261029T172003Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "38223f579988580dc512b6ff88bac2fb4b62e8135aa79837521a00f414d95b77",
+      "output_hashes": {
+        "checkpoints/random-clip-rank0.pt": "28b765022fedd86659f8bc7d8b4ddde8ca766c29f57eceb99039f6468e6b3127",
+        "checkpoints/random-clip-rank1.pt": "eafa300e0bf3eb1117e8436db6ec2068ba7445f204b227c3c985b3998a31dce7",
+        "command.sh": "31bfc269e44833ecd90f6c86ad272d9fed957003abc221515fe3022f239b687b",
+        "logs/qualification.log": "7d2217d1352ed763a7feea701c877eac9fbd204ee558e691d34854d1e6f43b29",
+        "provenance/campaign.json": "773efd8cf0806f0e2a87cabb286c92518555d07891ef9931ab2554274fdede56",
+        "provenance/process.json": "ce2911e552886f27a003867613617a05673ceb385ed67d9ad4d9e727cc736930"
+      },
+      "run_id": "synthetic-baseline-hvp-q0-seed042-20261029T172003Z-7d8dc0f2e6a2",
+      "state": "failed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "hvp-net-reproduction-v1",
+  "terminal_counts": {
+    "failed": 1
+  }
+}
