@@ -44,7 +44,7 @@ def test_step_fresh_restore_exact(tmp_path,fusion_factory,paired_batch,fusion_ac
         save_fusion_state(path,fresh,opt,binding,progress,store)
 
 
-@pytest.mark.parametrize('defect',['eta','source','sidecar','old','optimizer','binding_mutation'])
+@pytest.mark.parametrize('defect',['eta','source','sidecar','old','optimizer','binding_mutation','mapping','aqs','world'])
 def test_restore_refuses_before_mutation(tmp_path,fusion_factory,paired_batch,defect,monkeypatch):
     from semantic_retrieval.aqs.fusion_training import fusion_step,save_fusion_state,restore_fusion_state
     import semantic_retrieval.aqs.fusion_training as training
@@ -54,6 +54,11 @@ def test_restore_refuses_before_mutation(tmp_path,fusion_factory,paired_batch,de
     (tmp_path/'checkpoints').mkdir();path=tmp_path/'checkpoints/one.pt'
     save_fusion_state(path,model,opt,binding,dict(epoch=0,batch_cursor=1,update=1),ArtifactArrayStore(tmp_path/'arrays'))
     if defect=='eta': model.fusion_config=FusionConfig(True,.2)
+    if defect=='mapping': model.id_mapping_sha256='c'*64
+    if defect=='aqs':
+        from semantic_retrieval.aqs.config import AqsConfig
+        model.aqs_config=AqsConfig(True,3,.2)
+    if defect=='world': binding=binding_for(model,world=2)
     if defect=='source':
         original=training.source_identity
         monkeypatch.setattr(training,'source_identity',lambda:dict(original(),changed='c'*64))

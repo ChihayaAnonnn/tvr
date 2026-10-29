@@ -61,3 +61,46 @@ def test_invalid_distribution(defect):
     if defect=='shape': a=a[:1]
     if defect=='empty': mean,a=mean[:0],a[:0]
     with pytest.raises(ValueError): score_gaussian(mean,a)
+
+
+def test_scoring_remains_fp32_inside_autocast():
+    from semantic_retrieval.aqs.fusion_math import score_gaussian,symmetric_kl
+    generator=torch.Generator().manual_seed(713)
+    a=score_gaussian(torch.randn(3,16,generator=generator),torch.randn(3,16,generator=generator))
+    b=score_gaussian(torch.randn(4,16,generator=generator),torch.randn(4,16,generator=generator))
+    expected=symmetric_kl(a,b)
+    with torch.autocast('cpu',dtype=torch.bfloat16): actual=symmetric_kl(a,b)
+    assert actual.dtype==torch.float32
+    torch.testing.assert_close(actual,expected,atol=0,rtol=0)
+
+
+@pytest.mark.parametrize('dimension',[2,3,4,8,64,512])
+def test_equal_small_variance_is_stable_and_has_zero_gradient(dimension):
+    from semantic_retrieval.aqs.fusion_math import ScoreGaussian,symmetric_kl
+    torch.manual_seed(0)
+    mean=torch.nn.functional.normalize(torch.randn(64,dimension),dim=1).requires_grad_()
+    logvar=torch.full_like(mean,-8.,requires_grad=True)
+    q=ScoreGaussian(mean,logvar)
+    scores=symmetric_kl(q,q)
+    torch.testing.assert_close(scores.diag(),torch.zeros(64),atol=1e-5,rtol=0)
+    grads=torch.autograd.grad(scores.diag().sum(),(mean,logvar))
+    for g in grads: torch.testing.assert_close(g,torch.zeros_like(g),atol=1e-5,rtol=0)
+
+
+def test_near_zero_gradient_matches_independent_oracle_without_pair_storage():
+    from semantic_retrieval.aqs.fusion_math import ScoreGaussian,symmetric_kl
+    mt=torch.tensor([[.1,.2]],requires_grad=True)
+    mv=torch.tensor([[.1001,.2001],[.1002,.1999]],requires_grad=True)
+    lt=torch.tensor([[.2,-.3]],requires_grad=True)
+    lv=torch.tensor([[.2001,-.3001],[.1999,-.3002]],requires_grad=True)
+    qt=Independent(Normal(mt.double()[:,None],(lt.double()[:,None]/2).exp()),1)
+    qv=Independent(Normal(mv.double()[None],(lv.double()[None]/2).exp()),1)
+    oracle=(kl_divergence(qt,qv)+kl_divergence(qv,qt))/4
+    shapes=[]
+    with torch.autograd.graph.saved_tensors_hooks(lambda t:shapes.append(t.shape) or t,lambda t:t):
+        actual=symmetric_kl(ScoreGaussian(mt,lt),ScoreGaussian(mv,lv))
+    assert all(len(shape)<=2 for shape in shapes)
+    torch.testing.assert_close(actual.double(),oracle,atol=1e-10,rtol=2e-4)
+    expected=torch.autograd.grad(oracle.sum(),(mt,mv,lt,lv))
+    observed=torch.autograd.grad(actual.sum(),(mt,mv,lt,lv))
+    for a,b in zip(observed,expected):torch.testing.assert_close(a,b,atol=1e-7,rtol=2e-4)

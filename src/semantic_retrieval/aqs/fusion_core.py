@@ -135,11 +135,15 @@ class FusionCore(AqsCore):
             tp,vp=scores['text_params'],scores['video_params']
             ve=sample_gaussian_tensors(vp['mean'],vp['logsigma'],self.n_video_samples)
             te=sample_gaussian_tensors(tp['mean'],tp['logsigma'],self.n_text_samples)
+            if not torch.isfinite(ve).all() or not torch.isfinite(te).all():
+                raise ValueError('nonfinite legacy probability samples')
             b,d=ve.shape[0],ve.shape[-1]
             similarity=ve.reshape(-1,d)@te.reshape(-1,d).T
             mil=(self.loss_MIL_fct(similarity,b,self.n_video_samples,self.n_text_samples)
                  +self.loss_MIL_fct(similarity.T,b,self.n_text_samples,self.n_video_samples))/2
             kl=self.vib_loss(ve,vp['logsigma'],te,tp['logsigma'])
+            if not torch.isfinite(mil) or not torch.isfinite(kl):
+                raise ValueError('nonfinite legacy probability loss')
             stats={}
             for name,params in (('text',tp),('video',vp)):
                 a=params['logsigma'].detach().float()

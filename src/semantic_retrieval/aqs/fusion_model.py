@@ -67,7 +67,9 @@ class FusionAqsModel(AqsBaselineModel):
             old=select_negatives(parts.wti.detach(),parts.representation,global_ids,self.aqs_config.negatives)
             fusion_stats['selection_changed_fraction']=float((old.selected_ids!=selection.selected_ids).float().mean()) if selection.indices.numel() else 0.
         loss=contrastive+parts.mil+parts.kl+self.aqs_config.weight*auxiliary
-        if not torch.isfinite(loss): raise ValueError('nonfinite fusion loss')
+        def validate_loss():
+            if not torch.isfinite(loss): raise ValueError('nonfinite fusion loss')
+        _collective_call(validate_loss)
         return dict(loss=loss,contrastive=contrastive,mil=parts.mil,kl=parts.kl,logits=parts.logits,
                     aqs=auxiliary,aqs_stats=stats,fusion_stats=fusion_stats)
 

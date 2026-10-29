@@ -31,7 +31,7 @@ def worker(rank,init_file,directory,config,initial,batch,mode):
             if mode=='duplicate' and rank: local[-1][0]=0
             if mode=='mask' and rank: local[3][0]=False
             if mode=='late_aqs' and rank:model.aqs_config=AqsConfig(True,2,0.)
-            if mode in ('resume','optimizer'):
+            if mode in ('resume','restore_fault','optimizer'):
                 from semantic_retrieval.aqs.fusion_training import fusion_step,save_fusion_state,restore_fusion_state
                 from semantic_retrieval.full_data.training import make_optimizer
                 from .test_resume import binding_for,fingerprint
@@ -49,6 +49,21 @@ def worker(rank,init_file,directory,config,initial,batch,mode):
                 fresh=FusionAqsModel(config,clip,aqs=AqsConfig(True,2,.2),fusion=FusionConfig(True,.1),id_mapping_sha256='a'*64,temporal_layers=1)
                 fresh_opt=make_optimizer(fresh,learning_rate=5e-5,total_steps=10)
                 fresh_ddp=torch.nn.parallel.DistributedDataParallel(fresh,find_unused_parameters=True)
+                if mode=='restore_fault':
+                    before=fingerprint(fresh,fresh_opt)
+                    original=Path.read_bytes
+                    def faulty_read(p):
+                        if rank==1 and p==checkpoint: raise OSError('injected rank-local checkpoint read failure')
+                        return original(p)
+                    Path.read_bytes=faulty_read
+                    failure=None
+                    try: restore_fusion_state(checkpoint,fresh,fresh_opt,binding)
+                    except (OSError,RuntimeError) as exc: failure=str(exc)
+                    finally: Path.read_bytes=original
+                    outcomes=[None]*2
+                    dist.all_gather_object(outcomes,(failure is not None,before==fingerprint(fresh,fresh_opt)))
+                    assert all(refused and unchanged for refused,unchanged in outcomes),outcomes
+                    torch.save(dict(refused=True),path);return
                 restore_fusion_state(checkpoint,fresh,fresh_opt,binding)
                 assert fusion_step(fresh,fresh_ddp,fresh_opt,local)==expected
                 assert fingerprint(fresh,fresh_opt)==end
@@ -56,6 +71,8 @@ def worker(rank,init_file,directory,config,initial,batch,mode):
             ddp=torch.nn.parallel.DistributedDataParallel(Objective(model),find_unused_parameters=True)
             if mode=='probability' and rank:
                 with torch.no_grad():model.core.uncertain_net_video.fc.weight.fill_(float('nan'))
+            if mode=='legacy_overflow' and rank:
+                with torch.no_grad():model.core.uncertain_net_video.fc.bias.fill_(1000.)
             loss,logits=ddp(*local);loss.backward()
             if mode!='normal':raise AssertionError('expected collective refusal')
             torch.save(dict(loss=loss.detach(),logits=logits,grads={k:p.grad for k,p in model.named_parameters() if p.grad is not None}),path)
@@ -65,13 +82,13 @@ def worker(rank,init_file,directory,config,initial,batch,mode):
             assert 'timeout' not in str(exc).lower() and 'timed out' not in str(exc).lower(),str(exc)
             import re
             expected=dict(eta='configuration',duplicate='unique',mask='mask|padding|frame',
-                          probability='Gaussian',late_aqs='configuration',optimizer='optimizer parameters')[mode]
+                          probability='Gaussian',legacy_overflow='legacy probability',late_aqs='configuration',optimizer='optimizer parameters')[mode]
             assert re.search(expected,str(exc)),str(exc)
             torch.save(dict(refused=True,error=str(exc)),path)
     finally:dist.destroy_process_group()
 
 
-@pytest.mark.parametrize('mode',['normal','resume','eta','duplicate','mask','probability','late_aqs','optimizer'])
+@pytest.mark.parametrize('mode',['normal','resume','restore_fault','eta','duplicate','mask','probability','legacy_overflow','late_aqs','optimizer'])
 def test_global_gradient_resume_or_refusal(tmp_path,tiny_clip,paired_batch,fusion_factory,mode):
     model=fusion_factory();initial=copy.deepcopy(model.state_dict())
     batch=tuple(torch.cat([x,x]) for x in paired_batch[:-1])+(torch.arange(4),)

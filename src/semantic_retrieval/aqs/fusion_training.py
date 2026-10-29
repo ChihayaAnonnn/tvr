@@ -2,13 +2,15 @@
 from dataclasses import dataclass
 import hashlib
 import math
+import random
+import numpy as np
 from pathlib import Path
 import torch
 import torch.distributed as dist
 from experiment_artifacts import artifact_json_bytes,strict_json_load
 from semantic_retrieval.evidence.frame_cache import safe_path
-from semantic_retrieval.runtime.checkpoint import _publish_file
-from semantic_retrieval.full_data.training import save_state,restore_state,_optimizer_state,_progress
+from semantic_retrieval.runtime.checkpoint import _publish_file,_hydrate_array_references,restore_rng
+from semantic_retrieval.full_data.training import save_state,_optimizer_state,_progress,_identity
 from semantic_retrieval.full_data.worker import _collective_call
 from .training import CheckpointBinding,model_recipe,_validate_optimizer_binding
 from .fusion_model import FusionAqsModel
@@ -78,6 +80,56 @@ def save_fusion_state(path,model,optimizer,binding,progress,store):
     return save_state(path,model,optimizer,record['identity'],progress,store)
 
 
+def _validated_fusion_payload(path, model, optimizer, identity):
+    path = Path(path); _identity(identity)
+    safe_path(path); safe_path(path.with_suffix('.json'))
+    with path.with_suffix('.json').open() as stream:
+        meta = strict_json_load(stream)
+    if (set(meta) != {'schema_version', 'identity', 'sha256', 'model_sha256'}
+            or meta['schema_version'] != 'full-data-checkpoint-v1'
+            or meta['identity'] != identity):
+        raise ValueError('checkpoint identity/schema mismatch')
+    if hashlib.sha256(path.read_bytes()).hexdigest() != meta['sha256']:
+        raise ValueError('checkpoint content hash mismatch')
+    payload = torch.load(path, map_location='cpu', weights_only=True)
+    if (not isinstance(payload, dict) or set(payload) != {'schema_version', 'identity', 'progress', 'model', 'optimizer', 'rng'}
+            or payload['identity'] != identity or payload['schema_version'] != meta['schema_version']):
+        raise ValueError('checkpoint payload identity/schema mismatch')
+    payload = _hydrate_array_references(payload, path.parent.parent)
+    _progress(payload['progress'])
+    current, saved = model.state_dict(), payload['model']
+    if (not isinstance(saved, dict) or saved.keys() != current.keys()
+            or any(not isinstance(saved[k], torch.Tensor) or saved[k].shape != v.shape
+                   or saved[k].dtype != v.dtype or not torch.isfinite(saved[k]).all() for k, v in current.items())):
+        raise ValueError('checkpoint strict model state mismatch')
+    digest = hashlib.sha256()
+    for name, tensor in sorted(saved.items()):
+        tensor = tensor.contiguous()
+        digest.update(name.encode()); digest.update(str((tuple(tensor.shape), str(tensor.dtype))).encode())
+        digest.update(tensor.numpy().tobytes())
+    if digest.hexdigest() != meta['model_sha256']:
+        raise ValueError('checkpoint model identity mismatch')
+    state = payload['optimizer']
+    _optimizer_state(state, optimizer)
+    world = dist.get_world_size() if dist.is_initialized() else 1
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    if not isinstance(payload['rng'], list) or len(payload['rng']) != world or world != identity['world_size']:
+        raise ValueError('checkpoint RNG world size mismatch')
+    for rng in payload['rng']:
+        if not isinstance(rng, dict) or set(rng) != {'torch', 'python', 'numpy', 'cuda'}:
+            raise ValueError('checkpoint RNG schema mismatch')
+        torch.Generator().set_state(rng['torch'])
+        random.Random().setstate(rng['python'])
+        ns = rng['numpy']
+        np.random.RandomState().set_state((ns[0], ns[1].numpy().astype(np.uint32), ns[2], ns[3], ns[4]))
+        if len(rng['cuda']) != torch.cuda.device_count():
+            raise ValueError('checkpoint CUDA RNG device count mismatch')
+        for index, state_tensor in enumerate(rng['cuda']):
+            # Validate with a private generator before mutating the live model/RNG.
+            torch.Generator(device=torch.device('cuda', index)).set_state(state_tensor)
+    return payload
+
+
 def restore_fusion_state(path,model,optimizer,binding):
     record=_record(model,optimizer,binding);path=Path(path)
     def verify():
@@ -86,8 +138,13 @@ def restore_fusion_state(path,model,optimizer,binding):
         if actual!=record: raise ValueError('fusion checkpoint recipe/provenance mismatch')
     if dist.is_initialized(): _collective_call(verify)
     else: verify()
-    # The low-level loader validates arrays, optimizer, state and each RNG before mutation.
-    return restore_state(path,model,optimizer,record['identity'])
+    # Stage all state without touching live parameters, optimizer or any global RNG.
+    payload=_collective_call(lambda:_validated_fusion_payload(path,model,optimizer,record['identity']))
+    rank=dist.get_rank() if dist.is_initialized() else 0
+    model.load_state_dict(payload['model'],strict=True)
+    optimizer.load_state_dict(payload['optimizer'])
+    restore_rng(payload['rng'][rank])
+    return payload['progress']
 
 
 def fusion_step(model,network,optimizer,batch):

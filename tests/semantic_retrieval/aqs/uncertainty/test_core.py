@@ -89,3 +89,11 @@ def test_score_rejects_training_and_changed_configuration(fusion_factory,paired_
     with pytest.raises(ValueError,match='evaluation'): model.score(text,video)
     model.eval();model.fusion_config=FusionConfig(True,.2)
     with pytest.raises(ValueError,match='configuration changed'): model.score(text,video)
+
+
+def test_legacy_sampling_overflow_rejected_inside_component_collective(tiny_clip,paired_batch):
+    model=build_core(tiny_clip)
+    with torch.no_grad():model.core.uncertain_net_video.fc.bias.fill_(1000.)
+    text=model.encode_text(*paired_batch[:2]);video=model.encode_video(*paired_batch[2:4])
+    with pytest.raises(RuntimeError,match='nonfinite legacy probability'):
+        model.core.fusion_components(text,video)
