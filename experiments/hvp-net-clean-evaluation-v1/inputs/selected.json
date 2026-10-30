@@ -1,0 +1,6 @@
+{
+  "epoch": 1,
+  "global_step": 5625,
+  "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4/checkpoints/checkpoint_epoch_0.pth",
+  "sha256": "d970077b370f3f766a2917c5783b3efee48420d3c0eebb9a6fb020b9af476f80"
+}

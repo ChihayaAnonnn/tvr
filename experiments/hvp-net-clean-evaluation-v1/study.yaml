@@ -1,0 +1,37 @@
+study: hvp-net-clean-evaluation-v1
+authorization: user_2026-10-30_fix_evaluation_and_reevaluate_existing_checkpoint_once
+control_plane: experiments/hvp-net-clean-evaluation-v1
+data_plane: artifacts/hvp-net-clean-evaluation-v1
+registry: experiments/hvp-net-clean-evaluation-v1/registry.jsonl
+scope: evaluation_only_query_word_weighting_no_candidate_paired_caption_input
+checkpoint: epoch1_preselected_before_clean_evaluation_no_epoch_sweep
+parent_training_run: msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4
+training_source: preserved_in_original_workspace
+resource_policy:
+  gpu_count: 2
+  gpu_uuids: [GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece, GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede]
+  allow_share_with_own_training: true
+  max_existing_memory_MiB: 50000
+  per_rank_memory_limit_GiB: 16
+  qualification: fresh_two_rank_production_random_and_selected_model_inference
+  amendment_scope: HVP_user_authorized_dual_card_evaluation_only_other_studies_unchanged
+recipe:
+  seed: 42
+  base_encoder: ViT-B/32
+  layers: [0, 5, 11]
+  words: 24
+  frames: 12
+  dtype: fp16
+  video_batch: 16
+  eval_chunk: 8
+protocol:
+  test_authorized: true
+  test: official_JSFUSION_1000_queries_1000_videos
+  checkpoint_selection: fixed_epoch1_no_test_selection
+  scoring: query_caption_and_candidate_video_only
+  preserve_training_weighting: true
+budget:
+  qualify_wall_seconds: 3600
+  evaluate_wall_seconds: 3600
+  max_qualification_attempts: 2
+  max_evaluation_attempts: 1

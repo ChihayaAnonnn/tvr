@@ -1,0 +1,14 @@
+[
+  {
+    "path": "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-001.input-index.json",
+    "sha256": "f6ae67885e955e4e36b3b11aed328700a2e29ded42bc704d854a8e390d1b19b4"
+  },
+  {
+    "path": "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/experiments/full-data-retrieval-v1/inputs/jsfusion-1k-final-000.input-index.json",
+    "sha256": "0d45633bba568c4e4139bc246cb41493c001ea905d7291d5278663b655665fd8"
+  },
+  {
+    "path": "/data2/hxj/data/MSRVTT/csv/MSRVTT_JSFUSION_test.csv",
+    "sha256": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a"
+  }
+]
