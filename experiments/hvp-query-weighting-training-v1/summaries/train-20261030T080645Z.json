@@ -1,0 +1,36 @@
+{
+  "phase": "train-20261030T080645Z",
+  "phase_path": "experiments/hvp-query-weighting-training-v1/phases/train-20261030T080645Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "91695063197deee37fdfad0d333350c6b2518d26862ae8e0d4025db30e04a52d",
+      "output_hashes": {
+        "checkpoints/best.pth": "1193fdec291a73dd56e0ff157026c2139afce1d88c25641d6b6c9b5f11340a29",
+        "checkpoints/checkpoint_epoch_0.pth": "261605f563b4167288a73580717207e72ba24e0d3449291b89b57b468c6e843f",
+        "checkpoints/checkpoint_epoch_1.pth": "7df75240516817973e4a36078c8341c95b2653f6a3fa3985f9eb303aa140d60a",
+        "checkpoints/checkpoint_epoch_2.pth": "a539c656c14dfce8e830ecbe844e41995fafa001f87d966b9e89b03286bc0595",
+        "checkpoints/checkpoint_epoch_3.pth": "a1208f871164e28710bba22063014403365d11c47e3f49b6f9e08383270f4029",
+        "checkpoints/checkpoint_epoch_4.pth": "af026fa8f44c5645a040e4f38b263e4e9dc85a614012d6a620205c99318d8903",
+        "checkpoints/log.txt": "b8c76e6221148f4f4a84d727d603a8645f8244894eec35e536f4278ea16f1a2c",
+        "command.sh": "be18bbad6e5f45a9a4b92c38a55933c0026a6c3a9d9fe856bbb9cec161966503",
+        "logs/train.log": "d98530661d2c268e8ac4730838cc6a737376f1bb637fbb59884ba80e0f66af50",
+        "provenance/annotations-rank0/MSRVTT_data.json": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33",
+        "provenance/annotations-rank0/MSRVTT_test.1000.csv": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a",
+        "provenance/annotations-rank0/MSRVTT_train.9000.csv": "0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3",
+        "provenance/annotations-rank1/MSRVTT_data.json": "8342df0ed6f8212ec8f4363e7415ce9a98d6ddf89e25ed2fb72b364f97c65d33",
+        "provenance/annotations-rank1/MSRVTT_test.1000.csv": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a",
+        "provenance/annotations-rank1/MSRVTT_train.9000.csv": "0a7ece2418e1f7ac5680555a04ddfef8950293ac3c4bdd6584fb0fa6cc0ff7d3",
+        "provenance/campaign.json": "a47a75a500a2fbf01e5e6bb8a2c01d2074620e825fd5cc183358f18fbba42998",
+        "provenance/process.json": "78c1f8182efcae245a395d50c8d9fd754b56bf705350e822ffd701560a7e9e13",
+        "provenance/result.json": "1f5f50e05842acee3fe874ff472fb8bcebb53cfdd4e6400a15f9b61b5be9810f"
+      },
+      "run_id": "msrvtt-final-hvp-train-attempt1-seed042-20261030T080645Z-7cbd7c75c2ec",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "hvp-query-weighting-training-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
