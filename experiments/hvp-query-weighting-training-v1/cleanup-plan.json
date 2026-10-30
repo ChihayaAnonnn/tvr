@@ -1,0 +1,88 @@
+{
+  "authorization": "user_explicit_delete_old_HVP_checkpoints_2026-10-30",
+  "files": [
+    {
+      "bytes": 438845166,
+      "parent_run_id": "msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4/checkpoints/best.pth",
+      "sha256": "15c5bd7e37f4bf067a85d1dc2b79ebf69dd4d264b253a18434c373bc1376f421"
+    },
+    {
+      "bytes": 1699807838,
+      "parent_run_id": "msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4/checkpoints/checkpoint_epoch_0.pth",
+      "sha256": "d970077b370f3f766a2917c5783b3efee48420d3c0eebb9a6fb020b9af476f80"
+    },
+    {
+      "bytes": 1699807838,
+      "parent_run_id": "msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4/checkpoints/checkpoint_epoch_1.pth",
+      "sha256": "1d2e5985f0358c750f6763b11a3477aaa5050d9133ea9ab7b875a24d75301fff"
+    },
+    {
+      "bytes": 1699807838,
+      "parent_run_id": "msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4/checkpoints/checkpoint_epoch_2.pth",
+      "sha256": "f4297c52bd151f631ca13b82461fbf823f607b94d40cf580ea0a12477b61ed2f"
+    },
+    {
+      "bytes": 1699807838,
+      "parent_run_id": "msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4/checkpoints/checkpoint_epoch_3.pth",
+      "sha256": "4ad3b97135cc1a9729e1f8835adada9b3fd81689b4ac2a0e279435c5eb8c6f2e"
+    },
+    {
+      "bytes": 1699807838,
+      "parent_run_id": "msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-attempt2-seed042-20261030T011241Z-7686fc9f0af4/checkpoints/checkpoint_epoch_4.pth",
+      "sha256": "fb6797aefc9abcb8494c9a0f9c1d38096b6f5e6101bde7b2cca6fd8a57099838"
+    },
+    {
+      "bytes": 438845166,
+      "parent_run_id": "msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64/checkpoints/best.pth",
+      "sha256": "eec48c69be26706b6e61de1733979f5c766421f56a6536578c3b1d7d489bcd05"
+    },
+    {
+      "bytes": 1699807838,
+      "parent_run_id": "msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64/checkpoints/checkpoint_epoch_0.pth",
+      "sha256": "d518d125ba48ad66cc55a9f5c62380327bfa75c7f6110d4a79a12d47280a113a"
+    },
+    {
+      "bytes": 1699807838,
+      "parent_run_id": "msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64/checkpoints/checkpoint_epoch_1.pth",
+      "sha256": "1bd6517c0fc85339f6bd0cb39601f752a1c98b87037eb6ccd5234ff335723061"
+    },
+    {
+      "bytes": 1699807838,
+      "parent_run_id": "msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64/checkpoints/checkpoint_epoch_2.pth",
+      "sha256": "4bf6acf334e7890a9f1559eafbc6fe0c4c32762bbc951758e4546c4fb747a1c3"
+    },
+    {
+      "bytes": 1699807838,
+      "parent_run_id": "msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64/checkpoints/checkpoint_epoch_3.pth",
+      "sha256": "787ae7215052c02585487110db727d6dbee4a52e55f7f169856b2af9dc55a4a1"
+    },
+    {
+      "bytes": 1699807838,
+      "parent_run_id": "msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64",
+      "path": "/data2/hxj/project/UATVR/artifacts/hvp-net-reproduction-v1/msrvtt/final/msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64/checkpoints/checkpoint_epoch_4.pth",
+      "sha256": "678300cba55c889fe2e47c1d688bbc068db0b9862c0e4208fb2c212e38367c5e"
+    }
+  ],
+  "preserve": [
+    "original_CLIP",
+    "UATVR_checkpoints",
+    "qualification_artifacts",
+    "logs",
+    "metrics",
+    "score_matrices"
+  ],
+  "scope": "two_previous_scientific_HVP_training_runs_only",
+  "total_bytes": 17875768712,
+  "warning": "User-authorized deletion makes historical checkpoint files unavailable; archived hashes and metrics remain. No replacement or overwrite."
+}

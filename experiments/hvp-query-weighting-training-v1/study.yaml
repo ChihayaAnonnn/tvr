@@ -1,0 +1,49 @@
+study: hvp-query-weighting-training-v1
+authorization: user_2026-10-30_delete_old_checkpoints_stop_old_training_fix_query_weights_and_restart
+scope: HVP_B32_query_word_weighting_in_training_and_evaluation
+control_plane: experiments/hvp-query-weighting-training-v1
+data_plane: artifacts/hvp-query-weighting-training-v1
+registry: experiments/hvp-query-weighting-training-v1/registry.jsonl
+resource_policy:
+  gpu_count: 2
+  gpu_uuids:
+  - GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece
+  - GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede
+  idle_threshold_MiB: 500
+  qualification: fresh_two_rank_production_random_gradient_inference_checkpoint
+  amendment_scope: user_explicit_two_card_launch_this_study_only
+  other_studies_unchanged: true
+protocol:
+  train_videos: 9000
+  test_pairs: 1000
+  validation: absent_per_user_request
+  selection: test_T2V_R1_per_epoch_per_user_explicit_retention_of_author_protocol
+  test_authorized: true
+  claims: author_test_selected_reproduction_not_validation_selected_comparison
+  word_weighting: query_owned_aw_training_and_evaluation
+recipe:
+  backbone: ViT-B/32
+  layers:
+  - 0
+  - 5
+  - 11
+  seed: 42
+  epochs: 5
+  global_batch: 32
+  frames: 12
+  words: 24
+  lr: 0.0001
+  clip_coef_lr: 0.001
+  weight_decay: 0.2
+  warmup: 0.1
+  clip_dtype: fp16
+  workers_per_rank: 4
+  eval_chunk: 8
+budget:
+  qualify_wall_seconds: 3600
+  train_wall_seconds: 129600
+  max_training_attempts: 1
+  automatic_training_retry: false
+  max_qualification_attempts: 2
+  qualification_successors: documented_software_fixes_or_explicit_user_authorized_source_change_new_identity
+initialization: original_pretrained_CLIP_no_resume_or_old_HVP_checkpoint
