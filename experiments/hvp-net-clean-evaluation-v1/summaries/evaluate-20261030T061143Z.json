@@ -1,0 +1,26 @@
+{
+  "phase": "evaluate-20261030T061143Z",
+  "phase_path": "experiments/hvp-net-clean-evaluation-v1/phases/evaluate-20261030T061143Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "f42cbb67c442040d2bf02623e946b4ef987700dd272db4082d7d33418795a72e",
+      "output_hashes": {
+        "arrays/sha256/30/30538c9e1208b004cea48d6887ee77edcc0bd008a811909f62f50d8a071b869b.npy": "5ebd2f8fa8caab332283219713d91c2586b00932e7c20a9ec424769a77028bc8",
+        "command.sh": "52e8a9b29817924cda7e4ed6d2d9a32fe87a37faf3037f40f85d063b6fbedcbd",
+        "logs/evaluate.log": "c36194cc8da71a8da4e570839842186a0f150bbe424058b7f78ce027576eb0ff",
+        "metrics/clean-evaluation.json": "425e056baf3f61a0fdaa8484981ee3333395f0c6743918bff3db900e3d76afa6",
+        "provenance/campaign.json": "5b6d860d05f1db4ad2871a01935ed99e0da244de31055e99cdf3b1318b3c03d1",
+        "provenance/evaluation-annotations/MSRVTT_test.1000.csv": "e61144b312c8a2fc2126f96504c981f8c23c05b3ba9655a56e2af50ac8a4b16a",
+        "provenance/process.json": "1c2f108634ba1a38519dc4ab52799514b48a04ea316e7069dc1cd536c1162c19",
+        "provenance/result.json": "e7bb9daeb975391bc70018129478f8847dfbc1759bb27dea4b87af594ca20c36"
+      },
+      "run_id": "msrvtt-final-hvp-clean-eval-attempt1-seed042-20261030T061143Z-73d2d9f06790",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "hvp-net-clean-evaluation-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
