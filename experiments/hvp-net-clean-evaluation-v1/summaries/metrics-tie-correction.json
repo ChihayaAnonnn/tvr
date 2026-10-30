@@ -1,0 +1,23 @@
+{
+  "phase": "metrics-tie-correction",
+  "phase_path": "experiments/hvp-net-clean-evaluation-v1/phases/metrics-tie-correction.json",
+  "runs": [
+    {
+      "manifest_sha256": "be8a5a1cc9d12cf41fdee13bc81a6271016cd7baf43be93c2b3b1b5c66dda2b5",
+      "output_hashes": {
+        "command.sh": "e168cf305446c0de6eb31eab8bd2aeb69828c18b76da914c0a40973022a2f620",
+        "logs/metrics.log": "dd5032fa6d8c479abe1b6d276c971f6f24d4a71e3cf9859454199e5a64b08f10",
+        "metrics/corrected.json": "7242b74e82bdba5489eed0c868971430cbbbd4214420500ee33f392f9e13f5af",
+        "provenance/campaign.json": "8d260f8422a0a132f8dec893ec5f06d36f7bc28cd53df087a8081c322db24a40",
+        "provenance/result.json": "27f147d0f58b52b74fb505e536a62daa29439524489c5ad60509b8f128e487d5"
+      },
+      "run_id": "msrvtt-final-hvp-metrics-tie-correction-seed042-20261030T061811Z-b1a292d5dd9d",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "hvp-net-clean-evaluation-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
