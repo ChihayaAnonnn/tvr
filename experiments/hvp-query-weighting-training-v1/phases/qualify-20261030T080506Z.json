@@ -1,0 +1,160 @@
+{
+  "phase": "qualify-20261030T080506Z",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=GPU-6906cf09-5cb8-4373-8f3e-7636c4e9fece,GPU-8dab94cb-3e36-d6b4-61a8-a617b5dc7ede",
+        "OMP_NUM_THREADS=1",
+        "OPENBLAS_NUM_THREADS=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "CUBLAS_WORKSPACE_CONFIG=:4096:8",
+        "PYTHONPATH=src:.",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        "--nproc_per_node=2",
+        "--log-dir",
+        "{artifact_run_dir}/logs/elastic",
+        "scripts/hvp_query_training_worker.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "hvp_root": "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net",
+          "hvp_sha": "5dbf124022a2f0dca1d1c863455f3df57d967a49",
+          "mode": "qualify",
+          "qualification": null,
+          "source_files": {
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/.gitignore": "6a6464903749fe5ee72f8f2d5e0fd444af7f509fc53e00f77a2b1076db167f85",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/LICENSE": "bb40bfc7a0b4cd3474ec60385253954c6d570490d55197bb3e8ed0164ae09999",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/LOCAL_FIXES.md": "a73cf9099b5a7f7f8d22a02665399f42b0bc324b60298028b5ca9bcdc95f6f8f",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/LOCAL_SETUP.md": "14dcd86498aa60e0dfee598e5a8671381be16477ca0bf7829d03d379ec6f956f",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/README.md": "c333139d77972dacee7bb01a81931e6141c2e8c0a3c565d86028a9f68dcafa2a",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/data_dataloaders.py": "f7fbe6738014b0fab92d07acdba1616e09b58e791f710c3cea45e4abc3c97451",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/dataloader_activitynet_retrieval.py": "a5d1e66067636430fdea6ed8f50174654d37dfcf09f364bfc612004e9b99e580",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/dataloader_charades_retrieval.py": "773634155be03feac71da713c488a636b63547ed600423aae7a12d69b613df7e",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/dataloader_didemo_retrieval.py": "7bcef85805d4f4e02b90236f61cf793ba0342d5af573285e3996effc887cb5c2",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/dataloader_lsmdc_retrieval.py": "20431bcaf0868e52939bad5cabbfb16461d1ad854be751e8615e706cd7849769",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/dataloader_msrvtt_qa.py": "387ced88730304c6bdc906c7bc6c710f5f5a8450bb2e7e0e300f7427c65e9f37",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/dataloader_msrvtt_retrieval.py": "8aa69d17e4451398916c318f8ad18bdaef91fa67bd7bc2a08645643594ca48cb",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/dataloader_msvd_retrieval.py": "3ad4b4cffb2bdff6e8cb318797b9e434b7b5d7f6f4ea9b28ad12449900870a7b",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/dataloader_retrieval.py": "0d1514a774bf28346c6eaf31eede6467dec700a9d85ff30e7d4f37fe55f14cf3",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/dataloader_vatex_retrieval.py": "e815609cf1e276b706be41bf4b3eca0a2750790114dc4f0a0add8d41570de179",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/rand_augment.py": "cb8f92500b26cdc1d740d9206d04e1c7bd2d959f4c24cef4337efce1e183709a",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/random_erasing.py": "cf7f9c96eb6f486dd144934544ce88b85e2f91e156ab4294b2ab4ae64368d005",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/rawvideo_util.py": "0c7a9ed70047065690dd2fc93999b94f1bf1b938cb0690b4ea38b370301b49bb",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/dataloaders/video_transforms.py": "b17714c95c71e083894735780d2663975094c755413daf220931cd81f73898e6",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/environment.yml": "b9c68609ece49a6e98c4614b72608eb849aa3051288dfd8ab619288ee326c0e4",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/local.env.sh": "e2ceec20c8e605c8d38ff499fbda9713abb533a9724c27bf69c63cd6f4b70010",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/main_retrieval.py": "8b21e070b3eb82e24fd67db10f840aad55bcc31a1b1c6df8952d59ed09b64811",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/bpe_simple_vocab_16e6.txt.gz": "924691ac288e54409236115652ad4aa250f48203de50a9e4722a6ecd48d6804a",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/cluster.py": "d7ca168cee224f9b1ab8230419a142a708b189d578053e6e02181010ed8dd429",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/cross-base/cross_config.json": "a19c3ce510f6cf2d765e5337cfb65a623526ab53cc6c73d0c4185124fc3f9477",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/file_utils.py": "35d3bd094cb5019a33ed607ec973b7b808808de7de65510c9af8e046a10cf10b",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/modeling copy.py": "20fbab7c67bbdde64672654d36b0f85b1d8fe46e04c28eb4d9ad94cc9ab80686",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/modeling.py": "7025851caed9514c1453bee2a3bcf60269a77e8b3ec4263bc47e417962aeda77",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/module_clip.py": "151532e12294b04201fe32290798e11055626eaf077aa33eb39c82ea3b13489f",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/module_cross.py": "d83676aea97f80a6b3c79e690713d33f2c0515ba53ef50e62c6302a14744e5ed",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/module_transformer.py": "701cdd55640659efcb32c5275e718fb9fda95f509a1d4a2d78b2344af2911f03",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/mpp.py": "a664461932e44b050edaae19181c5fee39127d301653865270ce5405b2879f7b",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/optimization.py": "b2be1df90956bbb30485c48a4679a327eb73109ca237429b3c66a2c5edad7603",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/tokenization_clip.py": "60af2eccd9d1208933213b57d24c9ac337ca4be935bc6550a7300b656a6f3bb5",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/until_config.py": "a410fb06ad08e3a7b5b9cb2f9b598148990f9d2005919f8ac964e0e80c231bf0",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/models/until_module.py": "ceac62d611ab72a6d7c8e5af7532fe0e21f6eea279c5e6ea34c8f848a6bf2de5",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/preprocess/compress_video.py": "7250e6cc8cc61058afd28a8bfe5b795279fb42e8b2e2e68c46ead1f1c6b5e818",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/requirement.txt": "256877526836383ab997a9faa729fa3b6133d50a570d9ab9f83b731dba19ab68",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/script/run_ActivityNet.sh": "9d65da2a1987940ee8db0947d953796c981b8728e693f04db6448229b0efe7ab",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/script/run_Charades.sh": "11701dc703714f548bf99d9364956801759dd4ab5131cb3e06f75a59ea824d28",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/script/run_DiDeMo.sh": "9e14c4c245d0dbe8903dffe782ddf18635dd0d093c5aa54c95c0dd9561c419c6",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/script/run_LSMDC.sh": "b5f9d885647ddb5404caf830676bc009dec63884dc710311c4f1bd6169e54055",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/script/run_MSRVTT.sh": "065797fc6accbe7e8d801ffe517ed964e909ed0bd1a7f2e55bb426ef8599a6a9",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/script/run_MSRVTT_baseline_e0.sh": "ef08177779c2639d5d91f347ea2fa815d2b391d999f55680bcc12b3982c673a9",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/script/run_MSRVTT_vitl14_e1.sh": "03bfc71b06dee1bd9037d9dcc69319bc19a92138fe0e083f24cfad9f7e10fcf6",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/script/run_test.sh": "58b097899dc6fbd59045902a3c5c138d9e281a59d1cad549450406488c64a788",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/tests/test_local_fixes.py": "032eb89f72f173f81cf4e8ed4b9f2aa6b4686ec20219dfba54cf1a8b77976c30",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/tests/test_metrics_ties.py": "911b6e3d1e11b0eda8336f87ccfb6ca1e584a9862dd50f6f0ea592a94c1fc93e",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/utils/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/utils/comm.py": "2d71880d8b419c0b6212bfc0285f388afca13653ba6c7e58c6c660e0300e57b9",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/utils/local_runtime.py": "8b8c05b9cf8a6b43d6888f5d4c883b45749700c3afa0e077972b7d706362655a",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/utils/logger.py": "ac82c599eddf150905ec3753a11a7348f19adbf26f09f5a91b5344396992e618",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/utils/metric_logger.py": "59e000661494b89a23f77f1a9d37d17e1603fb038398c94e5314a510f479c1c0",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/utils/metrics.py": "b85c75a6ea3549d60dae7e1ced69b38e13d2c9a5fa893286dd8a57f4d0c01c7a",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/utils/metrics_qa.py": "7250df994d17e4ea88ad3354704dbf1c3fb19b77aa4133937cf809d6cf387abe",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/utils/util.py": "c7be5c2ccd823483062a1f7c7865b2d462428d0a5febeb8e02961869b937909e",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/scripts/hvp_query_training_campaign.py": "c2b295cbf1564a4557dd89ce67d508361682e7ea5bdec41c4d7809ce1a4978e5",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/scripts/hvp_query_training_worker.py": "af628d4d0cbbd588b1a1510b0ec3c25c27a7bd4563b802658b3cc6143a012ee6",
+            "/home/xujie/.codex/worktrees/uatvr-aqs-training-v1/UATVR/research_refs/HVP-Net/.local-deps/functional/__init__.py": "691f84dce5e626d932b2d2728a20d1b22e96c9eeaed09c69c0fa09d4d8cdd3f8"
+          }
+        },
+        "loss": {
+          "kind": "three_granularity_bidirectional_CE"
+        },
+        "model": {
+          "backbone": "ViT-B/32",
+          "clip_coef_lr": 0.001,
+          "clip_dtype": "fp16",
+          "epochs": 5,
+          "eval_chunk": 8,
+          "frames": 12,
+          "global_batch": 32,
+          "layers": [
+            0,
+            5,
+            11
+          ],
+          "lr": 0.0001,
+          "seed": 42,
+          "warmup": 0.1,
+          "weight_decay": 0.2,
+          "words": 24,
+          "workers_per_rank": 4
+        },
+        "optimizer": {
+          "kind": "BertAdam"
+        },
+        "scheduler": {
+          "kind": "warmup_cosine"
+        }
+      },
+      "dataset": "synthetic",
+      "dataset_splits": [],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "torchrun-2",
+        "gpu_count": 2,
+        "gpu_model": "NVIDIA A800 80GB PCIe",
+        "precision": "fp32_and_mixed_fp16",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [
+        {
+          "path": "/data2/hxj/project/UATVR/artifacts/semantic-answerability-pilot-v1/synthetic/baseline/synthetic-baseline-pilot-q0-prep-seed000-20261001T104445Z-4ff307be570d/arrays/random-pilot-clip.npz",
+          "sha256": "4186a61a25330fbc2b567b948f55c8e5660484d393e70817fc3e95b7de72faa8"
+        }
+      ],
+      "parent_run_ids": [],
+      "scheduled_timestamp_utc": "20261030T080506Z",
+      "seed": 42,
+      "selection_lineage": [
+        {
+          "reason": "User requested query-owned weights in train and eval and fresh dual-card restart from original CLIP; no validation added.",
+          "report_path": "experiments/hvp-query-weighting-training-v1/PROTOCOL.md",
+          "report_sha256": "7af7332486b6dde77a2f6fb7b584651ca556f50e09cff4384c78936f4b7d4457"
+        }
+      ],
+      "stage": "baseline",
+      "test_authorized": false,
+      "validation_authorized": false,
+      "variant": "hvp-q0-attempt1"
+    }
+  ],
+  "study": "hvp-query-weighting-training-v1"
+}
