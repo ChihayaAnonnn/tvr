@@ -1,0 +1,25 @@
+{
+  "phase": "qualify-20261030T061035Z",
+  "phase_path": "experiments/hvp-net-clean-evaluation-v1/phases/qualify-20261030T061035Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "195215ef368d628c9e1cc6f3cbde266b60ec2371ec80d36d8944e89af9f1071b",
+      "output_hashes": {
+        "checkpoints/random-clip-rank0.pt": "28b765022fedd86659f8bc7d8b4ddde8ca766c29f57eceb99039f6468e6b3127",
+        "checkpoints/random-clip-rank1.pt": "eafa300e0bf3eb1117e8436db6ec2068ba7445f204b227c3c985b3998a31dce7",
+        "command.sh": "2f61dc543c4c19f4c6b8d8ff4a44eb6d07082515990930f0b0fbf1c70ab34f81",
+        "logs/qualification.log": "32b1d661328523ae0cc458af9e67f2e9dd6ae49cf03340f35062c8c769f6a38a",
+        "provenance/campaign.json": "dc6d33bdcfc7bcd4e8d3462162483393b7168c906531d8d1c7313b570c1a34fe",
+        "provenance/process.json": "9e9cdd662a946d610b9ccf1157599053b3a5e0608f23dfd037cc64c17132015a",
+        "provenance/result.json": "65eac8f23e905d56d964390641287a4406d1e9d6f118fbd75e1da317691798ab"
+      },
+      "run_id": "synthetic-baseline-hvp-q0-attempt1-seed042-20261030T061035Z-8bbf058a6e27",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "hvp-net-clean-evaluation-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
