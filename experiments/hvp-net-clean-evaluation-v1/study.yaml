@@ -35,3 +35,8 @@ budget:
   evaluate_wall_seconds: 3600
   max_qualification_attempts: 2
   max_evaluation_attempts: 1
+postprocess:
+  scope: CPU_only_tie_counting_fix_on_single_archived_score_matrix
+  model_inference: forbidden
+  new_checkpoint_or_video_access: forbidden
+  rank_policy: count_strictly_greater_scores_once_per_query_optimistic_ties
