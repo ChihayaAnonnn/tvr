@@ -1,0 +1,69 @@
+{
+  "phase": "metrics-tie-correction",
+  "runs": [
+    {
+      "array_references": [],
+      "command": [
+        "/usr/bin/env",
+        "CUDA_VISIBLE_DEVICES=",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPATH=src:.",
+        "/home/xujie/.conda/envs/tvr/bin/python",
+        "scripts/hvp_clean_metrics_worker.py",
+        "--run-dir",
+        "{artifact_run_dir}"
+      ],
+      "config": {
+        "evaluation": {
+          "files": {
+            "/data2/hxj/project/UATVR/artifacts/hvp-net-clean-evaluation-v1/msrvtt/final/msrvtt-final-hvp-clean-eval-attempt1-seed042-20261030T061143Z-73d2d9f06790/arrays/sha256/30/30538c9e1208b004cea48d6887ee77edcc0bd008a811909f62f50d8a071b869b.npy": "5ebd2f8fa8caab332283219713d91c2586b00932e7c20a9ec424769a77028bc8",
+            "/data2/hxj/project/UATVR/artifacts/hvp-net-clean-evaluation-v1/msrvtt/final/msrvtt-final-hvp-clean-eval-attempt1-seed042-20261030T061143Z-73d2d9f06790/provenance/result.json": "e7bb9daeb975391bc70018129478f8847dfbc1759bb27dea4b87af594ca20c36",
+            "/data2/hxj/project/UATVR/artifacts/hvp-net-clean-evaluation-v1/msrvtt/final/msrvtt-final-hvp-clean-eval-attempt1-seed042-20261030T061143Z-73d2d9f06790/status.json": "b355395c2c494ee2ba66956ed34e2cfbcaefb01b4d22e8cffc1974664ac7fa1a",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net/utils/metrics.py": "b85c75a6ea3549d60dae7e1ced69b38e13d2c9a5fa893286dd8a57f4d0c01c7a",
+            "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/scripts/hvp_clean_metrics_worker.py": "5125c645f8198d82356547920cf872c8bea5c68f46cb10dfb116baca6539afb3"
+          },
+          "hvp_root": "/home/xujie/.codex/worktrees/hvp-clean-eval/UATVR/research_refs/HVP-Net",
+          "hvp_sha": "aefa2decc072dcc27c32a2ad164acd1771d82300",
+          "parent_root": "/data2/hxj/project/UATVR/artifacts/hvp-net-clean-evaluation-v1/msrvtt/final/msrvtt-final-hvp-clean-eval-attempt1-seed042-20261030T061143Z-73d2d9f06790",
+          "parent_run_id": "msrvtt-final-hvp-clean-eval-attempt1-seed042-20261030T061143Z-73d2d9f06790",
+          "score_path": "/data2/hxj/project/UATVR/artifacts/hvp-net-clean-evaluation-v1/msrvtt/final/msrvtt-final-hvp-clean-eval-attempt1-seed042-20261030T061143Z-73d2d9f06790/arrays/sha256/30/30538c9e1208b004cea48d6887ee77edcc0bd008a811909f62f50d8a071b869b.npy",
+          "score_relative": "arrays/sha256/30/30538c9e1208b004cea48d6887ee77edcc0bd008a811909f62f50d8a071b869b.npy"
+        },
+        "loss": {},
+        "model": {},
+        "optimizer": {},
+        "scheduler": {}
+      },
+      "dataset": "msrvtt",
+      "dataset_splits": [],
+      "environment": {
+        "cuda": "12.1",
+        "distributed_topology": "single-process-CPU",
+        "gpu_count": 0,
+        "gpu_model": "none",
+        "precision": "float32",
+        "python": "3.10.0",
+        "pytorch": "2.1.2+cu121"
+      },
+      "expected_scalar_outputs": [],
+      "input_checkpoints": [],
+      "parent_run_ids": [
+        "msrvtt-final-hvp-clean-eval-attempt1-seed042-20261030T061143Z-73d2d9f06790"
+      ],
+      "scheduled_timestamp_utc": "20261030T061811Z",
+      "seed": 42,
+      "selection_lineage": [
+        {
+          "reason": "CPU correction of duplicated tie ranks on the archived one-shot matrix; no model execution or selection.",
+          "report_path": "experiments/hvp-net-clean-evaluation-v1/PROTOCOL.md",
+          "report_sha256": "977d5537a83285d1938c16220d222c76965016c22d872b4034d48997d1048534"
+        }
+      ],
+      "stage": "final",
+      "test_authorized": true,
+      "validation_authorized": false,
+      "variant": "hvp-metrics-tie-correction"
+    }
+  ],
+  "study": "hvp-net-clean-evaluation-v1"
+}
