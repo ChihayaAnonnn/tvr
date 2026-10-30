@@ -38,12 +38,13 @@ def prepare(mode):
     terminal={r['run_id'] for r in records if r['event'] in ('completed','failed','cancelled')}
     if any(r['event']=='reserved' and r['run_id'] not in terminal for r in records):raise ValueError('unresolved reservation')
     attempts=[r for r in records if r['event']=='reserved' and ('hvp-q0' if mode=='qualify' else 'hvp-train') in r['run_id']]
-    if len(attempts)>=(3 if mode=='qualify' else 1):raise ValueError('attempt budget exhausted')
+    if len(attempts)>=study['budget']['max_qualification_attempts' if mode=='qualify' else 'max_training_attempts']:raise ValueError('attempt budget exhausted')
     chosen=devices(study);files=source_files();parents=[]
     ev=dict(mode=mode,hvp_root=str(HVP),hvp_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=HVP,text=True).strip(),source_files=files,qualification=None)
     if mode=='qualify' and attempts:parents=[attempts[-1]['run_id']]
     if mode=='train':
-        done=[r for r in records if r['event']=='completed' and 'hvp-q0' in r['run_id']]
+        done=[r for r in records if r['event']=='completed' and 'hvp-q0' in r['run_id']
+              and read(Path(r['artifact_path'])/'provenance/result.json').get('source_files')==files]
         if len(done)!=1:raise ValueError('one completed qualification required')
         root=Path(done[0]['artifact_path']);report=root/'provenance/result.json';q=read(report)
         if q.get('passed') is not True or q['source_files']!=files:raise ValueError('qualification source/config mismatch')
@@ -53,7 +54,7 @@ def prepare(mode):
     command=['/usr/bin/env','CUDA_VISIBLE_DEVICES='+','.join(chosen),'OMP_NUM_THREADS=1','OPENBLAS_NUM_THREADS=1','PYTHONDONTWRITEBYTECODE=1','CUBLAS_WORKSPACE_CONFIG=:4096:8','PYTHONPATH=src:.',sys.executable,
         '-m','torch.distributed.run','--standalone','--nproc_per_node=2','--log-dir','{artifact_run_dir}/logs/elastic','scripts/hvp_reproduction_worker.py','--run-dir','{artifact_run_dir}']
     stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-    spec=dict(dataset='msrvtt' if mode=='train' else 'synthetic',stage='baseline',variant='hvp-train' if mode=='train' else 'hvp-q0-attempt'+str(len(attempts)+1),seed=42,scheduled_timestamp_utc=stamp,
+    spec=dict(dataset='msrvtt' if mode=='train' else 'synthetic',stage='final' if mode=='train' else 'baseline',variant='hvp-train-attempt'+str(len(attempts)+1) if mode=='train' else 'hvp-q0-attempt'+str(len(attempts)+1),seed=42,scheduled_timestamp_utc=stamp,
         environment=dict(python=platform.python_version(),pytorch=str(torch.__version__),cuda=str(torch.version.cuda),gpu_model='NVIDIA A800 80GB PCIe',gpu_count=2,precision='mixed_fp16' if mode=='train' else 'fp32',distributed_topology='torchrun-2'),
         input_checkpoints=[dict(path=str(weights),sha256=file_sha256(weights))],dataset_splits=inputs,
         config=dict(model=study['recipe'],loss=dict(kind='three_granularity_bidirectional_CE'),optimizer=dict(kind='BertAdam'),scheduler=dict(kind='warmup_cosine'),evaluation=ev),

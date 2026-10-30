@@ -36,7 +36,16 @@ recipe:
 budget:
   qualify_wall_seconds: 3600
   train_wall_seconds: 129600
-  max_training_attempts: 1
+  max_training_attempts: 2
   automatic_training_retry: false
   max_qualification_attempts: 3
-  qualification_successors: documented_software_fixes_only_new_identity
+  qualification_successors: documented_software_fixes_or_explicit_user_authorized_source_change_new_identity
+
+rerun_authorization:
+  request: user_2026-10-30_restart_training_after_word_weighting_rollback
+  additional_training_runs: 1
+  initialization: original_pretrained_CLIP_not_previous_checkpoint
+  word_weighting: upstream_candidate_paired_caption_in_training_and_inference
+  other_training_hyperparameters: unchanged
+  qualification: fresh_matching_source_two_rank_required
+  predecessor_training_run: msrvtt-final-hvp-train-seed042-20261029T172409Z-a468b0210f64

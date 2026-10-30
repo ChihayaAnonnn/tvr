@@ -4,7 +4,7 @@
     "root": "/home/xujie/.codex/worktrees/uatvr-aqs-training-v1/UATVR/research_refs/HVP-Net/.local-deps",
     "version": "0.4"
   },
-  "hvp_sha": "f28768fa4b8ea13993c8e93c294712e0b4231261",
+  "hvp_sha": "86a38ce67d584135d6386cb4c0eb9e77040fb8b7",
   "packages": {
     "decord": "0.6.0",
     "ftfy": "6.3.1",
