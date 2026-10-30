@@ -1,0 +1,20 @@
+{
+  "executable": "/home/xujie/.conda/envs/tvr/bin/python",
+  "functional_overlay": {
+    "root": "/home/xujie/.codex/worktrees/uatvr-aqs-training-v1/UATVR/research_refs/HVP-Net/.local-deps",
+    "version": "0.4"
+  },
+  "hvp_sha": "5dbf124",
+  "packages": {
+    "decord": "0.6.0",
+    "ftfy": "6.3.1",
+    "numpy": "1.26.4",
+    "pandas": "2.2.3",
+    "regex": "2024.11.6",
+    "timm": "0.9.16",
+    "torch": "2.1.2+cu121",
+    "torchvision": "0.16.2+cu121",
+    "transformers": "4.52.4"
+  },
+  "warm_reuse": "unchanged tvr packages and functional0.4 overlay; source repair only"
+}

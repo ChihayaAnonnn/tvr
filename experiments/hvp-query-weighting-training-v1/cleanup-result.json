@@ -1,0 +1,9 @@
+{
+  "all_absent": true,
+  "authorization": "user_explicit_delete_old_HVP_checkpoints_2026-10-30",
+  "deleted_bytes": 17875768712,
+  "deleted_files": 12,
+  "plan_sha256": "e5699558616b8be3a36180c8a8b372857e19d777bc2f4819d5590dbf1d0b83ea",
+  "reason": "Explicit user deletion request, not archive corruption; historical checkpoint hashes/metrics remain.",
+  "time_utc": "2026-10-30T08:04:55.375505+00:00"
+}

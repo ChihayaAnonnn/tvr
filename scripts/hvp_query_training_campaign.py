@@ -55,7 +55,7 @@ def prepare(mode):
         '-m','torch.distributed.run','--standalone','--nproc_per_node=2','--log-dir','{artifact_run_dir}/logs/elastic','scripts/hvp_query_training_worker.py','--run-dir','{artifact_run_dir}']
     stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     spec=dict(dataset='msrvtt' if mode=='train' else 'synthetic',stage='final' if mode=='train' else 'baseline',variant='hvp-train-attempt'+str(len(attempts)+1) if mode=='train' else 'hvp-q0-attempt'+str(len(attempts)+1),seed=42,scheduled_timestamp_utc=stamp,
-        environment=dict(python=platform.python_version(),pytorch=str(torch.__version__),cuda=str(torch.version.cuda),gpu_model='NVIDIA A800 80GB PCIe',gpu_count=2,precision='mixed_fp16' if mode=='train' else 'fp32',distributed_topology='torchrun-2'),
+        environment=dict(python=platform.python_version(),pytorch=str(torch.__version__),cuda=str(torch.version.cuda),gpu_model='NVIDIA A800 80GB PCIe',gpu_count=2,precision='mixed_fp16' if mode=='train' else 'fp32_and_mixed_fp16',distributed_topology='torchrun-2'),
         input_checkpoints=[dict(path=str(weights),sha256=file_sha256(weights))],dataset_splits=inputs,
         config=dict(model=study['recipe'],loss=dict(kind='three_granularity_bidirectional_CE'),optimizer=dict(kind='BertAdam'),scheduler=dict(kind='warmup_cosine'),evaluation=ev),
         parent_run_ids=parents,selection_lineage=[dict(report_path=str(CONTROL/'PROTOCOL.md'),report_sha256=file_sha256(REPO/CONTROL/'PROTOCOL.md'),reason='User requested query-owned weights in train and eval and fresh dual-card restart from original CLIP; no validation added.')],
