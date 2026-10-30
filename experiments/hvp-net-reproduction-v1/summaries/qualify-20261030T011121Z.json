@@ -1,0 +1,29 @@
+{
+  "phase": "qualify-20261030T011121Z",
+  "phase_path": "experiments/hvp-net-reproduction-v1/phases/qualify-20261030T011121Z.json",
+  "runs": [
+    {
+      "manifest_sha256": "f3f79916c94498fdd0a9af3bd8751f8a17bec599d69e8b24beeb294ef0938266",
+      "output_hashes": {
+        "checkpoints/qualify-fp16-rank0.pth": "122ee79d356eec645be93363adca4f736a3aaa53546f181a056d382d23267760",
+        "checkpoints/qualify-fp16-rank1.pth": "6304a7fc97c93a03e7acdf0fb752fdc87ef030e04244681c02a793d0e3890b17",
+        "checkpoints/qualify-fp32-rank0.pth": "acabcfa81cda1f970a2cde766866e96285374fd93e6f74665d0a8b39a51435d3",
+        "checkpoints/qualify-fp32-rank1.pth": "ce601b41dd96875f1befb5ab15689c2b9c402b0efede545e81cf7e353daeb07e",
+        "checkpoints/random-clip-rank0.pt": "28b765022fedd86659f8bc7d8b4ddde8ca766c29f57eceb99039f6468e6b3127",
+        "checkpoints/random-clip-rank1.pt": "eafa300e0bf3eb1117e8436db6ec2068ba7445f204b227c3c985b3998a31dce7",
+        "command.sh": "255cc3f4e48dc4a6879d76dbde5584176ebfb9ec489a03d52cdb1bb2c61a789d",
+        "logs/qualification.log": "64fc5455da51fdf6bd5f4dc5b3f708bc55a831382be538edefbfa03715452bfa",
+        "provenance/campaign.json": "9a9eccfe6ab61ebac5ddb24a3c9aa2e8ed45ef79c7fb62e953c40e87617c3d1d",
+        "provenance/process.json": "3d6ce93fce9a35ae26ed39c332c43293c2899d10bf2b65ca84e566d7ff8d8140",
+        "provenance/result.json": "7d4d4b6a1ce8e36227fcb860d8a5fbc73af7284c19f5522fb9a4378f37bac2fc"
+      },
+      "run_id": "synthetic-baseline-hvp-q0-attempt3-seed042-20261030T011121Z-1aab898bb4e0",
+      "state": "completed",
+      "summary_metrics": {}
+    }
+  ],
+  "study": "hvp-net-reproduction-v1",
+  "terminal_counts": {
+    "completed": 1
+  }
+}
