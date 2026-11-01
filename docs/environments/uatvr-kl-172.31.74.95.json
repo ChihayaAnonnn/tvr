@@ -1,0 +1,24 @@
+{
+  "host": "172.31.74.95",
+  "purpose": "CPU-only Gaussian KL software compatibility tests; not GPU qualification",
+  "checkout": "/data2/hxj/project/UATVR-kl-check",
+  "base_python": "/home/xujie/.conda/envs/tvr/bin/python",
+  "python": "3.11",
+  "torch": "2.1.2+cu121",
+  "isolated_venv": "/data2/hxj/env/uatvr-kl-check",
+  "system_site_packages": true,
+  "overlay_packages": {
+    "jsonschema": "4.23.0",
+    "jsonschema-specifications": "2025.4.1",
+    "referencing": "0.36.2",
+    "rpds-py": "0.25.1",
+    "attrs": "25.3.0"
+  },
+  "existing_base_packages": {
+    "numpy": "1.26.0", "opencv-python": "4.8.1.78", "PyYAML": "6.0.3",
+    "regex": "2022.7.9", "ftfy": "6.1.1", "pytest": "7.1.2"
+  },
+  "local_reference_python": "3.10",
+  "cuda_visible_devices": "",
+  "test_path": "tests/semantic_retrieval/aqs/uncertainty"
+}
