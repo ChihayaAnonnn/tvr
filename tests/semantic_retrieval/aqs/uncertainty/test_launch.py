@@ -59,13 +59,13 @@ def test_require_matching_archived_four_rank_qualification():
 
 def test_shell_launch_is_four_rank_and_uses_fusion_module():
     root=Path(__file__).resolve().parents[4]
-    command=['bash',str(root/'scripts/run_uatvr_gaussian_kl_4gpu.sh'),'--mode','qualify','--run-dir','/reserved/run','--dry-run']
+    command=['bash',str(root/'scripts/run_uatvr_gaussian_kl_4gpu.sh'),'--smoke','--output','/example/smoke','--dry-run']
     import os
     env=dict(os.environ,CUDA_VISIBLE_DEVICES='0,1,2,3')
     result=subprocess.run(command,env=env,capture_output=True,text=True)
     assert result.returncode==0,result.stderr
     assert '--nproc_per_node=4' in result.stdout
-    assert 'semantic_retrieval.aqs.fusion_launch' in result.stdout
+    assert 'semantic_retrieval.aqs.fusion_train' in result.stdout
     env['CUDA_VISIBLE_DEVICES']='0,1'
     assert subprocess.run(command,env=env,capture_output=True).returncode!=0
 

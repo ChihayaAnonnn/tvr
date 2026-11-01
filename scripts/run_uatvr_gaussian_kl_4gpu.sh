@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
-# Launch only an already reserved Gaussian KL run. This script never reserves a run.
+# Config-driven four-GPU training; --smoke checks the actual training path first.
 set -euo pipefail
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-mode=''
-run_dir=''
+config="$repo_dir/configs/uatvr_gaussian_kl_4gpu.json"
+extra=()
 dry_run=0
 while (($#)); do
   case "$1" in
-    --mode) mode="${2:?missing mode}"; shift 2 ;;
-    --run-dir) run_dir="${2:?missing run directory}"; shift 2 ;;
+    --config) config="${2:?missing config}"; shift 2 ;;
+    --output|--resume) extra+=("$1" "${2:?missing path}"); shift 2 ;;
+    --smoke) extra+=("$1"); shift ;;
     --dry-run) dry_run=1; shift ;;
-    *) echo "Usage: $0 --mode qualify|train --run-dir /reserved/run [--dry-run]" >&2; exit 2 ;;
+    *) echo "Usage: $0 [--config config.json] [--output path] [--smoke | --resume checkpoint] [--dry-run]" >&2; exit 2 ;;
   esac
 done
-[[ "$mode" == qualify || "$mode" == train ]] || { echo 'mode must be qualify or train' >&2; exit 2; }
-[[ "$run_dir" == /* ]] || { echo 'run-dir must be absolute' >&2; exit 2; }
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
 IFS=',' read -ra devices <<< "$CUDA_VISIBLE_DEVICES"
 [[ ${#devices[@]} == 4 ]] || { echo 'exactly four CUDA devices are required' >&2; exit 2; }
@@ -27,7 +26,7 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 CUBLAS_WORKSPACE_CONFIG=:4096:8
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="$repo_dir/src:$repo_dir${PYTHONPATH:+:$PYTHONPATH}"
 python_bin="${UATVR_KL_PYTHON:-/data2/hxj/env/uatvr-kl-check/bin/python}"
-command=("$python_bin" -m torch.distributed.run --standalone --nproc_per_node=4 --module semantic_retrieval.aqs.fusion_launch --run-dir "$run_dir" --mode "$mode")
+command=("$python_bin" -m torch.distributed.run --standalone --nproc_per_node=4 --module semantic_retrieval.aqs.fusion_train --config "$config" "${extra[@]}")
 if ((dry_run)); then
   printf 'CUDA_VISIBLE_DEVICES=%q ' "$CUDA_VISIBLE_DEVICES"
   printf '%q ' "${command[@]}"
@@ -35,6 +34,6 @@ if ((dry_run)); then
   exit 0
 fi
 [[ -x "$python_bin" ]] || { echo 'set UATVR_KL_PYTHON to the pinned Python executable' >&2; exit 2; }
-[[ -f "$run_dir/manifest.json" ]] || { echo 'reserved manifest.json is required' >&2; exit 2; }
+[[ -f "$config" ]] || { echo 'training config.json is required' >&2; exit 2; }
 cd "$repo_dir"
 exec "${command[@]}"

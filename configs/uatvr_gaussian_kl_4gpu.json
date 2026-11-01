@@ -1,0 +1,23 @@
+{
+  "architecture": "uatvr-aqs-kl-v1",
+  "cohort": "/data2/hxj/project/tvr/artifacts/inputs/msrvtt-complete.json",
+  "clip_weights": "/data2/hxj/assets/clip-b32-40d365715913/ViT-B-32.pt",
+  "clip_sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af",
+  "output": "/data2/hxj/project/tvr/artifacts/gaussian-kl/msrvtt-b32-eta01-seed713-4gpu-20261102",
+  "world_size": 4,
+  "precision": "fp32",
+  "global_batch": 64,
+  "epochs": 5,
+  "seed": 713,
+  "learning_rate": 5e-5,
+  "eta": 0.1,
+  "negatives": 16,
+  "aqs_weight": 0.2,
+  "train_videos": 8246,
+  "val_videos": 500,
+  "captions_per_video": 20,
+  "loader_workers": 4,
+  "checkpoint_interval": 500,
+  "log_interval": 20,
+  "memory_fraction": 0.8
+}

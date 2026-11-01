@@ -1,70 +1,44 @@
-# UATVR + AQS Gaussian KL: four-GPU entry
+# UATVR + AQS Gaussian KL: four-GPU training
 
-This entry uses your UATVR Gaussian KL matching implementation, not HVP or the
-spatial-local-query branch. It constructs `FusionAqsModel`, requires active
-symmetric Gaussian KL score fusion, and uses `fusion_step` and versioned fusion
-checkpoint save/restore. Historical two-rank launchers are unchanged.
+The config-driven entry follows the repository-wide simplified rules in
+AGENTS.md. It needs a config and input files, with no study, registry,
+reservation, manifest or formal qualification gate. Historical sealed worker
+code is retained for old runs; the shell wrapper now invokes `fusion_train`.
 
-Remote checkout: `/data2/hxj/project/tvr` on `172.31.74.95`.
-Default Python: `/data2/hxj/env/uatvr-kl-check/bin/python`; override with
-`UATVR_KL_PYTHON`. Defaults: `CUDA_VISIBLE_DEVICES=0,1,2,3`, four torchrun ranks,
-one CPU compute thread per rank, deterministic cuBLAS, FP32. The allocator limit
-is 80% of each card (32 GiB on A100 40GB). No process is stopped by this script.
+Remote checkout: `172.31.74.95:/data2/hxj/project/tvr`.
+Python: `/data2/hxj/env/uatvr-kl-check/bin/python` (override `UATVR_KL_PYTHON`).
+Config: `configs/uatvr_gaussian_kl_4gpu.json`.
 
-The global batch belongs to the frozen recipe. Keep the existing global batch64
-for 16 examples per rank, rather than multiplying it to256. Smaller final batches
-must still be divisible by4. The wrapper does not select or change eta.
+The config uses original CLIP ViT-B/32, FP32, four ranks, global batch64
+(16 per rank), seed713, 5 epochs, BertAdam base LR5e-5 / CLIP multiplier0.001,
+M16, AQS weight0.2 and fixed eta0.1. Eta0.1 is an exploratory starting value,
+not a validated optimum. Local spatial queries and Laya are absent.
 
-Inspect the exact command without initializing CUDA:
+`artifacts/inputs/msrvtt-complete.json` contains the previous certified
+8246-video/164920-caption training and 500-video/10000-caption validation cohort,
+including the original compressed-224/12fps video paths. Test is not loaded.
 
 ```bash
 cd /data2/hxj/project/tvr
-bash scripts/run_uatvr_gaussian_kl_4gpu.sh --mode qualify --run-dir /absolute/reserved/qualification-run --dry-run
+# Inspect the command without CUDA initialization.
+bash scripts/run_uatvr_gaussian_kl_4gpu.sh --dry-run
+# Actual full-capacity, real-data smoke in a separate output directory.
+bash scripts/run_uatvr_gaussian_kl_4gpu.sh --smoke --output /absolute/new-smoke-directory
+# Full training, using config.output as a new directory.
+bash scripts/run_uatvr_gaussian_kl_4gpu.sh
+# Resume in that same output directory.
+bash scripts/run_uatvr_gaussian_kl_4gpu.sh --resume /absolute/training-directory/latest.pt
 ```
 
-For execution, use distinct, already reserved Scheme A run directories:
+Check GPU availability before launching. Default devices are0,1,2,3; override
+CUDA_VISIBLE_DEVICES with four distinct indices or UUIDs. Allocator cap is80%
+per card. The smoke checks actual gradients/updates, fresh-model exact next-step
+recovery, repeatable rectangular inference and model agreement across ranks.
 
-```bash
-bash scripts/run_uatvr_gaussian_kl_4gpu.sh --mode qualify --run-dir /absolute/reserved/qualification-run
-bash scripts/run_uatvr_gaussian_kl_4gpu.sh --mode train --run-dir /absolute/reserved/training-run
-```
-
-These commands are launch interfaces, not permission to create arbitrary run
-folders or launch an experiment. No study/run/eta is automatically created or
-chosen by the wrapper. Before execution, freeze the dedicated study and reserve
-runs with the standard artifact manager. This change alone does not reserve or
-start a qualification or scientific training run.
-
-## Sealed manifest contract
-
-- Study/registry: `uatvr-aqs-kl-training-v1` /
-  `experiments/uatvr-aqs-kl-training-v1/registry.jsonl`.
-- `environment`: gpu_count4, precision fp32, four registered GPU UUIDs in runtime
-  order. Runtime visible devices must match these UUIDs exactly.
-- `config.model`: architecture `uatvr-aqs-kl-v1`, formal CLIP B/32 recipe,
-  explicit active `FusionConfig.recipe()` with positive frozen eta.
-- `config.loss.aqs`: explicit active `AqsConfig.recipe()` matching the training
-  recipe's negatives and weight. Optimizer kind `pinned_bert_adam`, scheduler
-  kind `warmup_cosine`.
-- `config.evaluation`: mode, dsl=false, four-rank validation-only training recipe,
-  complete `fusion_launch.source_inventory(repo)` as source_files, a hashed
-  environment_spec JSON with pinned `packages`, and train-only source_report
-  and qualification references. The frozen study contains matching recipe,
-  fusion settings and resource_policy.gpu_uuids.
-- Dataset synthetic for qualification, msrvtt for training; test_authorized=false.
-  Both manifest and reservation must use the exact output directory. Bind the
-  certified train/validation input indices and pretrained checkpoint references
-  for training; no test execution entry is included.
-
-Qualification creates full-capacity random model weights without consuming the
-training checkpoint or real dataset. It checks intended gradients and parameter
-updates, exact next-step continuation after fresh-model checkpoint restore,
-finite repeatable inference and four-rank model agreement. The training run
-requires the completed qualification's committed registry record, manifest,
-terminal output hash, source inventory, environment and identical fusion recipe.
-Training starts from the pinned CLIP input, preserves the complete unique-video
-caption batches and selects checkpoints using validation only.
-
-CPU tests cover four Gloo ranks, real fused forward/backward, state agreement,
-exact checkpoint continuation, sharding, device identity and reservation guards.
-They do not establish CUDA numerical correctness, memory fit or throughput.
+The output contains the effective config, simple status, per-rank diagnostic logs,
+epoch validation metrics/scores, interval/epoch checkpoints and latest.pt/best.pt
+links. Redirect console output to one persistent log when detaching the job.
+Selection is earliest epoch with highest raw validation T2V R@1; DSL is off.
+Checkpoints include model, optimizer and its warmup/cosine state, epoch/batch
+cursor, history and each rank's RNG. Resume validates scoring/config compatibility
+without binding to a source commit or external registry.
